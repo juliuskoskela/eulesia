@@ -3,26 +3,26 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root package files for workspaces
+# Copy all package files
 COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
 
-# Install all dependencies
+# Install all dependencies (including dev for build)
 RUN npm ci
 
-# Copy API source
+# Copy source
 COPY apps/api ./apps/api
+COPY tsconfig.json ./
 
-# Build API
-WORKDIR /app/apps/api
-RUN npm run build
+# Build API (from root so node_modules are found)
+RUN cd apps/api && npx tsc
 
 # Production image
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install production dependencies only
+# Copy package files and install production deps
 COPY apps/api/package*.json ./
 RUN npm ci --omit=dev
 
