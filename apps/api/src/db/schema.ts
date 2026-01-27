@@ -12,6 +12,7 @@ export const placeTypeEnum = pgEnum('place_type', ['poi', 'area', 'route', 'land
 export const placeSourceEnum = pgEnum('place_source', ['user', 'osm', 'lipas', 'mml', 'municipal'])
 export const syncStatusEnum = pgEnum('sync_status', ['active', 'deprecated', 'merged'])
 export const inviteCodeStatusEnum = pgEnum('invite_code_status', ['available', 'used', 'revoked'])
+export const threadSourceEnum = pgEnum('thread_source', ['user', 'minutes_import', 'rss_import'])
 
 // Municipalities
 export const municipalities = pgTable('municipalities', {
@@ -185,6 +186,15 @@ export const threads = pgTable('threads', {
   placeId: uuid('place_id').references(() => places.id),
   latitude: decimal('latitude', { precision: 10, scale: 7 }),
   longitude: decimal('longitude', { precision: 10, scale: 7 }),
+  // AI/Import source tracking
+  source: threadSourceEnum('source').default('user'),
+  sourceUrl: varchar('source_url', { length: 1000 }),  // Link to original document
+  sourceId: varchar('source_id', { length: 255 }),     // External ID (meeting ID, etc.)
+  aiGenerated: boolean('ai_generated').default(false),
+  aiModel: varchar('ai_model', { length: 100 }),       // e.g., 'mistral-large-latest'
+  originalContent: text('original_content'),            // Original pöytäkirja text before AI summary
+  editedBy: uuid('edited_by').references(() => users.id), // If human edited AI content
+  editedAt: timestamp('edited_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
@@ -194,7 +204,9 @@ export const threads = pgTable('threads', {
   createdIdx: index('threads_created_idx').on(table.createdAt),
   updatedIdx: index('threads_updated_idx').on(table.updatedAt),
   placeIdx: index('threads_place_idx').on(table.placeId),
-  coordsIdx: index('threads_coords_idx').on(table.latitude, table.longitude)
+  coordsIdx: index('threads_coords_idx').on(table.latitude, table.longitude),
+  sourceIdx: index('threads_source_idx').on(table.source),
+  sourceIdIdx: index('threads_source_id_idx').on(table.sourceId)
 }))
 
 // Thread Tags
