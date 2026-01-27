@@ -9,6 +9,7 @@ import { Server } from 'socket.io'
 import { env } from './utils/env.js'
 import routes from './routes/index.js'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
+import { initScheduler } from './services/scheduler.js'
 
 const app = express()
 const httpServer = createServer(app)
@@ -135,4 +136,7 @@ httpServer.listen(PORT, () => {
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `)
+
+  // Initialize background scheduler
+  initScheduler()
 })
