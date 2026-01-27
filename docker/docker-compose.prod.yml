@@ -39,6 +39,7 @@ services:
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
       EMAIL_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: auth@${DOMAIN}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
     labels:
       - "traefik.enable=true"
       # HTTPS router
