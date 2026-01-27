@@ -14,7 +14,8 @@
 
 import { db, threads, threadTags, municipalities, users } from '../../db/index.js'
 import { eq, and } from 'drizzle-orm'
-import { generateMinutesSummary, splitMinutesIntoItems } from './mistral.js'
+import { generateMinutesSummary } from './mistral.js'
+// splitMinutesIntoItems available for future use when processing full meetings
 import { renderMarkdown } from '../../utils/markdown.js'
 
 // Rate limiting
