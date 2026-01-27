@@ -3,15 +3,17 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
+# Copy root package files for workspaces
 COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
 
-RUN npm ci --workspace=@eulesia/api
+# Install all dependencies
+RUN npm ci
 
-# Copy source and build
+# Copy API source
 COPY apps/api ./apps/api
 
+# Build API
 WORKDIR /app/apps/api
 RUN npm run build
 
@@ -20,12 +22,12 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy built files and dependencies
+# Install production dependencies only
+COPY apps/api/package*.json ./
+RUN npm ci --omit=dev
+
+# Copy built files
 COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/package*.json ./
-COPY --from=builder /app/apps/api/drizzle.config.ts ./
-COPY --from=builder /app/apps/api/src/db/schema.ts ./src/db/schema.ts
-COPY --from=builder /app/node_modules ./node_modules
 
 # Security: run as non-root
 RUN addgroup -g 1001 -S nodejs && \
@@ -37,6 +39,6 @@ EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/v1/health || exit 1
 
 CMD ["node", "dist/index.js"]
