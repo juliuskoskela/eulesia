@@ -43,7 +43,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.eulesia-api.rule=Host(`api.${DOMAIN}`)"
       - "traefik.http.routers.eulesia-api.entrypoints=websecure"
-      - "traefik.http.routers.eulesia-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.eulesia-api.tls.certresolver=le"
       - "traefik.http.services.eulesia-api.loadbalancer.server.port=3001"
     networks:
       - internal
@@ -64,7 +64,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.eulesia-web.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.eulesia-web.entrypoints=websecure"
-      - "traefik.http.routers.eulesia-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.eulesia-web.tls.certresolver=le"
       - "traefik.http.services.eulesia-web.loadbalancer.server.port=80"
     networks:
       - wp_web
