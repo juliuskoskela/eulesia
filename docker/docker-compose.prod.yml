@@ -41,9 +41,14 @@ services:
       EMAIL_FROM: auth@${DOMAIN}
     labels:
       - "traefik.enable=true"
+      # HTTPS router
       - "traefik.http.routers.eulesia-api.rule=Host(`api.${DOMAIN}`)"
       - "traefik.http.routers.eulesia-api.entrypoints=websecure"
       - "traefik.http.routers.eulesia-api.tls.certresolver=le"
+      # HTTP router (for ACME challenge and redirect)
+      - "traefik.http.routers.eulesia-api-http.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.eulesia-api-http.entrypoints=web"
+      # Service
       - "traefik.http.services.eulesia-api.loadbalancer.server.port=3001"
     networks:
       - internal
@@ -62,9 +67,14 @@ services:
       - api
     labels:
       - "traefik.enable=true"
+      # HTTPS router
       - "traefik.http.routers.eulesia-web.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.eulesia-web.entrypoints=websecure"
       - "traefik.http.routers.eulesia-web.tls.certresolver=le"
+      # HTTP router (for ACME challenge and redirect)
+      - "traefik.http.routers.eulesia-web-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.eulesia-web-http.entrypoints=web"
+      # Service
       - "traefik.http.services.eulesia-web.loadbalancer.server.port=80"
     networks:
       - wp_web
