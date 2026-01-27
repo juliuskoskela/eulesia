@@ -142,14 +142,14 @@ async function extractTextFromPdf(pdfUrl: string): Promise<string> {
   }
 
   const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
 
-  // Dynamic import for pdf-parse (CommonJS module)
-  const pdfParse = (await import('pdf-parse')).default
-  const data = await pdfParse(buffer)
+  // pdf-parse v2: PDFParse class takes LoadParameters in constructor
+  const { PDFParse } = await import('pdf-parse')
+  const parser = new PDFParse({ data: arrayBuffer })
+  const result = await parser.getText()
 
-  console.log(`   Extracted ${data.text.length} characters from PDF`)
-  return data.text
+  console.log(`   Extracted ${result.text.length} characters from PDF`)
+  return result.text
 }
 
 // ============================================
