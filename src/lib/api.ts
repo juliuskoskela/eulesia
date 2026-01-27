@@ -243,10 +243,10 @@ class ApiClient {
     })
   }
 
-  async inviteToRoom(roomId: string, userId: string): Promise<RoomInvitation> {
+  async inviteToRoom(roomId: string, username: string): Promise<RoomInvitation> {
     return this.request(`/home/rooms/${roomId}/invite`, {
       method: 'POST',
-      body: JSON.stringify({ userId })
+      body: JSON.stringify({ username })
     })
   }
 
