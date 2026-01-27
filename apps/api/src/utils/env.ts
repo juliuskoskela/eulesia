@@ -9,10 +9,16 @@ const envSchema = z.object({
   APP_URL: z.string().url().default('http://localhost:5173'),
   API_URL: z.string().url().default('http://localhost:3001'),
 
-  // Email
-  EMAIL_PROVIDER: z.enum(['resend', 'console']).default('console'),
-  EMAIL_API_KEY: z.string().optional(),
+  // Email - SMTP is recommended for EU sovereignty
+  EMAIL_PROVIDER: z.enum(['smtp', 'console']).default('console'),
   EMAIL_FROM: z.string().email().default('auth@eulesia.local'),
+
+  // SMTP Configuration (for EMAIL_PROVIDER=smtp)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().transform(Number).default('587'),
+  SMTP_SECURE: z.string().transform(v => v === 'true').default('false'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
 
   // eIDAS (future)
   EIDAS_ENABLED: z.string().transform(v => v === 'true').default('false')

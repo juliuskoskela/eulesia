@@ -5,6 +5,7 @@ import { db, clubs, clubMembers, clubThreads, clubComments, users } from '../db/
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
+import { asyncHandler } from '../utils/asyncHandler.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -29,8 +30,8 @@ const createClubCommentSchema = z.object({
 })
 
 // GET /clubs - List clubs
-router.get('/', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: Response) => {
-  const { category, search, page = '1', limit = '20' } = req.query
+router.get('/', optionalAuthMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { page = '1', limit = '20' } = req.query
   const pageNum = Math.max(1, parseInt(page as string))
   const limitNum = Math.min(50, Math.max(1, parseInt(limit as string)))
   const offset = (pageNum - 1) * limitNum
@@ -46,7 +47,7 @@ router.get('/', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: R
     })
     .from(clubs)
     .leftJoin(users, eq(clubs.creatorId, users.id))
-    .where(clubs.isPublic)
+    .where(eq(clubs.isPublic, true))
     .orderBy(desc(clubs.memberCount))
     .limit(limitNum)
     .offset(offset)
@@ -57,7 +58,7 @@ router.get('/', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: R
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(clubs)
-    .where(clubs.isPublic)
+    .where(eq(clubs.isPublic, true))
 
   // If user is logged in, get their membership status
   let memberships: Record<string, boolean> = {}
@@ -87,10 +88,10 @@ router.get('/', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: R
       hasMore: offset + clubList.length < count
     }
   })
-})
+}))
 
 // GET /clubs/:id - Get club details
-router.get('/:id', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params
 
   // Get club (by ID or slug)
@@ -180,10 +181,10 @@ router.get('/:id', optionalAuthMiddleware, async (req: AuthenticatedRequest, res
       memberRole
     }
   })
-})
+}))
 
 // POST /clubs - Create club
-router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id
   const data = createClubSchema.parse(req.body)
 
@@ -218,10 +219,10 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
     success: true,
     data: newClub
   })
-})
+}))
 
 // POST /clubs/:id/join - Join club
-router.post('/:id/join', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/join', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id
   const { id: clubId } = req.params
 
@@ -264,10 +265,10 @@ router.post('/:id/join', authMiddleware, async (req: AuthenticatedRequest, res: 
     .where(eq(clubs.id, clubId))
 
   res.json({ success: true, message: 'Joined club' })
-})
+}))
 
 // POST /clubs/:id/leave - Leave club
-router.post('/:id/leave', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/leave', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id
   const { id: clubId } = req.params
 
@@ -317,10 +318,10 @@ router.post('/:id/leave', authMiddleware, async (req: AuthenticatedRequest, res:
     .where(eq(clubs.id, clubId))
 
   res.json({ success: true, message: 'Left club' })
-})
+}))
 
 // POST /clubs/:id/threads - Create thread in club
-router.post('/:id/threads', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/threads', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id
   const { id: clubId } = req.params
   const data = createClubThreadSchema.parse(req.body)
@@ -358,10 +359,10 @@ router.post('/:id/threads', authMiddleware, async (req: AuthenticatedRequest, re
     success: true,
     data: newThread
   })
-})
+}))
 
 // GET /clubs/:clubId/threads/:threadId - Get club thread
-router.get('/:clubId/threads/:threadId', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:clubId/threads/:threadId', optionalAuthMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { clubId, threadId } = req.params
 
   const [threadData] = await db
@@ -413,10 +414,10 @@ router.get('/:clubId/threads/:threadId', optionalAuthMiddleware, async (req: Aut
       }))
     }
   })
-})
+}))
 
 // POST /clubs/:clubId/threads/:threadId/comments - Add comment
-router.post('/:clubId/threads/:threadId/comments', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:clubId/threads/:threadId/comments', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id
   const { clubId, threadId } = req.params
   const data = createClubCommentSchema.parse(req.body)
@@ -481,14 +482,14 @@ router.post('/:clubId/threads/:threadId/comments', authMiddleware, async (req: A
     success: true,
     data: newComment
   })
-})
+}))
 
 // GET /clubs/categories - Get club categories
-router.get('/meta/categories', async (req, res: Response) => {
+router.get('/meta/categories', asyncHandler(async (_req, res: Response) => {
   const categories = await db
     .select({ category: clubs.category, count: sql<number>`count(*)::int` })
     .from(clubs)
-    .where(clubs.isPublic)
+    .where(eq(clubs.isPublic, true))
     .groupBy(clubs.category)
     .orderBy(desc(sql`count(*)`))
 
@@ -496,6 +497,6 @@ router.get('/meta/categories', async (req, res: Response) => {
     success: true,
     data: categories.filter(c => c.category)
   })
-})
+}))
 
 export default router

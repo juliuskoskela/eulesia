@@ -14,7 +14,7 @@ export class AppError extends Error {
 
 export function errorHandler(
   err: Error,
-  req: Request,
+  _req: Request,
   res: Response,
   _next: NextFunction
 ): void {

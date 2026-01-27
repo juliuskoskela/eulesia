@@ -20,3 +20,24 @@ body {
 .content-end-marker {
   @apply py-8 text-center text-gray-500 border-t border-gray-200;
 }
+
+/* Leaflet map custom styles */
+.leaflet-popup-content-wrapper {
+  border-radius: 0.75rem;
+  padding: 0;
+}
+
+.leaflet-popup-content {
+  margin: 0.75rem;
+}
+
+.custom-marker {
+  background: transparent;
+  border: none;
+}
+
+/* Fix Leaflet container height */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}

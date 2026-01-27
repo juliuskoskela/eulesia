@@ -42,18 +42,21 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-// Rate limiting
+// Rate limiting (relaxed in development)
+const isDev = env.NODE_ENV === 'development'
+
 const limiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute
+  max: isDev ? 1000 : 100, // 1000 in dev, 100 in prod
   message: { success: false, error: 'Too many requests, please try again later' },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: () => isDev // Skip rate limiting entirely in development
 })
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 requests per 15 minutes
+  max: isDev ? 100 : 10, // 100 in dev, 10 in prod
   message: { success: false, error: 'Too many authentication attempts' },
   standardHeaders: true,
   legacyHeaders: false
@@ -70,6 +73,11 @@ app.use(cookieParser())
 // Trust proxy (for rate limiting behind reverse proxy)
 app.set('trust proxy', 1)
 
+// Health check endpoint
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
 // API routes
 app.use('/api/v1', routes)
 
@@ -81,14 +89,16 @@ app.use(errorHandler)
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id)
 
-  socket.on('join:conversation', (conversationId: string) => {
-    socket.join(`conversation:${conversationId}`)
+  // Home rooms
+  socket.on('join:room', (roomId: string) => {
+    socket.join(`room:${roomId}`)
   })
 
-  socket.on('leave:conversation', (conversationId: string) => {
-    socket.leave(`conversation:${conversationId}`)
+  socket.on('leave:room', (roomId: string) => {
+    socket.leave(`room:${roomId}`)
   })
 
+  // Agora threads
   socket.on('join:thread', (threadId: string) => {
     socket.join(`thread:${threadId}`)
   })

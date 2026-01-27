@@ -60,7 +60,7 @@ export const users: User[] = [
   {
     id: 'liisa-makinen',
     name: 'Liisa Mäkinen',
-    role: 'moderator',
+    role: 'citizen',
     verified: true,
     municipality: 'tampere',
     avatarInitials: 'LM'
@@ -100,5 +100,5 @@ export const getInstitutions = (): User[] => {
 }
 
 export const getCitizens = (): User[] => {
-  return users.filter(user => user.role === 'citizen' || user.role === 'moderator')
+  return users.filter(user => user.role === 'citizen')
 }

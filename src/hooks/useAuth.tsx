@@ -1,37 +1,83 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
-import type { User, AuthState } from '../types'
-import { users } from '../data'
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { api } from '../lib/api'
+import type { User } from '../lib/api'
 
-interface AuthContextType extends AuthState {
-  login: () => void
-  logout: () => void
+interface AuthContextType {
+  isAuthenticated: boolean
+  isLoading: boolean
+  currentUser: User | null
+  login: (username: string, password: string) => Promise<void>
+  register: (data: { inviteCode: string; username: string; password: string; name: string }) => Promise<void>
+  requestMagicLink: (email: string) => Promise<{ message: string }>
+  logout: () => Promise<void>
+  checkAuth: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [authState, setAuthState] = useState<AuthState>({
-    isAuthenticated: false,
-    currentUser: null
-  })
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const queryClient = useQueryClient()
 
-  const login = () => {
-    const demoUser = users.find(u => u.id === 'current-user') as User
-    setAuthState({
-      isAuthenticated: true,
-      currentUser: demoUser
-    })
+  const checkAuth = useCallback(async () => {
+    try {
+      const user = await api.getCurrentUser()
+      setCurrentUser(user)
+      setIsAuthenticated(true)
+    } catch {
+      setCurrentUser(null)
+      setIsAuthenticated(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
+
+  const login = async (username: string, password: string) => {
+    const user = await api.login(username, password)
+    setCurrentUser(user)
+    setIsAuthenticated(true)
   }
 
-  const logout = () => {
-    setAuthState({
-      isAuthenticated: false,
-      currentUser: null
-    })
+  const register = async (data: { inviteCode: string; username: string; password: string; name: string }) => {
+    const user = await api.register(data)
+    setCurrentUser(user)
+    setIsAuthenticated(true)
+  }
+
+  const requestMagicLink = async (email: string) => {
+    return api.requestMagicLink(email)
+  }
+
+  const logout = async () => {
+    try {
+      await api.logout()
+    } catch {
+      // Ignore logout errors
+    } finally {
+      setCurrentUser(null)
+      setIsAuthenticated(false)
+      queryClient.clear()
+    }
   }
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout }}>
+    <AuthContext.Provider value={{
+      isAuthenticated,
+      isLoading,
+      currentUser,
+      login,
+      register,
+      requestMagicLink,
+      logout,
+      checkAuth
+    }}>
       {children}
     </AuthContext.Provider>
   )

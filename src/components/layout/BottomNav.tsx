@@ -1,9 +1,10 @@
-import { Landmark, Users, Home, Store } from 'lucide-react'
+import { Landmark, Users, Home, Store, MapPin } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const navItems = [
   { to: '/agora', icon: Landmark, label: 'Agora' },
   { to: '/clubs', icon: Users, label: 'Clubs' },
+  { to: '/map', icon: MapPin, label: 'Map' },
   { to: '/home', icon: Home, label: 'Home' },
   { to: '/services', icon: Store, label: 'Services' }
 ]

@@ -3,33 +3,41 @@ import { Search } from 'lucide-react'
 import { Layout } from '../components/layout'
 import { ClubCard } from '../components/clubs'
 import { ContentEndMarker } from '../components/common'
-import { clubs, getClubCategories } from '../data'
+import { useClubs, useClubCategories } from '../hooks/useApi'
+import type { Club as ApiClub } from '../lib/api'
+
+// Transform API club to component format
+function transformClub(club: ApiClub) {
+  return {
+    id: club.id,
+    name: club.name,
+    description: club.description || '',
+    rules: club.rules || [],
+    moderators: [],
+    memberCount: club.memberCount,
+    threads: [],
+    category: club.category || 'General'
+  }
+}
 
 export function ClubsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
-  const categories = useMemo(() => getClubCategories(), [])
+  const { data: categoriesData } = useClubCategories()
+  const { data: clubsData, isLoading, error } = useClubs({
+    category: selectedCategory || undefined,
+    search: searchQuery || undefined
+  })
 
-  const filteredClubs = useMemo(() => {
-    return clubs.filter(club => {
-      // Category filter
-      if (selectedCategory && club.category !== selectedCategory) {
-        return false
-      }
+  const categories = useMemo(() => {
+    return categoriesData?.map(c => c.category) || []
+  }, [categoriesData])
 
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        return (
-          club.name.toLowerCase().includes(query) ||
-          club.description.toLowerCase().includes(query)
-        )
-      }
-
-      return true
-    })
-  }, [searchQuery, selectedCategory])
+  const clubs = useMemo(() => {
+    if (!clubsData?.items) return []
+    return clubsData.items.map(transformClub)
+  }, [clubsData])
 
   return (
     <Layout>
@@ -85,13 +93,28 @@ export function ClubsPage() {
 
       {/* Club list */}
       <div className="px-4 py-4">
-        {filteredClubs.length > 0 ? (
+        {isLoading && (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {error && (
+          <div className="text-center py-12 text-red-600">
+            <p>Failed to load clubs</p>
+            <p className="text-sm mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
+          </div>
+        )}
+
+        {!isLoading && !error && clubs.length > 0 && (
           <div className="space-y-3">
-            {filteredClubs.map(club => (
+            {clubs.map(club => (
               <ClubCard key={club.id} club={club} />
             ))}
           </div>
-        ) : (
+        )}
+
+        {!isLoading && !error && clubs.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <p>No clubs match your search</p>
             <button
@@ -106,7 +129,7 @@ export function ClubsPage() {
           </div>
         )}
 
-        {filteredClubs.length > 0 && (
+        {!isLoading && clubs.length > 0 && (
           <ContentEndMarker message="All clubs shown" />
         )}
       </div>

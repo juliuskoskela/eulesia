@@ -1,4 +1,5 @@
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
+import type { Transporter } from 'nodemailer'
 import { env } from '../utils/env.js'
 
 interface EmailOptions {
@@ -9,16 +10,24 @@ interface EmailOptions {
 }
 
 class EmailService {
-  private resend: Resend | null = null
+  private transporter: Transporter | null = null
 
   constructor() {
-    if (env.EMAIL_PROVIDER === 'resend' && env.EMAIL_API_KEY) {
-      this.resend = new Resend(env.EMAIL_API_KEY)
+    if (env.EMAIL_PROVIDER === 'smtp' && env.SMTP_HOST) {
+      this.transporter = nodemailer.createTransport({
+        host: env.SMTP_HOST,
+        port: env.SMTP_PORT,
+        secure: env.SMTP_SECURE, // true for 465, false for other ports
+        auth: env.SMTP_USER ? {
+          user: env.SMTP_USER,
+          pass: env.SMTP_PASS
+        } : undefined
+      })
     }
   }
 
   async send(options: EmailOptions): Promise<boolean> {
-    if (env.EMAIL_PROVIDER === 'console' || !this.resend) {
+    if (env.EMAIL_PROVIDER === 'console' || !this.transporter) {
       // Development: log to console
       console.log('\n📧 Email (console mode):')
       console.log(`To: ${options.to}`)
@@ -28,7 +37,7 @@ class EmailService {
     }
 
     try {
-      await this.resend.emails.send({
+      await this.transporter.sendMail({
         from: env.EMAIL_FROM,
         to: options.to,
         subject: options.subject,
@@ -43,7 +52,7 @@ class EmailService {
   }
 
   async sendMagicLink(email: string, token: string): Promise<boolean> {
-    const loginUrl = `${env.APP_URL}/auth/verify?token=${token}`
+    const loginUrl = `${env.API_URL}/api/v1/auth/verify/${token}`
 
     const html = `
       <!DOCTYPE html>

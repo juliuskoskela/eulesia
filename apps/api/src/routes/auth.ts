@@ -1,12 +1,14 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
-import { eq, and, gt } from 'drizzle-orm'
-import { db, users, magicLinks, sessions } from '../db/index.js'
+import { eq, and, gt, or } from 'drizzle-orm'
+import * as argon2 from 'argon2'
+import { db, users, magicLinks, sessions, inviteCodes } from '../db/index.js'
 import { generateMagicLinkToken, generateSessionToken, hashToken } from '../utils/crypto.js'
 import { emailService } from '../services/email.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { env } from '../utils/env.js'
+import { asyncHandler } from '../utils/asyncHandler.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -20,8 +22,20 @@ const verifySchema = z.object({
   token: z.string().min(1, 'Token is required')
 })
 
+const registerSchema = z.object({
+  inviteCode: z.string().min(1, 'Invite code is required'),
+  username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  name: z.string().min(2).max(255)
+})
+
+const loginSchema = z.object({
+  username: z.string().min(1, 'Username or email is required'),
+  password: z.string().min(1, 'Password is required')
+})
+
 // POST /auth/magic-link - Request a magic link
-router.post('/magic-link', async (req, res: Response) => {
+router.post('/magic-link', asyncHandler(async (req, res: Response) => {
   const { email } = magicLinkSchema.parse(req.body)
 
   // Generate token
@@ -38,14 +52,183 @@ router.post('/magic-link', async (req, res: Response) => {
   // Send email
   await emailService.sendMagicLink(email, token)
 
+  // In development, return the login URL directly for easy testing
+  if (env.NODE_ENV === 'development') {
+    const loginUrl = `${env.API_URL}/api/v1/auth/verify/${token}`
+    res.json({
+      success: true,
+      message: 'If an account exists, you will receive a login link',
+      // DEV ONLY - login URL for testing
+      _dev: {
+        loginUrl,
+        note: 'This field only appears in development mode'
+      }
+    })
+    return
+  }
+
   res.json({
     success: true,
     message: 'If an account exists, you will receive a login link'
   })
-})
+}))
+
+// POST /auth/register - Register with invite code, username and password
+router.post('/register', asyncHandler(async (req, res: Response) => {
+  const { inviteCode, username, password, name } = registerSchema.parse(req.body)
+
+  // Validate invite code
+  const [invite] = await db
+    .select()
+    .from(inviteCodes)
+    .where(eq(inviteCodes.code, inviteCode.toUpperCase()))
+    .limit(1)
+
+  if (!invite) {
+    throw new AppError(400, 'Invalid invite code')
+  }
+
+  if (invite.status !== 'available') {
+    throw new AppError(400, 'Invite code has already been used')
+  }
+
+  if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
+    throw new AppError(400, 'Invite code has expired')
+  }
+
+  // Check if username already exists
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.username, username.toLowerCase()))
+    .limit(1)
+
+  if (existing) {
+    throw new AppError(400, 'Username already exists')
+  }
+
+  // Hash password
+  const passwordHash = await argon2.hash(password)
+
+  // Create user
+  const [newUser] = await db
+    .insert(users)
+    .values({
+      username: username.toLowerCase(),
+      passwordHash,
+      name,
+      invitedBy: invite.createdBy,
+      inviteCodesRemaining: 5,
+      identityProvider: 'invite',
+      identityVerified: false,
+      identityLevel: 'basic'
+    })
+    .returning()
+
+  // Mark invite code as used
+  await db
+    .update(inviteCodes)
+    .set({
+      usedBy: newUser.id,
+      status: 'used',
+      usedAt: new Date()
+    })
+    .where(eq(inviteCodes.id, invite.id))
+
+  // Create session
+  const { token: sessionToken, hash: sessionHash } = generateSessionToken()
+  const sessionExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+
+  await db.insert(sessions).values({
+    userId: newUser.id,
+    tokenHash: sessionHash,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+    expiresAt: sessionExpiresAt
+  })
+
+  // Set session cookie
+  res.cookie('session', sessionToken, {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    domain: env.COOKIE_DOMAIN,
+    expires: sessionExpiresAt
+  })
+
+  res.status(201).json({
+    success: true,
+    data: {
+      id: newUser.id,
+      username: newUser.username,
+      name: newUser.name,
+      inviteCodesRemaining: newUser.inviteCodesRemaining
+    }
+  })
+}))
+
+// POST /auth/login - Login with username/email and password
+router.post('/login', asyncHandler(async (req, res: Response) => {
+  const { username, password } = loginSchema.parse(req.body)
+
+  // Find user by username or email
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(or(
+      eq(users.username, username.toLowerCase()),
+      eq(users.email, username.toLowerCase())
+    ))
+    .limit(1)
+
+  if (!user || !user.passwordHash) {
+    res.status(401).json({ success: false, error: 'Invalid credentials' })
+    return
+  }
+
+  // Verify password
+  const validPassword = await argon2.verify(user.passwordHash, password)
+
+  if (!validPassword) {
+    res.status(401).json({ success: false, error: 'Invalid credentials' })
+    return
+  }
+
+  // Create session
+  const { token: sessionToken, hash: sessionHash } = generateSessionToken()
+  const sessionExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+
+  await db.insert(sessions).values({
+    userId: user.id,
+    tokenHash: sessionHash,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+    expiresAt: sessionExpiresAt
+  })
+
+  // Set session cookie
+  res.cookie('session', sessionToken, {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    domain: env.COOKIE_DOMAIN,
+    expires: sessionExpiresAt
+  })
+
+  res.json({
+    success: true,
+    data: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      role: user.role
+    }
+  })
+}))
 
 // GET /auth/verify/:token - Verify magic link and create session
-router.get('/verify/:token', async (req, res: Response) => {
+router.get('/verify/:token', asyncHandler(async (req, res: Response) => {
   const { token } = verifySchema.parse(req.params)
   const tokenHash = hashToken(token)
 
@@ -63,7 +246,8 @@ router.get('/verify/:token', async (req, res: Response) => {
     .limit(1)
 
   if (!magicLink) {
-    throw new AppError(400, 'Invalid or expired link')
+    res.status(400).json({ success: false, error: 'Invalid or expired link' })
+    return
   }
 
   // Mark as used
@@ -118,20 +302,20 @@ router.get('/verify/:token', async (req, res: Response) => {
 
   // Redirect to app
   res.redirect(`${env.APP_URL}/auth/callback?success=true`)
-})
+}))
 
 // POST /auth/logout - End session
-router.post('/logout', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/logout', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   if (req.sessionId) {
     await db.delete(sessions).where(eq(sessions.id, req.sessionId))
   }
 
   res.clearCookie('session')
   res.json({ success: true })
-})
+}))
 
 // GET /auth/me - Get current user
-router.get('/me', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!
 
   // Get municipality if set
@@ -168,6 +352,6 @@ router.get('/me', authMiddleware, async (req: AuthenticatedRequest, res: Respons
       createdAt: user.createdAt
     }
   })
-})
+}))
 
 export default router

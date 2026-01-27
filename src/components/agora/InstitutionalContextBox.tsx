@@ -13,6 +13,10 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
     setExpandedSection(prev => prev === section ? null : section)
   }
 
+  const docs = context.docs || []
+  const timeline = context.timeline || []
+  const faq = context.faq || []
+
   return (
     <div className="bg-violet-50 border border-violet-200 rounded-xl overflow-hidden">
       <div className="px-4 py-3 bg-violet-100 border-b border-violet-200">
@@ -27,7 +31,7 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
 
       <div className="divide-y divide-violet-200">
         {/* Documents */}
-        {context.docs.length > 0 && (
+        {docs.length > 0 && (
           <div>
             <button
               onClick={() => toggleSection('docs')}
@@ -35,7 +39,7 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
             >
               <span className="flex items-center gap-2 font-medium text-violet-900">
                 <FileText className="w-4 h-4" />
-                Related Documents ({context.docs.length})
+                Related Documents ({docs.length})
               </span>
               {expandedSection === 'docs' ? (
                 <ChevronUp className="w-4 h-4 text-violet-600" />
@@ -46,7 +50,7 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
 
             {expandedSection === 'docs' && (
               <div className="px-4 pb-3 space-y-2">
-                {context.docs.map((doc, i) => (
+                {docs.map((doc, i) => (
                   <a
                     key={i}
                     href={doc.url}
@@ -62,7 +66,7 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
         )}
 
         {/* Timeline */}
-        {context.timeline.length > 0 && (
+        {timeline.length > 0 && (
           <div>
             <button
               onClick={() => toggleSection('timeline')}
@@ -82,10 +86,10 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
             {expandedSection === 'timeline' && (
               <div className="px-4 pb-3">
                 <div className="space-y-3">
-                  {context.timeline.map((item, i) => {
+                  {timeline.map((item, i) => {
                     const date = new Date(item.date)
                     const isPast = date < new Date()
-                    const isNext = !isPast && (i === 0 || new Date(context.timeline[i - 1].date) < new Date())
+                    const isNext = !isPast && (i === 0 || new Date(timeline[i - 1].date) < new Date())
 
                     return (
                       <div
@@ -96,7 +100,7 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
                           <div className={`w-3 h-3 rounded-full ${
                             isPast ? 'bg-gray-400' : isNext ? 'bg-violet-600' : 'bg-violet-300'
                           }`} />
-                          {i < context.timeline.length - 1 && (
+                          {i < timeline.length - 1 && (
                             <div className="w-0.5 h-full bg-violet-200 mt-1" />
                           )}
                         </div>
@@ -116,7 +120,7 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
         )}
 
         {/* FAQ */}
-        {context.faq.length > 0 && (
+        {faq.length > 0 && (
           <div>
             <button
               onClick={() => toggleSection('faq')}
@@ -124,7 +128,7 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
             >
               <span className="flex items-center gap-2 font-medium text-violet-900">
                 <HelpCircle className="w-4 h-4" />
-                FAQ ({context.faq.length})
+                FAQ ({faq.length})
               </span>
               {expandedSection === 'faq' ? (
                 <ChevronUp className="w-4 h-4 text-violet-600" />
@@ -135,7 +139,7 @@ export function InstitutionalContextBox({ context }: InstitutionalContextBoxProp
 
             {expandedSection === 'faq' && (
               <div className="px-4 pb-3 space-y-3">
-                {context.faq.map((item, i) => (
+                {faq.map((item, i) => (
                   <div key={i} className="bg-white rounded-lg p-3">
                     <p className="text-sm font-medium text-violet-900 mb-1">{item.q}</p>
                     <p className="text-sm text-gray-600">{item.a}</p>
