@@ -83,29 +83,33 @@ async function fetchCloudNCMeetings(baseUrl: string): Promise<Meeting[]> {
 
   const meetings: Meeting[] = []
 
-  // CloudNC uses /kokous_{id} pattern
-  const regex = /href="([^"]*\/kokous_(\d+)[^"]*)"/gi
+  // CloudNC pattern: href='/fi-FI/Toimielimet/Organ/Kokous_DATE'
+  // Match: Organ - Kokous DATE Pöytäkirja (skip Esityslista)
+  const regex = /href='([^']*\/Kokous_[^']+)'[^>]*>([^<]+Pöytäkirja)/gi
   let match
 
   while ((match = regex.exec(html)) !== null) {
     const href = match[1]
-    const id = match[2]
+    const title = match[2].trim()
 
-    // Extract title from link text (simple approach)
-    const titleMatch = html.slice(match.index, match.index + 500).match(/>([^<]+)</g)
-    const title = titleMatch?.[0]?.replace(/[><]/g, '').trim() || `Kokous ${id}`
+    // Extract organ and date from title
+    const parts = title.split(' - ')
+    const organ = parts[0]?.trim()
+
+    // Create unique ID from path
+    const pathParts = href.split('/')
+    const id = pathParts[pathParts.length - 1]  // e.g., "Kokous_1912026"
 
     meetings.push({
       id,
       pageUrl: new URL(href, baseUrl).toString(),
-      title
+      title,
+      organ
     })
   }
 
-  // Deduplicate by ID
-  const unique = [...new Map(meetings.map(m => [m.id, m])).values()]
-
-  return unique.slice(0, 10)  // Limit to 10 most recent
+  console.log(`   Found ${meetings.length} pöytäkirjat`)
+  return meetings.slice(0, 10)  // Limit to 10 most recent
 }
 
 /**
@@ -115,33 +119,37 @@ async function extractCloudNCPdfUrl(pageUrl: string): Promise<string | null> {
   const response = await rateLimitedFetch(pageUrl)
   const html = await response.text()
 
-  // Look for /download/noname/ pattern
-  const pdfMatch = html.match(/href="([^"]*\/download\/noname\/[^"]*)"/i)
+  // Look for download button with /download/noname/ pattern
+  // Pattern: href="/download/noname/{GUID}/ID"
+  const pdfMatch = html.match(/href="(\/download\/noname\/\{[^}]+\}\/\d+)"/i)
   if (pdfMatch) {
-    return new URL(pdfMatch[1], pageUrl).toString()
+    const baseUrl = new URL(pageUrl)
+    return `${baseUrl.origin}${pdfMatch[1]}`
   }
 
   return null
 }
 
 /**
- * Download and extract text from PDF
- * Note: In production, use pdf-parse or similar library
+ * Download and extract text from PDF using pdf-parse
  */
 async function extractTextFromPdf(pdfUrl: string): Promise<string> {
-  // For now, we'll use a simple fetch and note that PDF parsing
-  // requires additional setup (pdf-parse library)
+  console.log(`   Downloading PDF: ${pdfUrl}`)
 
-  console.log(`   PDF URL: ${pdfUrl}`)
-  console.log('   Note: PDF text extraction requires pdf-parse library')
+  const response = await rateLimitedFetch(pdfUrl)
+  if (!response.ok) {
+    throw new Error(`Failed to download PDF: ${response.status}`)
+  }
 
-  // Return placeholder - in production, use:
-  // const pdfParse = require('pdf-parse')
-  // const pdfBuffer = await (await fetch(pdfUrl)).arrayBuffer()
-  // const data = await pdfParse(Buffer.from(pdfBuffer))
-  // return data.text
+  const arrayBuffer = await response.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
 
-  throw new Error('PDF parsing not implemented - install pdf-parse')
+  // Dynamic import for pdf-parse (CommonJS module)
+  const pdfParse = (await import('pdf-parse')).default
+  const data = await pdfParse(buffer)
+
+  console.log(`   Extracted ${data.text.length} characters from PDF`)
+  return data.text
 }
 
 // ============================================
