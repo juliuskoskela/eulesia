@@ -1,12 +1,12 @@
-import { Landmark, Users, Home, MapPin, Building } from 'lucide-react'
+import { Landmark, Users, Home, MapPin, Store } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const navItems = [
   { to: '/agora', icon: Landmark, label: 'Agora' },
-  { to: '/kunnat', icon: Building, label: 'Kunnat' },
   { to: '/clubs', icon: Users, label: 'Clubs' },
   { to: '/map', icon: MapPin, label: 'Map' },
-  { to: '/home', icon: Home, label: 'Home' }
+  { to: '/home', icon: Home, label: 'Home' },
+  { to: '/services', icon: Store, label: 'Services' }
 ]
 
 export function BottomNav() {

@@ -24,7 +24,10 @@ function transformThread(thread: ApiThread) {
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     replyCount: thread.replyCount,
-    institutionalContext: thread.institutionalContext
+    institutionalContext: thread.institutionalContext,
+    source: thread.source,
+    sourceUrl: thread.sourceUrl,
+    aiGenerated: thread.aiGenerated
   }
 }
 
@@ -46,6 +49,7 @@ export function AgoraPage() {
   const { currentUser } = useAuth()
   const [selectedScope, setSelectedScope] = useState<Scope | 'all'>('all')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedMunicipality, setSelectedMunicipality] = useState<string | undefined>()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newThreadTitle, setNewThreadTitle] = useState('')
   const [newThreadContent, setNewThreadContent] = useState('')
@@ -57,6 +61,7 @@ export function AgoraPage() {
   const createThreadMutation = useCreateThread()
   const { data: threadsData, isLoading, error } = useThreads({
     scope: selectedScope === 'all' ? undefined : selectedScope,
+    municipalityId: selectedMunicipality,
     tags: selectedTags.length > 0 ? selectedTags : undefined
   })
 
@@ -82,6 +87,7 @@ export function AgoraPage() {
   const handleClearFilters = () => {
     setSelectedScope('all')
     setSelectedTags([])
+    setSelectedMunicipality(undefined)
   }
 
   const handleCreateThread = async (e: React.FormEvent) => {
@@ -218,6 +224,9 @@ export function AgoraPage() {
         availableTags={availableTags}
         onTagToggle={handleTagToggle}
         onClearFilters={handleClearFilters}
+        municipalities={municipalitiesData}
+        selectedMunicipality={selectedMunicipality}
+        onMunicipalityChange={setSelectedMunicipality}
       />
 
       {/* Thread list */}

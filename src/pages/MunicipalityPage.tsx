@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Bot } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Layout } from '../components/layout'
 import { ThreadCard } from '../components/agora'
 import { ContentEndMarker } from '../components/common'
@@ -21,7 +21,10 @@ function transformThread(thread: ApiThread) {
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     replyCount: thread.replyCount,
-    institutionalContext: thread.institutionalContext
+    institutionalContext: thread.institutionalContext,
+    source: thread.source,
+    sourceUrl: thread.sourceUrl,
+    aiGenerated: thread.aiGenerated
   }
 }
 
@@ -53,15 +56,6 @@ export function MunicipalityPage() {
       .map(transformThread)
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
   }, [threadsData])
-
-  // Check if thread is AI-generated (source = 'minutes_summary' or ai_generated = true)
-  const isAiGenerated = (thread: ApiThread) => {
-    // Check if author name suggests AI generation or has special marker
-    return thread.author.name.toLowerCase().includes('ai') ||
-           thread.author.name.toLowerCase().includes('tekoäly') ||
-           thread.title.toLowerCase().includes('pöytäkirja') ||
-           thread.title.toLowerCase().includes('yhteenveto')
-  }
 
   return (
     <Layout>
@@ -106,20 +100,11 @@ export function MunicipalityPage() {
         {!isLoading && !error && threads.length > 0 && (
           <div className="space-y-3">
             {threadsData?.items.map(thread => (
-              <div key={thread.id} className="relative">
-                {isAiGenerated(thread) && (
-                  <div className="absolute -top-2 -right-2 z-10">
-                    <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
-                      <Bot className="w-3 h-3" />
-                      Pöytäkirja
-                    </span>
-                  </div>
-                )}
-                <ThreadCard
-                  thread={transformThread(thread)}
-                  author={transformAuthor(thread.author)}
-                />
-              </div>
+              <ThreadCard
+                key={thread.id}
+                thread={transformThread(thread)}
+                author={transformAuthor(thread.author)}
+              />
             ))}
           </div>
         )}

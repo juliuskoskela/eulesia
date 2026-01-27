@@ -361,6 +361,11 @@ export interface Thread {
   replyCount: number
   createdAt: string
   updatedAt: string
+  // AI/Import source tracking
+  source?: 'user' | 'minutes_import' | 'rss_import'
+  sourceUrl?: string
+  sourceId?: string
+  aiGenerated?: boolean
 }
 
 export interface ThreadWithComments extends Thread {

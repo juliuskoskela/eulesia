@@ -1,4 +1,4 @@
-import { MessageSquare, Clock, Building2 } from 'lucide-react'
+import { MessageSquare, Clock, Building2, Bot, FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Thread, User } from '../../types'
 import { ActorBadge } from '../common/ActorBadge'
@@ -35,16 +35,37 @@ function formatDate(dateString: string): string {
 export function ThreadCard({ thread, author }: ThreadCardProps) {
   const isInstitutional = author.role === 'institution'
   const hasInstitutionalContext = !!thread.institutionalContext
+  const isAiGenerated = thread.aiGenerated || thread.source === 'minutes_import'
 
   return (
     <Link
       to={`/agora/thread/${thread.id}`}
       className={`block bg-white rounded-xl p-4 hover:shadow-md transition-shadow border ${
-        isInstitutional ? 'border-violet-200' : 'border-gray-200'
+        isAiGenerated ? 'border-purple-200' : isInstitutional ? 'border-violet-200' : 'border-gray-200'
       }`}
     >
+      {/* AI/Minutes indicator */}
+      {isAiGenerated && (
+        <div className="flex items-center gap-1.5 text-xs text-purple-700 mb-2">
+          <Bot className="w-3.5 h-3.5" />
+          <span className="font-medium">Pöytäkirjayhteenveto</span>
+          {thread.sourceUrl && (
+            <a
+              href={thread.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="ml-1 flex items-center gap-0.5 text-purple-500 hover:text-purple-700 underline"
+            >
+              <FileText className="w-3 h-3" />
+              Alkuperäinen
+            </a>
+          )}
+        </div>
+      )}
+
       {/* Institutional indicator */}
-      {isInstitutional && (
+      {isInstitutional && !isAiGenerated && (
         <div className="flex items-center gap-1.5 text-xs text-violet-700 mb-2">
           <Building2 className="w-3.5 h-3.5" />
           <span className="font-medium">Official channel</span>
