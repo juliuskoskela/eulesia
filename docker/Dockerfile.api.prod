@@ -24,7 +24,7 @@ WORKDIR /app
 
 # Copy package files and install production deps
 COPY apps/api/package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Copy built files
 COPY --from=builder /app/apps/api/dist ./dist
