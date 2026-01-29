@@ -18,11 +18,11 @@ interface FeedFiltersProps {
   hasSubscriptions?: boolean
 }
 
+// All scopes filter within subscriptions - never shows all content globally
 const feedScopeOptions: { value: FeedScope; label: string; icon: React.ElementType }[] = [
-  { value: 'following', label: 'Following', icon: Users },
-  { value: 'local', label: 'Local', icon: MapPin },
-  { value: 'national', label: 'National', icon: Layers },
-  { value: 'all', label: 'All', icon: Globe }
+  { value: 'following', label: 'Kaikki', icon: Users },      // All from subscriptions
+  { value: 'local', label: 'Paikalliset', icon: MapPin },    // Municipal scope from subscriptions
+  { value: 'national', label: 'Valtakunnalliset', icon: Layers } // National scope from subscriptions
 ]
 
 const sortByOptions: { value: SortBy; label: string; icon: React.ElementType }[] = [
@@ -166,35 +166,7 @@ export function FeedFilters({
           )}
         </div>
 
-        {/* Municipality chips - show when Local scope is selected */}
-        {feedScope === 'local' && municipalities && municipalities.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-hide">
-            <span className="text-xs text-gray-500 flex-shrink-0">Kunta:</span>
-            <button
-              onClick={() => onMunicipalityChange?.(undefined)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                !selectedMunicipality
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              Kaikki
-            </button>
-            {municipalities.map(m => (
-              <button
-                key={m.id}
-                onClick={() => onMunicipalityChange?.(m.id)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                  selectedMunicipality === m.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {m.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Note: Municipality filtering removed - users subscribe to specific municipalities */}
 
         {/* Topic tags */}
         {availableTags.length > 0 && (

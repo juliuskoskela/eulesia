@@ -525,8 +525,8 @@ export interface HomeData {
   isOwnHome: boolean
 }
 
-// Filter types
-export type FeedScope = 'following' | 'local' | 'national' | 'global' | 'all'
+// Filter types - all scopes filter WITHIN subscriptions, never shows all content globally
+export type FeedScope = 'following' | 'local' | 'national' | 'all'
 export type SortBy = 'recent' | 'new' | 'top'
 export type TopPeriod = 'day' | 'week' | 'month' | 'year'
 

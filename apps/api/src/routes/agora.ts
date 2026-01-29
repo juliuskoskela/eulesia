@@ -44,7 +44,12 @@ const threadFiltersSchema = z.object({
   scope: z.enum(['municipal', 'regional', 'national']).optional(),
   municipalityId: z.string().uuid().optional(),
   tags: z.string().optional(), // Comma-separated
-  feedScope: z.enum(['following', 'local', 'national', 'global', 'all']).optional(),
+  // feedScope filters WITHIN subscriptions, never shows all content globally
+  // 'following' = all subscribed content
+  // 'local' = subscribed content with municipal scope
+  // 'national' = subscribed content with national/regional scope
+  // 'all' = same as 'following'
+  feedScope: z.enum(['following', 'local', 'national', 'all']).optional(),
   sortBy: z.enum(['recent', 'new', 'top']).default('recent'),
   topPeriod: z.enum(['day', 'week', 'month', 'year']).optional(),
   page: z.coerce.number().min(1).default(1),
@@ -69,12 +74,15 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
   }
 
   // Handle feedScope filtering (personalized feed)
+  // ALL feedScopes filter within subscriptions - never show all content globally
   let followedAuthors: string[] = []
   let followedMunicipalities: string[] = []
   let followedTags: string[] = []
+  let hasAnySubscriptions = false
 
-  if (filters.feedScope === 'following' && userId) {
-    // Get user's subscriptions
+  // Get subscriptions for any feedScope (except when not logged in)
+  if (userId && (filters.feedScope === 'following' || filters.feedScope === 'local' ||
+      filters.feedScope === 'national' || filters.feedScope === 'all' || !filters.feedScope)) {
     const subscriptions = await db
       .select()
       .from(userSubscriptions)
@@ -90,7 +98,11 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
       .filter(s => s.entityType === 'tag')
       .map(s => s.entityId)
 
-    // Build OR condition for following
+    hasAnySubscriptions = followedAuthors.length > 0 ||
+                          followedMunicipalities.length > 0 ||
+                          followedTags.length > 0
+
+    // Build subscription filter - always applied for logged-in users
     const followConditions = []
     if (followedAuthors.length > 0) {
       followConditions.push(inArray(threads.authorId, followedAuthors))
@@ -102,7 +114,7 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
     if (followConditions.length > 0) {
       conditions.push(or(...followConditions))
     } else if (followedTags.length === 0) {
-      // No subscriptions at all - return empty result
+      // No subscriptions at all - return empty result with onboarding flag
       res.json({
         success: true,
         data: {
@@ -111,29 +123,25 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
           page: filters.page,
           limit: filters.limit,
           hasMore: false,
-          feedScope: 'following',
+          feedScope: filters.feedScope || 'following',
           hasSubscriptions: false
         }
       })
       return
     }
-  } else if (filters.feedScope === 'national') {
-    // Show national-scope posts
-    conditions.push(or(
-      eq(threads.scope, 'national'),
-      eq(threads.scope, 'regional')
-    ))
-  } else if (filters.feedScope === 'local' && userId) {
-    // Show local posts based on user's municipality
-    const [user] = await db
-      .select({ municipalityId: users.municipalityId })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1)
 
-    if (user?.municipalityId) {
-      conditions.push(eq(threads.municipalityId, user.municipalityId))
+    // Additional scope filter within subscriptions
+    if (filters.feedScope === 'local') {
+      // Only municipal-scope content from subscriptions
+      conditions.push(eq(threads.scope, 'municipal'))
+    } else if (filters.feedScope === 'national') {
+      // Only national/regional-scope content from subscriptions
+      conditions.push(or(
+        eq(threads.scope, 'national'),
+        eq(threads.scope, 'regional')
+      ))
     }
+    // 'following' and 'all' show all scopes from subscriptions
   }
 
   // Time filter for 'top' sorting
