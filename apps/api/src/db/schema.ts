@@ -13,6 +13,30 @@ export const placeSourceEnum = pgEnum('place_source', ['user', 'osm', 'lipas', '
 export const syncStatusEnum = pgEnum('sync_status', ['active', 'deprecated', 'merged'])
 export const inviteCodeStatusEnum = pgEnum('invite_code_status', ['available', 'used', 'revoked'])
 export const threadSourceEnum = pgEnum('thread_source', ['user', 'minutes_import', 'rss_import'])
+export const locationTypeEnum = pgEnum('location_type', ['country', 'region', 'municipality', 'village', 'district'])
+export const subscriptionNotifyEnum = pgEnum('subscription_notify', ['all', 'none', 'highlights'])
+
+// Locations (hierarchical administrative areas from OSM)
+export const locations = pgTable('locations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  osmId: integer('osm_id').unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  nameLocal: varchar('name_local', { length: 255 }),
+  adminLevel: integer('admin_level'), // OSM admin_level: 4=region, 7=municipality, 8=village
+  type: varchar('type', { length: 50 }), // 'country', 'region', 'municipality', 'village', 'district'
+  parentId: uuid('parent_id'),
+  country: varchar('country', { length: 2 }).default('FI'),
+  latitude: decimal('latitude', { precision: 10, scale: 7 }),
+  longitude: decimal('longitude', { precision: 10, scale: 7 }),
+  bounds: jsonb('bounds'), // GeoJSON polygon
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  parentIdx: index('locations_parent_idx').on(table.parentId),
+  adminLevelIdx: index('locations_admin_level_idx').on(table.adminLevel),
+  osmIdx: index('locations_osm_idx').on(table.osmId),
+  countryIdx: index('locations_country_idx').on(table.country),
+  coordsIdx: index('locations_coords_idx').on(table.latitude, table.longitude)
+}))
 
 // Municipalities
 export const municipalities = pgTable('municipalities', {
@@ -53,6 +77,7 @@ export const places = pgTable('places', {
 
   // Link to administrative structure
   municipalityId: uuid('municipality_id').references(() => municipalities.id),
+  locationId: uuid('location_id').references(() => locations.id),
   country: varchar('country', { length: 2 }).default('FI'),
 
   // Address info
@@ -84,6 +109,7 @@ export const places = pgTable('places', {
   typeIdx: index('places_type_idx').on(table.type),
   categoryIdx: index('places_category_idx').on(table.category),
   municipalityIdx: index('places_municipality_idx').on(table.municipalityId),
+  locationIdx: index('places_location_idx').on(table.locationId),
   sourceIdx: index('places_source_idx').on(table.source, table.sourceId),
   osmIdx: index('places_osm_idx').on(table.osmId),
   countryIdx: index('places_country_idx').on(table.country)
@@ -182,7 +208,9 @@ export const threads = pgTable('threads', {
   isPinned: boolean('is_pinned').default(false),
   isLocked: boolean('is_locked').default(false),
   replyCount: integer('reply_count').default(0),
+  score: integer('score').default(0), // Cached vote score
   // Location fields
+  locationId: uuid('location_id').references(() => locations.id),
   placeId: uuid('place_id').references(() => places.id),
   latitude: decimal('latitude', { precision: 10, scale: 7 }),
   longitude: decimal('longitude', { precision: 10, scale: 7 }),
@@ -203,6 +231,8 @@ export const threads = pgTable('threads', {
   authorIdx: index('threads_author_idx').on(table.authorId),
   createdIdx: index('threads_created_idx').on(table.createdAt),
   updatedIdx: index('threads_updated_idx').on(table.updatedAt),
+  scoreIdx: index('threads_score_idx').on(table.score),
+  locationIdx: index('threads_location_idx').on(table.locationId),
   placeIdx: index('threads_place_idx').on(table.placeId),
   coordsIdx: index('threads_coords_idx').on(table.latitude, table.longitude),
   sourceIdx: index('threads_source_idx').on(table.source),
@@ -244,6 +274,17 @@ export const commentVotes = pgTable('comment_votes', {
 }, (table) => ({
   pk: primaryKey({ columns: [table.commentId, table.userId] }),
   commentIdx: index('comment_votes_comment_idx').on(table.commentId)
+}))
+
+// Thread Votes
+export const threadVotes = pgTable('thread_votes', {
+  threadId: uuid('thread_id').notNull().references(() => threads.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  value: integer('value').notNull(), // 1 = upvote, -1 = downvote
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  pk: primaryKey({ columns: [table.threadId, table.userId] }),
+  threadIdx: index('thread_votes_thread_idx').on(table.threadId)
 }))
 
 // Clubs
@@ -383,11 +424,14 @@ export const notifications = pgTable('notifications', {
 // User Subscriptions
 export const userSubscriptions = pgTable('user_subscriptions', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  entityType: varchar('entity_type', { length: 50 }).notNull(),
+  entityType: varchar('entity_type', { length: 50 }).notNull(), // 'user', 'municipality', 'place', 'club', 'tag'
   entityId: varchar('entity_id', { length: 255 }).notNull(),
+  notify: varchar('notify', { length: 20 }).default('all'), // 'all', 'none', 'highlights'
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
-  pk: primaryKey({ columns: [table.userId, table.entityType, table.entityId] })
+  pk: primaryKey({ columns: [table.userId, table.entityType, table.entityId] }),
+  entityIdx: index('user_subscriptions_entity_idx').on(table.entityType, table.entityId),
+  userIdx: index('user_subscriptions_user_idx').on(table.userId)
 }))
 
 // Relations
@@ -421,12 +465,17 @@ export const threadsRelations = relations(threads, ({ one, many }) => ({
     fields: [threads.municipalityId],
     references: [municipalities.id]
   }),
+  location: one(locations, {
+    fields: [threads.locationId],
+    references: [locations.id]
+  }),
   place: one(places, {
     fields: [threads.placeId],
     references: [places.id]
   }),
   comments: many(comments),
-  tags: many(threadTags)
+  tags: many(threadTags),
+  votes: many(threadVotes)
 }))
 
 export const commentsRelations = relations(comments, ({ one, many }) => ({
@@ -458,6 +507,35 @@ export const commentVotesRelations = relations(commentVotes, ({ one }) => ({
   })
 }))
 
+export const threadVotesRelations = relations(threadVotes, ({ one }) => ({
+  thread: one(threads, {
+    fields: [threadVotes.threadId],
+    references: [threads.id]
+  }),
+  user: one(users, {
+    fields: [threadVotes.userId],
+    references: [users.id]
+  })
+}))
+
+export const locationsRelations = relations(locations, ({ one, many }) => ({
+  parent: one(locations, {
+    fields: [locations.parentId],
+    references: [locations.id],
+    relationName: 'locationChildren'
+  }),
+  children: many(locations, { relationName: 'locationChildren' }),
+  threads: many(threads),
+  places: many(places)
+}))
+
+export const userSubscriptionsRelations = relations(userSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [userSubscriptions.userId],
+    references: [users.id]
+  })
+}))
+
 export const clubsRelations = relations(clubs, ({ one, many }) => ({
   creator: one(users, {
     fields: [clubs.creatorId],
@@ -480,6 +558,10 @@ export const placesRelations = relations(places, ({ one, many }) => ({
   municipality: one(municipalities, {
     fields: [places.municipalityId],
     references: [municipalities.id]
+  }),
+  location: one(locations, {
+    fields: [places.locationId],
+    references: [locations.id]
   }),
   creator: one(users, {
     fields: [places.createdBy],
@@ -572,3 +654,9 @@ export type Place = typeof places.$inferSelect
 export type Municipality = typeof municipalities.$inferSelect
 export type NewInviteCode = typeof inviteCodes.$inferInsert
 export type InviteCode = typeof inviteCodes.$inferSelect
+export type NewLocation = typeof locations.$inferInsert
+export type Location = typeof locations.$inferSelect
+export type NewThreadVote = typeof threadVotes.$inferInsert
+export type ThreadVote = typeof threadVotes.$inferSelect
+export type NewUserSubscription = typeof userSubscriptions.$inferInsert
+export type UserSubscription = typeof userSubscriptions.$inferSelect

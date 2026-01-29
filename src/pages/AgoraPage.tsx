@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout'
-import { ThreadCard, AgoraFilters } from '../components/agora'
+import { ThreadCard, FeedFilters, FeedOnboarding } from '../components/agora'
 import { ContentEndMarker } from '../components/common'
-import { useThreads, useTags, useCreateThread, useMunicipalities } from '../hooks/useApi'
+import { useThreads, useTags, useCreateThread, useMunicipalities, useVoteThread, useSubscriptions } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
-import type { Thread as ApiThread, UserSummary, Municipality } from '../lib/api'
+import type { Thread as ApiThread, UserSummary, Municipality, FeedScope, SortBy, TopPeriod } from '../lib/api'
 
 type Scope = 'municipal' | 'regional' | 'national'
 
@@ -24,6 +24,8 @@ function transformThread(thread: ApiThread) {
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     replyCount: thread.replyCount,
+    score: thread.score,
+    userVote: thread.userVote,
     institutionalContext: thread.institutionalContext,
     source: thread.source,
     sourceUrl: thread.sourceUrl,
@@ -47,9 +49,16 @@ function transformAuthor(author: UserSummary) {
 export function AgoraPage() {
   const navigate = useNavigate()
   const { currentUser } = useAuth()
-  const [selectedScope, setSelectedScope] = useState<Scope | 'all'>('all')
+
+  // Feed state
+  const [feedScope, setFeedScope] = useState<FeedScope>('all')
+  const [sortBy, setSortBy] = useState<SortBy>('recent')
+  const [topPeriod, setTopPeriod] = useState<TopPeriod>('week')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedMunicipality, setSelectedMunicipality] = useState<string | undefined>()
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  // Create thread state
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newThreadTitle, setNewThreadTitle] = useState('')
   const [newThreadContent, setNewThreadContent] = useState('')
@@ -58,12 +67,48 @@ export function AgoraPage() {
 
   const { data: tagsData } = useTags()
   const { data: municipalitiesData } = useMunicipalities()
+  const { data: subscriptionsData } = useSubscriptions()
   const createThreadMutation = useCreateThread()
-  const { data: threadsData, isLoading, error } = useThreads({
-    scope: selectedScope === 'all' ? undefined : selectedScope,
+
+  // Build filters for the API
+  const filters = useMemo(() => ({
+    feedScope,
+    sortBy,
+    topPeriod: sortBy === 'top' ? topPeriod : undefined,
     municipalityId: selectedMunicipality,
     tags: selectedTags.length > 0 ? selectedTags : undefined
-  })
+  }), [feedScope, sortBy, topPeriod, selectedMunicipality, selectedTags])
+
+  const { data: threadsData, isLoading, error } = useThreads(filters)
+  const voteThreadMutation = useVoteThread(filters)
+
+  // Determine if user has subscriptions
+  const hasSubscriptions = useMemo(() => {
+    if (!subscriptionsData) return false
+    return subscriptionsData.length > 0
+  }, [subscriptionsData])
+
+  // Set default feed scope based on subscriptions
+  useEffect(() => {
+    if (currentUser && subscriptionsData !== undefined) {
+      if (hasSubscriptions) {
+        setFeedScope('following')
+      } else {
+        setFeedScope('all')
+      }
+    }
+  }, [currentUser, subscriptionsData, hasSubscriptions])
+
+  // Show onboarding when following feed is empty
+  useEffect(() => {
+    if (
+      feedScope === 'following' &&
+      !isLoading &&
+      threadsData?.hasSubscriptions === false
+    ) {
+      setShowOnboarding(true)
+    }
+  }, [feedScope, isLoading, threadsData?.hasSubscriptions])
 
   const availableTags = useMemo(() => {
     return tagsData?.map(t => t.tag) || []
@@ -71,9 +116,7 @@ export function AgoraPage() {
 
   const threads = useMemo(() => {
     if (!threadsData?.items) return []
-    return threadsData.items
-      .map(transformThread)
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    return threadsData.items.map(transformThread)
   }, [threadsData])
 
   const handleTagToggle = (tag: string) => {
@@ -84,10 +127,9 @@ export function AgoraPage() {
     )
   }
 
-  const handleClearFilters = () => {
-    setSelectedScope('all')
-    setSelectedTags([])
-    setSelectedMunicipality(undefined)
+  const handleVote = (threadId: string, value: number) => {
+    if (!currentUser) return
+    voteThreadMutation.mutate({ threadId, value })
   }
 
   const handleCreateThread = async (e: React.FormEvent) => {
@@ -112,6 +154,11 @@ export function AgoraPage() {
     }
   }
 
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false)
+    // Stay on following feed to see the newly subscribed content
+  }
+
   return (
     <Layout>
       {/* Page header */}
@@ -120,7 +167,7 @@ export function AgoraPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">Agora</h1>
             <p className="text-sm text-gray-600 mt-1">
-              Public civic discussions — sorted by most recent activity
+              Public civic discussions
             </p>
           </div>
           {currentUser && (
@@ -217,16 +264,20 @@ export function AgoraPage() {
       )}
 
       {/* Filters */}
-      <AgoraFilters
-        selectedScope={selectedScope}
-        onScopeChange={setSelectedScope}
+      <FeedFilters
+        feedScope={feedScope}
+        onFeedScopeChange={setFeedScope}
+        sortBy={sortBy}
+        onSortByChange={setSortBy}
+        topPeriod={topPeriod}
+        onTopPeriodChange={setTopPeriod}
         selectedTags={selectedTags}
         availableTags={availableTags}
         onTagToggle={handleTagToggle}
-        onClearFilters={handleClearFilters}
         municipalities={municipalitiesData}
         selectedMunicipality={selectedMunicipality}
         onMunicipalityChange={setSelectedMunicipality}
+        hasSubscriptions={hasSubscriptions}
       />
 
       {/* Thread list */}
@@ -244,32 +295,45 @@ export function AgoraPage() {
           </div>
         )}
 
-        {!isLoading && !error && threads.length > 0 && (
+        {/* Onboarding for empty following feed */}
+        {!isLoading && !error && showOnboarding && feedScope === 'following' && (
+          <div className="py-8">
+            <FeedOnboarding onComplete={handleOnboardingComplete} />
+          </div>
+        )}
+
+        {/* Thread list */}
+        {!isLoading && !error && !showOnboarding && threads.length > 0 && (
           <div className="space-y-3">
             {threadsData?.items.map(thread => (
               <ThreadCard
                 key={thread.id}
                 thread={transformThread(thread)}
                 author={transformAuthor(thread.author)}
+                onVote={handleVote}
+                isVoting={voteThreadMutation.isPending}
               />
             ))}
           </div>
         )}
 
-        {!isLoading && !error && threads.length === 0 && (
+        {/* Empty state (not onboarding) */}
+        {!isLoading && !error && !showOnboarding && threads.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <p>No discussions match your filters</p>
-            <button
-              onClick={handleClearFilters}
-              className="mt-2 text-blue-600 hover:underline text-sm"
-            >
-              Clear filters
-            </button>
+            {feedScope === 'following' && (
+              <button
+                onClick={() => setShowOnboarding(true)}
+                className="mt-2 text-blue-600 hover:underline text-sm"
+              >
+                Set up your feed
+              </button>
+            )}
           </div>
         )}
 
         {/* End marker - no infinite scroll */}
-        {!isLoading && threads.length > 0 && (
+        {!isLoading && !showOnboarding && threads.length > 0 && (
           <ContentEndMarker />
         )}
       </div>

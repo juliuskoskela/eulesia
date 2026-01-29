@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
-import { eq, desc, asc, and, inArray, sql } from 'drizzle-orm'
-import { db, threads, threadTags, comments, commentVotes, users, municipalities } from '../db/index.js'
+import { eq, desc, asc, and, inArray, sql, or, gte } from 'drizzle-orm'
+import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
@@ -34,12 +34,19 @@ const voteSchema = z.object({
   value: z.number().int().min(-1).max(1) // -1 = downvote, 0 = remove, 1 = upvote
 })
 
+const threadVoteSchema = z.object({
+  value: z.number().int().min(-1).max(1) // -1 = downvote, 0 = remove, 1 = upvote
+})
+
 const commentSortSchema = z.enum(['best', 'new', 'old', 'controversial']).default('best')
 
 const threadFiltersSchema = z.object({
   scope: z.enum(['municipal', 'regional', 'national']).optional(),
   municipalityId: z.string().uuid().optional(),
   tags: z.string().optional(), // Comma-separated
+  feedScope: z.enum(['following', 'local', 'national', 'global', 'all']).optional(),
+  sortBy: z.enum(['recent', 'new', 'top']).default('recent'),
+  topPeriod: z.enum(['day', 'week', 'month', 'year']).optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(50).default(20)
 })
@@ -48,6 +55,7 @@ const threadFiltersSchema = z.object({
 router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const filters = threadFiltersSchema.parse(req.query)
   const offset = (filters.page - 1) * filters.limit
+  const userId = req.user?.id
 
   // Build where conditions
   const conditions = []
@@ -58,6 +66,110 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
 
   if (filters.municipalityId) {
     conditions.push(eq(threads.municipalityId, filters.municipalityId))
+  }
+
+  // Handle feedScope filtering (personalized feed)
+  let followedAuthors: string[] = []
+  let followedMunicipalities: string[] = []
+  let followedTags: string[] = []
+
+  if (filters.feedScope === 'following' && userId) {
+    // Get user's subscriptions
+    const subscriptions = await db
+      .select()
+      .from(userSubscriptions)
+      .where(eq(userSubscriptions.userId, userId))
+
+    followedAuthors = subscriptions
+      .filter(s => s.entityType === 'user')
+      .map(s => s.entityId)
+    followedMunicipalities = subscriptions
+      .filter(s => s.entityType === 'municipality')
+      .map(s => s.entityId)
+    followedTags = subscriptions
+      .filter(s => s.entityType === 'tag')
+      .map(s => s.entityId)
+
+    // Build OR condition for following
+    const followConditions = []
+    if (followedAuthors.length > 0) {
+      followConditions.push(inArray(threads.authorId, followedAuthors))
+    }
+    if (followedMunicipalities.length > 0) {
+      followConditions.push(inArray(threads.municipalityId, followedMunicipalities))
+    }
+
+    if (followConditions.length > 0) {
+      conditions.push(or(...followConditions))
+    } else if (followedTags.length === 0) {
+      // No subscriptions at all - return empty result
+      res.json({
+        success: true,
+        data: {
+          items: [],
+          total: 0,
+          page: filters.page,
+          limit: filters.limit,
+          hasMore: false,
+          feedScope: 'following',
+          hasSubscriptions: false
+        }
+      })
+      return
+    }
+  } else if (filters.feedScope === 'national') {
+    // Show national-scope posts
+    conditions.push(or(
+      eq(threads.scope, 'national'),
+      eq(threads.scope, 'regional')
+    ))
+  } else if (filters.feedScope === 'local' && userId) {
+    // Show local posts based on user's municipality
+    const [user] = await db
+      .select({ municipalityId: users.municipalityId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+
+    if (user?.municipalityId) {
+      conditions.push(eq(threads.municipalityId, user.municipalityId))
+    }
+  }
+
+  // Time filter for 'top' sorting
+  if (filters.sortBy === 'top' && filters.topPeriod) {
+    const now = new Date()
+    let startDate: Date
+    switch (filters.topPeriod) {
+      case 'day':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        break
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case 'year':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+        break
+    }
+    conditions.push(gte(threads.createdAt, startDate))
+  }
+
+  // Determine sort order
+  let orderBy
+  switch (filters.sortBy) {
+    case 'new':
+      orderBy = desc(threads.createdAt)
+      break
+    case 'top':
+      orderBy = desc(threads.score)
+      break
+    case 'recent':
+    default:
+      orderBy = desc(threads.updatedAt)
+      break
   }
 
   // Get threads
@@ -78,7 +190,7 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
     .leftJoin(users, eq(threads.authorId, users.id))
     .leftJoin(municipalities, eq(threads.municipalityId, municipalities.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(threads.updatedAt))
+    .orderBy(orderBy)
     .limit(filters.limit)
     .offset(offset)
 
@@ -98,14 +210,46 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
     return acc
   }, {} as Record<string, string[]>)
 
-  // Filter by tags if specified
+  // Filter by tags if specified (including followed tags)
   let filteredThreads = threadList
-  if (filters.tags) {
-    const requestedTags = filters.tags.split(',').map(t => t.trim().toLowerCase())
+  const requestedTags = filters.tags ? filters.tags.split(',').map(t => t.trim().toLowerCase()) : []
+  const combinedTags = [...requestedTags, ...followedTags]
+
+  if (combinedTags.length > 0 && filters.feedScope !== 'following') {
+    // For non-following feeds, use tag filter as normal
+    if (requestedTags.length > 0) {
+      filteredThreads = threadList.filter(t => {
+        const threadTagList = tagsByThread[t.thread.id] || []
+        return requestedTags.some(rt => threadTagList.includes(rt))
+      })
+    }
+  } else if (filters.feedScope === 'following' && followedTags.length > 0) {
+    // For following feed, include threads with followed tags
     filteredThreads = threadList.filter(t => {
       const threadTagList = tagsByThread[t.thread.id] || []
-      return requestedTags.some(rt => threadTagList.includes(rt))
+      // Include if matches author/municipality OR has followed tag
+      const hasFollowedTag = followedTags.some(ft => threadTagList.includes(ft))
+      const followsAuthor = followedAuthors.includes(t.thread.authorId)
+      const followsMunicipality = t.thread.municipalityId && followedMunicipalities.includes(t.thread.municipalityId)
+      return hasFollowedTag || followsAuthor || followsMunicipality
     })
+  }
+
+  // Get user's votes on these threads
+  let userVotes: Record<string, number> = {}
+  if (userId && threadIds.length > 0) {
+    const votes = await db
+      .select()
+      .from(threadVotes)
+      .where(and(
+        inArray(threadVotes.threadId, threadIds),
+        eq(threadVotes.userId, userId)
+      ))
+
+    userVotes = votes.reduce((acc, v) => {
+      acc[v.threadId] = v.value
+      return acc
+    }, {} as Record<string, number>)
   }
 
   // Get total count
@@ -121,12 +265,15 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
         ...thread,
         tags: tagsByThread[thread.id] || [],
         author,
-        municipality
+        municipality,
+        userVote: userVotes[thread.id] || 0
       })),
       total: count,
       page: filters.page,
       limit: filters.limit,
-      hasMore: offset + filteredThreads.length < count
+      hasMore: offset + filteredThreads.length < count,
+      feedScope: filters.feedScope || 'all',
+      hasSubscriptions: filters.feedScope === 'following' ? (followedAuthors.length > 0 || followedMunicipalities.length > 0 || followedTags.length > 0) : undefined
     }
   })
 }))
@@ -224,6 +371,20 @@ router.get('/threads/:id', optionalAuthMiddleware, asyncHandler(async (req: Auth
     }
   }
 
+  // Get user's vote on the thread
+  let threadUserVote = 0
+  if (userId) {
+    const [vote] = await db
+      .select()
+      .from(threadVotes)
+      .where(and(
+        eq(threadVotes.threadId, id),
+        eq(threadVotes.userId, userId)
+      ))
+      .limit(1)
+    threadUserVote = vote?.value || 0
+  }
+
   res.json({
     success: true,
     data: {
@@ -231,6 +392,7 @@ router.get('/threads/:id', optionalAuthMiddleware, asyncHandler(async (req: Auth
       tags: tags.map(t => t.tag),
       author: threadData.author,
       municipality: threadData.municipality,
+      userVote: threadUserVote,
       comments: commentList.map(({ comment, author }) => ({
         ...comment,
         author,
@@ -441,6 +603,94 @@ router.post('/comments/:commentId/vote', authMiddleware, asyncHandler(async (req
     data: {
       commentId,
       score: updatedComment.score,
+      userVote: value
+    }
+  })
+}))
+
+// POST /agora/threads/:threadId/vote - Vote on a thread
+router.post('/threads/:threadId/vote', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { threadId } = req.params
+  const { value } = threadVoteSchema.parse(req.body)
+
+  // Verify thread exists
+  const [thread] = await db
+    .select()
+    .from(threads)
+    .where(eq(threads.id, threadId))
+    .limit(1)
+
+  if (!thread) {
+    throw new AppError(404, 'Thread not found')
+  }
+
+  // Get existing vote
+  const [existingVote] = await db
+    .select()
+    .from(threadVotes)
+    .where(and(
+      eq(threadVotes.threadId, threadId),
+      eq(threadVotes.userId, userId)
+    ))
+    .limit(1)
+
+  const oldValue = existingVote?.value || 0
+  const scoreDelta = value - oldValue
+
+  if (value === 0) {
+    // Remove vote
+    if (existingVote) {
+      await db
+        .delete(threadVotes)
+        .where(and(
+          eq(threadVotes.threadId, threadId),
+          eq(threadVotes.userId, userId)
+        ))
+    }
+  } else {
+    // Upsert vote
+    if (existingVote) {
+      await db
+        .update(threadVotes)
+        .set({ value })
+        .where(and(
+          eq(threadVotes.threadId, threadId),
+          eq(threadVotes.userId, userId)
+        ))
+    } else {
+      await db
+        .insert(threadVotes)
+        .values({
+          threadId,
+          userId,
+          value
+        })
+    }
+  }
+
+  // Update thread score
+  if (scoreDelta !== 0) {
+    await db
+      .update(threads)
+      .set({
+        score: sql`${threads.score} + ${scoreDelta}`
+      })
+      .where(eq(threads.id, threadId))
+  }
+
+  // Get updated thread score
+  const [updatedThread] = await db
+    .select({ score: threads.score })
+    .from(threads)
+    .where(eq(threads.id, threadId))
+    .limit(1)
+
+  res.json({
+    success: true,
+    data: {
+      threadId,
+      score: updatedThread.score,
       userVote: value
     }
   })

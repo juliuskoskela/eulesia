@@ -7,7 +7,9 @@ import type {
   CreateCommentData,
   CreateClubData,
   CreateClubThreadData,
-  CreateRoomData
+  CreateRoomData,
+  EntityType,
+  SubscribeData
 } from '../lib/api'
 
 export type CommentSort = 'best' | 'new' | 'old' | 'controversial'
@@ -21,6 +23,10 @@ export const queryKeys = {
   threads: (filters?: ThreadFilters) => ['threads', filters] as const,
   thread: (id: string, sort?: CommentSort) => ['thread', id, sort] as const,
   tags: ['tags'] as const,
+
+  // Subscriptions
+  subscriptions: ['subscriptions'] as const,
+  subscriptionCheck: (entityType: EntityType, entityId: string) => ['subscriptionCheck', entityType, entityId] as const,
 
   // Clubs
   clubs: (filters?: ClubFilters) => ['clubs', filters] as const,
@@ -129,6 +135,89 @@ export function useVoteComment(threadId: string, sort?: CommentSort) {
           }
         }
       )
+    }
+  })
+}
+
+export function useVoteThread(filters?: ThreadFilters) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ threadId, value }: { threadId: string; value: number }) =>
+      api.voteThread(threadId, value),
+    onSuccess: (data) => {
+      // Update the threads list cache
+      queryClient.setQueryData(
+        queryKeys.threads(filters),
+        (old: any) => {
+          if (!old) return old
+          return {
+            ...old,
+            items: old.items.map((t: any) =>
+              t.id === data.threadId
+                ? { ...t, score: data.score, userVote: data.userVote }
+                : t
+            )
+          }
+        }
+      )
+      // Also update individual thread cache if it exists
+      queryClient.setQueriesData(
+        { queryKey: ['thread', data.threadId] },
+        (old: any) => {
+          if (!old) return old
+          return { ...old, score: data.score, userVote: data.userVote }
+        }
+      )
+    }
+  })
+}
+
+// Subscription hooks
+export function useSubscriptions() {
+  return useQuery({
+    queryKey: queryKeys.subscriptions,
+    queryFn: () => api.getSubscriptions()
+  })
+}
+
+export function useSubscriptionCheck(entityType: EntityType, entityId: string) {
+  return useQuery({
+    queryKey: queryKeys.subscriptionCheck(entityType, entityId),
+    queryFn: () => api.checkSubscription(entityType, entityId),
+    enabled: !!entityId
+  })
+}
+
+export function useSubscribe() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: SubscribeData) => api.subscribe(data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions })
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.subscriptionCheck(variables.entityType, variables.entityId)
+      })
+      // Invalidate threads with following feed scope
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
+    }
+  })
+}
+
+export function useUnsubscribe() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ entityType, entityId }: { entityType: EntityType; entityId: string }) =>
+      api.unsubscribe(entityType, entityId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions })
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.subscriptionCheck(variables.entityType, variables.entityId)
+      })
+      // Invalidate threads with following feed scope
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
     }
   })
 }

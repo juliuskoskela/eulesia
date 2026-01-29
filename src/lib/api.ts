@@ -114,11 +114,14 @@ class ApiClient {
   }
 
   // Agora - Threads
-  async getThreads(params?: ThreadFilters): Promise<PaginatedResponse<Thread>> {
+  async getThreads(params?: ThreadFilters): Promise<ThreadsResponse> {
     const searchParams = new URLSearchParams()
     if (params?.scope) searchParams.set('scope', params.scope)
     if (params?.municipalityId) searchParams.set('municipalityId', params.municipalityId)
     if (params?.tags?.length) searchParams.set('tags', params.tags.join(','))
+    if (params?.feedScope) searchParams.set('feedScope', params.feedScope)
+    if (params?.sortBy) searchParams.set('sortBy', params.sortBy)
+    if (params?.topPeriod) searchParams.set('topPeriod', params.topPeriod)
     if (params?.page) searchParams.set('page', params.page.toString())
     if (params?.limit) searchParams.set('limit', params.limit.toString())
 
@@ -133,6 +136,13 @@ class ApiClient {
 
   async voteComment(commentId: string, value: number): Promise<{ commentId: string; score: number; userVote: number }> {
     return this.request(`/agora/comments/${commentId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ value })
+    })
+  }
+
+  async voteThread(threadId: string, value: number): Promise<{ threadId: string; score: number; userVote: number }> {
+    return this.request(`/agora/threads/${threadId}/vote`, {
       method: 'POST',
       body: JSON.stringify({ value })
     })
@@ -317,6 +327,28 @@ class ApiClient {
   async getMunicipalities(): Promise<Municipality[]> {
     return this.request('/map/municipalities')
   }
+
+  // Subscriptions
+  async subscribe(data: SubscribeData): Promise<Subscription> {
+    return this.request('/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async unsubscribe(entityType: EntityType, entityId: string): Promise<{ unsubscribed: boolean }> {
+    return this.request(`/subscriptions/${entityType}/${entityId}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async getSubscriptions(): Promise<Subscription[]> {
+    return this.request('/subscriptions')
+  }
+
+  async checkSubscription(entityType: EntityType, entityId: string): Promise<SubscriptionCheck> {
+    return this.request(`/subscriptions/check/${entityType}/${entityId}`)
+  }
 }
 
 // Types
@@ -359,6 +391,8 @@ export interface Thread {
   municipality?: Municipality
   institutionalContext?: InstitutionalContext
   replyCount: number
+  score: number
+  userVote?: number
   createdAt: string
   updatedAt: string
   // AI/Import source tracking
@@ -492,12 +526,24 @@ export interface HomeData {
 }
 
 // Filter types
+export type FeedScope = 'following' | 'local' | 'national' | 'global' | 'all'
+export type SortBy = 'recent' | 'new' | 'top'
+export type TopPeriod = 'day' | 'week' | 'month' | 'year'
+
 export interface ThreadFilters {
   scope?: 'municipal' | 'regional' | 'national'
   municipalityId?: string
   tags?: string[]
+  feedScope?: FeedScope
+  sortBy?: SortBy
+  topPeriod?: TopPeriod
   page?: number
   limit?: number
+}
+
+export interface ThreadsResponse extends PaginatedResponse<Thread> {
+  feedScope: FeedScope
+  hasSubscriptions?: boolean
 }
 
 export interface ClubFilters {
@@ -634,6 +680,29 @@ export interface InvitedUser {
   name: string
   username: string
   createdAt: string
+}
+
+// Subscription types
+export type EntityType = 'user' | 'municipality' | 'place' | 'club' | 'tag'
+export type NotifyLevel = 'all' | 'none' | 'highlights'
+
+export interface Subscription {
+  entityType: EntityType
+  entityId: string
+  notify: NotifyLevel
+  createdAt: string
+  entity: Record<string, unknown> | null
+}
+
+export interface SubscribeData {
+  entityType: EntityType
+  entityId: string
+  notify?: NotifyLevel
+}
+
+export interface SubscriptionCheck {
+  subscribed: boolean
+  notify: NotifyLevel | null
 }
 
 // Export singleton instance
