@@ -1,4 +1,4 @@
-import { Users, MapPin, Globe, Layers, ChevronDown, Clock, TrendingUp, Sparkles } from 'lucide-react'
+import { Users, MapPin, Layers, ChevronDown, Clock, TrendingUp, Sparkles } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import type { FeedScope, SortBy, TopPeriod, Municipality } from '../../lib/api'
 
@@ -48,9 +48,13 @@ export function FeedFilters({
   selectedTags,
   availableTags,
   onTagToggle,
-  municipalities,
-  selectedMunicipality,
-  onMunicipalityChange
+  // These props are kept for API compatibility but not currently used
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  municipalities: _municipalities,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  selectedMunicipality: _selectedMunicipality,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onMunicipalityChange: _onMunicipalityChange
 }: FeedFiltersProps) {
   const [showSortDropdown, setShowSortDropdown] = useState(false)
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false)

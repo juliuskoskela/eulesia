@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Search, X, User, MessageSquare, MapPin, Building2, Hash, Loader2 } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useSearch } from '../../hooks/useApi'
 import type { SearchResults } from '../../lib/api'
 
@@ -16,7 +16,6 @@ export function SearchBar({ className = '', placeholder = 'Hae...', autoFocus = 
   const [isOpen, setIsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const navigate = useNavigate()
 
   const { data: results, isLoading } = useSearch(query)
 
