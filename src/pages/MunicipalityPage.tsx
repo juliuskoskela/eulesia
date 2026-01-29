@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { Layout } from '../components/layout'
 import { ThreadCard } from '../components/agora'
-import { ContentEndMarker } from '../components/common'
+import { ContentEndMarker, FollowButton } from '../components/common'
 import { useThreads, useMunicipalities } from '../hooks/useApi'
 import type { Thread as ApiThread, UserSummary, Municipality } from '../lib/api'
 
@@ -61,21 +61,26 @@ export function MunicipalityPage() {
     <Layout>
       {/* Page header */}
       <div className="bg-white px-4 py-4 border-b border-gray-200">
-        <div className="flex items-center gap-3 mb-2">
-          <Link
-            to="/kunnat"
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">
-              {municipality?.name || 'Kunta'}
-            </h1>
-            {municipality?.region && (
-              <p className="text-sm text-gray-500">{municipality.region}</p>
-            )}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <Link
+              to="/kunnat"
+              className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-600" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">
+                {municipality?.name || 'Kunta'}
+              </h1>
+              {municipality?.region && (
+                <p className="text-sm text-gray-500">{municipality.region}</p>
+              )}
+            </div>
           </div>
+          {municipalityId && (
+            <FollowButton entityType="municipality" entityId={municipalityId} />
+          )}
         </div>
         <p className="text-sm text-gray-600">
           {threads.length} keskustelua

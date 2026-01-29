@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Users, Shield, MessageSquare, Pin, ScrollText, X, Send } from 'lucide-react'
 import { Layout } from '../components/layout'
-import { ActorBadge, ContentEndMarker } from '../components/common'
+import { ActorBadge, ContentEndMarker, FollowButton } from '../components/common'
 import { useClub, useJoinClub, useLeaveClub, useCreateClubThread } from '../hooks/useApi'
 import type { UserSummary, ClubThread } from '../lib/api'
 
@@ -138,24 +138,29 @@ export function ClubViewPage() {
           </div>
         </div>
 
-        {/* Join/Leave button */}
-        {club.isMember ? (
-          <button
-            onClick={handleLeave}
-            disabled={leaveClubMutation.isPending}
-            className="mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
-          >
-            {leaveClubMutation.isPending ? 'Leaving...' : 'Leave Club'}
-          </button>
-        ) : (
-          <button
-            onClick={handleJoin}
-            disabled={joinClubMutation.isPending}
-            className="mt-4 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
-          >
-            {joinClubMutation.isPending ? 'Joining...' : 'Join Club'}
-          </button>
-        )}
+        {/* Join/Leave and Follow buttons */}
+        <div className="mt-4 flex items-center gap-3">
+          {club.isMember ? (
+            <button
+              onClick={handleLeave}
+              disabled={leaveClubMutation.isPending}
+              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+            >
+              {leaveClubMutation.isPending ? 'Leaving...' : 'Leave Club'}
+            </button>
+          ) : (
+            <button
+              onClick={handleJoin}
+              disabled={joinClubMutation.isPending}
+              className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
+            >
+              {joinClubMutation.isPending ? 'Joining...' : 'Join Club'}
+            </button>
+          )}
+          {clubId && (
+            <FollowButton entityType="club" entityId={clubId} variant="outline" />
+          )}
+        </div>
       </div>
 
       {/* Main content */}
