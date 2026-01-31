@@ -6,7 +6,7 @@ import type { Municipality } from '../lib/api'
 
 export function MunicipalitiesPage() {
   const { data: municipalities, isLoading, error } = useMunicipalities()
-  const { data: threadsData } = useThreads({ scope: 'municipal' })
+  const { data: threadsData } = useThreads({ scope: 'local' })
 
   // Count threads per municipality
   const threadCounts = new Map<string, number>()

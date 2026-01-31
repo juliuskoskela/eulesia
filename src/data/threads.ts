@@ -4,7 +4,7 @@ export const threads: Thread[] = [
   {
     id: 'thread-1',
     title: 'City Centre Development Plan 2025–2030 — Public Consultation',
-    scope: 'municipal',
+    scope: 'local',
     municipalityId: 'tampere',
     tags: ['urban-planning', 'consultation', 'development'],
     authorId: 'tampere-municipality',
@@ -47,7 +47,7 @@ The consultation period runs from January 15 to February 28, 2025.`,
   {
     id: 'thread-2',
     title: 'New Public Library Branch — Location Feedback',
-    scope: 'municipal',
+    scope: 'local',
     municipalityId: 'tampere',
     tags: ['libraries', 'services', 'consultation'],
     authorId: 'tampere-municipality',
@@ -82,7 +82,7 @@ Please share your thoughts on which location would best serve your needs and why
   {
     id: 'thread-3',
     title: 'Winter Maintenance Feedback Thread',
-    scope: 'municipal',
+    scope: 'local',
     municipalityId: 'tampere',
     tags: ['maintenance', 'winter', 'feedback'],
     authorId: 'matti-virtanen',
@@ -150,7 +150,7 @@ Your voice matters in creating a fair and effective climate strategy for Finland
   {
     id: 'thread-5',
     title: 'Helsinki Central Library Oodi — Extended Hours Proposal',
-    scope: 'municipal',
+    scope: 'local',
     municipalityId: 'helsinki',
     tags: ['libraries', 'services', 'helsinki'],
     authorId: 'helsinki-municipality',

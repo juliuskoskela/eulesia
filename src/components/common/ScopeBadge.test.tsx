@@ -8,33 +8,33 @@ const renderWithRouter = (ui: React.ReactElement) => {
 }
 
 describe('ScopeBadge', () => {
-  it('renders municipal scope with default label', () => {
-    renderWithRouter(<ScopeBadge scope="municipal" />)
+  it('renders local scope with default label', () => {
+    renderWithRouter(<ScopeBadge scope="local" />)
 
-    expect(screen.getByText('Municipal')).toBeInTheDocument()
-  })
-
-  it('renders regional scope', () => {
-    renderWithRouter(<ScopeBadge scope="regional" />)
-
-    expect(screen.getByText('Regional')).toBeInTheDocument()
+    expect(screen.getByText('Paikallinen')).toBeInTheDocument()
   })
 
   it('renders national scope', () => {
     renderWithRouter(<ScopeBadge scope="national" />)
 
-    expect(screen.getByText('National')).toBeInTheDocument()
+    expect(screen.getByText('Valtakunnallinen')).toBeInTheDocument()
+  })
+
+  it('renders european scope', () => {
+    renderWithRouter(<ScopeBadge scope="european" />)
+
+    expect(screen.getByText('EU')).toBeInTheDocument()
   })
 
   it('displays municipality name when provided', () => {
-    renderWithRouter(<ScopeBadge scope="municipal" municipalityName="Helsinki" />)
+    renderWithRouter(<ScopeBadge scope="local" municipalityName="Helsinki" />)
 
     expect(screen.getByText('Helsinki')).toBeInTheDocument()
-    expect(screen.queryByText('Municipal')).not.toBeInTheDocument()
+    expect(screen.queryByText('Paikallinen')).not.toBeInTheDocument()
   })
 
   it('renders the icon', () => {
-    const { container } = renderWithRouter(<ScopeBadge scope="municipal" />)
+    const { container } = renderWithRouter(<ScopeBadge scope="local" />)
 
     const svg = container.querySelector('svg')
     expect(svg).toBeInTheDocument()
@@ -42,7 +42,7 @@ describe('ScopeBadge', () => {
 
   it('renders as a link when municipalityId is provided', () => {
     renderWithRouter(
-      <ScopeBadge scope="municipal" municipalityId="rautalampi" municipalityName="Rautalampi" />
+      <ScopeBadge scope="local" municipalityId="rautalampi" municipalityName="Rautalampi" />
     )
 
     const link = screen.getByRole('link')
@@ -51,7 +51,7 @@ describe('ScopeBadge', () => {
   })
 
   it('renders as span without municipalityId', () => {
-    const { container } = renderWithRouter(<ScopeBadge scope="municipal" />)
+    const { container } = renderWithRouter(<ScopeBadge scope="local" />)
 
     const link = container.querySelector('a')
     expect(link).not.toBeInTheDocument()
