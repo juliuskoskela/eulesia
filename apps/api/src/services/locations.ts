@@ -6,7 +6,7 @@
  */
 
 import { db, locations, type Location } from '../db/index.js'
-import { eq, ilike, or, sql, and } from 'drizzle-orm'
+import { eq, ilike, or, sql, and, inArray } from 'drizzle-orm'
 import {
   searchNominatim,
   lookupNominatim,
@@ -128,7 +128,7 @@ async function searchLocalDatabase(
   // Filter by types if specified
   if (options.types && options.types.length > 0) {
     conditions.push(
-      sql`${locations.type} = ANY(${options.types})`
+      inArray(locations.type, options.types)
     )
   }
 
