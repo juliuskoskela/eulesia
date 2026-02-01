@@ -180,7 +180,7 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
           {results.threads.map(thread => (
             <Link
               key={thread.id}
-              to={`/agora/${thread.id}`}
+              to={`/agora/thread/${thread.id}`}
               onClick={onResultClick}
               className="block px-4 py-2 hover:bg-gray-50 transition-colors"
             >
