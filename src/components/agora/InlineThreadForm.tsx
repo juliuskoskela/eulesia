@@ -142,13 +142,12 @@ export function InlineThreadForm({ locationId, locationName, onSuccess }: Inline
       {!isExpanded ? (
         <button
           onClick={() => setIsExpanded(true)}
-          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-blue-50/50 transition-colors group"
         >
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+          <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
             <Plus className="w-4 h-4 text-blue-600" />
           </div>
-          <span className="flex-1 text-gray-500">Aloita uusi keskustelu...</span>
-          <ChevronDown className="w-5 h-5 text-gray-400" />
+          <span className="flex-1 text-gray-500 group-hover:text-gray-700 transition-colors">Aloita uusi keskustelu...</span>
         </button>
       ) : (
         /* Expanded state */
@@ -157,21 +156,21 @@ export function InlineThreadForm({ locationId, locationName, onSuccess }: Inline
           <div className="flex items-center justify-between">
             {isPrefilled ? (
               // Show location badge when prefilled
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full">
                 <MapPin className="w-4 h-4 text-blue-600" />
-                <span className="font-medium text-blue-700">{locationName}</span>
+                <span className="text-sm font-medium text-blue-700">{locationName}</span>
               </div>
             ) : (
               // Show scope tabs when not prefilled
-              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+              <div className="flex items-center gap-2">
                 {scopeOptions.map(({ value, icon: Icon, label }) => (
                   <button
                     key={value}
                     onClick={() => setScope(value)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       scope === value
-                        ? 'bg-white text-blue-700 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-800'
+                        ? 'bg-blue-800 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -199,17 +198,17 @@ export function InlineThreadForm({ locationId, locationName, onSuccess }: Inline
             />
           )}
 
-          {/* National/EU indicator */}
+          {/* National/EU indicator - subtle, informational */}
           {!isPrefilled && scope === 'national' && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-600">
-              <span className="text-base">🇫🇮</span>
-              <span>Koko Suomi</span>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span>🇫🇮</span>
+              <span>Näkyy koko Suomessa</span>
             </div>
           )}
           {!isPrefilled && scope === 'european' && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-600">
-              <span className="text-base">🇪🇺</span>
-              <span>Euroopan laajuinen</span>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span>🇪🇺</span>
+              <span>Euroopan laajuinen keskustelu</span>
             </div>
           )}
 
@@ -220,7 +219,7 @@ export function InlineThreadForm({ locationId, locationName, onSuccess }: Inline
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Otsikko"
-            className="w-full px-0 py-1 border-0 border-b border-gray-200 text-lg font-medium placeholder-gray-400 focus:ring-0 focus:border-blue-500"
+            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-base font-medium placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-colors"
             maxLength={500}
           />
 
@@ -230,7 +229,7 @@ export function InlineThreadForm({ locationId, locationName, onSuccess }: Inline
             onChange={(e) => setContent(e.target.value)}
             placeholder="Kerro tarkemmin aiheesta..."
             rows={4}
-            className="w-full px-0 py-1 border-0 text-gray-700 placeholder-gray-400 focus:ring-0 resize-none"
+            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white resize-none transition-colors"
           />
 
           {/* Tags */}
@@ -293,17 +292,17 @@ export function InlineThreadForm({ locationId, locationName, onSuccess }: Inline
           )}
 
           {/* Actions */}
-          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-end gap-3 pt-3">
             <button
               onClick={handleCancel}
-              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors"
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors"
             >
               Peruuta
             </button>
             <button
               onClick={handleSubmit}
               disabled={!title.trim() || !content.trim() || isSubmitting}
-              className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-full text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {isSubmitting ? 'Julkaistaan...' : 'Julkaise'}
