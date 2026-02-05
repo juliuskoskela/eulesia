@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
-import { MapPin, Building2, Globe, Hash, Plus, X, Loader2, ChevronUp } from 'lucide-react'
+import { MapPin, Building2, Globe, Hash, Plus, X, Loader2, ChevronUp, Image as ImageIcon } from 'lucide-react'
 import { useCreateThread } from '../../hooks/useApi'
 import { LocationSearch } from '../common/LocationSearch'
+import { api } from '../../lib/api'
 import type { Scope } from '../../types'
 import type { LocationResult } from '../../lib/api'
 
@@ -25,10 +26,18 @@ const scopeOptions: { value: Scope; icon: React.ElementType; label: string }[] =
   { value: 'european', icon: Globe, label: 'EU' }
 ]
 
+interface UploadedImage {
+  url: string
+  thumbnailUrl: string
+  width: number
+  height: number
+}
+
 export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }: InlineThreadFormProps) {
   const createThreadMutation = useCreateThread()
   const formRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   // Is this a prefilled municipality context (municipality page)?
   const isPrefilled = !!(municipalityId && municipalityName)
@@ -43,6 +52,10 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
   const [customTag, setCustomTag] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Image upload state
+  const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
 
   // Focus title input when expanded
   useEffect(() => {
@@ -75,6 +88,54 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
     }
   }
 
+  const handleImageClick = () => {
+    imageInputRef.current?.click()
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      setError('Vain JPEG, PNG, WebP ja GIF sallittu')
+      return
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Kuva saa olla max 5MB')
+      return
+    }
+
+    setIsUploadingImage(true)
+    setError(null)
+
+    try {
+      const result = await api.uploadImage(file)
+      setUploadedImage({
+        url: result.url,
+        thumbnailUrl: result.thumbnailUrl,
+        width: result.width,
+        height: result.height
+      })
+    } catch (err) {
+      setError('Kuvan lataus epäonnistui')
+      console.error('Image upload failed:', err)
+    } finally {
+      setIsUploadingImage(false)
+      // Reset file input
+      if (imageInputRef.current) {
+        imageInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setUploadedImage(null)
+  }
+
   const handleSubmit = async () => {
     if (!title.trim() || !content.trim()) {
       setError('Otsikko ja sisältö ovat pakollisia')
@@ -102,9 +163,15 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
           : { locationOsmId: selectedLocation.osmId, locationOsmType: selectedLocation.osmType }
       }
 
+      // Build content with image if uploaded
+      let finalContent = content.trim()
+      if (uploadedImage) {
+        finalContent += `\n\n![Kuva](${uploadedImage.url})`
+      }
+
       const result = await createThreadMutation.mutateAsync({
         title: title.trim(),
-        content: content.trim(),
+        content: finalContent,
         scope,
         country: 'FI',
         ...locationData,
@@ -116,6 +183,7 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
       setContent('')
       setSelectedTags([])
       setSelectedLocation(null)
+      setUploadedImage(null)
       setScope(isPrefilled ? 'local' : 'national')
       setIsExpanded(false)
 
@@ -133,6 +201,7 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
     setContent('')
     setSelectedTags([])
     setSelectedLocation(null)
+    setUploadedImage(null)
     setScope(isPrefilled ? 'local' : 'national')
     setError(null)
     setIsExpanded(false)
@@ -233,6 +302,49 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
             rows={4}
             className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white resize-none transition-colors"
           />
+
+          {/* Image upload */}
+          <div className="space-y-2">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+
+            {/* Upload button or preview */}
+            {uploadedImage ? (
+              <div className="relative inline-block">
+                <img
+                  src={uploadedImage.thumbnailUrl}
+                  alt="Esikatselu"
+                  className="h-24 rounded-lg border border-gray-200 object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors shadow-sm"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleImageClick}
+                disabled={isUploadingImage}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isUploadingImage ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ImageIcon className="w-4 h-4" />
+                )}
+                {isUploadingImage ? 'Ladataan...' : 'Lisää kuva'}
+              </button>
+            )}
+          </div>
 
           {/* Tags */}
           <div className="space-y-2">

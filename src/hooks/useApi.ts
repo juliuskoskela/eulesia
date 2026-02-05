@@ -162,9 +162,9 @@ export function useVoteThread(filters?: ThreadFilters) {
           }
         }
       )
-      // Also update individual thread cache if it exists
+      // Also update individual thread cache if it exists (matches any sort)
       queryClient.setQueriesData(
-        { queryKey: ['thread', data.threadId] },
+        { queryKey: ['thread', data.threadId], exact: false },
         (old: any) => {
           if (!old) return old
           return { ...old, score: data.score, userVote: data.userVote }

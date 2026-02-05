@@ -127,6 +127,7 @@ router.delete('/avatar', authMiddleware, async (req, res) => {
     const existingUser = await db
       .select({ avatarUrl: users.avatarUrl })
       .from(users)
+      .where(eq(users.id, user.id))
       .limit(1)
 
     if (existingUser[0]?.avatarUrl) {

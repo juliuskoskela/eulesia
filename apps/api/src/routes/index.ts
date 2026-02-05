@@ -10,6 +10,7 @@ import invitesRoutes from './invites.js'
 import subscriptionsRoutes from './subscriptions.js'
 import searchRoutes from './search.js'
 import locationsRoutes from './locations.js'
+import uploadsRoutes from './uploads.js'
 
 const router = Router()
 
@@ -24,6 +25,7 @@ router.use('/invites', invitesRoutes)
 router.use('/subscriptions', subscriptionsRoutes)
 router.use('/search', searchRoutes)
 router.use('/locations', locationsRoutes)
+router.use('/uploads', uploadsRoutes)
 
 // Health check
 router.get('/health', (_req, res) => {

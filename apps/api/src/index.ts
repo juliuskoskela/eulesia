@@ -5,12 +5,16 @@ import cookieParser from 'cookie-parser'
 import rateLimit from 'express-rate-limit'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
+import path from 'path'
 
 import { env } from './utils/env.js'
 import routes from './routes/index.js'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { initScheduler } from './services/scheduler.js'
 import { fullSync, startPeriodicSync, healthCheck as meiliHealthCheck } from './services/search/index.js'
+
+// Upload directory (relative to project root)
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads'
 
 const app = express()
 const httpServer = createServer(app)
@@ -72,6 +76,9 @@ app.use(limiter)
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.resolve(UPLOAD_DIR)))
 
 // Trust proxy (for rate limiting behind reverse proxy)
 app.set('trust proxy', 1)

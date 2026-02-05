@@ -5,7 +5,9 @@ import { Layout } from '../components/layout'
 import { ActorBadge, ScopeBadge, TagList, ContentEndMarker } from '../components/common'
 import { InstitutionalContextBox } from '../components/agora/InstitutionalContextBox'
 import { CommentThread } from '../components/agora/CommentThread'
-import { useThread, useAddComment, useVoteComment, type CommentSort } from '../hooks/useApi'
+import { ThreadVoteButtons } from '../components/agora/ThreadVoteButtons'
+import { useThread, useAddComment, useVoteComment, useVoteThread, type CommentSort } from '../hooks/useApi'
+import { useAuth } from '../hooks/useAuth'
 import type { Comment as ApiComment, UserSummary } from '../lib/api'
 
 function formatDate(dateString: string): string {
@@ -58,15 +60,22 @@ const sortOptions: { value: CommentSort; label: string }[] = [
 
 export function ThreadPage() {
   const { threadId } = useParams<{ threadId: string }>()
+  const { currentUser } = useAuth()
   const [sort, setSort] = useState<CommentSort>('best')
   const [showSortMenu, setShowSortMenu] = useState(false)
 
   const { data: thread, isLoading, error } = useThread(threadId || '', sort)
   const addCommentMutation = useAddComment(threadId || '', sort)
   const voteCommentMutation = useVoteComment(threadId || '', sort)
+  const voteThreadMutation = useVoteThread()
 
   const [commentContent, setCommentContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleThreadVote = (value: number) => {
+    if (!currentUser || !threadId) return
+    voteThreadMutation.mutate({ threadId, value })
+  }
 
   const handleSubmitComment = async () => {
     if (!commentContent.trim() || !threadId) return
@@ -183,40 +192,55 @@ export function ThreadPage() {
         )}
 
         {/* Thread content */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          {thread.contentHtml ? (
-            <div
-              className="prose prose-gray max-w-none"
-              dangerouslySetInnerHTML={{ __html: thread.contentHtml }}
+        <div className="bg-white rounded-xl border border-gray-200 flex">
+          {/* Vote buttons */}
+          <div className="flex-shrink-0 p-4 border-r border-gray-100">
+            <ThreadVoteButtons
+              threadId={thread.id}
+              score={thread.score ?? 0}
+              userVote={thread.userVote ?? 0}
+              onVote={handleThreadVote}
+              isLoading={voteThreadMutation.isPending}
+              size="md"
             />
-          ) : (
-            <div className="prose prose-gray max-w-none">
-              {thread.content.split('\n').map((paragraph, i) => {
-                if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
+          </div>
+
+          {/* Content */}
+          <div className="flex-grow p-6">
+            {thread.contentHtml ? (
+              <div
+                className="prose prose-gray max-w-none"
+                dangerouslySetInnerHTML={{ __html: thread.contentHtml }}
+              />
+            ) : (
+              <div className="prose prose-gray max-w-none">
+                {thread.content.split('\n').map((paragraph, i) => {
+                  if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
+                    return (
+                      <h3 key={i} className="font-semibold text-gray-900 mt-4 first:mt-0">
+                        {paragraph.replace(/\*\*/g, '')}
+                      </h3>
+                    )
+                  }
+                  if (paragraph.startsWith('- ')) {
+                    return (
+                      <li key={i} className="ml-4 text-gray-700">
+                        {paragraph.replace('- ', '')}
+                      </li>
+                    )
+                  }
+                  if (paragraph.trim() === '') {
+                    return <br key={i} />
+                  }
                   return (
-                    <h3 key={i} className="font-semibold text-gray-900 mt-4 first:mt-0">
-                      {paragraph.replace(/\*\*/g, '')}
-                    </h3>
+                    <p key={i} className="text-gray-700 leading-relaxed">
+                      {paragraph}
+                    </p>
                   )
-                }
-                if (paragraph.startsWith('- ')) {
-                  return (
-                    <li key={i} className="ml-4 text-gray-700">
-                      {paragraph.replace('- ', '')}
-                    </li>
-                  )
-                }
-                if (paragraph.trim() === '') {
-                  return <br key={i} />
-                }
-                return (
-                  <p key={i} className="text-gray-700 leading-relaxed">
-                    {paragraph}
-                  </p>
-                )
-              })}
-            </div>
-          )}
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Discussion section */}

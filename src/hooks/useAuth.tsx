@@ -12,6 +12,7 @@ interface AuthContextType {
   requestMagicLink: (email: string) => Promise<{ message: string }>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -67,6 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const refreshUser = async () => {
+    try {
+      const user = await api.getCurrentUser()
+      setCurrentUser(user)
+    } catch {
+      // Ignore refresh errors - user might have been logged out
+    }
+  }
+
   return (
     <AuthContext.Provider value={{
       isAuthenticated,
@@ -76,7 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       requestMagicLink,
       logout,
-      checkAuth
+      checkAuth,
+      refreshUser
     }}>
       {children}
     </AuthContext.Provider>

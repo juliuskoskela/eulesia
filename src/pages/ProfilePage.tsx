@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Shield, Bell, Eye, Database, LogOut, ChevronRight, Info, ExternalLink, Ticket, Plus, Copy, Check, Trash2, Users } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Shield, Bell, Eye, Database, LogOut, ChevronRight, Info, ExternalLink, Ticket, Plus, Copy, Check, Trash2, Users, Camera, Loader2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout'
 import { useAuth } from '../hooks/useAuth'
@@ -7,16 +7,21 @@ import { useUpdateProfile, useExportData } from '../hooks/useApi'
 import { api, type InviteCode, type InvitedUser } from '../lib/api'
 
 export function ProfilePage() {
-  const { currentUser, logout } = useAuth()
+  const { currentUser, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
   const updateProfileMutation = useUpdateProfile()
   const exportDataMutation = useExportData()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [notificationSettings, setNotificationSettings] = useState({
     replies: currentUser?.settings?.notificationReplies ?? true,
     mentions: currentUser?.settings?.notificationMentions ?? true,
     official: currentUser?.settings?.notificationOfficial ?? true
   })
+
+  // Avatar upload state
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
 
   // Invite codes state
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([])
@@ -120,6 +125,61 @@ export function ProfilePage() {
     }
   }
 
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      setAvatarError('Vain JPEG, PNG, WebP ja GIF sallittu')
+      return
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('Kuva saa olla max 5MB')
+      return
+    }
+
+    setIsUploadingAvatar(true)
+    setAvatarError(null)
+
+    try {
+      await api.uploadAvatar(file)
+      // Refresh user to get new avatar URL
+      await refreshUser()
+    } catch (err) {
+      setAvatarError('Kuvan lataus epäonnistui')
+      console.error('Avatar upload failed:', err)
+    } finally {
+      setIsUploadingAvatar(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleRemoveAvatar = async () => {
+    setIsUploadingAvatar(true)
+    setAvatarError(null)
+
+    try {
+      await api.deleteAvatar()
+      await refreshUser()
+    } catch (err) {
+      setAvatarError('Kuvan poisto epäonnistui')
+      console.error('Avatar delete failed:', err)
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
   if (!currentUser) {
     return (
       <Layout>
@@ -142,11 +202,43 @@ export function ProfilePage() {
       {/* Profile header */}
       <div className="bg-white px-4 py-6 border-b border-gray-200">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center">
-            {currentUser.avatarUrl ? (
-              <img src={currentUser.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
-            ) : (
-              <span className="text-white text-xl font-bold">{avatarInitials}</span>
+          {/* Avatar with upload */}
+          <div className="relative">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+            <button
+              onClick={handleAvatarClick}
+              disabled={isUploadingAvatar}
+              className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center relative group overflow-hidden disabled:cursor-not-allowed"
+            >
+              {currentUser.avatarUrl ? (
+                <img src={currentUser.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                <span className="text-white text-xl font-bold">{avatarInitials}</span>
+              )}
+              {/* Overlay */}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
+                {isUploadingAvatar ? (
+                  <Loader2 className="w-6 h-6 text-white animate-spin" />
+                ) : (
+                  <Camera className="w-6 h-6 text-white" />
+                )}
+              </div>
+            </button>
+            {/* Remove avatar button */}
+            {currentUser.avatarUrl && !isUploadingAvatar && (
+              <button
+                onClick={handleRemoveAvatar}
+                className="absolute -bottom-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors shadow-sm"
+                title="Poista kuva"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
             )}
           </div>
           <div>
@@ -164,6 +256,9 @@ export function ProfilePage() {
                 </span>
               )}
             </div>
+            {avatarError && (
+              <p className="text-xs text-red-600 mt-1">{avatarError}</p>
+            )}
           </div>
         </div>
       </div>

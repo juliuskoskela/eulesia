@@ -401,6 +401,49 @@ class ApiClient {
   async searchPlaces(query: string, limit = 10): Promise<SearchPlaceResult[]> {
     return this.request(`/search/places?q=${encodeURIComponent(query)}&limit=${limit}`)
   }
+
+  // Uploads
+  async uploadAvatar(file: File): Promise<UploadAvatarResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const url = `${this.baseUrl}/api/v1/uploads/avatar`
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    })
+
+    const data = await response.json()
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Upload failed')
+    }
+
+    return data
+  }
+
+  async deleteAvatar(): Promise<void> {
+    await this.request('/uploads/avatar', { method: 'DELETE' })
+  }
+
+  async uploadImage(file: File): Promise<UploadImageResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const url = `${this.baseUrl}/api/v1/uploads/image`
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    })
+
+    const data = await response.json()
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Upload failed')
+    }
+
+    return data
+  }
 }
 
 // Types
@@ -871,6 +914,20 @@ export interface SearchResults {
   tags: SearchTagResult[]
   query: string
   processingTimeMs: number
+}
+
+// Upload types
+export interface UploadAvatarResponse {
+  success: boolean
+  avatarUrl: string
+}
+
+export interface UploadImageResponse {
+  success: boolean
+  url: string
+  thumbnailUrl: string
+  width: number
+  height: number
 }
 
 // Export singleton instance
