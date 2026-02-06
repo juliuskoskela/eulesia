@@ -4,6 +4,41 @@ import { Layout } from '../components/layout'
 import { ThreadCard } from '../components/agora/ThreadCard'
 import { FollowButton } from '../components/common'
 import { useTagPage, useVoteThread } from '../hooks/useApi'
+import type { Thread as ApiThread, UserSummary } from '../lib/api'
+
+function transformThread(thread: ApiThread) {
+  return {
+    id: thread.id,
+    title: thread.title,
+    scope: thread.scope,
+    municipalityId: thread.municipality?.id,
+    municipalityName: thread.municipality?.name,
+    tags: thread.tags,
+    authorId: thread.author.id,
+    content: thread.content,
+    createdAt: thread.createdAt,
+    updatedAt: thread.updatedAt,
+    replyCount: thread.replyCount,
+    score: thread.score,
+    userVote: thread.userVote,
+    institutionalContext: thread.institutionalContext,
+    source: thread.source,
+    sourceUrl: thread.sourceUrl,
+    aiGenerated: thread.aiGenerated
+  }
+}
+
+function transformAuthor(author: UserSummary) {
+  return {
+    id: author.id,
+    name: author.name,
+    role: author.role,
+    verified: true,
+    avatarInitials: author.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
+    institutionType: author.institutionType as 'municipality' | 'agency' | 'ministry' | undefined,
+    institutionName: author.institutionName
+  }
+}
 
 export function TagPage() {
   const { tagName } = useParams<{ tagName: string }>()
@@ -119,8 +154,8 @@ export function TagPage() {
           data.items.map(thread => (
             <ThreadCard
               key={thread.id}
-              thread={thread}
-              author={thread.author}
+              thread={transformThread(thread)}
+              author={transformAuthor(thread.author)}
               onVote={handleVote}
               isVoting={voteMutation.isPending}
             />

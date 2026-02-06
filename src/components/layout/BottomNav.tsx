@@ -1,4 +1,4 @@
-import { Landmark, Users, Home, MapPin, Store, MessageSquare } from 'lucide-react'
+import { Landmark, Users, Home, MapPin, MessageSquare } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const navItems = [

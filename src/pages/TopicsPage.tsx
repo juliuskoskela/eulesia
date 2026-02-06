@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Hash, ChevronRight, Building2 } from 'lucide-react'
+import { Hash } from 'lucide-react'
 import { Layout } from '../components/layout'
 import { FollowButton } from '../components/common'
 import { useTags } from '../hooks/useApi'

@@ -8,19 +8,6 @@ interface FeedOnboardingProps {
   onComplete: () => void
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  talous: 'Talous',
-  terveys: 'Terveys',
-  koulutus: 'Koulutus',
-  ympäristö: 'Ympäristö',
-  liikenne: 'Liikenne',
-  turvallisuus: 'Turvallisuus',
-  työ: 'Työ',
-  kulttuuri: 'Kulttuuri',
-  eu: 'EU',
-  kunta: 'Kunta'
-}
-
 function groupTagsByCategory(tags: TagWithCategory[]): Record<string, TagWithCategory[]> {
   const groups: Record<string, TagWithCategory[]> = {}
   for (const tag of tags) {
