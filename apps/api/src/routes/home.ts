@@ -6,6 +6,7 @@ import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
+import { io } from '../index.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -391,12 +392,20 @@ router.post('/rooms/:roomId/messages', authMiddleware, asyncHandler(async (req: 
     .where(eq(users.id, userId))
     .limit(1)
 
+  const messageData = {
+    ...message,
+    author: formatUserSummary(author)
+  }
+
+  // Broadcast to room via Socket.IO
+  io.to(`room:${roomId}`).emit('new_room_message', {
+    roomId,
+    message: messageData
+  })
+
   res.status(201).json({
     success: true,
-    data: {
-      ...message,
-      author: formatUserSummary(author)
-    }
+    data: messageData
   })
 }))
 

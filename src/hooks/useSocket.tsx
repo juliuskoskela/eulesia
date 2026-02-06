@@ -119,12 +119,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   const joinRoom = useCallback((roomId: string) => {
     if (!socket || !isConnected) return
-    socket.emit('join_room', { roomId })
+    socket.emit('join:room', roomId)
   }, [socket, isConnected])
 
   const leaveRoom = useCallback((roomId: string) => {
     if (!socket || !isConnected) return
-    socket.emit('leave_room', { roomId })
+    socket.emit('leave:room', roomId)
   }, [socket, isConnected])
 
   const joinDm = useCallback((conversationId: string) => {

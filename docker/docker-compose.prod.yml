@@ -102,10 +102,10 @@ services:
       - "traefik.http.routers.eulesia-web.tls.certresolver=le"
       - "traefik.http.routers.eulesia-web.service=eulesia-web"
       # www → naked redirect middleware
-      - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https?://www\\.(.+)"
-      - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://$${1}"
-      - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
-      - "traefik.http.routers.eulesia-web.middlewares=www-redirect"
+      - "traefik.http.middlewares.eulesia-www-redirect.redirectregex.regex=^https?://www\\.(.+)"
+      - "traefik.http.middlewares.eulesia-www-redirect.redirectregex.replacement=https://$${1}"
+      - "traefik.http.middlewares.eulesia-www-redirect.redirectregex.permanent=true"
+      - "traefik.http.routers.eulesia-web.middlewares=eulesia-www-redirect"
       # HTTP router (for ACME challenge and redirect)
       - "traefik.http.routers.eulesia-web-http.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
       - "traefik.http.routers.eulesia-web-http.entrypoints=web"

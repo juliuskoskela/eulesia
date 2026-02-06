@@ -5,6 +5,7 @@ import { Layout } from '../components/layout'
 import { ActorBadge } from '../components/common'
 import { useRoom, useSendRoomMessage, useUpdateRoom, useDeleteRoom, useInviteToRoom } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
+import { useSocket } from '../hooks/useSocket'
 import type { RoomMessage, UserSummary } from '../lib/api'
 
 // Transform API user to component format
@@ -45,6 +46,16 @@ export function RoomPage() {
   const updateRoomMutation = useUpdateRoom(roomId || '')
   const deleteRoomMutation = useDeleteRoom()
   const inviteToRoomMutation = useInviteToRoom(roomId || '')
+
+  const { joinRoom, leaveRoom } = useSocket()
+
+  // Join/leave socket room for real-time updates
+  useEffect(() => {
+    if (roomId) {
+      joinRoom(roomId)
+      return () => { leaveRoom(roomId) }
+    }
+  }, [roomId, joinRoom, leaveRoom])
 
   const [newMessage, setNewMessage] = useState('')
   const [showSettings, setShowSettings] = useState(false)
