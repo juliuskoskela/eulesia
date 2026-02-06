@@ -9,6 +9,7 @@ import { authMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { env } from '../utils/env.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
+import { indexUser } from '../services/search/meilisearch.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -134,6 +135,21 @@ router.post('/register', asyncHandler(async (req, res: Response) => {
       usedAt: new Date()
     })
     .where(eq(inviteCodes.id, invite.id))
+
+  // Index new user in Meilisearch so they are immediately discoverable
+  try {
+    await indexUser({
+      id: newUser.id,
+      name: newUser.name,
+      username: newUser.username,
+      role: (newUser.role as 'citizen' | 'institution' | 'admin') || 'citizen',
+      institutionType: newUser.institutionType || undefined,
+      institutionName: newUser.institutionName || undefined,
+      createdAt: newUser.createdAt?.toISOString() || new Date().toISOString()
+    })
+  } catch (err) {
+    console.error('Failed to index new user in Meilisearch:', err)
+  }
 
   // Create session
   const { token: sessionToken, hash: sessionHash } = generateSessionToken()

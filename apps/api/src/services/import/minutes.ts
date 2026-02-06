@@ -14,8 +14,7 @@
 
 import { db, threads, threadTags, municipalities, users } from '../../db/index.js'
 import { eq, and } from 'drizzle-orm'
-import { generateMinutesSummary } from './mistral.js'
-// splitMinutesIntoItems available for future use when processing full meetings
+import { editorialGate, writeArticle, verifyArticle } from './mistral.js'
 import { renderMarkdown } from '../../utils/markdown.js'
 
 // Rate limiting
@@ -327,83 +326,148 @@ export async function importMinutes(options: ImportOptions = {}): Promise<Import
           try {
             originalText = await extractTextFromPdf(pdfUrl)
           } catch (err) {
-            // For now, skip PDF parsing (requires library)
             result.errors.push(`PDF parsing not available: ${sourceId}`)
             continue
           }
 
-          // Generate AI summary
-          const summary = await generateMinutesSummary(
+          // Get municipality ID
+          const municipalityId = await getOrCreateMunicipality(source.municipality)
+
+          // ============================================
+          // 3-STAGE AGENTIC PIPELINE
+          // ============================================
+
+          // STAGE 1: Editorial Gate — split & filter newsworthy items
+          console.log(`   🔍 Stage 1: Editorial gate...`)
+          const editorialItems = await editorialGate(
             originalText,
             source.municipality,
             meeting.organ
           )
 
-          // Get municipality ID
-          const municipalityId = await getOrCreateMunicipality(source.municipality)
+          const newsworthyItems = editorialItems.filter(item => item.newsworthy)
+          const skippedItems = editorialItems.filter(item => !item.newsworthy)
 
-          // Build thread content
-          const content = `${summary.summary}
+          console.log(`   📊 ${newsworthyItems.length} newsworthy / ${skippedItems.length} filtered out`)
+
+          if (skippedItems.length > 0) {
+            console.log(`   ⏭️  Filtered: ${skippedItems.map(i => i.title).join(', ')}`)
+          }
+
+          // Process each newsworthy item as a separate thread
+          for (const item of newsworthyItems) {
+            const itemSourceId = `${sourceId}-${item.itemNumber.replace(/\s+/g, '')}`
+
+            if (await isAlreadyImported(itemSourceId)) {
+              console.log(`   ⏭️  Already imported: ${item.itemNumber} ${item.title}`)
+              result.skipped++
+              continue
+            }
+
+            try {
+              // STAGE 2: Write article from excerpt only
+              console.log(`   ✍️  Stage 2: Writing ${item.itemNumber}...`)
+              const article = await writeArticle(
+                item.excerpt,
+                source.municipality,
+                item.itemNumber,
+                meeting.organ
+              )
+
+              // STAGE 3: Verify against original excerpt
+              console.log(`   ✓  Stage 3: Verifying ${item.itemNumber}...`)
+              const verification = await verifyArticle(
+                article,
+                item.excerpt,
+                source.municipality
+              )
+
+              if (!verification.passed && verification.severity === 'major') {
+                console.log(`   ⚠️  Verification FAILED for ${item.itemNumber}: ${verification.issues.join('; ')}`)
+                result.errors.push(`${itemSourceId}: verification failed — ${verification.issues.join('; ')}`)
+                continue
+              }
+
+              if (verification.issues.length > 0) {
+                console.log(`   ℹ️  Minor issues: ${verification.issues.join('; ')}`)
+              }
+
+              // Build thread content
+              const content = `${article.summary}
 
 ---
 
 **Keskeiset kohdat:**
-${summary.keyPoints.map(p => `- ${p}`).join('\n')}
+${article.keyPoints.map(p => `- ${p}`).join('\n')}
 
 ---
 
-*${summary.discussionPrompt}*
+*${article.discussionPrompt}*
 
 ---
-🤖 *Tämä on AI-generoitu yhteenveto kunnan pöytäkirjasta. [Näytä alkuperäinen →](${pdfUrl})*`
+🤖 *Tämä on AI-generoitu yhteenveto kunnan pöytäkirjasta (${item.itemNumber}). [Näytä alkuperäinen →](${pdfUrl})*`
 
-          const contentHtml = renderMarkdown(content)
+              const contentHtml = renderMarkdown(content)
 
-          // Create thread
-          const [thread] = await db
-            .insert(threads)
-            .values({
-              title: summary.title,
-              content,
-              contentHtml,
-              authorId: botUserId,
-              scope: 'local',
-              municipalityId,
-              source: 'minutes_import',
-              sourceUrl: pdfUrl,
-              sourceId,
-              aiGenerated: true,
-              aiModel: 'mistral-large-3-25-12',
-              originalContent: originalText.slice(0, 50000),  // Store first 50k chars
-              institutionalContext: {
-                type: 'minutes',
-                meetingId: meeting.id,
-                organ: meeting.organ,
-                sourceSystem: source.type,
-                importedAt: new Date().toISOString()
+              // Create thread
+              const [thread] = await db
+                .insert(threads)
+                .values({
+                  title: article.title,
+                  content,
+                  contentHtml,
+                  authorId: botUserId,
+                  scope: 'local',
+                  municipalityId,
+                  source: 'minutes_import',
+                  sourceUrl: pdfUrl,
+                  sourceId: itemSourceId,
+                  aiGenerated: true,
+                  aiModel: 'mistral-large-latest',
+                  originalContent: item.excerpt.slice(0, 50000),
+                  institutionalContext: {
+                    type: 'minutes',
+                    meetingId: meeting.id,
+                    itemNumber: item.itemNumber,
+                    organ: meeting.organ,
+                    sourceSystem: source.type,
+                    verificationPassed: verification.passed,
+                    verificationSeverity: verification.severity,
+                    verificationIssues: verification.issues,
+                    importedAt: new Date().toISOString()
+                  }
+                })
+                .returning({ id: threads.id })
+
+              // Add tags
+              const allTags = [...article.tags, 'pöytäkirja']
+              const uniqueTags = [...new Set(allTags)].slice(0, 10)
+
+              for (const tag of uniqueTags) {
+                await db.insert(threadTags).values({
+                  threadId: thread.id,
+                  tag: tag.toLowerCase()
+                }).onConflictDoNothing()
               }
-            })
-            .returning({ id: threads.id })
 
-          // Add tags (no municipality name - it's linked via municipality_id)
-          const allTags = [...summary.tags, 'pöytäkirja']
-          const uniqueTags = [...new Set(allTags)].slice(0, 10)
+              result.imported++
+              result.threads.push({
+                id: thread.id,
+                title: article.title,
+                municipality: source.municipality
+              })
 
-          for (const tag of uniqueTags) {
-            await db.insert(threadTags).values({
-              threadId: thread.id,
-              tag: tag.toLowerCase()
-            }).onConflictDoNothing()
+              console.log(`   ✅ Created: ${article.title}`)
+
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err)
+              result.errors.push(`${itemSourceId}: ${msg}`)
+              console.log(`   ❌ Item error: ${msg}`)
+            }
+
+            // Rate limit between AI calls
+            await sleep(1000)
           }
-
-          result.imported++
-          result.threads.push({
-            id: thread.id,
-            title: summary.title,
-            municipality: source.municipality
-          })
-
-          console.log(`   ✅ Created thread: ${summary.title}`)
 
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
