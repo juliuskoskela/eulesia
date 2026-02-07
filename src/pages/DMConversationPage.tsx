@@ -143,7 +143,7 @@ export function DMConversationPage() {
 
   return (
     <Layout>
-      <div className="flex flex-col h-[100dvh]">
+      <div className="flex flex-col" style={{ height: 'calc(100dvh - 3.5rem - 5rem)' }}>
         {/* Header */}
         <div className="bg-teal-700 px-4 py-4 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -192,7 +192,7 @@ export function DMConversationPage() {
         </div>
 
         {/* Message input */}
-        <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3">
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <input
               type="text"

@@ -151,7 +151,7 @@ export function RoomPage() {
 
   return (
     <Layout>
-      <div className="flex flex-col h-[100dvh]">
+      <div className="flex flex-col" style={{ height: 'calc(100dvh - 3.5rem - 5rem)' }}>
         {/* Header */}
         <div className={`px-4 py-4 flex-shrink-0 ${visibility === 'public' ? 'bg-green-700' : 'bg-amber-700'}`}>
           <div className="flex items-center gap-3">
@@ -172,10 +172,17 @@ export function RoomPage() {
               </p>
             </div>
             {isOwner && (
-              <div className="relative" ref={settingsRef}>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="p-2 hover:bg-white/10 rounded-lg"
+                >
+                  <UserPlus className="w-5 h-5 text-white" />
+                </button>
                 <button
                   onClick={handleOpenSettings}
                   className="p-2 hover:bg-white/10 rounded-lg"
+                  ref={settingsRef}
                 >
                   <Settings className="w-5 h-5 text-white" />
                 </button>
@@ -191,22 +198,13 @@ export function RoomPage() {
           </div>
         )}
 
-        {/* Members and invite (for private rooms) */}
+        {/* Members info (for private rooms) */}
         {visibility === 'private' && (
-          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center flex-shrink-0">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-600">{members.length + 1} members</span>
             </div>
-            {isOwner && (
-              <button
-                onClick={() => setShowInvite(true)}
-                className="text-sm text-teal-600 hover:text-teal-700 flex items-center gap-1"
-              >
-                <UserPlus className="w-4 h-4" />
-                Invite
-              </button>
-            )}
           </div>
         )}
 
@@ -231,7 +229,7 @@ export function RoomPage() {
 
         {/* Message input */}
         {canPost ? (
-          <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3">
             <form onSubmit={handleSendMessage} className="flex gap-2">
               <input
                 type="text"
@@ -251,7 +249,7 @@ export function RoomPage() {
             </form>
           </div>
         ) : (
-          <div className="flex-shrink-0 bg-gray-100 border-t border-gray-200 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-center">
+          <div className="flex-shrink-0 bg-gray-100 border-t border-gray-200 px-4 py-3 text-center">
             <p className="text-sm text-gray-600">
               {currentUser ? 'You need an invitation to post here' : 'Sign in to participate'}
             </p>
