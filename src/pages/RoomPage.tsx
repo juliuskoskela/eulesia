@@ -64,7 +64,7 @@ export function RoomPage() {
   const [editDescription, setEditDescription] = useState('')
   const [inviteUsername, setInviteUsername] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const settingsRef = useRef<HTMLDivElement>(null)
+  const settingsRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
