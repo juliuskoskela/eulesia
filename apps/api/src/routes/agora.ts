@@ -53,11 +53,11 @@ const threadFiltersSchema = z.object({
   municipalityId: z.string().uuid().optional(),
   tags: z.string().optional(), // Comma-separated
   // feedScope filters WITHIN subscriptions, never shows all content globally
-  // 'following' = all subscribed content
+  // 'following' = all subscribed content across all scopes
   // 'local' = subscribed content with local scope
   // 'national' = subscribed content with national scope
   // 'european' = subscribed content with european scope
-  // 'all' = same as 'following'
+  // 'all' = discovery feed (no subscription filter)
   feedScope: z.enum(['following', 'local', 'national', 'european', 'all']).optional(),
   sortBy: z.enum(['recent', 'new', 'top']).default('recent'),
   topPeriod: z.enum(['day', 'week', 'month', 'year']).optional(),
@@ -82,12 +82,12 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
     conditions.push(eq(threads.municipalityId, filters.municipalityId))
   }
 
-  // Handle feedScope filtering
-  // - 'following' = content from all subscriptions (personalized feed)
-  // - 'local' = local-scope content from subscribed municipalities only
-  // - 'national' = ALL national scope content
-  // - 'european' = ALL european scope content
-  // - 'all' = all content (no filter)
+  // Handle feedScope filtering — all personalized scopes require subscriptions
+  // - 'following' = content from all subscriptions across all scopes
+  // - 'local' = subscribed content with local scope
+  // - 'national' = subscribed content with national scope
+  // - 'european' = subscribed content with european scope
+  // - 'all' = discovery feed, no subscription filter
   const isViewingSpecificMunicipality = !!filters.municipalityId
 
   // Declare subscription arrays at outer scope for later use in tag filtering
@@ -113,90 +113,36 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
       .map(s => s.entityId)
   }
 
-  if (filters.feedScope === 'local') {
-    // Local scope: only show content from municipalities the user follows
-    conditions.push(eq(threads.scope, 'local'))
+  // Helper: build subscription-based OR conditions
+  // Matches threads by followed authors, institutions, municipalities, OR tags (via subquery)
+  function buildSubscriptionFilter() {
+    const subConditions = []
 
-    if (userId && followedMunicipalities.length > 0) {
-      conditions.push(inArray(threads.municipalityId, followedMunicipalities))
-    } else {
-      // Not logged in or no subscriptions — return empty with onboarding flag
-      res.json({
-        success: true,
-        data: {
-          items: [],
-          total: 0,
-          page: filters.page,
-          limit: filters.limit,
-          hasMore: false,
-          feedScope: filters.feedScope,
-          hasSubscriptions: false
-        }
-      })
-      return
-    }
-  } else if (filters.feedScope === 'national' || filters.feedScope === 'european') {
-    // National/European: scope filter + subscription filter
-    conditions.push(eq(threads.scope, filters.feedScope))
-
-    if (userId) {
-      const scopeFollowConditions = []
-      if (followedAuthors.length > 0) {
-        scopeFollowConditions.push(inArray(threads.authorId, followedAuthors))
-        scopeFollowConditions.push(inArray(threads.sourceInstitutionId, followedAuthors))
-      }
-      if (followedTags.length > 0) {
-        // For national/eu, tag subscriptions are the main discovery mechanism
-        // We'll filter by tags in the post-query step below
-      }
-
-      if (scopeFollowConditions.length > 0) {
-        conditions.push(or(...scopeFollowConditions))
-      } else if (followedTags.length === 0) {
-        res.json({
-          success: true,
-          data: {
-            items: [],
-            total: 0,
-            page: filters.page,
-            limit: filters.limit,
-            hasMore: false,
-            feedScope: filters.feedScope,
-            hasSubscriptions: false
-          }
-        })
-        return
-      }
-    } else {
-      // Not logged in — empty
-      res.json({
-        success: true,
-        data: {
-          items: [],
-          total: 0,
-          page: filters.page,
-          limit: filters.limit,
-          hasMore: false,
-          feedScope: filters.feedScope,
-          hasSubscriptions: false
-        }
-      })
-      return
-    }
-  } else if (filters.feedScope === 'following' && userId && !isViewingSpecificMunicipality) {
-    // 'following' shows only subscribed content across all scopes
-    const followConditions = []
     if (followedAuthors.length > 0) {
-      followConditions.push(inArray(threads.authorId, followedAuthors))
-      followConditions.push(inArray(threads.sourceInstitutionId, followedAuthors))
+      subConditions.push(inArray(threads.authorId, followedAuthors))
+      subConditions.push(inArray(threads.sourceInstitutionId, followedAuthors))
     }
     if (followedMunicipalities.length > 0) {
-      followConditions.push(inArray(threads.municipalityId, followedMunicipalities))
+      subConditions.push(inArray(threads.municipalityId, followedMunicipalities))
+    }
+    if (followedTags.length > 0) {
+      // Match threads that have any of the followed tags
+      subConditions.push(
+        sql`${threads.id} IN (SELECT ${threadTags.threadId} FROM ${threadTags} WHERE ${inArray(threadTags.tag, followedTags)})`
+      )
     }
 
-    if (followConditions.length > 0) {
-      conditions.push(or(...followConditions))
-    } else if (followedTags.length === 0) {
+    return subConditions
+  }
+
+  const hasAnySubscriptions = followedAuthors.length > 0 || followedMunicipalities.length > 0 || followedTags.length > 0
+
+  if (filters.feedScope === 'local' || filters.feedScope === 'national' || filters.feedScope === 'european') {
+    // Scope filter: restrict to this scope
+    conditions.push(eq(threads.scope, filters.feedScope))
+
+    if (!userId || !hasAnySubscriptions) {
+      // Not logged in or no subscriptions — empty with onboarding
       res.json({
         success: true,
         data: {
@@ -210,6 +156,34 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
         }
       })
       return
+    }
+
+    // Add subscription filter
+    const subFilter = buildSubscriptionFilter()
+    if (subFilter.length > 0) {
+      conditions.push(or(...subFilter))
+    }
+  } else if (filters.feedScope === 'following' && userId && !isViewingSpecificMunicipality) {
+    // 'following' shows subscribed content across all scopes
+    if (!hasAnySubscriptions) {
+      res.json({
+        success: true,
+        data: {
+          items: [],
+          total: 0,
+          page: filters.page,
+          limit: filters.limit,
+          hasMore: false,
+          feedScope: filters.feedScope,
+          hasSubscriptions: false
+        }
+      })
+      return
+    }
+
+    const subFilter = buildSubscriptionFilter()
+    if (subFilter.length > 0) {
+      conditions.push(or(...subFilter))
     }
   }
   // 'all' shows everything (no additional filter)
@@ -306,28 +280,15 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
     return acc
   }, {} as Record<string, string[]>)
 
-  // Filter by tags if specified (including followed tags)
+  // Post-query tag filtering: only for explicit URL ?tags= parameter
+  // (Followed tags are already handled at SQL level via buildSubscriptionFilter)
   let filteredThreads = threadList
   const requestedTags = filters.tags ? filters.tags.split(',').map(t => t.trim().toLowerCase()) : []
-  const combinedTags = [...requestedTags, ...followedTags]
 
-  if (combinedTags.length > 0 && filters.feedScope !== 'following') {
-    // For non-following feeds, use tag filter as normal
-    if (requestedTags.length > 0) {
-      filteredThreads = threadList.filter(t => {
-        const threadTagList = tagsByThread[t.thread.id] || []
-        return requestedTags.some(rt => threadTagList.includes(rt))
-      })
-    }
-  } else if (filters.feedScope === 'following' && followedTags.length > 0) {
-    // For following feed, include threads with followed tags
+  if (requestedTags.length > 0) {
     filteredThreads = threadList.filter(t => {
       const threadTagList = tagsByThread[t.thread.id] || []
-      // Include if matches author/municipality OR has followed tag
-      const hasFollowedTag = followedTags.some(ft => threadTagList.includes(ft))
-      const followsAuthor = followedAuthors.includes(t.thread.authorId)
-      const followsMunicipality = t.thread.municipalityId && followedMunicipalities.includes(t.thread.municipalityId)
-      return hasFollowedTag || followsAuthor || followsMunicipality
+      return requestedTags.some(rt => threadTagList.includes(rt))
     })
   }
 
