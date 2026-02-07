@@ -98,6 +98,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       )
       // Invalidate conversations list to update last message & unread count
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
+      // Update unread DM badge
+      queryClient.invalidateQueries({ queryKey: queryKeys.dmUnreadCount })
     })
 
     setSocket(newSocket)

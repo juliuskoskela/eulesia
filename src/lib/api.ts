@@ -414,6 +414,10 @@ class ApiClient {
     return this.request('/dm')
   }
 
+  async getUnreadDmCount(): Promise<{ count: number }> {
+    return this.request('/dm/unread-count')
+  }
+
   async startConversation(userId: string): Promise<Conversation> {
     return this.request('/dm', {
       method: 'POST',

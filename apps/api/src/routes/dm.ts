@@ -181,6 +181,35 @@ router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, 
   })
 }))
 
+// GET /dm/unread-count — Get total unread DM count across all conversations
+router.get('/unread-count', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+
+  const participations = await db
+    .select({ conversationId: conversationParticipants.conversationId, lastReadAt: conversationParticipants.lastReadAt })
+    .from(conversationParticipants)
+    .where(eq(conversationParticipants.userId, userId))
+
+  if (participations.length === 0) {
+    return res.json({ success: true, data: { count: 0 } })
+  }
+
+  let totalUnread = 0
+  for (const p of participations) {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(directMessages)
+      .where(and(
+        eq(directMessages.conversationId, p.conversationId),
+        sql`${directMessages.authorId} != ${userId}`,
+        p.lastReadAt ? gt(directMessages.createdAt, p.lastReadAt) : sql`true`
+      ))
+    totalUnread += result?.count ?? 0
+  }
+
+  res.json({ success: true, data: { count: totalUnread } })
+}))
+
 // GET /dm/:conversationId — Get conversation with messages
 router.get('/:conversationId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id
@@ -340,17 +369,28 @@ router.post('/:conversationId/messages', authMiddleware, asyncHandler(async (req
   })
 }))
 
-// POST /dm/:conversationId/read — Mark conversation as read
+// POST /dm/:conversationId/read — Mark conversation as read + dismiss related notifications
 router.post('/:conversationId/read', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id
   const { conversationId } = req.params
 
+  // Update lastReadAt
   await db
     .update(conversationParticipants)
     .set({ lastReadAt: new Date() })
     .where(and(
       eq(conversationParticipants.conversationId, conversationId),
       eq(conversationParticipants.userId, userId)
+    ))
+
+  // Mark related DM notifications as read
+  await db
+    .update(notifications)
+    .set({ read: true })
+    .where(and(
+      eq(notifications.userId, userId),
+      eq(notifications.type, 'dm'),
+      sql`${notifications.link} = ${`/messages/${conversationId}`}`
     ))
 
   res.json({ success: true, data: { read: true } })

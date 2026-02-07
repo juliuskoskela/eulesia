@@ -61,7 +61,7 @@ function ConversationItem({ conversation }: { conversation: Conversation }) {
           <p className={`text-sm truncate ${unreadCount > 0 ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
             {lastMessage
               ? lastMessage.content.substring(0, 80)
-              : 'Ei viesteja viela'
+              : 'Ei viestejä vielä'
             }
           </p>
           {unreadCount > 0 && (
@@ -99,9 +99,9 @@ export function MessagesPage() {
       ) : (
         <div className="text-center py-16 px-4">
           <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-gray-900 mb-2">Ei viesteja viela</h2>
+          <h2 className="text-lg font-medium text-gray-900 mb-2">Ei viestejä vielä</h2>
           <p className="text-sm text-gray-500">
-            Aloita keskustelu kayttajan profiilisivulta.
+            Aloita keskustelu käyttäjän profiilisivulta.
           </p>
         </div>
       )}

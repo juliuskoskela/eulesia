@@ -151,110 +151,113 @@ export function RoomPage() {
 
   return (
     <Layout>
-      {/* Header */}
-      <div className={`px-4 py-4 ${visibility === 'public' ? 'bg-green-700' : 'bg-amber-700'}`}>
-        <div className="flex items-center gap-3">
-          <Link to="/home" className="p-2 -ml-2 hover:bg-white/10 rounded-lg">
-            <ArrowLeft className="w-5 h-5 text-white" />
-          </Link>
-          <div className="flex-1">
+      <div className="flex flex-col h-[100dvh]">
+        {/* Header */}
+        <div className={`px-4 py-4 flex-shrink-0 ${visibility === 'public' ? 'bg-green-700' : 'bg-amber-700'}`}>
+          <div className="flex items-center gap-3">
+            <Link to="/home" className="p-2 -ml-2 hover:bg-white/10 rounded-lg">
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </Link>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                {visibility === 'public' ? (
+                  <Globe className="w-4 h-4 text-white/80" />
+                ) : (
+                  <Lock className="w-4 h-4 text-white/80" />
+                )}
+                <h1 className="text-lg font-bold text-white">{name}</h1>
+              </div>
+              <p className="text-sm text-white/70">
+                {owner.name}'s home • {visibility === 'public' ? 'Open to all' : 'Invite only'}
+              </p>
+            </div>
+            {isOwner && (
+              <div className="relative" ref={settingsRef}>
+                <button
+                  onClick={handleOpenSettings}
+                  className="p-2 hover:bg-white/10 rounded-lg"
+                >
+                  <Settings className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Room description */}
+        {description && (
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+            <p className="text-sm text-gray-600">{description}</p>
+          </div>
+        )}
+
+        {/* Members and invite (for private rooms) */}
+        {visibility === 'private' && (
+          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2">
-              {visibility === 'public' ? (
-                <Globe className="w-4 h-4 text-white/80" />
-              ) : (
-                <Lock className="w-4 h-4 text-white/80" />
-              )}
-              <h1 className="text-lg font-bold text-white">{name}</h1>
+              <Users className="w-4 h-4 text-gray-500" />
+              <span className="text-sm text-gray-600">{members.length + 1} members</span>
             </div>
-            <p className="text-sm text-white/70">
-              {owner.name}'s home • {visibility === 'public' ? 'Open to all' : 'Invite only'}
-            </p>
-          </div>
-          {isOwner && (
-            <div className="relative" ref={settingsRef}>
+            {isOwner && (
               <button
-                onClick={handleOpenSettings}
-                className="p-2 hover:bg-white/10 rounded-lg"
+                onClick={() => setShowInvite(true)}
+                className="text-sm text-teal-600 hover:text-teal-700 flex items-center gap-1"
               >
-                <Settings className="w-5 h-5 text-white" />
+                <UserPlus className="w-4 h-4" />
+                Invite
               </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Room description */}
-      {description && (
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <p className="text-sm text-gray-600">{description}</p>
-        </div>
-      )}
-
-      {/* Members and invite (for private rooms) */}
-      {visibility === 'private' && (
-        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-gray-500" />
-            <span className="text-sm text-gray-600">{members.length + 1} members</span>
+            )}
           </div>
-          {isOwner && (
-            <button
-              onClick={() => setShowInvite(true)}
-              className="text-sm text-teal-600 hover:text-teal-700 flex items-center gap-1"
-            >
-              <UserPlus className="w-4 h-4" />
-              Invite
-            </button>
-          )}
-        </div>
-      )}
+        )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4" style={{ minHeight: '300px', maxHeight: 'calc(100vh - 350px)' }}>
-        {messages.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <p>No messages yet</p>
-            <p className="text-sm mt-1">Be the first to say something!</p>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <p>No messages yet</p>
+              <p className="text-sm mt-1">Be the first to say something!</p>
+            </div>
+          ) : (
+            messages.map((msg: RoomMessage) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                isOwnMessage={msg.author.id === currentUser?.id}
+              />
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Message input */}
+        {canPost ? (
+          <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Write a message..."
+                enterKeyHint="send"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+              <button
+                type="submit"
+                disabled={!newMessage.trim() || sendMessageMutation.isPending}
+                className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </form>
           </div>
         ) : (
-          messages.map((msg: RoomMessage) => (
-            <MessageBubble
-              key={msg.id}
-              message={msg}
-              isOwnMessage={msg.author.id === currentUser?.id}
-            />
-          ))
+          <div className="flex-shrink-0 bg-gray-100 border-t border-gray-200 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-center">
+            <p className="text-sm text-gray-600">
+              {currentUser ? 'You need an invitation to post here' : 'Sign in to participate'}
+            </p>
+          </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
-
-      {/* Message input */}
-      {canPost ? (
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-4 py-3">
-          <form onSubmit={handleSendMessage} className="flex gap-2">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Write a message..."
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            />
-            <button
-              type="submit"
-              disabled={!newMessage.trim() || sendMessageMutation.isPending}
-              className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </form>
-        </div>
-      ) : (
-        <div className="sticky bottom-0 bg-gray-100 border-t border-gray-200 px-4 py-3 text-center">
-          <p className="text-sm text-gray-600">
-            {currentUser ? 'You need an invitation to post here' : 'Sign in to participate'}
-          </p>
-        </div>
-      )}
 
       {/* Settings Modal */}
       {showSettings && (

@@ -109,7 +109,7 @@ export function ClubThreadPage() {
     return (
       <Layout>
         <div className="p-8 text-center">
-          <p className="text-gray-500">Ketjua ei loytynyt tai sinulla ei ole oikeuksia</p>
+          <p className="text-gray-500">Ketjua ei löytynyt tai sinulla ei ole oikeuksia</p>
           <Link to={`/clubs/${clubId}`} className="text-blue-600 hover:underline mt-2 inline-block">
             Takaisin kerhoon
           </Link>
@@ -235,7 +235,7 @@ export function ClubThreadPage() {
                 disabled={!commentContent.trim() || isSubmitting}
                 className="bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? 'Lahetetaan...' : 'Laheta vastaus'}
+                {isSubmitting ? 'Lähetetään...' : 'Lähetä vastaus'}
               </button>
             </div>
           </div>
@@ -249,7 +249,7 @@ export function ClubThreadPage() {
             />
           ) : (
             <div className="text-center py-8 text-gray-500">
-              <p>Ei viela vastauksia. Ole ensimmainen!</p>
+              <p>Ei vielä vastauksia. Ole ensimmäinen!</p>
             </div>
           )}
 

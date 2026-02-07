@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Shield, Building2, Calendar, MessageSquare, Hash, Bot, Users, Send } from 'lucide-react'
+import { ArrowLeft, Shield, Building2, Calendar, MessageSquare, Hash, Bot, Users, Send, Home } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { Layout } from '../components/layout'
 import { FollowButton } from '../components/common'
@@ -137,7 +137,7 @@ export function UserProfilePage() {
     return (
       <Layout>
         <div className="p-8 text-center">
-          <p className="text-gray-500">Kayttajaa ei loytynyt</p>
+          <p className="text-gray-500">Käyttäjää ei löytynyt</p>
           <Link to="/agora" className="text-blue-600 hover:underline mt-2 inline-block">
             Takaisin Agoraan
           </Link>
@@ -198,17 +198,24 @@ export function UserProfilePage() {
           </div>
         </div>
 
-        {/* Send message button */}
+        {/* Send message & visit home buttons */}
         {!isOwnProfile && userId && (
-          <div className="mt-4">
+          <div className="mt-4 flex gap-2">
             <button
               onClick={handleSendMessage}
               disabled={sendingMessage}
               className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
-              {sendingMessage ? 'Avataan...' : 'Laheta viesti'}
+              {sendingMessage ? 'Avataan...' : 'Lähetä viesti'}
             </button>
+            <Link
+              to={`/home/${userId}`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <Home className="w-4 h-4" />
+              Käy kotisivulla
+            </Link>
           </div>
         )}
 

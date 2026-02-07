@@ -143,71 +143,74 @@ export function DMConversationPage() {
 
   return (
     <Layout>
-      {/* Header */}
-      <div className="bg-teal-700 px-4 py-4">
-        <div className="flex items-center gap-3">
-          <Link to="/messages" className="p-2 -ml-2 hover:bg-white/10 rounded-lg">
-            <ArrowLeft className="w-5 h-5 text-white" />
-          </Link>
-          {otherUser && (
-            <Link to={`/user/${otherUser.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-                {otherUser.avatarUrl ? (
-                  <img src={otherUser.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  <span className="text-white text-sm font-bold">
-                    {getAvatarInitials(otherUser.name)}
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h1 className="text-lg font-bold text-white truncate">{otherUser.name}</h1>
-                {otherUser.institutionName && (
-                  <p className="text-sm text-white/70 truncate">{otherUser.institutionName}</p>
-                )}
-              </div>
+      <div className="flex flex-col h-[100dvh]">
+        {/* Header */}
+        <div className="bg-teal-700 px-4 py-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <Link to="/messages" className="p-2 -ml-2 hover:bg-white/10 rounded-lg">
+              <ArrowLeft className="w-5 h-5 text-white" />
             </Link>
-          )}
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4" style={{ minHeight: '300px', maxHeight: 'calc(100vh - 280px)' }}>
-        {messages.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <p>Ei viesteja viela</p>
-            <p className="text-sm mt-1">Laheta ensimmainen viesti!</p>
+            {otherUser && (
+              <Link to={`/user/${otherUser.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                  {otherUser.avatarUrl ? (
+                    <img src={otherUser.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <span className="text-white text-sm font-bold">
+                      {getAvatarInitials(otherUser.name)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-lg font-bold text-white truncate">{otherUser.name}</h1>
+                  {otherUser.institutionName && (
+                    <p className="text-sm text-white/70 truncate">{otherUser.institutionName}</p>
+                  )}
+                </div>
+              </Link>
+            )}
           </div>
-        ) : (
-          messages.map((msg: DirectMessage) => (
-            <MessageBubble
-              key={msg.id}
-              message={msg}
-              isOwnMessage={msg.author.id === currentUser?.id}
-            />
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+        </div>
 
-      {/* Message input */}
-      <div className="sticky bottom-0 bg-white border-t border-gray-200 px-4 py-3">
-        <form onSubmit={handleSendMessage} className="flex gap-2">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Kirjoita viesti..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-          />
-          <button
-            type="submit"
-            disabled={!newMessage.trim() || sendMessageMutation.isPending}
-            className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </form>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <p>Ei viestejä vielä</p>
+              <p className="text-sm mt-1">Lähetä ensimmäinen viesti!</p>
+            </div>
+          ) : (
+            messages.map((msg: DirectMessage) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                isOwnMessage={msg.author.id === currentUser?.id}
+              />
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Message input */}
+        <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <form onSubmit={handleSendMessage} className="flex gap-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Kirjoita viesti..."
+              enterKeyHint="send"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            />
+            <button
+              type="submit"
+              disabled={!newMessage.trim() || sendMessageMutation.isPending}
+              className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </form>
+        </div>
       </div>
     </Layout>
   )

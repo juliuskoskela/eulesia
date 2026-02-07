@@ -124,7 +124,7 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
     <div className="py-2">
       {/* Users */}
       {results.users.length > 0 && (
-        <ResultSection title="Kayttajat" icon={User}>
+        <ResultSection title="Käyttäjät" icon={User}>
           {results.users.map(user => (
             <Link
               key={user.id}

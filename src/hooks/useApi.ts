@@ -43,6 +43,7 @@ export const queryKeys = {
   // Direct Messages
   conversations: ['conversations'] as const,
   conversation: (id: string) => ['conversation', id] as const,
+  dmUnreadCount: ['dmUnreadCount'] as const,
 
   // Notifications
   notifications: ['notifications'] as const,
@@ -466,6 +467,7 @@ export function useSendDM(conversationId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dmUnreadCount })
     }
   })
 }
@@ -477,7 +479,18 @@ export function useMarkRead(conversationId: string) {
     mutationFn: () => api.markConversationRead(conversationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dmUnreadCount })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount })
     }
+  })
+}
+
+export function useUnreadDmCount() {
+  return useQuery({
+    queryKey: queryKeys.dmUnreadCount,
+    queryFn: () => api.getUnreadDmCount(),
+    refetchInterval: 30_000
   })
 }
 

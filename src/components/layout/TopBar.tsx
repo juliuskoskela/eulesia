@@ -133,7 +133,7 @@ export function TopBar() {
 
         {/* Search bar - desktop */}
         <div className="hidden md:block flex-1 max-w-md mx-4">
-          <SearchBar placeholder="Hae kayttajia, keskusteluja, paikkoja..." />
+          <SearchBar placeholder="Hae käyttäjiä, keskusteluja, paikkoja..." />
         </div>
 
         {/* Right section */}
@@ -199,7 +199,7 @@ export function TopBar() {
                   <div className="p-8 text-center">
                     <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">Ei ilmoituksia</p>
-                    <p className="text-xs text-gray-400 mt-1">Vastaukset ja maininnat nakyvet taalla</p>
+                    <p className="text-xs text-gray-400 mt-1">Vastaukset ja maininnat näkyvät täällä</p>
                   </div>
                 )}
               </div>

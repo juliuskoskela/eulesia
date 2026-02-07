@@ -21,7 +21,8 @@ import {
   TagPage,
   TopicsPage,
   MessagesPage,
-  DMConversationPage
+  DMConversationPage,
+  UserHomePage
 } from './pages'
 
 function LoadingScreen() {
@@ -164,6 +165,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <RoomPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/home/:userId"
+        element={
+          <ProtectedRoute>
+            <UserHomePage />
           </ProtectedRoute>
         }
       />
