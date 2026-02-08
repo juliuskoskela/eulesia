@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import DOMPurify from 'dompurify'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Building2, ChevronDown } from 'lucide-react'
@@ -10,38 +11,7 @@ import { ThreadVoteButtons } from '../components/agora/ThreadVoteButtons'
 import { useThread, useAddComment, useVoteComment, useVoteThread, type CommentSort } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { formatRelativeTime } from '../lib/formatTime'
-import type { Comment as ApiComment, UserSummary } from '../lib/api'
-
-// Transform API user to component format
-function transformAuthor(author: UserSummary) {
-  return {
-    id: author.id,
-    name: author.name,
-    role: author.role,
-    verified: true,
-    avatarUrl: author.avatarUrl,
-    avatarInitials: author.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-    institutionType: author.institutionType as 'municipality' | 'agency' | 'ministry' | undefined,
-    institutionName: author.institutionName
-  }
-}
-
-// Transform API comment to component format
-function transformComment(comment: ApiComment) {
-  return {
-    id: comment.id,
-    threadId: '',
-    authorId: comment.author.id,
-    parentId: comment.parentId,
-    content: comment.content,
-    contentHtml: comment.contentHtml,
-    score: comment.score || 0,
-    depth: comment.depth || 0,
-    userVote: comment.userVote || 0,
-    createdAt: comment.createdAt,
-    author: transformAuthor(comment.author)
-  }
-}
+import { transformAuthor, transformComment } from '../utils/transforms'
 
 export function ThreadPage() {
   const { t } = useTranslation(['agora', 'common'])
@@ -208,7 +178,7 @@ export function ThreadPage() {
             {thread.contentHtml ? (
               <div
                 className="prose prose-gray max-w-none"
-                dangerouslySetInnerHTML={{ __html: thread.contentHtml }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(thread.contentHtml) }}
               />
             ) : (
               <div className="prose prose-gray max-w-none">

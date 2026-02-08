@@ -24,7 +24,7 @@ export function ActorBadge({ user, showName = true, size = 'md' }: ActorBadgePro
       {user.avatarUrl ? (
         <img
           src={user.avatarUrl}
-          alt=""
+          alt={user.name}
           className={`${sizeClasses[size]} rounded-full object-cover`}
         />
       ) : (

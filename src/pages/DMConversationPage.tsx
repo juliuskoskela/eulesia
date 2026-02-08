@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Send } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -8,30 +9,14 @@ import { useConversation, useSendDM, useMarkRead } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { useSocket } from '../hooks/useSocket'
 import { formatRelativeTime } from '../lib/formatTime'
-import type { DirectMessage, UserSummary } from '../lib/api'
-
-function transformUser(user: UserSummary) {
-  return {
-    id: user.id,
-    name: user.name,
-    role: user.role,
-    verified: true,
-    avatarUrl: user.avatarUrl,
-    avatarInitials: user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-    institutionType: user.institutionType as 'municipality' | 'agency' | 'ministry' | undefined,
-    institutionName: user.institutionName
-  }
-}
-
-function getAvatarInitials(name: string): string {
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-}
+import type { DirectMessage } from '../lib/api'
+import { transformAuthor, getAvatarInitials } from '../utils/transforms'
 
 function MessageBubble({ message, isOwnMessage }: { message: DirectMessage; isOwnMessage: boolean }) {
   return (
     <div className={`flex gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
       <div className="flex-shrink-0">
-        <ActorBadge user={transformUser(message.author)} showName={false} size="sm" />
+        <ActorBadge user={transformAuthor(message.author)} showName={false} size="sm" />
       </div>
       <div className={`max-w-[75%] ${isOwnMessage ? 'text-right' : ''}`}>
         <div className="flex items-baseline gap-2 mb-1">
@@ -50,7 +35,7 @@ function MessageBubble({ message, isOwnMessage }: { message: DirectMessage; isOw
           }`}
         >
           {message.contentHtml ? (
-            <div dangerouslySetInnerHTML={{ __html: message.contentHtml }} className="prose prose-sm max-w-none" />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(message.contentHtml) }} className="prose prose-sm max-w-none" />
           ) : (
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           )}
@@ -142,7 +127,7 @@ export function DMConversationPage() {
               <Link to={`/user/${otherUser.id}`} className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
                   {otherUser.avatarUrl ? (
-                    <img src={otherUser.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                    <img src={otherUser.avatarUrl} alt={otherUser.name} className="w-full h-full rounded-full object-cover" />
                   ) : (
                     <span className="text-white text-sm font-bold">
                       {getAvatarInitials(otherUser.name)}
@@ -194,6 +179,7 @@ export function DMConversationPage() {
               type="submit"
               disabled={!newMessage.trim() || sendMessageMutation.isPending}
               className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label={t('sendMessage')}
             >
               <Send className="w-5 h-5" />
             </button>

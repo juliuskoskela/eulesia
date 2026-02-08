@@ -57,6 +57,7 @@ export function AgoraFilters({
                   ? 'bg-blue-800 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
+              aria-pressed={selectedScope === value}
             >
               <Icon className="w-4 h-4" />
               {label}
@@ -106,6 +107,7 @@ export function AgoraFilters({
                   ? 'bg-teal-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
+              aria-pressed={selectedTags.includes(tag)}
             >
               {tag.replace('-', ' ')}
             </button>

@@ -76,7 +76,8 @@ export function ThreadVoteButtons({
           }
           disabled:opacity-50 disabled:cursor-not-allowed
         `}
-        title={currentUser ? t('actions.upvote') : t('actions.loginToVote')}
+        aria-label={currentUser ? t('actions.upvote') : t('actions.loginToVote')}
+        aria-pressed={userVote === 1}
       >
         <ChevronUp className={classes.icon} strokeWidth={2.5} />
       </button>
@@ -87,6 +88,7 @@ export function ThreadVoteButtons({
           ${classes.score} font-semibold tabular-nums
           ${userVote === 1 ? 'text-orange-500' : userVote === -1 ? 'text-blue-500' : 'text-gray-700'}
         `}
+        aria-label={t('actions.score', { score: formatScore(score) })}
       >
         {formatScore(score)}
       </span>
@@ -103,7 +105,8 @@ export function ThreadVoteButtons({
           }
           disabled:opacity-50 disabled:cursor-not-allowed
         `}
-        title={currentUser ? t('actions.downvote') : t('actions.loginToVote')}
+        aria-label={currentUser ? t('actions.downvote') : t('actions.loginToVote')}
+        aria-pressed={userVote === -1}
       >
         <ChevronDown className={classes.icon} strokeWidth={2.5} />
       </button>

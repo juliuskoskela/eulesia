@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import DOMPurify from 'dompurify'
 import { useTranslation } from 'react-i18next'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Users, ChevronDown, Lock } from 'lucide-react'
@@ -7,38 +8,7 @@ import { ActorBadge, ContentEndMarker } from '../components/common'
 import { CommentThread } from '../components/agora/CommentThread'
 import { useClubThread, useAddClubComment } from '../hooks/useApi'
 import { formatRelativeTime } from '../lib/formatTime'
-import type { Comment as ApiComment, UserSummary } from '../lib/api'
-
-// Transform API user to component format
-function transformAuthor(author: UserSummary) {
-  return {
-    id: author.id,
-    name: author.name,
-    role: author.role,
-    verified: true,
-    avatarUrl: author.avatarUrl,
-    avatarInitials: author.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-    institutionType: author.institutionType as 'municipality' | 'agency' | 'ministry' | undefined,
-    institutionName: author.institutionName
-  }
-}
-
-// Transform API comment to component format
-function transformComment(comment: ApiComment) {
-  return {
-    id: comment.id,
-    threadId: '',
-    authorId: comment.author.id,
-    parentId: comment.parentId,
-    content: comment.content,
-    contentHtml: comment.contentHtml,
-    score: comment.score || 0,
-    depth: comment.depth || 0,
-    userVote: comment.userVote || 0,
-    createdAt: comment.createdAt,
-    author: transformAuthor(comment.author)
-  }
-}
+import { transformAuthor, transformComment } from '../utils/transforms'
 
 type CommentSort = 'best' | 'new' | 'old' | 'controversial'
 
@@ -76,8 +46,7 @@ export function ClubThreadPage() {
   }
 
   const handleVote = async (_commentId: string, _value: number) => {
-    // Club comments don't have voting for now
-    console.log('Club comment voting not implemented')
+    // Club comments don't have voting yet
   }
 
   const handleReply = async (parentId: string, content: string) => {
@@ -160,7 +129,7 @@ export function ClubThreadPage() {
           {thread.contentHtml ? (
             <div
               className="prose prose-gray max-w-none"
-              dangerouslySetInnerHTML={{ __html: thread.contentHtml }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(thread.contentHtml) }}
             />
           ) : (
             <div className="prose prose-gray max-w-none whitespace-pre-wrap">

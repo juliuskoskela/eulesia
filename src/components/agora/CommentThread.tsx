@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import DOMPurify from 'dompurify'
 import { ChevronUp, ChevronDown, MessageSquare, Minus, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ActorBadge } from '../common/ActorBadge'
@@ -79,9 +80,13 @@ function CommentItem({
       {/* Vertical line for nesting */}
       {depth > 0 && depth <= maxVisualDepth && (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label={isCollapsed ? t('common:actions.expand') : t('common:actions.collapse')}
           className="absolute left-0 top-0 bottom-0 w-0.5 bg-gray-200 hover:bg-blue-400 cursor-pointer"
           style={{ marginLeft: -12 }}
           onClick={() => setIsCollapsed(!isCollapsed)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsCollapsed(!isCollapsed) } }}
         />
       )}
 
@@ -95,13 +100,17 @@ function CommentItem({
               className={`p-0.5 rounded hover:bg-gray-100 transition-colors ${
                 userVote === 1 ? 'text-orange-500' : 'text-gray-400 hover:text-gray-600'
               }`}
-              title={t('common:actions.upvote')}
+              aria-label={t('common:actions.upvote')}
+              aria-pressed={userVote === 1}
             >
               <ChevronUp className="w-5 h-5" />
             </button>
-            <span className={`text-xs font-medium min-w-[20px] text-center ${
-              score > 0 ? 'text-orange-600' : score < 0 ? 'text-blue-600' : 'text-gray-500'
-            }`}>
+            <span
+              className={`text-xs font-medium min-w-[20px] text-center ${
+                score > 0 ? 'text-orange-600' : score < 0 ? 'text-blue-600' : 'text-gray-500'
+              }`}
+              aria-label={`${score} ${t('common:actions.points')}`}
+            >
               {score}
             </span>
             <button
@@ -109,7 +118,8 @@ function CommentItem({
               className={`p-0.5 rounded hover:bg-gray-100 transition-colors ${
                 userVote === -1 ? 'text-blue-500' : 'text-gray-400 hover:text-gray-600'
               }`}
-              title={t('common:actions.downvote')}
+              aria-label={t('common:actions.downvote')}
+              aria-pressed={userVote === -1}
             >
               <ChevronDown className="w-5 h-5" />
             </button>
@@ -151,7 +161,7 @@ function CommentItem({
                   {comment.contentHtml ? (
                     <div
                       className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: comment.contentHtml }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(comment.contentHtml) }}
                     />
                   ) : (
                     <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">

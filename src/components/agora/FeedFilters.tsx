@@ -94,6 +94,7 @@ export function FeedFilters({
                   ? 'bg-blue-800 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
+              aria-pressed={feedScope === value}
             >
               <Icon className="w-4 h-4" />
               {t(tKey)}
@@ -187,6 +188,7 @@ export function FeedFilters({
                     ? 'bg-teal-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
+                aria-pressed={selectedTags.includes(tag)}
               >
                 {tag.replace(/-/g, ' ')}
               </button>

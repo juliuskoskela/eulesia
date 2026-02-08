@@ -43,14 +43,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     newSocket.on('connect', () => {
       setIsConnected(true)
-      console.log('Socket connected')
       // Join user-specific room for notifications
       newSocket.emit('join:user', currentUser.id)
     })
 
     newSocket.on('disconnect', () => {
       setIsConnected(false)
-      console.log('Socket disconnected')
     })
 
     newSocket.on('error', (error) => {
@@ -73,8 +71,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     })
 
     // Handle typing indicators
-    newSocket.on('user_typing', (data: { roomId: string; userId: string; userName: string }) => {
-      console.log(`${data.userName} is typing in room ${data.roomId}`)
+    newSocket.on('user_typing', (_data: { roomId: string; userId: string; userName: string }) => {
+      // TODO: Show typing indicator in UI
     })
 
     // Handle new notification events

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Lock, Globe, Send, Users, Settings, UserPlus, X, Trash2, Save, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -9,21 +10,8 @@ import { useAuth } from '../hooks/useAuth'
 import { useSocket } from '../hooks/useSocket'
 import { formatRelativeTime } from '../lib/formatTime'
 import { api } from '../lib/api'
-import type { RoomMessage, UserSummary, SearchUserResult } from '../lib/api'
-
-// Transform API user to component format
-function transformUser(user: UserSummary) {
-  return {
-    id: user.id,
-    name: user.name,
-    role: user.role,
-    verified: true,
-    avatarUrl: user.avatarUrl,
-    avatarInitials: user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-    institutionType: user.institutionType as 'municipality' | 'agency' | 'ministry' | undefined,
-    institutionName: user.institutionName
-  }
-}
+import type { RoomMessage, SearchUserResult } from '../lib/api'
+import { transformAuthor } from '../utils/transforms'
 
 export function RoomPage() {
   const { t } = useTranslation('home')
@@ -201,6 +189,7 @@ export function RoomPage() {
                 <button
                   onClick={() => setShowInvite(true)}
                   className="p-2 hover:bg-white/10 rounded-lg"
+                  aria-label={t('room.inviteTitle')}
                 >
                   <UserPlus className="w-5 h-5 text-white" />
                 </button>
@@ -208,6 +197,7 @@ export function RoomPage() {
                   onClick={handleOpenSettings}
                   className="p-2 hover:bg-white/10 rounded-lg"
                   ref={settingsRef}
+                  aria-label={t('room.settings')}
                 >
                   <Settings className="w-5 h-5 text-white" />
                 </button>
@@ -268,6 +258,7 @@ export function RoomPage() {
                 type="submit"
                 disabled={!newMessage.trim() || sendMessageMutation.isPending}
                 className="p-2 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={t('room.sendMessage')}
               >
                 <Send className="w-5 h-5" />
               </button>
@@ -284,11 +275,11 @@ export function RoomPage() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="room-settings-title">
           <div className="bg-white rounded-xl w-full max-w-md">
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">{t('room.settings')}</h3>
-              <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-gray-100 rounded">
+              <h3 id="room-settings-title" className="font-semibold text-gray-900">{t('room.settings')}</h3>
+              <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-gray-100 rounded" aria-label={t('common:actions.close')}>
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
@@ -344,11 +335,11 @@ export function RoomPage() {
 
       {/* Invite Modal */}
       {showInvite && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="room-invite-title">
           <div className="bg-white rounded-xl w-full max-w-md">
             <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">{t('room.inviteTitle')}</h3>
-              <button onClick={() => { setShowInvite(false); setInviteSearch(''); setInviteResults([]); setSelectedUser(null) }} className="p-1 hover:bg-gray-100 rounded">
+              <h3 id="room-invite-title" className="font-semibold text-gray-900">{t('room.inviteTitle')}</h3>
+              <button onClick={() => { setShowInvite(false); setInviteSearch(''); setInviteResults([]); setSelectedUser(null) }} className="p-1 hover:bg-gray-100 rounded" aria-label={t('common:actions.close')}>
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
@@ -387,7 +378,7 @@ export function RoomPage() {
                         }`}
                       >
                         {user.avatarUrl ? (
-                          <img src={user.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          <img src={user.avatarUrl} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
                             {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
@@ -446,7 +437,7 @@ function MessageBubble({ message, isOwnMessage }: { message: RoomMessage; isOwnM
   return (
     <div className={`flex gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
       <div className="flex-shrink-0">
-        <ActorBadge user={transformUser(message.author)} showName={false} size="sm" />
+        <ActorBadge user={transformAuthor(message.author)} showName={false} size="sm" />
       </div>
       <div className={`max-w-[75%] ${isOwnMessage ? 'text-right' : ''}`}>
         <div className="flex items-baseline gap-2 mb-1">
@@ -465,7 +456,7 @@ function MessageBubble({ message, isOwnMessage }: { message: RoomMessage; isOwnM
           }`}
         >
           {message.contentHtml ? (
-            <div dangerouslySetInnerHTML={{ __html: message.contentHtml }} className="prose prose-sm max-w-none" />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(message.contentHtml) }} className="prose prose-sm max-w-none" />
           ) : (
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           )}
