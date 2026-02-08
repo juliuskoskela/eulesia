@@ -10,8 +10,8 @@
  * "taken over" by the real institution later.
  */
 
-import { db, users, institutionTopics, municipalities } from '../../db/index.js'
-import { eq, and } from 'drizzle-orm'
+import { db, users, institutionTopics, municipalities, locations } from '../../db/index.js'
+import { eq, and, ilike } from 'drizzle-orm'
 
 // ============================================
 // BOT USER
@@ -180,6 +180,59 @@ async function getOrCreateMunicipalityRecord(name: string): Promise<string> {
     .returning({ id: municipalities.id })
 
   return created.id
+}
+
+// ============================================
+// LOCATION RESOLUTION
+// ============================================
+
+/**
+ * Resolve a location (with coordinates) for a municipality.
+ * Looks up in locations table first, then tries Nominatim.
+ * Returns locationId or null if not found.
+ *
+ * This links municipal content to the map — threads with locationId
+ * appear as geographic points.
+ */
+export async function resolveLocationForMunicipality(municipalityName: string): Promise<string | null> {
+  const normalized = municipalityName.charAt(0).toUpperCase() + municipalityName.slice(1).toLowerCase()
+
+  // Check if location already exists in DB
+  const [existing] = await db
+    .select({ id: locations.id })
+    .from(locations)
+    .where(and(
+      ilike(locations.name, normalized),
+      eq(locations.country, 'FI')
+    ))
+    .limit(1)
+
+  if (existing) {
+    return existing.id
+  }
+
+  // Try Nominatim to create location
+  try {
+    const { searchNominatim } = await import('../nominatim.js')
+    const results = await searchNominatim(normalized, {
+      country: 'FI',
+      featuretype: 'city',
+      limit: 1
+    })
+
+    if (results.length > 0) {
+      const { activateLocation } = await import('../locations.js')
+      const osmType = results[0].osm_type === 'relation' ? 'relation' : results[0].osm_type === 'way' ? 'way' : 'node'
+      const location = await activateLocation(osmType as 'node' | 'way' | 'relation', results[0].osm_id)
+      console.log(`  Resolved location for ${normalized}: ${location.name} (${location.latitude}, ${location.longitude})`)
+      return location.id
+    }
+  } catch (err) {
+    // Nominatim unavailable — not critical, location can be resolved later
+    console.log(`  Could not resolve location for ${normalized}: ${err instanceof Error ? err.message : err}`)
+  }
+
+  return null
 }
 
 // ============================================

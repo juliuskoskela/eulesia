@@ -21,7 +21,7 @@ import { editorialGate, writeArticle, verifyArticle } from './mistral.js'
 import { renderMarkdown } from '../../utils/markdown.js'
 import { fetchers, MINUTE_SOURCES } from './fetchers/index.js'
 import type { MinuteSource } from './fetchers/index.js'
-import { getOrCreateBotUser, getOrCreateInstitution } from './institutions.js'
+import { getOrCreateBotUser, getOrCreateInstitution, resolveLocationForMunicipality } from './institutions.js'
 
 // Re-export for backwards compatibility
 export { MINUTE_SOURCES }
@@ -169,13 +169,15 @@ export async function importMinutes(options: ImportOptions = {}): Promise<Import
             continue
           }
 
-          // Get municipality ID and institution placeholder
+          // Get municipality ID, institution placeholder, and geographic location
           const municipalityId = await getOrCreateMunicipality(source.municipality)
+          const normalizedName = source.municipality.charAt(0).toUpperCase() + source.municipality.slice(1).toLowerCase()
           const sourceInstitutionId = await getOrCreateInstitution(
-            source.municipality.charAt(0).toUpperCase() + source.municipality.slice(1).toLowerCase(),
+            normalizedName,
             'municipality',
             { municipalityName: source.municipality }
           )
+          const locationId = await resolveLocationForMunicipality(normalizedName)
 
           // ============================================
           // 3-STAGE AGENTIC PIPELINE
@@ -266,6 +268,7 @@ ${article.keyPoints.map(p => `- ${p}`).join('\n')}
                   authorId: botUserId,
                   scope: 'local',
                   municipalityId,
+                  locationId,
                   sourceInstitutionId,
                   source: 'minutes_import',
                   sourceUrl,
