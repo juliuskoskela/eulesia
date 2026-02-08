@@ -156,28 +156,27 @@ export const dynastyFetcher: MinuteFetcher = {
     const meetings: Meeting[] = []
 
     // Parse meeting_frames page: look for links to individual meetings
-    // The meeting_frames page has a table with organ name, date, and protocol link
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
+    // Split by <tr to handle HTML with or without </tr> closing tags
+    const rows = html.split(/<tr\b/i).slice(1) // Skip content before first <tr>
 
-    let rowMatch
-    while ((rowMatch = rowRegex.exec(html)) !== null) {
-      const row = rowMatch[1]
+    for (const rawRow of rows) {
+      const row = rawRow
 
-      // Check if this row has a protocol (pöytäkirja) icon
+      // Check if this row has a protocol (pöytäkirja) link
       const protocolMatch = row.match(/page=meeting&(?:amp;)?id=(\d+)/)
       if (!protocolMatch) continue
 
-      // Check for protocol indicator: icon_protocol (older), 'protocol' CSS class (newer), or Pöytäkirja link text
-      const isProtocol = row.includes('icon_protocol') || /class='[^']*\bprotocol\b/.test(row) || /class="[^"]*\bprotocol\b/.test(row)
+      // Check for protocol indicator: icon_protocol (older) or 'protocol' CSS class (newer)
+      const isProtocol = row.includes('icon_protocol') || /class=['"][^'"]*\bprotocol\b/.test(row)
       if (!isProtocol) continue
 
       const meetingId = protocolMatch[1]
 
       // Extract organ name: first link in the row usually points to meetings&id=BODY_ID
-      const organMatch = row.match(/page=meetings&(?:amp;)?id=\d+[^"]*"[^>]*>([^<]+)/)
+      const organMatch = row.match(/page=meetings&(?:amp;)?id=\d+[^"']*['"][^>]*>([^<]+)/)
       const organ = organMatch ? organMatch[1].trim() : undefined
 
-      // Extract date from the row (Finnish date format: DD.MM.YYYY or similar)
+      // Extract date from the row (Finnish date format: DD.MM.YYYY)
       const dateMatch = row.match(/(\d{1,2}\.\d{1,2}\.\d{4})/)
       const date = dateMatch ? dateMatch[1] : undefined
 
