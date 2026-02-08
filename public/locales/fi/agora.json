@@ -4,6 +4,13 @@
   "loadError": "Keskustelujen lataaminen epäonnistui",
   "noThreads": "Ei keskusteluja valituilla suodattimilla",
   "editSubscriptions": "Muokkaa seuraamisia",
+  "emptyScope": {
+    "local": "Seuraa kuntia ja paikkakuntia nähdäksesi paikallisia keskusteluja ja päätöksiä.",
+    "national": "Seuraa ministeriöitä, organisaatioita ja aiheita nähdäksesi valtakunnallisia keskusteluja.",
+    "european": "Seuraa EU-instituutioita ja aiheita nähdäksesi EU-tason keskusteluja.",
+    "startFollowing": "Aloita seuraaminen",
+    "hint": "Täällä näkyy sisältö seuraamiltasi tahoilta. Selaa-näkymästä löydät kaiken sisällön."
+  },
   "replies_one": "{{count}} vastaus",
   "replies_other": "{{count}} vastausta",
   "aiSummary": "Automatisoitu yhteenveto",

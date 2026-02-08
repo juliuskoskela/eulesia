@@ -4,6 +4,13 @@
   "loadError": "Failed to load discussions",
   "noThreads": "No discussions match your filters",
   "editSubscriptions": "Edit subscriptions",
+  "emptyScope": {
+    "local": "Follow municipalities and places to see local discussions and decisions.",
+    "national": "Follow ministries, organizations and topics to see national discussions.",
+    "european": "Follow EU institutions and topics to see EU-level discussions.",
+    "startFollowing": "Start following",
+    "hint": "This shows content from people and organizations you follow. Browse all content in the Explore view."
+  },
   "replies_one": "{{count}} reply",
   "replies_other": "{{count}} replies",
   "aiSummary": "Automated summary",

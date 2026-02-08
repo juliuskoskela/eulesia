@@ -333,7 +333,9 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
       limit: filters.limit,
       hasMore: offset + filteredThreads.length < count,
       feedScope: filters.feedScope || 'all',
-      hasSubscriptions: filters.feedScope === 'following' ? (followedAuthors.length > 0 || followedMunicipalities.length > 0 || followedTags.length > 0) : undefined
+      hasSubscriptions: ['following', 'local', 'national', 'european'].includes(filters.feedScope || '')
+        ? hasAnySubscriptions
+        : undefined
     }
   })
 }))
