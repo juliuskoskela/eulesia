@@ -48,16 +48,14 @@ export interface SummaryResult {
 /**
  * Rate limiting configuration.
  *
- * Currently using Mistral free tier which allows ~2 requests/minute.
- * The pipeline runs slowly but continuously — each municipality's
- * minutes take ~10-15 minutes to fully process.
+ * Currently using Mistral free tier which allows max 1 request/second.
+ * Using 2s delay to stay safely under the limit.
  *
  * When upgrading to a paid Mistral plan:
- *  1. Reduce API_CALL_DELAY_MS to 1_000 (1s) or even 500
+ *  1. Reduce API_CALL_DELAY_MS to 500 or remove entirely
  *  2. The retry logic will still handle any occasional 429s
- *  3. A full municipality import will then take seconds, not minutes
  */
-const API_CALL_DELAY_MS = 35_000 // 35s between calls → safe under 2 req/min (free tier)
+const API_CALL_DELAY_MS = 2_000 // 2s between calls → safe under 1 req/s (free tier)
 const MAX_RETRIES = 5
 let lastCallTime = 0
 
@@ -105,7 +103,7 @@ async function callMistral(messages: MistralMessage[], options?: {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'mistral-large-latest',
+        model: process.env.MISTRAL_MODEL || 'mistral-large-latest',
         messages,
         temperature: options?.temperature ?? 0.3,
         max_tokens: options?.maxTokens ?? 2000,
