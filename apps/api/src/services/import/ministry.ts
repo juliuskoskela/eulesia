@@ -13,13 +13,13 @@
  * - Kept as supplementary for press releases that aren't formal decisions
  */
 
-import { db, threads, threadTags } from '../../db/index.js'
+import { db, threads, threadTags, municipalities } from '../../db/index.js'
 import { eq, and } from 'drizzle-orm'
 import { parseFeed, fetchArticleContent, type FeedItem } from './feeds.js'
 import { generateMinistrySummary } from './mistral.js'
 import { renderMarkdown } from '../../utils/markdown.js'
 import { fetchRecentSessions, fetchDecision, type VnDecision } from './valtioneuvosto.js'
-import { getOrCreateBotUser, getOrCreateInstitution, getInstitutionTopicTag } from './institutions.js'
+import { getOrCreateBotUser, getOrCreateInstitution, getInstitutionTopicTag, resolveLocationForMunicipality } from './institutions.js'
 
 // ============================================
 // CONFIGURATION
@@ -155,6 +155,24 @@ async function importVnDecisions(
         const sourceInstitutionId = await getOrCreateInstitution(institutionName, 'ministry')
         const topicTag = await getInstitutionTopicTag(sourceInstitutionId)
 
+        // Resolve scope and location for regional decisions
+        const threadScope = summary.scope || 'national'
+        let municipalityId: string | undefined
+        let locationId: string | null = null
+
+        if (threadScope === 'local' && summary.region) {
+          console.log(`   📍 Regional decision: ${summary.region}`)
+          // Try to resolve region to municipality and location
+          locationId = await resolveLocationForMunicipality(summary.region)
+          const normalized = summary.region.charAt(0).toUpperCase() + summary.region.slice(1).toLowerCase()
+          const [muni] = await db
+            .select({ id: municipalities.id })
+            .from(municipalities)
+            .where(eq(municipalities.name, normalized))
+            .limit(1)
+          municipalityId = muni?.id
+        }
+
         // Create thread
         const [thread] = await db
           .insert(threads)
@@ -163,7 +181,9 @@ async function importVnDecisions(
             content,
             contentHtml,
             authorId: botUserId,
-            scope: 'national',
+            scope: threadScope,
+            municipalityId,
+            locationId,
             source: 'rss_import',
             sourceUrl: decision.sourceUrl,
             sourceId,
@@ -180,6 +200,7 @@ async function importVnDecisions(
               sessionType: decision.sessionType,
               sessionDate: decision.sessionDate,
               decisionId: decision.decisionId,
+              region: summary.region,
               publishedAt: parseFinDate(decision.sessionDate)?.toISOString() || new Date().toISOString(),
               importedAt: new Date().toISOString()
             }
@@ -324,6 +345,21 @@ async function importRssFeeds(
           const sourceInstitutionId = await getOrCreateInstitution(source.name, 'ministry')
           const topicTag = await getInstitutionTopicTag(sourceInstitutionId)
 
+          // Resolve scope for regional content
+          const rssScope = summary.scope || 'national'
+          let rssMunicipalityId: string | undefined
+          let rssLocationId: string | null = null
+          if (rssScope === 'local' && summary.region) {
+            rssLocationId = await resolveLocationForMunicipality(summary.region)
+            const normalized = summary.region.charAt(0).toUpperCase() + summary.region.slice(1).toLowerCase()
+            const [muni] = await db
+              .select({ id: municipalities.id })
+              .from(municipalities)
+              .where(eq(municipalities.name, normalized))
+              .limit(1)
+            rssMunicipalityId = muni?.id
+          }
+
           const [thread] = await db
             .insert(threads)
             .values({
@@ -331,7 +367,9 @@ async function importRssFeeds(
               content,
               contentHtml,
               authorId: botUserId,
-              scope: 'national',
+              scope: rssScope,
+              municipalityId: rssMunicipalityId,
+              locationId: rssLocationId,
               source: 'rss_import',
               sourceUrl: item.link,
               sourceId,

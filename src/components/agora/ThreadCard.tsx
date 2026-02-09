@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { Thread, User } from '../../types'
 import { ActorBadge } from '../common/ActorBadge'
+import { FollowButton } from '../common/FollowButton'
 import { ScopeBadge } from '../common/ScopeBadge'
 import { TagList } from '../common/TagList'
 import { ThreadVoteButtons } from './ThreadVoteButtons'
@@ -61,11 +62,14 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
         >
           {/* Bot RSS import summary indicator */}
           {isBotSummary && (
-            <div className="flex items-center gap-1.5 text-xs text-purple-700 mb-2">
+            <div className="flex items-center flex-wrap gap-1.5 text-xs text-purple-700 mb-2">
               <Bot className="w-3.5 h-3.5" />
               <span className="font-medium">
                 {sourceInstitutionName ? t('aiSummarySource', { source: sourceInstitutionName }) : t('aiSummary')}
               </span>
+              {thread.sourceInstitutionId && (
+                <FollowButton entityType="user" entityId={thread.sourceInstitutionId} size="sm" variant="ghost" />
+              )}
               {thread.sourceUrl && (
                 <a
                   href={thread.sourceUrl}
@@ -83,9 +87,14 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
 
           {/* Minutes import summary indicator */}
           {isMinutesSummary && (
-            <div className="flex items-center gap-1.5 text-xs text-purple-700 mb-2">
+            <div className="flex items-center flex-wrap gap-1.5 text-xs text-purple-700 mb-2">
               <Bot className="w-3.5 h-3.5" />
-              <span className="font-medium">{t('minutesSummary')}</span>
+              <span className="font-medium">
+                {sourceInstitutionName ? t('aiSummarySource', { source: sourceInstitutionName }) : t('minutesSummary')}
+              </span>
+              {thread.sourceInstitutionId && (
+                <FollowButton entityType="user" entityId={thread.sourceInstitutionId} size="sm" variant="ghost" />
+              )}
               {thread.sourceUrl && (
                 <a
                   href={thread.sourceUrl}

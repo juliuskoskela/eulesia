@@ -430,13 +430,23 @@ Vastaa JSON-muodossa:
 }
 
 /**
- * Generate a civic-friendly summary of ministry/government content
+ * Extended result for ministry summaries — includes scope classification.
+ */
+export interface MinistrySummaryResult extends SummaryResult {
+  scope: 'national' | 'local'
+  /** Region/municipality name if scope is 'local' (e.g. "Kanta-Häme") */
+  region?: string
+}
+
+/**
+ * Generate a civic-friendly summary of ministry/government content.
+ * Also classifies scope: 'national' vs 'local' (regional decisions).
  */
 export async function generateMinistrySummary(
   originalText: string,
   institutionName: string,
   contentType: string
-): Promise<SummaryResult> {
+): Promise<MinistrySummaryResult> {
   const contentTypeLabel = contentType === 'press' ? 'tiedotteen' : contentType === 'law' ? 'lakiuutisen' : 'päätöksen'
 
   const content = await callMistral([
@@ -449,25 +459,33 @@ Ohjeet:
 - Nosta esiin tärkeimmät kohdat
 - Älä keksi faktoja, käytä vain alkuperäistekstin tietoja
 
+Luokittele scope:
+- "national": koskee koko Suomea (esim. verotus, lait, yleinen talouspolitiikka)
+- "local": koskee yhtä tiettyä aluetta, kuntaa tai hyvinvointialuetta (esim. lainanottovaltuus Kanta-Hämeelle, Pohjois-Savon sairaalahanke)
+
 Vastaa JSON-muodossa:
 {
   "title": "Selkeä otsikko (max 100 merkkiä)",
   "summary": "2-4 kappaleen yhteenveto selkokielellä.",
   "tags": ["aihetunniste1", "aihetunniste2"],
   "keyPoints": ["Keskeisin asia", "Toinen tärkeä asia"],
-  "discussionPrompt": "Keskustelukysymys kansalaisille"
+  "discussionPrompt": "Keskustelukysymys kansalaisille",
+  "scope": "national tai local",
+  "region": "Alueen nimi jos local, muuten null"
 }` },
     { role: 'user', content: `Tee yhteenveto seuraavasta ${institutionName}n ${contentTypeLabel}sta:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nVastaa vain JSON-muodossa.` }
   ])
 
   try {
-    const parsed = JSON.parse(content) as SummaryResult
+    const parsed = JSON.parse(content)
     return {
       title: parsed.title || `${institutionName}: päätös`,
       summary: parsed.summary || '',
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
       keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
-      discussionPrompt: parsed.discussionPrompt || 'Mitä mieltä olet tästä?'
+      discussionPrompt: parsed.discussionPrompt || 'Mitä mieltä olet tästä?',
+      scope: parsed.scope === 'local' ? 'local' : 'national',
+      region: parsed.region || undefined
     }
   } catch {
     console.error('Failed to parse Mistral response:', content.slice(0, 200))

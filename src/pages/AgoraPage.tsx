@@ -28,7 +28,9 @@ function transformThread(thread: ApiThread) {
     institutionalContext: thread.institutionalContext,
     source: thread.source,
     sourceUrl: thread.sourceUrl,
-    aiGenerated: thread.aiGenerated
+    aiGenerated: thread.aiGenerated,
+    sourceInstitutionId: thread.sourceInstitutionId,
+    sourceInstitutionName: thread.sourceInstitutionName
   }
 }
 
