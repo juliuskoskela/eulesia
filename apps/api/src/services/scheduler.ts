@@ -99,7 +99,7 @@ async function runEuImport(): Promise<void> {
  * Initialize the scheduler
  *
  * Schedules:
- * - Minutes import: Daily at 06:00 and 18:00
+ * - Minutes import: Daily at 03:00 (runs once/day — slow due to Mistral free tier)
  * - Ministry import: Daily at 08:00, 14:00, and 20:00
  * - EU import: Daily at 10:00 and 16:00
  */
@@ -112,13 +112,13 @@ export function initScheduler(): void {
 
   console.log('📅 Initializing background scheduler...')
 
-  // Minutes import: 06:00 and 18:00
-  cron.schedule('0 6,18 * * *', () => {
+  // Minutes import: 03:00 (once/day — Mistral free tier is slow, round-robin needs hours)
+  cron.schedule('0 3 * * *', () => {
     runMinutesImport()
   }, {
     timezone: 'Europe/Helsinki'
   })
-  console.log('   ✓ Minutes import scheduled: 06:00 and 18:00 Europe/Helsinki')
+  console.log('   ✓ Minutes import scheduled: 03:00 Europe/Helsinki')
 
   // Ministry import: 08:00, 14:00, 20:00
   cron.schedule('0 8,14,20 * * *', () => {
