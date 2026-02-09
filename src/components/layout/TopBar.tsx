@@ -122,7 +122,7 @@ export function TopBar() {
         </Link>
 
         {/* Search bar - desktop */}
-        <div className="hidden md:block flex-1 max-w-md mx-4">
+        <div className="hidden md:block flex-1 max-w-md mx-4" data-guide="search">
           <SearchBar placeholder={t('search.placeholder')} />
         </div>
 
@@ -137,7 +137,7 @@ export function TopBar() {
           </button>
 
           {/* Notifications */}
-          <div className="relative" ref={notificationRef}>
+          <div className="relative" ref={notificationRef} data-guide="notifications">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
               className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"

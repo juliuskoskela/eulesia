@@ -17,7 +17,7 @@ export function BottomNav() {
   const unreadCount = dmUnread?.count ?? 0
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-[env(safe-area-inset-bottom)]" data-guide="bottomnav">
       <div className="max-w-4xl mx-auto px-4">
         <div className="flex justify-around">
           {navItems.map(({ to, icon: Icon, tKey, badge }) => (

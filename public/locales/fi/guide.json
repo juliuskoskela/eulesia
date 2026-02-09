@@ -1,0 +1,117 @@
+{
+  "helpButton": "Oppaat",
+  "stepOf": "{{current}} / {{total}}",
+  "next": "Seuraava",
+  "prev": "Edellinen",
+  "skip": "Ohita",
+  "finish": "Valmis",
+  "selectGuide": "Valitse opas",
+  "resetAll": "Nollaa kaikki oppaat",
+  "resetAllConfirm": "Haluatko varmasti nollata kaikki oppaat?",
+  "guidesSection": "Oppaat",
+  "guidesDescription": "Katsele oppaita uudelleen tai nollaa ne",
+  "viewGuide": "Katso",
+  "completed": "Katsottu",
+  "global": {
+    "title": "Tervetuloa Eulesiaan!",
+    "search": {
+      "title": "Haku",
+      "description": "Etsi käyttäjiä, keskusteluja ja paikkoja hakupalkista."
+    },
+    "notifications": {
+      "title": "Ilmoitukset",
+      "description": "Vastaukset ja päivitykset näkyvät täällä. Punainen pallo kertoo lukemattomista ilmoituksista."
+    },
+    "bottomnav": {
+      "title": "Navigointi",
+      "description": "Viisi pääosiota: Agora (keskustelut), Klubit, Viestit, Kartta ja Koti. Siirry osiosta toiseen tästä."
+    }
+  },
+  "agora": {
+    "title": "Agora-opas",
+    "header": {
+      "title": "Mikä on Agora?",
+      "description": "Agora on julkinen keskustelufoorumi, jossa käyttäjät voivat keskustella kuntansa, valtion ja EU:n asioista."
+    },
+    "scope": {
+      "title": "Näkymän rajaus",
+      "description": "Valitse mitä keskusteluja näet: seuraamasi, paikalliset, valtakunnalliset tai EU-tason keskustelut."
+    },
+    "sort": {
+      "title": "Lajittelu",
+      "description": "Järjestä keskustelut viimeisimmän toiminnan, uusimman tai suosituimman mukaan."
+    },
+    "newthread": {
+      "title": "Uusi keskustelu",
+      "description": "Aloita uusi keskustelu kirjoittamalla otsikko ja sisältö. Voit liittää aihetageja ja valita keskustelun tason."
+    },
+    "threadcard": {
+      "title": "Keskustelukortti",
+      "description": "Jokainen kortti näyttää otsikon, kirjoittajan, äänimäärän ja vastausten lukumäärän. Äänestä nuolilla tai klikkaa avataksesi."
+    }
+  },
+  "clubs": {
+    "title": "Klubit-opas",
+    "header": {
+      "title": "Mikä ovat Klubit?",
+      "description": "Klubit ovat ryhmäkeskusteluja tietyn aiheen tai yhteisön ympärillä. Voit liittyä avoimiin klubeihin tai perustaa oman."
+    },
+    "search": {
+      "title": "Hae klubeja",
+      "description": "Etsi klubeja nimellä tai suodata kategorioittain."
+    },
+    "create": {
+      "title": "Luo klubi",
+      "description": "Perusta oma klubi painamalla tätä. Valitse nimi, kuvaus, kategoria ja näkyvyys."
+    },
+    "clubcard": {
+      "title": "Klubikortti",
+      "description": "Jokaisessa kortissa näet klubin nimen, kuvauksen, jäsenmäärän ja kategorian. Klikkaa liittyäksesi tai katsoaksesi."
+    }
+  },
+  "messages": {
+    "title": "Viestit-opas",
+    "header": {
+      "title": "Yksityisviestit",
+      "description": "Täällä näet kaikki yksityisviestikeskustelusi. Voit aloittaa uuden keskustelun käyttäjäprofiilin kautta."
+    },
+    "conversation": {
+      "title": "Keskustelu",
+      "description": "Klikkaa keskustelua avataksesi viestit. Lukemattomat viestit on merkitty sinisellä."
+    }
+  },
+  "map": {
+    "title": "Kartta-opas",
+    "header": {
+      "title": "Eulesian kartta",
+      "description": "Karttanäkymä näyttää keskustelut, klubit ja paikat maantieteellisesti. Zoomaa ja liiku kartalla löytääksesi lähiympäristön sisältöä."
+    },
+    "filters": {
+      "title": "Suodattimet",
+      "description": "Rajaa kartan sisältöä tyypin, aikavälin ja kielen mukaan."
+    },
+    "point": {
+      "title": "Karttapisteet",
+      "description": "Klikkaa karttapistettä nähdäksesi tarkemmat tiedot. Voit siirtyä suoraan keskusteluun tai klubiin."
+    }
+  },
+  "home": {
+    "title": "Koti-opas",
+    "header": {
+      "title": "Koti",
+      "description": "Koti on henkilökohtainen tilasi. Täällä näet huoneesi, kutsusi ja viimeaikaisen toimintasi."
+    },
+    "rooms": {
+      "title": "Huoneet",
+      "description": "Luo julkisia tai yksityisiä huoneita keskusteluille. Kutsu muita käyttäjiä yksityisiin huoneisiin."
+    },
+    "invitations": {
+      "title": "Kutsut",
+      "description": "Tässä näet huonekutsusi. Voit hyväksyä tai hylätä kutsun."
+    },
+    "activity": {
+      "title": "Viimeaikainen toiminta",
+      "description": "Nopea katsaus viimeisimpiin keskusteluihisi ja klubeihisi."
+    }
+  }
+}

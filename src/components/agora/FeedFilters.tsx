@@ -84,7 +84,7 @@ export function FeedFilters({
     <div className="bg-white border-b border-gray-200 sticky top-14 z-40">
       <div className="px-4 py-3 space-y-3">
         {/* Feed scope tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide" data-guide="agora-scope">
           {feedScopeOptions.map(({ value, tKey, icon: Icon }) => (
             <button
               key={value}
@@ -103,7 +103,7 @@ export function FeedFilters({
         </div>
 
         {/* Sort and time period */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap" data-guide="agora-sort">
           {/* Sort dropdown */}
           <div className="relative" ref={sortDropdownRef}>
             <button

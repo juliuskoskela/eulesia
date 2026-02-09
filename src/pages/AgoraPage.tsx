@@ -7,6 +7,7 @@ import { ContentEndMarker } from '../components/common'
 import { MapPin, Building2, Globe, Users } from 'lucide-react'
 import { useThreads, useTags, useMunicipalities, useVoteThread, useSubscriptions } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
+import { useGuide } from '../hooks/useGuide'
 import type { Thread as ApiThread, UserSummary, FeedScope, SortBy, TopPeriod } from '../lib/api'
 
 // Transform API thread to component format
@@ -62,6 +63,8 @@ export function AgoraPage() {
   const [selectedMunicipality, setSelectedMunicipality] = useState<string | undefined>()
   const [showOnboarding, setShowOnboarding] = useState(false)
 
+  const { hasCompletedGuide, startGuide, isGuideActive } = useGuide()
+
   const { data: tagsData } = useTags()
   const { data: municipalitiesData } = useMunicipalities()
   const { data: subscriptionsData } = useSubscriptions()
@@ -107,6 +110,16 @@ export function AgoraPage() {
     }
   }, [feedScope, isLoading, threadsData?.hasSubscriptions])
 
+  // Auto-trigger agora guide on first visit
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!hasCompletedGuide('agora') && !isGuideActive) {
+        startGuide('agora')
+      }
+    }, 800)
+    return () => clearTimeout(timer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const availableTags = useMemo(() => {
     return tagsData?.map(t => t.tag) || []
   }, [tagsData])
@@ -144,7 +157,7 @@ export function AgoraPage() {
   return (
     <Layout>
       {/* Page header */}
-      <div className="bg-white px-4 py-4 border-b border-gray-200">
+      <div className="bg-white px-4 py-4 border-b border-gray-200" data-guide="agora-header">
         <h1 className="text-xl font-bold text-gray-900">{t('title')}</h1>
         <p className="text-sm text-gray-600 mt-1">
           {t('subtitle')}
@@ -172,7 +185,9 @@ export function AgoraPage() {
       <div className="px-4 py-4 space-y-4">
         {/* Inline thread creation */}
         {currentUser && (
-          <InlineThreadForm onSuccess={handleThreadCreated} />
+          <div data-guide="agora-newthread">
+            <InlineThreadForm onSuccess={handleThreadCreated} />
+          </div>
         )}
 
         {isLoading && (
@@ -198,14 +213,15 @@ export function AgoraPage() {
         {/* Thread list */}
         {!isLoading && !error && !showOnboarding && threads.length > 0 && (
           <div className="space-y-3">
-            {threadsData?.items.map(thread => (
-              <ThreadCard
-                key={thread.id}
-                thread={transformThread(thread)}
-                author={transformAuthor(thread.author)}
-                onVote={handleVote}
-                isVoting={voteThreadMutation.isPending}
-              />
+            {threadsData?.items.map((thread, index) => (
+              <div key={thread.id} {...(index === 0 ? { 'data-guide': 'agora-threadcard' } : {})}>
+                <ThreadCard
+                  thread={transformThread(thread)}
+                  author={transformAuthor(thread.author)}
+                  onVote={handleVote}
+                  isVoting={voteThreadMutation.isPending}
+                />
+              </div>
             ))}
           </div>
         )}

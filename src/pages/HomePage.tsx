@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Home, Plus, Lock, Globe, MessageSquare, Users, Settings, ChevronRight, BookOpen, Activity } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +6,7 @@ import { Layout } from '../components/layout'
 import { ContentEndMarker } from '../components/common'
 import { useHome, useCreateRoom, useInvitations, useAcceptInvitation, useDeclineInvitation } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
+import { useGuide } from '../hooks/useGuide'
 import type { Room, RoomInvitationWithDetails } from '../lib/api'
 
 export function HomePage() {
@@ -17,6 +18,7 @@ export function HomePage() {
   const createRoomMutation = useCreateRoom()
   const acceptInvitationMutation = useAcceptInvitation()
   const declineInvitationMutation = useDeclineInvitation()
+  const { hasCompletedGuide, startGuide, isGuideActive } = useGuide()
   const [showCreateRoom, setShowCreateRoom] = useState(false)
   const [newRoomName, setNewRoomName] = useState('')
   const [newRoomDescription, setNewRoomDescription] = useState('')
@@ -58,6 +60,16 @@ export function HomePage() {
     }
   }
 
+  // Auto-trigger home guide on first visit
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!hasCompletedGuide('home') && !isGuideActive) {
+        startGuide('home')
+      }
+    }, 800)
+    return () => clearTimeout(timer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const publicRooms = homeData?.rooms.filter((r: Room) => r.visibility === 'public') || []
   const privateRooms = homeData?.rooms.filter((r: Room) => r.visibility === 'private') || []
   const pendingInvitations = invitations || []
@@ -65,7 +77,7 @@ export function HomePage() {
   return (
     <Layout>
       {/* Header */}
-      <div className="bg-gradient-to-r from-teal-700 to-teal-600 px-4 py-5">
+      <div className="bg-gradient-to-r from-teal-700 to-teal-600 px-4 py-5" data-guide="home-header">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
@@ -85,7 +97,7 @@ export function HomePage() {
       <div className="px-4 py-4 space-y-6">
         {/* Pending Invitations */}
         {pendingInvitations.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4" data-guide="home-invitations">
             <h2 className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-2">
               <Users className="w-4 h-4" />
               {t('pendingInvites')} ({pendingInvitations.length})
@@ -134,7 +146,7 @@ export function HomePage() {
         {!isLoading && !error && (
           <>
             {/* Rooms Section */}
-            <div>
+            <div data-guide="home-rooms">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                   <MessageSquare className="w-4 h-4" />
@@ -247,7 +259,7 @@ export function HomePage() {
             </div>
 
             {/* Recent Activity */}
-            <div>
+            <div data-guide="home-activity">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Activity className="w-4 h-4" />
                 {t('recentActivity')}

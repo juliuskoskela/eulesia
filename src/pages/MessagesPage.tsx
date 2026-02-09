@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { MessageSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Layout } from '../components/layout'
 import { useConversations } from '../hooks/useApi'
+import { useGuide } from '../hooks/useGuide'
 import { formatMessageDate } from '../lib/formatTime'
 import type { Conversation } from '../lib/api'
 
@@ -63,11 +65,22 @@ function ConversationItem({ conversation }: { conversation: Conversation }) {
 export function MessagesPage() {
   const { t } = useTranslation('messages')
   const { data: conversations, isLoading } = useConversations()
+  const { hasCompletedGuide, startGuide, isGuideActive } = useGuide()
+
+  // Auto-trigger messages guide on first visit
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!hasCompletedGuide('messages') && !isGuideActive) {
+        startGuide('messages')
+      }
+    }, 800)
+    return () => clearTimeout(timer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Layout>
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
+      <div className="bg-white border-b border-gray-200 px-4 py-4" data-guide="messages-header">
         <h1 className="text-xl font-bold text-gray-900">{t('title')}</h1>
       </div>
 
@@ -77,7 +90,7 @@ export function MessagesPage() {
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : conversations && conversations.length > 0 ? (
-        <div className="bg-white">
+        <div className="bg-white" data-guide="messages-conversation">
           {conversations.map(conv => (
             <ConversationItem key={conv.id} conversation={conv} />
           ))}

@@ -196,6 +196,13 @@ class ApiClient {
     })
   }
 
+  async updateClub(id: string, data: Partial<CreateClubData>): Promise<Club> {
+    return this.request(`/clubs/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+
   async joinClub(clubId: string): Promise<void> {
     await this.request(`/clubs/${clubId}/join`, { method: 'POST' })
   }
@@ -605,14 +612,28 @@ export interface Club {
   description?: string
   rules?: string[]
   category?: string
+  coverImageUrl?: string
+  isPublic: boolean
+  latitude?: string
+  longitude?: string
+  address?: string
+  municipalityId?: string
   memberCount: number
   creator: UserSummary
   isMember: boolean
   createdAt: string
 }
 
+export interface ClubMember {
+  id: string
+  name: string
+  avatarUrl?: string
+  role: string
+}
+
 export interface ClubWithThreads extends Club {
   moderators: UserSummary[]
+  members: ClubMember[]
   threads: ClubThread[]
   memberRole?: string
 }
@@ -780,6 +801,12 @@ export interface CreateClubData {
   description?: string
   rules?: string[]
   category?: string
+  coverImageUrl?: string
+  isPublic?: boolean
+  latitude?: number
+  longitude?: number
+  address?: string
+  municipalityId?: string
 }
 
 export interface CreateClubThreadData {

@@ -1,0 +1,117 @@
+{
+  "helpButton": "Guides",
+  "stepOf": "{{current}} / {{total}}",
+  "next": "Next",
+  "prev": "Previous",
+  "skip": "Skip",
+  "finish": "Finish",
+  "selectGuide": "Select a guide",
+  "resetAll": "Reset all guides",
+  "resetAllConfirm": "Are you sure you want to reset all guides?",
+  "guidesSection": "Guides",
+  "guidesDescription": "Review guides or reset them",
+  "viewGuide": "View",
+  "completed": "Completed",
+  "global": {
+    "title": "Welcome to Eulesia!",
+    "search": {
+      "title": "Search",
+      "description": "Search for users, discussions and places using the search bar."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "Replies and updates appear here. A red dot indicates unread notifications."
+    },
+    "bottomnav": {
+      "title": "Navigation",
+      "description": "Five main sections: Agora (discussions), Clubs, Messages, Map and Home. Navigate between sections here."
+    }
+  },
+  "agora": {
+    "title": "Agora Guide",
+    "header": {
+      "title": "What is Agora?",
+      "description": "Agora is a public discussion forum where users can discuss local, national and EU matters."
+    },
+    "scope": {
+      "title": "Feed Scope",
+      "description": "Choose which discussions to see: followed, local, national or EU-level discussions."
+    },
+    "sort": {
+      "title": "Sorting",
+      "description": "Sort discussions by recent activity, newest or most popular."
+    },
+    "newthread": {
+      "title": "New Discussion",
+      "description": "Start a new discussion by writing a title and content. You can attach topic tags and choose the discussion level."
+    },
+    "threadcard": {
+      "title": "Discussion Card",
+      "description": "Each card shows the title, author, vote count and number of replies. Vote with arrows or click to open."
+    }
+  },
+  "clubs": {
+    "title": "Clubs Guide",
+    "header": {
+      "title": "What are Clubs?",
+      "description": "Clubs are group discussions around a specific topic or community. You can join open clubs or create your own."
+    },
+    "search": {
+      "title": "Search Clubs",
+      "description": "Find clubs by name or filter by category."
+    },
+    "create": {
+      "title": "Create a Club",
+      "description": "Create your own club by pressing this button. Choose a name, description, category and visibility."
+    },
+    "clubcard": {
+      "title": "Club Card",
+      "description": "Each card shows the club name, description, member count and category. Click to join or view."
+    }
+  },
+  "messages": {
+    "title": "Messages Guide",
+    "header": {
+      "title": "Private Messages",
+      "description": "Here you see all your private message conversations. You can start a new conversation from a user's profile."
+    },
+    "conversation": {
+      "title": "Conversation",
+      "description": "Click a conversation to open messages. Unread messages are marked with blue."
+    }
+  },
+  "map": {
+    "title": "Map Guide",
+    "header": {
+      "title": "Eulesia Map",
+      "description": "The map view shows discussions, clubs and places geographically. Zoom and pan to find content near you."
+    },
+    "filters": {
+      "title": "Filters",
+      "description": "Filter map content by type, date range and language."
+    },
+    "point": {
+      "title": "Map Points",
+      "description": "Click a map point to see details. You can navigate directly to the discussion or club."
+    }
+  },
+  "home": {
+    "title": "Home Guide",
+    "header": {
+      "title": "Home",
+      "description": "Home is your personal space. Here you see your rooms, invitations and recent activity."
+    },
+    "rooms": {
+      "title": "Rooms",
+      "description": "Create public or private rooms for discussions. Invite other users to private rooms."
+    },
+    "invitations": {
+      "title": "Invitations",
+      "description": "Here you see your room invitations. You can accept or decline an invitation."
+    },
+    "activity": {
+      "title": "Recent Activity",
+      "description": "A quick overview of your latest discussions and clubs."
+    }
+  }
+}

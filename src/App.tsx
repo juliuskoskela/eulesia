@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { SocketProvider } from './hooks/useSocket'
+import { GuideProvider } from './components/guide'
 import {
   LoginPage,
   AgoraPage,
@@ -304,7 +305,9 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <SocketProvider>
-          <AppRoutes />
+          <GuideProvider>
+            <AppRoutes />
+          </GuideProvider>
         </SocketProvider>
       </AuthProvider>
     </BrowserRouter>

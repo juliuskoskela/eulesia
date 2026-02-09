@@ -1,6 +1,6 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
-import { eq, desc, and, sql } from 'drizzle-orm'
+import { eq, desc, and, or, sql, inArray } from 'drizzle-orm'
 import { db, clubs, clubMembers, clubThreads, clubComments, users } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
@@ -16,7 +16,26 @@ const createClubSchema = z.object({
   slug: z.string().min(3).max(255).regex(/^[a-z0-9-]+$/),
   description: z.string().max(5000).optional(),
   rules: z.array(z.string().max(500)).max(10).optional(),
-  category: z.string().max(100).optional()
+  category: z.string().max(100).optional(),
+  coverImageUrl: z.string().url().max(500).optional(),
+  isPublic: z.boolean().default(true),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
+  address: z.string().max(500).optional(),
+  municipalityId: z.string().uuid().optional()
+})
+
+const updateClubSchema = z.object({
+  name: z.string().min(3).max(255).optional(),
+  description: z.string().max(5000).optional(),
+  rules: z.array(z.string().max(500)).max(10).optional(),
+  category: z.string().max(100).optional(),
+  coverImageUrl: z.string().url().max(500).nullable().optional(),
+  isPublic: z.boolean().optional(),
+  latitude: z.coerce.number().min(-90).max(90).nullable().optional(),
+  longitude: z.coerce.number().min(-180).max(180).nullable().optional(),
+  address: z.string().max(500).nullable().optional(),
+  municipalityId: z.string().uuid().nullable().optional()
 })
 
 const createClubThreadSchema = z.object({
@@ -31,14 +50,35 @@ const createClubCommentSchema = z.object({
   language: z.string().max(10).optional()
 })
 
-// GET /clubs - List clubs
+// GET /clubs - List clubs (public + user's closed clubs)
 router.get('/', optionalAuthMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { page = '1', limit = '20' } = req.query
   const pageNum = Math.max(1, parseInt(page as string))
   const limitNum = Math.min(50, Math.max(1, parseInt(limit as string)))
   const offset = (pageNum - 1) * limitNum
 
-  let query = db
+  // Get user's club memberships first (if logged in)
+  let memberClubIds: string[] = []
+  let memberships: Record<string, boolean> = {}
+  if (req.user) {
+    const userMemberships = await db
+      .select({ clubId: clubMembers.clubId })
+      .from(clubMembers)
+      .where(eq(clubMembers.userId, req.user.id))
+
+    memberClubIds = userMemberships.map(m => m.clubId)
+    memberships = userMemberships.reduce((acc, m) => {
+      acc[m.clubId] = true
+      return acc
+    }, {} as Record<string, boolean>)
+  }
+
+  // Show public clubs + closed clubs where user is a member
+  const whereCondition = memberClubIds.length > 0
+    ? or(eq(clubs.isPublic, true), inArray(clubs.id, memberClubIds))
+    : eq(clubs.isPublic, true)
+
+  const clubList = await db
     .select({
       club: clubs,
       creator: {
@@ -49,32 +89,16 @@ router.get('/', optionalAuthMiddleware, asyncHandler(async (req: AuthenticatedRe
     })
     .from(clubs)
     .leftJoin(users, eq(clubs.creatorId, users.id))
-    .where(eq(clubs.isPublic, true))
+    .where(whereCondition!)
     .orderBy(desc(clubs.memberCount))
     .limit(limitNum)
     .offset(offset)
 
-  const clubList = await query
-
-  // Get total count
+  // Get total count with same condition
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(clubs)
-    .where(eq(clubs.isPublic, true))
-
-  // If user is logged in, get their membership status
-  let memberships: Record<string, boolean> = {}
-  if (req.user) {
-    const userMemberships = await db
-      .select({ clubId: clubMembers.clubId })
-      .from(clubMembers)
-      .where(eq(clubMembers.userId, req.user.id))
-
-    memberships = userMemberships.reduce((acc, m) => {
-      acc[m.clubId] = true
-      return acc
-    }, {} as Record<string, boolean>)
-  }
+    .where(whereCondition!)
 
   res.json({
     success: true,
@@ -118,8 +142,8 @@ router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: Authenticate
     return res.redirect(`/api/v1/clubs/${clubBySlug.id}`)
   }
 
-  // Get moderators
-  const moderators = await db
+  // Get moderators and admins
+  const staffMembers = await db
     .select({
       user: {
         id: users.id,
@@ -132,8 +156,22 @@ router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: Authenticate
     .leftJoin(users, eq(clubMembers.userId, users.id))
     .where(and(
       eq(clubMembers.clubId, club.id),
-      eq(clubMembers.role, 'moderator')
+      or(eq(clubMembers.role, 'moderator'), eq(clubMembers.role, 'admin'))
     ))
+
+  // Get all members for member list
+  const allMembers = await db
+    .select({
+      user: {
+        id: users.id,
+        name: users.name,
+        avatarUrl: users.avatarUrl
+      },
+      role: clubMembers.role
+    })
+    .from(clubMembers)
+    .leftJoin(users, eq(clubMembers.userId, users.id))
+    .where(eq(clubMembers.clubId, club.id))
 
   // Get threads
   const threadList = await db
@@ -174,7 +212,8 @@ router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: Authenticate
     success: true,
     data: {
       ...club,
-      moderators: moderators.map(m => m.user),
+      moderators: staffMembers.map(m => m.user),
+      members: allMembers.map(m => ({ ...m.user, role: m.role })),
       threads: threadList.map(({ thread, author }) => ({
         ...thread,
         author
@@ -205,7 +244,17 @@ router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, 
   const [newClub] = await db
     .insert(clubs)
     .values({
-      ...data,
+      name: data.name,
+      slug: data.slug,
+      description: data.description,
+      rules: data.rules,
+      category: data.category,
+      coverImageUrl: data.coverImageUrl,
+      isPublic: data.isPublic,
+      latitude: data.latitude?.toString(),
+      longitude: data.longitude?.toString(),
+      address: data.address,
+      municipalityId: data.municipalityId,
       creatorId: userId
     })
     .returning()
@@ -220,6 +269,63 @@ router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, 
   res.status(201).json({
     success: true,
     data: newClub
+  })
+}))
+
+// PATCH /clubs/:id - Update club (admin/moderator only)
+router.patch('/:id', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { id: clubId } = req.params
+
+  // Verify club exists
+  const [club] = await db
+    .select()
+    .from(clubs)
+    .where(eq(clubs.id, clubId))
+    .limit(1)
+
+  if (!club) {
+    throw new AppError(404, 'Club not found')
+  }
+
+  // Check admin/moderator role
+  const [membership] = await db
+    .select()
+    .from(clubMembers)
+    .where(and(
+      eq(clubMembers.clubId, clubId),
+      eq(clubMembers.userId, userId)
+    ))
+    .limit(1)
+
+  if (!membership || (membership.role !== 'admin' && membership.role !== 'moderator')) {
+    throw new AppError(403, 'Only admins and moderators can edit club settings')
+  }
+
+  const data = updateClubSchema.parse(req.body)
+
+  // Build update object
+  const updateData: Record<string, unknown> = { updatedAt: new Date() }
+  if (data.name !== undefined) updateData.name = data.name
+  if (data.description !== undefined) updateData.description = data.description
+  if (data.rules !== undefined) updateData.rules = data.rules
+  if (data.category !== undefined) updateData.category = data.category
+  if (data.coverImageUrl !== undefined) updateData.coverImageUrl = data.coverImageUrl
+  if (data.isPublic !== undefined) updateData.isPublic = data.isPublic
+  if (data.latitude !== undefined) updateData.latitude = data.latitude?.toString() ?? null
+  if (data.longitude !== undefined) updateData.longitude = data.longitude?.toString() ?? null
+  if (data.address !== undefined) updateData.address = data.address
+  if (data.municipalityId !== undefined) updateData.municipalityId = data.municipalityId
+
+  const [updatedClub] = await db
+    .update(clubs)
+    .set(updateData)
+    .where(eq(clubs.id, clubId))
+    .returning()
+
+  res.json({
+    success: true,
+    data: updatedClub
   })
 }))
 

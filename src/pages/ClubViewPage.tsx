@@ -1,12 +1,16 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Users, Shield, MessageSquare, Pin, ScrollText, X, Send } from 'lucide-react'
+import {
+  ArrowLeft, Users, Shield, MessageSquare, Pin, ScrollText, X, Send,
+  Settings, Globe, Lock, MapPin, Image as ImageIcon, Loader2, Trash2
+} from 'lucide-react'
 import { Layout } from '../components/layout'
-import { ActorBadge, ContentEndMarker, FollowButton } from '../components/common'
-import { useClub, useJoinClub, useLeaveClub, useCreateClubThread } from '../hooks/useApi'
+import { ActorBadge, ContentEndMarker, FollowButton, LocationSearch } from '../components/common'
+import { useClub, useJoinClub, useLeaveClub, useCreateClubThread, useUpdateClub } from '../hooks/useApi'
+import { api } from '../lib/api'
 import { formatRelativeTime } from '../lib/formatTime'
-import type { UserSummary, ClubThread } from '../lib/api'
+import type { UserSummary, ClubThread, LocationResult } from '../lib/api'
 
 // Transform API user to component format
 function transformUser(user: UserSummary) {
@@ -29,10 +33,83 @@ export function ClubViewPage() {
   const joinClubMutation = useJoinClub()
   const leaveClubMutation = useLeaveClub()
   const createThreadMutation = useCreateClubThread(clubId || '')
+  const updateClubMutation = useUpdateClub(clubId || '')
 
   const [showNewThreadForm, setShowNewThreadForm] = useState(false)
   const [newThreadTitle, setNewThreadTitle] = useState('')
   const [newThreadContent, setNewThreadContent] = useState('')
+
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editCategory, setEditCategory] = useState('')
+  const [editIsPublic, setEditIsPublic] = useState(true)
+  const [editCoverImage, setEditCoverImage] = useState<string | null>(null)
+  const [editLocation, setEditLocation] = useState<LocationResult | null>(null)
+  const [editAddress, setEditAddress] = useState('')
+  const [editRules, setEditRules] = useState<string[]>([])
+  const [editRuleInput, setEditRuleInput] = useState('')
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const settingsImageRef = useRef<HTMLInputElement>(null)
+
+  const openSettings = () => {
+    if (!club) return
+    setEditName(club.name)
+    setEditDescription(club.description || '')
+    setEditCategory(club.category || '')
+    setEditIsPublic(club.isPublic)
+    setEditCoverImage(club.coverImageUrl || null)
+    setEditAddress(club.address || '')
+    setEditRules(club.rules || [])
+    setEditRuleInput('')
+    setEditLocation(null)
+    setShowSettings(true)
+  }
+
+  const handleSettingsImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024) return
+    setIsUploadingImage(true)
+    try {
+      const result = await api.uploadImage(file)
+      setEditCoverImage(result.url)
+    } catch (err) {
+      console.error('Image upload failed:', err)
+    } finally {
+      setIsUploadingImage(false)
+      if (settingsImageRef.current) settingsImageRef.current.value = ''
+    }
+  }
+
+  const handleAddEditRule = () => {
+    const rule = editRuleInput.trim()
+    if (rule && editRules.length < 10) {
+      setEditRules(prev => [...prev, rule])
+      setEditRuleInput('')
+    }
+  }
+
+  const handleSaveSettings = async () => {
+    try {
+      await updateClubMutation.mutateAsync({
+        name: editName.trim(),
+        description: editDescription.trim() || undefined,
+        category: editCategory.trim() || undefined,
+        coverImageUrl: editCoverImage || undefined,
+        isPublic: editIsPublic,
+        latitude: editLocation ? editLocation.latitude : undefined,
+        longitude: editLocation ? editLocation.longitude : undefined,
+        address: editLocation ? (editLocation.displayName || editLocation.name) : (editAddress || undefined),
+        rules: editRules.length > 0 ? editRules : undefined
+      })
+      setShowSettings(false)
+    } catch (err) {
+      console.error('Failed to update club:', err)
+    }
+  }
 
   const handleCreateThread = async () => {
     if (!newThreadTitle.trim() || !newThreadContent.trim()) return
@@ -90,7 +167,9 @@ export function ClubViewPage() {
     )
   }
 
+  const isAdminOrMod = club.memberRole === 'admin' || club.memberRole === 'moderator'
   const moderators = club.moderators || []
+  const members = club.members || []
   const threads = club.threads || []
   const pinnedThread = threads.find((t: ClubThread) => t.isPinned)
   const regularThreads = threads.filter((t: ClubThread) => !t.isPinned)
@@ -108,33 +187,81 @@ export function ClubViewPage() {
         </Link>
       </div>
 
+      {/* Cover image */}
+      {club.coverImageUrl ? (
+        <div className="h-40 sm:h-48 bg-gray-100">
+          <img
+            src={club.coverImageUrl}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="h-24 bg-gradient-to-r from-teal-400 to-cyan-500" />
+      )}
+
       {/* Club header */}
       <div className="bg-teal-50 px-4 py-6">
-        {club.category && (
-          <span className="text-xs text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
-            {club.category}
-          </span>
-        )}
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            {/* Badges row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {club.category && (
+                <span className="text-xs text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full">
+                  {club.category}
+                </span>
+              )}
+              {club.isPublic ? (
+                <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Globe className="w-3 h-3" />
+                  {t('openClub')}
+                </span>
+              ) : (
+                <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {t('closedClub')}
+                </span>
+              )}
+            </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 mt-3 mb-2">
-          {club.name}
-        </h1>
+            <h1 className="text-2xl font-bold text-gray-900 mt-3 mb-2">
+              {club.name}
+            </h1>
 
-        {club.description && (
-          <p className="text-gray-600 mb-4">
-            {club.description}
-          </p>
-        )}
+            {club.description && (
+              <p className="text-gray-600 mb-4">
+                {club.description}
+              </p>
+            )}
 
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <div className="flex items-center gap-1">
-            <Users className="w-4 h-4" />
-            <span>{t('members', { count: club.memberCount })}</span>
+            <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
+              <div className="flex items-center gap-1">
+                <Users className="w-4 h-4" />
+                <span>{t('members', { count: club.memberCount })}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <MessageSquare className="w-4 h-4" />
+                <span>{t('threads', { count: threads.length })}</span>
+              </div>
+              {club.address && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  <span className="truncate max-w-[250px]">{club.address}</span>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <MessageSquare className="w-4 h-4" />
-            <span>{t('threads', { count: threads.length })}</span>
-          </div>
+
+          {/* Settings button */}
+          {isAdminOrMod && (
+            <button
+              onClick={openSettings}
+              className="p-2 hover:bg-teal-100 rounded-lg transition-colors"
+              title={t('settings')}
+            >
+              <Settings className="w-5 h-5 text-gray-600" />
+            </button>
+          )}
         </div>
 
         {/* Join/Leave and Follow buttons */}
@@ -161,6 +288,201 @@ export function ClubViewPage() {
           )}
         </div>
       </div>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white rounded-t-xl z-10">
+              <h3 className="font-semibold text-gray-900">{t('editClub')}</h3>
+              <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.name')}</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.description')}</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+                />
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.category')}</label>
+                <input
+                  type="text"
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  placeholder={t('create.categoryPlaceholder')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Cover Image */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.coverImage')}</label>
+                {editCoverImage ? (
+                  <div className="relative">
+                    <img src={editCoverImage} alt="" className="w-full h-32 object-cover rounded-lg" />
+                    <button
+                      type="button"
+                      onClick={() => setEditCoverImage(null)}
+                      className="absolute top-2 right-2 p-1 bg-black/50 rounded-full hover:bg-black/70"
+                    >
+                      <X className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => settingsImageRef.current?.click()}
+                    disabled={isUploadingImage}
+                    className="w-full h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center gap-2 text-gray-500 hover:border-teal-400 hover:text-teal-600 transition-colors disabled:opacity-50"
+                  >
+                    {isUploadingImage ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <ImageIcon className="w-5 h-5" />
+                        <span className="text-sm">{t('create.coverImage')}</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <input
+                  ref={settingsImageRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleSettingsImageUpload}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Location */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.location')}</label>
+                <LocationSearch
+                  value={editLocation}
+                  onChange={setEditLocation}
+                />
+                {!editLocation && editAddress && (
+                  <p className="text-xs text-gray-500 mt-1">{t('location')}: {editAddress}</p>
+                )}
+              </div>
+
+              {/* Visibility */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('create.visibility')}</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="editVisibility"
+                      checked={editIsPublic}
+                      onChange={() => setEditIsPublic(true)}
+                      className="text-teal-600"
+                    />
+                    <Globe className="w-4 h-4 text-green-600" />
+                    <span className="text-sm">{t('create.open')}</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="editVisibility"
+                      checked={!editIsPublic}
+                      onChange={() => setEditIsPublic(false)}
+                      className="text-teal-600"
+                    />
+                    <Lock className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm">{t('create.closed')}</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Rules */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.rules')}</label>
+                {editRules.length > 0 && (
+                  <ol className="space-y-1 mb-2">
+                    {editRules.map((rule, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
+                        <span className="text-gray-400 font-medium">{i + 1}.</span>
+                        <span className="flex-1 text-gray-700">{rule}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditRules(prev => prev.filter((_, idx) => idx !== i))}
+                          className="p-0.5 hover:bg-gray-200 rounded"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-gray-400" />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {editRules.length < 10 && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={editRuleInput}
+                      onChange={(e) => setEditRuleInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddEditRule()
+                        }
+                      }}
+                      placeholder={t('create.rulePlaceholder')}
+                      className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddEditRule}
+                      disabled={!editRuleInput.trim()}
+                      className="px-3 py-1.5 text-sm text-teal-600 hover:bg-teal-50 rounded-lg disabled:opacity-50"
+                    >
+                      {t('create.addRule')}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Save */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(false)}
+                  className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  {t('common:actions.cancel')}
+                </button>
+                <button
+                  onClick={handleSaveSettings}
+                  disabled={updateClubMutation.isPending || !editName.trim()}
+                  className="flex-1 bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {updateClubMutation.isPending ? t('saving') : t('save')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="px-4 py-6 space-y-6">
@@ -195,6 +517,45 @@ export function ClubViewPage() {
               {moderators.map(mod => (
                 <ActorBadge key={mod.id} user={transformUser(mod)} size="sm" />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Members */}
+        {members.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Users className="w-4 h-4 text-teal-600" />
+              {t('memberList')} ({members.length})
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {members.slice(0, 20).map(member => (
+                <Link
+                  key={member.id}
+                  to={`/home/${member.id}`}
+                  className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full text-sm hover:bg-gray-100 transition-colors"
+                >
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt="" className="w-5 h-5 rounded-full" />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-medium text-teal-700">
+                      {member.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="text-gray-700">{member.name}</span>
+                  {(member as { role?: string }).role === 'admin' && (
+                    <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">admin</span>
+                  )}
+                  {(member as { role?: string }).role === 'moderator' && (
+                    <span className="text-[10px] text-blue-700 bg-blue-100 px-1 rounded">mod</span>
+                  )}
+                </Link>
+              ))}
+              {members.length > 20 && (
+                <span className="text-sm text-gray-500 px-2 py-1">
+                  +{members.length - 20}
+                </span>
+              )}
             </div>
           </div>
         )}

@@ -281,6 +281,18 @@ export function useCreateClub() {
   })
 }
 
+export function useUpdateClub(clubId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: Partial<CreateClubData>) => api.updateClub(clubId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.club(clubId) })
+      queryClient.invalidateQueries({ queryKey: ['clubs'] })
+    }
+  })
+}
+
 export function useJoinClub() {
   const queryClient = useQueryClient()
 

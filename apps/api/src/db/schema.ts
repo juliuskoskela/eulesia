@@ -313,6 +313,7 @@ export const clubs = pgTable('clubs', {
   category: varchar('category', { length: 100 }),
   creatorId: uuid('creator_id').notNull().references(() => users.id),
   memberCount: integer('member_count').default(1),
+  coverImageUrl: varchar('cover_image_url', { length: 500 }),
   isPublic: boolean('is_public').default(true),
   // Location fields
   placeId: uuid('place_id').references(() => places.id),

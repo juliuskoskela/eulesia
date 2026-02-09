@@ -166,6 +166,13 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE "club_comments" ADD COLUMN IF NOT EXISTS "language" varchar(10)`)
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "threads_language_idx" ON "threads" ("language")`)
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "club_threads_language_idx" ON "club_threads" ("language")`)
+    // 0010: clubs cover image
+    await db.execute(sql`ALTER TABLE "clubs" ADD COLUMN IF NOT EXISTS "cover_image_url" varchar(500)`)
+    // 0011: remove seed mock clubs (Tampere History, Cycling, Hervanta)
+    await db.execute(sql`DELETE FROM "club_comments" WHERE "thread_id" IN (SELECT "id" FROM "club_threads" WHERE "club_id" IN (SELECT "id" FROM "clubs" WHERE "slug" IN ('tampere-history', 'cycling-tampere', 'hervanta-neighbors')))`)
+    await db.execute(sql`DELETE FROM "club_threads" WHERE "club_id" IN (SELECT "id" FROM "clubs" WHERE "slug" IN ('tampere-history', 'cycling-tampere', 'hervanta-neighbors'))`)
+    await db.execute(sql`DELETE FROM "club_members" WHERE "club_id" IN (SELECT "id" FROM "clubs" WHERE "slug" IN ('tampere-history', 'cycling-tampere', 'hervanta-neighbors'))`)
+    await db.execute(sql`DELETE FROM "clubs" WHERE "slug" IN ('tampere-history', 'cycling-tampere', 'hervanta-neighbors')`)
     console.log('Migrations OK')
   } catch (error) {
     console.error('Migration error:', error)

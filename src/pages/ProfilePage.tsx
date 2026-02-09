@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { Shield, Bell, Eye, Database, LogOut, ChevronRight, Info, ExternalLink, Ticket, Plus, Copy, Check, Trash2, Users, Camera, Loader2, Globe } from 'lucide-react'
+import { Shield, Bell, Eye, Database, LogOut, ChevronRight, Info, ExternalLink, Ticket, Plus, Copy, Check, Trash2, Users, Camera, Loader2, Globe, HelpCircle } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Layout } from '../components/layout'
 import { LanguageSwitcher } from '../components/common/LanguageSwitcher'
 import { useAuth } from '../hooks/useAuth'
+import { useGuide } from '../hooks/useGuide'
 import { useUpdateProfile, useExportData } from '../hooks/useApi'
+import { guides } from '../data/guides'
 import { api, type InviteCode, type InvitedUser } from '../lib/api'
 
 export function ProfilePage() {
@@ -14,6 +16,7 @@ export function ProfilePage() {
   const navigate = useNavigate()
   const updateProfileMutation = useUpdateProfile()
   const exportDataMutation = useExportData()
+  const { startGuide, hasCompletedGuide, resetAllGuides } = useGuide()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -524,6 +527,53 @@ export function ProfilePage() {
           <div className="p-4">
             <p className="text-sm text-gray-600 mb-3">{t('language.description')}</p>
             <LanguageSwitcher />
+          </div>
+        </div>
+
+        {/* Guides */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+              <HelpCircle className="w-4 h-4 text-blue-600" />
+              {t('guide:guidesSection')}
+            </h2>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-sm text-gray-600">{t('guide:guidesDescription')}</p>
+            <div className="space-y-2">
+              {Object.values(guides).map(guide => {
+                const completed = hasCompletedGuide(guide.id)
+                return (
+                  <div
+                    key={guide.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <span className="text-sm text-gray-700">
+                      {t(guide.titleKey.replace('guide:', ''), { ns: 'guide' })}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {completed && (
+                        <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
+                          {t('guide:completed')}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => startGuide(guide.id)}
+                        className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                      >
+                        {t('guide:viewGuide')}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <button
+              onClick={resetAllGuides}
+              className="text-xs text-gray-500 hover:text-gray-700 mt-2"
+            >
+              {t('guide:resetAll')}
+            </button>
           </div>
         </div>
 

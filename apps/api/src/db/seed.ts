@@ -1,4 +1,4 @@
-import { db, municipalities, users, threads, threadTags, comments, clubs, clubMembers, clubThreads, rooms, roomMessages, places } from './index.js'
+import { db, municipalities, users, threads, threadTags, comments, rooms, roomMessages, places } from './index.js'
 import { renderMarkdown } from '../utils/markdown.js'
 
 async function seed() {
@@ -226,7 +226,7 @@ async function seed() {
 
   // Create users
   console.log('Creating users...')
-  const [tampereMunicipality, _helsinkiMunicipality, _traficom, ministryEnv, matti, anna, liisa, juha, maria] = await db.insert(users).values([
+  const [tampereMunicipality, _helsinkiMunicipality, _traficom, ministryEnv, matti, anna, liisa, juha, _maria] = await db.insert(users).values([
     // Institutions
     {
       username: 'tampere_city',
@@ -495,104 +495,6 @@ These details are covered in Section 4.3 of the Environmental Impact Assessment 
       contentHtml: renderMarkdown(`I've documented this...`)
     }
   ]).returning()
-
-  // Create clubs
-  console.log('Creating clubs...')
-  const [historyClub, cyclingClub, hervantaClub] = await db.insert(clubs).values([
-    {
-      name: 'Tampere History Enthusiasts',
-      slug: 'tampere-history',
-      description: 'A community for those interested in the rich industrial and cultural history of Tampere.',
-      rules: [
-        'Be respectful of different perspectives on historical events',
-        'Cite sources when sharing historical claims',
-        'No political debates about current events'
-      ],
-      category: 'Local History',
-      creatorId: liisa.id,
-      memberCount: 3,
-      municipalityId: tampere.id,
-      latitude: '61.4969',
-      longitude: '23.7722',
-      address: 'Vapriikki, Alaverstaanraitti 5, 33101 Tampere'
-    },
-    {
-      name: 'Cycling in Tampere',
-      slug: 'cycling-tampere',
-      description: 'For cyclists of all levels in the Tampere region. Share routes, discuss infrastructure, organize group rides.',
-      rules: [
-        'Be inclusive of all cycling levels',
-        'Safety discussions welcome, but no shaming',
-        'Keep advocacy constructive'
-      ],
-      category: 'Sports & Outdoors',
-      creatorId: anna.id,
-      memberCount: 2,
-      municipalityId: tampere.id,
-      latitude: '61.4908',
-      longitude: '23.7383'
-    },
-    {
-      name: 'Hervanta Neighbors',
-      slug: 'hervanta-neighbors',
-      description: 'The community hub for Hervanta residents.',
-      rules: [
-        'Keep discussions relevant to Hervanta',
-        'No commercial advertising without approval',
-        'Be helpful and neighborly'
-      ],
-      category: 'Neighborhoods',
-      creatorId: matti.id,
-      memberCount: 2,
-      municipalityId: tampere.id,
-      latitude: '61.4500',
-      longitude: '23.8500'
-    }
-  ]).returning()
-
-  // Add club members
-  console.log('Adding club members...')
-  await db.insert(clubMembers).values([
-    { clubId: historyClub.id, userId: liisa.id, role: 'admin' },
-    { clubId: historyClub.id, userId: matti.id, role: 'member' },
-    { clubId: historyClub.id, userId: maria.id, role: 'member' },
-    { clubId: cyclingClub.id, userId: anna.id, role: 'admin' },
-    { clubId: cyclingClub.id, userId: matti.id, role: 'member' },
-    { clubId: hervantaClub.id, userId: matti.id, role: 'admin' },
-    { clubId: hervantaClub.id, userId: maria.id, role: 'member' }
-  ])
-
-  // Create club threads
-  console.log('Creating club threads...')
-  await db.insert(clubThreads).values([
-    {
-      clubId: historyClub.id,
-      authorId: liisa.id,
-      title: 'Welcome & Resources for New Members',
-      content: `Welcome to Tampere History Enthusiasts! This thread serves as an introduction to our community.
-
-**Recommended starting points:**
-- Vapriikki Museum Center
-- Tampere City Archives
-- "Tampere: A History of Industrial Finland" by Pertti Haapala`,
-      contentHtml: renderMarkdown(`Welcome to Tampere History Enthusiasts!...`),
-      isPinned: true,
-      replyCount: 0
-    },
-    {
-      clubId: cyclingClub.id,
-      authorId: anna.id,
-      title: '2025 Infrastructure Updates & Advocacy',
-      content: `Let's use this thread to track cycling infrastructure updates in 2025.
-
-**Confirmed projects for 2025:**
-- Ratina-Lielahti cycling bridge completion
-- Hervanta main cycling route resurfacing`,
-      contentHtml: renderMarkdown(`Let's use this thread...`),
-      isPinned: true,
-      replyCount: 0
-    }
-  ])
 
   // Create rooms for Home system
   console.log('Creating rooms...')

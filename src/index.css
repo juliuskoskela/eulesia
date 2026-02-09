@@ -41,3 +41,9 @@ body {
   height: 100%;
   width: 100%;
 }
+
+/* Guide tour: highlighted element */
+[data-guide-active="true"] {
+  position: relative;
+  z-index: 56 !important;
+}
