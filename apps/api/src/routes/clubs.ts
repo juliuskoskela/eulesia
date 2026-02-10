@@ -185,7 +185,7 @@ router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: Authenticate
     })
     .from(clubThreads)
     .leftJoin(users, eq(clubThreads.authorId, users.id))
-    .where(eq(clubThreads.clubId, club.id))
+    .where(and(eq(clubThreads.clubId, club.id), eq(clubThreads.isHidden, false)))
     .orderBy(desc(clubThreads.isPinned), desc(clubThreads.updatedAt))
     .limit(50)
 
@@ -509,14 +509,32 @@ router.get('/:clubId/threads/:threadId', optionalAuthMiddleware, asyncHandler(as
     })
     .from(clubComments)
     .leftJoin(users, eq(clubComments.authorId, users.id))
-    .where(eq(clubComments.threadId, threadId))
+    .where(and(eq(clubComments.threadId, threadId), eq(clubComments.isHidden, false)))
     .orderBy(clubComments.createdAt)
+
+  // Check membership for memberRole
+  let memberRole = null
+  if (req.user) {
+    const [membership] = await db
+      .select()
+      .from(clubMembers)
+      .where(and(
+        eq(clubMembers.clubId, clubId),
+        eq(clubMembers.userId, req.user.id)
+      ))
+      .limit(1)
+
+    if (membership) {
+      memberRole = membership.role
+    }
+  }
 
   res.json({
     success: true,
     data: {
       ...threadData.thread,
       author: threadData.author,
+      memberRole,
       comments: commentList.map(({ comment, author }) => ({
         ...comment,
         author
@@ -592,6 +610,250 @@ router.post('/:clubId/threads/:threadId/comments', authMiddleware, asyncHandler(
     success: true,
     data: newComment
   })
+}))
+
+// ── Moderation endpoints ──
+
+const updateMemberRoleSchema = z.object({
+  role: z.enum(['member', 'moderator', 'admin'])
+})
+
+const updateThreadModerationSchema = z.object({
+  isLocked: z.boolean().optional(),
+  isPinned: z.boolean().optional()
+})
+
+// PATCH /clubs/:id/members/:userId/role — Change member role
+router.patch('/:id/members/:userId/role', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const actorId = req.user!.id
+  const { id: clubId, userId: targetUserId } = req.params
+  const { role: newRole } = updateMemberRoleSchema.parse(req.body)
+
+  // Check actor is admin
+  const [actorMembership] = await db
+    .select()
+    .from(clubMembers)
+    .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, actorId)))
+    .limit(1)
+
+  if (!actorMembership || actorMembership.role !== 'admin') {
+    throw new AppError(403, 'Only admins can change member roles')
+  }
+
+  // Check target is a member
+  const [targetMembership] = await db
+    .select()
+    .from(clubMembers)
+    .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, targetUserId)))
+    .limit(1)
+
+  if (!targetMembership) {
+    throw new AppError(404, 'Member not found')
+  }
+
+  // Admin cannot demote themselves if they are the only admin
+  if (actorId === targetUserId && targetMembership.role === 'admin' && newRole !== 'admin') {
+    const adminCount = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(clubMembers)
+      .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.role, 'admin')))
+
+    if (adminCount[0].count <= 1) {
+      throw new AppError(400, 'Cannot demote the only admin')
+    }
+  }
+
+  await db
+    .update(clubMembers)
+    .set({ role: newRole })
+    .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, targetUserId)))
+
+  res.json({ success: true, message: 'Role updated' })
+}))
+
+// DELETE /clubs/:id/members/:userId — Remove member from club
+router.delete('/:id/members/:userId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const actorId = req.user!.id
+  const { id: clubId, userId: targetUserId } = req.params
+
+  if (actorId === targetUserId) {
+    throw new AppError(400, 'Cannot remove yourself — use leave instead')
+  }
+
+  // Check actor membership
+  const [actorMembership] = await db
+    .select()
+    .from(clubMembers)
+    .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, actorId)))
+    .limit(1)
+
+  if (!actorMembership || (actorMembership.role !== 'admin' && actorMembership.role !== 'moderator')) {
+    throw new AppError(403, 'Only admins and moderators can remove members')
+  }
+
+  // Check target membership
+  const [targetMembership] = await db
+    .select()
+    .from(clubMembers)
+    .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, targetUserId)))
+    .limit(1)
+
+  if (!targetMembership) {
+    throw new AppError(404, 'Member not found')
+  }
+
+  // Moderator cannot remove admin or other moderators
+  if (actorMembership.role === 'moderator' && (targetMembership.role === 'admin' || targetMembership.role === 'moderator')) {
+    throw new AppError(403, 'Moderators cannot remove admins or other moderators')
+  }
+
+  await db
+    .delete(clubMembers)
+    .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, targetUserId)))
+
+  // Update member count
+  await db
+    .update(clubs)
+    .set({ memberCount: sql`${clubs.memberCount} - 1` })
+    .where(eq(clubs.id, clubId))
+
+  res.json({ success: true, message: 'Member removed' })
+}))
+
+// DELETE /clubs/:clubId/threads/:threadId — Delete thread
+router.delete('/:clubId/threads/:threadId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const actorId = req.user!.id
+  const { clubId, threadId } = req.params
+
+  // Get the thread
+  const [thread] = await db
+    .select()
+    .from(clubThreads)
+    .where(and(eq(clubThreads.id, threadId), eq(clubThreads.clubId, clubId)))
+    .limit(1)
+
+  if (!thread) {
+    throw new AppError(404, 'Thread not found')
+  }
+
+  // Check permissions: author, admin, or moderator
+  const isAuthor = thread.authorId === actorId
+  if (!isAuthor) {
+    const [membership] = await db
+      .select()
+      .from(clubMembers)
+      .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, actorId)))
+      .limit(1)
+
+    if (!membership || (membership.role !== 'admin' && membership.role !== 'moderator')) {
+      throw new AppError(403, 'Not authorized to delete this thread')
+    }
+  }
+
+  // Delete thread (comments cascade via DB)
+  await db
+    .delete(clubThreads)
+    .where(eq(clubThreads.id, threadId))
+
+  res.json({ success: true, message: 'Thread deleted' })
+}))
+
+// PATCH /clubs/:clubId/threads/:threadId — Lock/pin thread
+router.patch('/:clubId/threads/:threadId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const actorId = req.user!.id
+  const { clubId, threadId } = req.params
+  const data = updateThreadModerationSchema.parse(req.body)
+
+  // Check actor is admin or moderator
+  const [membership] = await db
+    .select()
+    .from(clubMembers)
+    .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, actorId)))
+    .limit(1)
+
+  if (!membership || (membership.role !== 'admin' && membership.role !== 'moderator')) {
+    throw new AppError(403, 'Only admins and moderators can lock/pin threads')
+  }
+
+  // Verify thread exists in this club
+  const [thread] = await db
+    .select()
+    .from(clubThreads)
+    .where(and(eq(clubThreads.id, threadId), eq(clubThreads.clubId, clubId)))
+    .limit(1)
+
+  if (!thread) {
+    throw new AppError(404, 'Thread not found')
+  }
+
+  const updateData: Record<string, unknown> = { updatedAt: new Date() }
+  if (data.isLocked !== undefined) updateData.isLocked = data.isLocked
+  if (data.isPinned !== undefined) updateData.isPinned = data.isPinned
+
+  const [updatedThread] = await db
+    .update(clubThreads)
+    .set(updateData)
+    .where(eq(clubThreads.id, threadId))
+    .returning()
+
+  res.json({ success: true, data: updatedThread })
+}))
+
+// DELETE /clubs/:clubId/threads/:threadId/comments/:commentId — Delete comment
+router.delete('/:clubId/threads/:threadId/comments/:commentId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const actorId = req.user!.id
+  const { clubId, threadId, commentId } = req.params
+
+  // Verify thread exists in this club
+  const [thread] = await db
+    .select()
+    .from(clubThreads)
+    .where(and(eq(clubThreads.id, threadId), eq(clubThreads.clubId, clubId)))
+    .limit(1)
+
+  if (!thread) {
+    throw new AppError(404, 'Thread not found')
+  }
+
+  // Get the comment
+  const [comment] = await db
+    .select()
+    .from(clubComments)
+    .where(and(eq(clubComments.id, commentId), eq(clubComments.threadId, threadId)))
+    .limit(1)
+
+  if (!comment) {
+    throw new AppError(404, 'Comment not found')
+  }
+
+  // Check permissions: author, admin, or moderator
+  const isAuthor = comment.authorId === actorId
+  if (!isAuthor) {
+    const [membership] = await db
+      .select()
+      .from(clubMembers)
+      .where(and(eq(clubMembers.clubId, clubId), eq(clubMembers.userId, actorId)))
+      .limit(1)
+
+    if (!membership || (membership.role !== 'admin' && membership.role !== 'moderator')) {
+      throw new AppError(403, 'Not authorized to delete this comment')
+    }
+  }
+
+  await db
+    .delete(clubComments)
+    .where(eq(clubComments.id, commentId))
+
+  // Update reply count
+  await db
+    .update(clubThreads)
+    .set({
+      replyCount: sql`GREATEST(${clubThreads.replyCount} - 1, 0)`,
+      updatedAt: new Date()
+    })
+    .where(eq(clubThreads.id, threadId))
+
+  res.json({ success: true, message: 'Comment deleted' })
 }))
 
 // GET /clubs/categories - Get club categories

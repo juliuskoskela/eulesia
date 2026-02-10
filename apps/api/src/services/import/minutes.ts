@@ -58,16 +58,24 @@ function parseFinnishDate(dateStr: string): Date | null {
 }
 
 /**
- * Filter meetings to only include recent ones
+ * Filter meetings to only include recent ones.
+ * Meetings without a parseable date are EXCLUDED to prevent
+ * old (undated) meetings from slipping through.
  */
 function filterRecentMeetings(meetings: Meeting[], maxAgeDays: number): Meeting[] {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - maxAgeDays)
 
   return meetings.filter(m => {
-    if (!m.date) return true // If no date, include it (don't silently drop)
+    if (!m.date) {
+      console.log(`   ⏭️  Skipping undated meeting: ${m.title}`)
+      return false
+    }
     const meetingDate = parseFinnishDate(m.date)
-    if (!meetingDate) return true
+    if (!meetingDate) {
+      console.log(`   ⏭️  Skipping unparseable date "${m.date}": ${m.title}`)
+      return false
+    }
     return meetingDate >= cutoff
   })
 }

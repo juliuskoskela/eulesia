@@ -247,6 +247,18 @@ export function useUnsubscribe() {
   })
 }
 
+// Onboarding hook
+export function useCompleteOnboarding() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => api.completeOnboarding(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] })
+    }
+  })
+}
+
 // Club hooks
 export function useClubs(filters?: ClubFilters) {
   return useQuery({
@@ -341,6 +353,65 @@ export function useAddClubComment(clubId: string, threadId: string) {
 
   return useMutation({
     mutationFn: (data: CreateCommentData) => api.addClubComment(clubId, threadId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.clubThread(clubId, threadId) })
+    }
+  })
+}
+
+// Club moderation hooks
+export function useUpdateMemberRole(clubId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      api.updateMemberRole(clubId, userId, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.club(clubId) })
+    }
+  })
+}
+
+export function useRemoveMember(clubId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (userId: string) => api.removeMember(clubId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.club(clubId) })
+    }
+  })
+}
+
+export function useDeleteClubThread(clubId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (threadId: string) => api.deleteClubThread(clubId, threadId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.club(clubId) })
+    }
+  })
+}
+
+export function useUpdateClubThread(clubId: string, threadId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: { isLocked?: boolean; isPinned?: boolean }) =>
+      api.updateClubThread(clubId, threadId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.clubThread(clubId, threadId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.club(clubId) })
+    }
+  })
+}
+
+export function useDeleteClubComment(clubId: string, threadId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (commentId: string) => api.deleteClubComment(clubId, threadId, commentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.clubThread(clubId, threadId) })
     }

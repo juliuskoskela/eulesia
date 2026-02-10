@@ -4,10 +4,17 @@ import i18n from '../lib/i18n'
 import { api } from '../lib/api'
 import type { User } from '../lib/api'
 
+interface SanctionInfo {
+  sanctionType: 'suspension' | 'ban'
+  reason: string | null
+  expiresAt: string | null
+}
+
 interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   currentUser: User | null
+  sanction: SanctionInfo | null
   login: (username: string, password: string) => Promise<void>
   register: (data: { inviteCode: string; username: string; password: string; name: string }) => Promise<void>
   requestMagicLink: (email: string) => Promise<{ message: string }>
@@ -22,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [sanction, setSanction] = useState<SanctionInfo | null>(null)
   const queryClient = useQueryClient()
 
   const checkAuth = useCallback(async () => {
@@ -29,13 +37,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const user = await api.getCurrentUser()
       setCurrentUser(user)
       setIsAuthenticated(true)
+      setSanction(null)
       // Sync user's locale preference to i18next
       if (user.settings?.locale && user.settings.locale !== i18n.language) {
         i18n.changeLanguage(user.settings.locale)
       }
-    } catch {
+    } catch (err: any) {
       setCurrentUser(null)
       setIsAuthenticated(false)
+      // Check if the error is a ban/suspension response
+      if (err?.message?.includes('banned') || err?.message?.includes('suspended')) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/v1/auth/me`, {
+            credentials: 'include'
+          })
+          if (response.status === 403) {
+            const data = await response.json()
+            if (data.sanctionType) {
+              setSanction({
+                sanctionType: data.sanctionType,
+                reason: data.reason,
+                expiresAt: data.expiresAt
+              })
+            }
+          }
+        } catch {
+          // Ignore secondary fetch errors
+        }
+      }
     } finally {
       setIsLoading(false)
     }
@@ -90,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated,
       isLoading,
       currentUser,
+      sanction,
       login,
       register,
       requestMagicLink,

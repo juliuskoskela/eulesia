@@ -5,7 +5,7 @@ import { Layout } from '../components/layout'
 import { ThreadCard, FeedFilters, FeedOnboarding, InlineThreadForm } from '../components/agora'
 import { ContentEndMarker } from '../components/common'
 import { MapPin, Building2, Globe, Users } from 'lucide-react'
-import { useThreads, useTags, useMunicipalities, useVoteThread, useSubscriptions } from '../hooks/useApi'
+import { useThreads, useTags, useMunicipalities, useVoteThread, useSubscriptions, useCompleteOnboarding } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { useGuide } from '../hooks/useGuide'
 import type { Thread as ApiThread, UserSummary, FeedScope, SortBy, TopPeriod } from '../lib/api'
@@ -62,6 +62,8 @@ export function AgoraPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedMunicipality, setSelectedMunicipality] = useState<string | undefined>()
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const onboardingDone = !!currentUser?.onboardingCompletedAt
+  const completeOnboardingMutation = useCompleteOnboarding()
 
   const { hasCompletedGuide, startGuide, isGuideActive } = useGuide()
 
@@ -99,16 +101,17 @@ export function AgoraPage() {
     }
   }, [currentUser, subscriptionsData, hasSubscriptions, feedScopeInitialized])
 
-  // Show onboarding when following feed is empty
+  // Show onboarding when following feed is empty AND user hasn't completed it before
   useEffect(() => {
     if (
       feedScope === 'following' &&
       !isLoading &&
-      threadsData?.hasSubscriptions === false
+      threadsData?.hasSubscriptions === false &&
+      !onboardingDone
     ) {
       setShowOnboarding(true)
     }
-  }, [feedScope, isLoading, threadsData?.hasSubscriptions])
+  }, [feedScope, isLoading, threadsData?.hasSubscriptions, onboardingDone])
 
   // Auto-trigger agora guide on first visit
   useEffect(() => {
@@ -151,6 +154,7 @@ export function AgoraPage() {
   }
 
   const handleOnboardingComplete = () => {
+    completeOnboardingMutation.mutate()
     setShowOnboarding(false)
   }
 

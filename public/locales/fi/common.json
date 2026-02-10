@@ -138,5 +138,32 @@
       "year": "Tänä vuonna"
     },
     "topics": "Aiheet:"
+  },
+  "report": {
+    "report": "Ilmianna",
+    "title": "Ilmianna sisältö",
+    "reason": "Ilmiannon syy",
+    "reasons": {
+      "illegal": "Laiton sisältö",
+      "harassment": "Häirintä tai kiusaaminen",
+      "spam": "Roskaposti",
+      "misinformation": "Disinformaatio",
+      "other": "Muu syy"
+    },
+    "description": "Kuvaus (vapaaehtoinen)",
+    "descriptionPlaceholder": "Kerro tarkemmin, miksi ilmiannat tämän sisällön...",
+    "cancel": "Peruuta",
+    "submit": "Lähetä ilmianto",
+    "submitted": "Ilmianto lähetetty. Kiitos!"
+  },
+  "appeal": {
+    "submit": "Valita",
+    "title": "Lähetä valitus",
+    "reason": "Valituksen perustelu",
+    "reasonPlaceholder": "Kerro miksi sanktiosi tulisi kumota...",
+    "minimumLength": "Vähintään 10 merkkiä",
+    "cancel": "Peruuta",
+    "send": "Lähetä valitus",
+    "submitted": "Valitus lähetetty. Käsittelemme sen mahdollisimman pian."
   }
 }

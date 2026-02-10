@@ -138,5 +138,32 @@
       "year": "This year"
     },
     "topics": "Topics:"
+  },
+  "report": {
+    "report": "Report",
+    "title": "Report Content",
+    "reason": "Reason for reporting",
+    "reasons": {
+      "illegal": "Illegal content",
+      "harassment": "Harassment or bullying",
+      "spam": "Spam",
+      "misinformation": "Misinformation",
+      "other": "Other reason"
+    },
+    "description": "Description (optional)",
+    "descriptionPlaceholder": "Tell us more about why you are reporting this content...",
+    "cancel": "Cancel",
+    "submit": "Submit Report",
+    "submitted": "Report submitted. Thank you!"
+  },
+  "appeal": {
+    "submit": "Appeal",
+    "title": "Submit Appeal",
+    "reason": "Reason for appeal",
+    "reasonPlaceholder": "Explain why your sanction should be revoked...",
+    "minimumLength": "Minimum 10 characters",
+    "cancel": "Cancel",
+    "send": "Submit Appeal",
+    "submitted": "Appeal submitted. We will review it as soon as possible."
   }
 }

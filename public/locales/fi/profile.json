@@ -81,5 +81,9 @@
     "maxSize": "Kuva saa olla max 5MB",
     "uploadFailed": "Kuvan lataus epäonnistui",
     "removeFailed": "Kuvan poisto epäonnistui"
+  },
+  "sanctions": {
+    "active": "Aktiiviset sanktiot",
+    "expiresAt": "Päättyy {{date}}"
   }
 }

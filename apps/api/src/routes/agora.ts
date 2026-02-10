@@ -74,6 +74,9 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
   // Build where conditions
   const conditions = []
 
+  // Filter out hidden content
+  conditions.push(eq(threads.isHidden, false))
+
   if (filters.scope) {
     conditions.push(eq(threads.scope, filters.scope))
   }
@@ -410,7 +413,7 @@ router.get('/threads/:id', optionalAuthMiddleware, asyncHandler(async (req: Auth
     })
     .from(comments)
     .leftJoin(users, eq(comments.authorId, users.id))
-    .where(eq(comments.threadId, id))
+    .where(and(eq(comments.threadId, id), eq(comments.isHidden, false)))
     .orderBy(orderBy)
 
   // Get user's votes if logged in

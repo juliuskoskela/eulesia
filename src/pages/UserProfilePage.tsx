@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Shield, Building2, Calendar, MessageSquare, Hash, Bot, Users, Send, Home } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { Layout } from '../components/layout'
-import { FollowButton } from '../components/common'
+import { FollowButton, ReportButton } from '../components/common'
 import { useAuth } from '../hooks/useAuth'
 import { useStartConversation } from '../hooks/useApi'
 import { formatDateLong } from '../lib/formatTime'
@@ -195,6 +195,13 @@ export function UserProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* Report user */}
+        {!isOwnProfile && userId && (
+          <div className="mt-3">
+            <ReportButton contentType="user" contentId={userId} size="sm" />
+          </div>
+        )}
 
         {/* Send message & visit home buttons */}
         {!isOwnProfile && userId && (

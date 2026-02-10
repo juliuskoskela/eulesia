@@ -212,6 +212,18 @@ router.patch('/me', authMiddleware, asyncHandler(async (req: AuthenticatedReques
   res.json({ success: true, data: updatedUser })
 }))
 
+// POST /users/me/onboarding-complete - Mark onboarding as completed
+router.post('/me/onboarding-complete', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+
+  await db
+    .update(users)
+    .set({ onboardingCompletedAt: new Date() })
+    .where(eq(users.id, userId))
+
+  res.json({ success: true })
+}))
+
 // GET /users/me/data - GDPR data export
 router.get('/me/data', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id

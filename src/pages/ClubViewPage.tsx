@@ -3,14 +3,15 @@ import { useTranslation } from 'react-i18next'
 import { useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft, Users, Shield, MessageSquare, Pin, ScrollText, X, Send,
-  Settings, Globe, Lock, MapPin, Image as ImageIcon, Loader2, Trash2
+  Settings, Globe, Lock, MapPin, Image as ImageIcon, Loader2, Trash2,
+  MoreVertical, UserMinus, ChevronDown
 } from 'lucide-react'
 import { Layout } from '../components/layout'
-import { ActorBadge, ContentEndMarker, FollowButton, LocationSearch } from '../components/common'
-import { useClub, useJoinClub, useLeaveClub, useCreateClubThread, useUpdateClub } from '../hooks/useApi'
+import { ActorBadge, ContentEndMarker, FollowButton, LocationSearch, ReportButton } from '../components/common'
+import { useClub, useJoinClub, useLeaveClub, useCreateClubThread, useUpdateClub, useUpdateMemberRole, useRemoveMember } from '../hooks/useApi'
 import { api } from '../lib/api'
 import { formatRelativeTime } from '../lib/formatTime'
-import type { UserSummary, ClubThread, LocationResult } from '../lib/api'
+import type { UserSummary, ClubThread, ClubMember, LocationResult } from '../lib/api'
 
 // Transform API user to component format
 function transformUser(user: UserSummary) {
@@ -34,8 +35,12 @@ export function ClubViewPage() {
   const leaveClubMutation = useLeaveClub()
   const createThreadMutation = useCreateClubThread(clubId || '')
   const updateClubMutation = useUpdateClub(clubId || '')
+  const updateRoleMutation = useUpdateMemberRole(clubId || '')
+  const removeMemberMutation = useRemoveMember(clubId || '')
 
   const [showNewThreadForm, setShowNewThreadForm] = useState(false)
+  const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null)
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState<ClubMember | null>(null)
   const [newThreadTitle, setNewThreadTitle] = useState('')
   const [newThreadContent, setNewThreadContent] = useState('')
 
@@ -108,6 +113,24 @@ export function ClubViewPage() {
       setShowSettings(false)
     } catch (err) {
       console.error('Failed to update club:', err)
+    }
+  }
+
+  const handleChangeRole = async (userId: string, role: string) => {
+    try {
+      await updateRoleMutation.mutateAsync({ userId, role })
+      setMemberMenuOpen(null)
+    } catch (err) {
+      console.error('Failed to change role:', err)
+    }
+  }
+
+  const handleRemoveMember = async (userId: string) => {
+    try {
+      await removeMemberMutation.mutateAsync(userId)
+      setConfirmRemoveMember(null)
+    } catch (err) {
+      console.error('Failed to remove member:', err)
     }
   }
 
@@ -285,6 +308,9 @@ export function ClubViewPage() {
           )}
           {clubId && (
             <FollowButton entityType="club" entityId={clubId} variant="outline" />
+          )}
+          {clubId && (
+            <ReportButton contentType="club" contentId={clubId} />
           )}
         </div>
       </div>
@@ -530,32 +556,107 @@ export function ClubViewPage() {
             </h3>
             <div className="flex flex-wrap gap-2">
               {members.slice(0, 20).map(member => (
-                <Link
-                  key={member.id}
-                  to={`/home/${member.id}`}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full text-sm hover:bg-gray-100 transition-colors"
-                >
-                  {member.avatarUrl ? (
-                    <img src={member.avatarUrl} alt="" className="w-5 h-5 rounded-full" />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-medium text-teal-700">
-                      {member.name.charAt(0).toUpperCase()}
-                    </div>
+                <div key={member.id} className="relative flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full text-sm hover:bg-gray-100 transition-colors group">
+                  <Link
+                    to={`/home/${member.id}`}
+                    className="flex items-center gap-1.5"
+                  >
+                    {member.avatarUrl ? (
+                      <img src={member.avatarUrl} alt="" className="w-5 h-5 rounded-full" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-medium text-teal-700">
+                        {member.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-gray-700">{member.name}</span>
+                    {member.role === 'admin' && (
+                      <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">{t('moderation.admin')}</span>
+                    )}
+                    {member.role === 'moderator' && (
+                      <span className="text-[10px] text-blue-700 bg-blue-100 px-1 rounded">{t('moderation.moderator')}</span>
+                    )}
+                  </Link>
+
+                  {/* Moderation menu button */}
+                  {isAdminOrMod && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMemberMenuOpen(memberMenuOpen === member.id ? null : member.id) }}
+                      className="ml-1 p-0.5 rounded hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
                   )}
-                  <span className="text-gray-700">{member.name}</span>
-                  {(member as { role?: string }).role === 'admin' && (
-                    <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">admin</span>
+
+                  {/* Moderation dropdown */}
+                  {memberMenuOpen === member.id && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setMemberMenuOpen(null)} />
+                      <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                        {/* Role change - admin only */}
+                        {club.memberRole === 'admin' && (
+                          <>
+                            <div className="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase">{t('moderation.changeRole')}</div>
+                            {(['member', 'moderator', 'admin'] as const).map(role => (
+                              <button
+                                key={role}
+                                onClick={() => handleChangeRole(member.id, role)}
+                                disabled={member.role === role || updateRoleMutation.isPending}
+                                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40 ${
+                                  member.role === role ? 'text-teal-600 font-medium' : 'text-gray-700'
+                                }`}
+                              >
+                                {t(`moderation.${role}`)}
+                                {member.role === role && ' ✓'}
+                              </button>
+                            ))}
+                            <div className="border-t border-gray-100 my-1" />
+                          </>
+                        )}
+                        {/* Remove member - admin + mod (mod can't remove admin/mod) */}
+                        {!(club.memberRole === 'moderator' && (member.role === 'admin' || member.role === 'moderator')) && (
+                          <button
+                            onClick={() => { setMemberMenuOpen(null); setConfirmRemoveMember(member) }}
+                            className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                          >
+                            <UserMinus className="w-3.5 h-3.5" />
+                            {t('moderation.removeFromClub')}
+                          </button>
+                        )}
+                      </div>
+                    </>
                   )}
-                  {(member as { role?: string }).role === 'moderator' && (
-                    <span className="text-[10px] text-blue-700 bg-blue-100 px-1 rounded">mod</span>
-                  )}
-                </Link>
+                </div>
               ))}
               {members.length > 20 && (
                 <span className="text-sm text-gray-500 px-2 py-1">
                   +{members.length - 20}
                 </span>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Confirm remove member dialog */}
+        {confirmRemoveMember && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-sm p-6">
+              <h3 className="font-semibold text-gray-900 mb-2">{t('moderation.confirmRemove')}</h3>
+              <p className="text-sm text-gray-600 mb-4">{confirmRemoveMember.name}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmRemoveMember(null)}
+                  className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  {t('common:actions.cancel')}
+                </button>
+                <button
+                  onClick={() => handleRemoveMember(confirmRemoveMember.id)}
+                  disabled={removeMemberMutation.isPending}
+                  className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {removeMemberMutation.isPending ? '...' : t('moderation.removeFromClub')}
+                </button>
+              </div>
             </div>
           </div>
         )}

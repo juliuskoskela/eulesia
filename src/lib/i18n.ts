@@ -11,7 +11,7 @@ i18n
     fallbackLng: 'fi',
     supportedLngs: ['fi', 'en'],
     defaultNS: 'common',
-    ns: ['common', 'auth', 'agora', 'clubs', 'home', 'messages', 'profile', 'about', 'services', 'map', 'guide'],
+    ns: ['common', 'auth', 'agora', 'clubs', 'home', 'messages', 'profile', 'about', 'services', 'map', 'guide', 'admin'],
 
     backend: {
       loadPath: '/locales/{{lng}}/{{ns}}.json'

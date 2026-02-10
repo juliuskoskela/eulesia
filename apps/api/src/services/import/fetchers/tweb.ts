@@ -92,10 +92,15 @@ export const twebFetcher: MinuteFetcher = {
       const bid = match[1]
       const linkText = match[2].trim()
 
+      // Extract date from link text (Finnish format: DD.MM.YYYY)
+      const dateMatch = linkText.match(/(\d{1,2}\.\d{1,2}\.\d{4})/)
+      const date = dateMatch ? dateMatch[1] : undefined
+
       meetings.push({
         id: `tweb-${bid}`,
         pageUrl: `${source.url}/dbisa.dll/ktwebscr/pk_asil_tweb.htm?+bid=${bid}`,
         title: linkText || `Kokous ${bid}`,
+        date,
         organ: linkText.split(/\s+\d/).at(0)?.trim()
       })
     }

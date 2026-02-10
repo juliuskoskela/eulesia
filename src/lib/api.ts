@@ -233,6 +233,33 @@ class ApiClient {
     return this.request('/clubs/meta/categories')
   }
 
+  // Club moderation
+  async updateMemberRole(clubId: string, userId: string, role: string): Promise<void> {
+    await this.request(`/clubs/${clubId}/members/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role })
+    })
+  }
+
+  async removeMember(clubId: string, userId: string): Promise<void> {
+    await this.request(`/clubs/${clubId}/members/${userId}`, { method: 'DELETE' })
+  }
+
+  async deleteClubThread(clubId: string, threadId: string): Promise<void> {
+    await this.request(`/clubs/${clubId}/threads/${threadId}`, { method: 'DELETE' })
+  }
+
+  async updateClubThread(clubId: string, threadId: string, data: { isLocked?: boolean; isPinned?: boolean }): Promise<void> {
+    await this.request(`/clubs/${clubId}/threads/${threadId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteClubComment(clubId: string, threadId: string, commentId: string): Promise<void> {
+    await this.request(`/clubs/${clubId}/threads/${threadId}/comments/${commentId}`, { method: 'DELETE' })
+  }
+
   // Home
   async getHome(userId: string): Promise<HomeData> {
     return this.request(`/home/${userId}`)
@@ -383,6 +410,12 @@ class ApiClient {
   async unsubscribe(entityType: EntityType, entityId: string): Promise<{ unsubscribed: boolean }> {
     return this.request(`/subscriptions/${entityType}/${entityId}`, {
       method: 'DELETE'
+    })
+  }
+
+  async completeOnboarding(): Promise<void> {
+    return this.request('/users/me/onboarding-complete', {
+      method: 'POST'
     })
   }
 
@@ -538,6 +571,7 @@ export interface User {
     notificationOfficial: boolean
     locale: string
   }
+  onboardingCompletedAt?: string | null
   createdAt: string
 }
 
@@ -645,12 +679,14 @@ export interface ClubThread {
   contentHtml?: string
   author: UserSummary
   isPinned: boolean
+  isLocked: boolean
   replyCount: number
   createdAt: string
   updatedAt: string
 }
 
 export interface ClubThreadWithComments extends ClubThread {
+  memberRole?: string | null
   comments: ClubComment[]
 }
 
@@ -1105,6 +1141,298 @@ export interface UploadImageResponse {
   thumbnailUrl: string
   width: number
   height: number
+}
+
+  // ─── Admin API ────────────────────────────────────────────
+
+  async getAdminDashboard(): Promise<AdminDashboard> {
+    return this.request('/admin/dashboard')
+  }
+
+  async getAdminUsers(params?: { page?: number; limit?: number; search?: string; role?: string }): Promise<PaginatedResponse<AdminUser>> {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set('page', params.page.toString())
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+    if (params?.search) searchParams.set('search', params.search)
+    if (params?.role) searchParams.set('role', params.role)
+    const query = searchParams.toString()
+    return this.request(`/admin/users${query ? `?${query}` : ''}`)
+  }
+
+  async getAdminUser(id: string): Promise<AdminUserDetail> {
+    return this.request(`/admin/users/${id}`)
+  }
+
+  async changeUserRole(id: string, role: 'citizen' | 'institution' | 'admin'): Promise<{ id: string; role: string }> {
+    return this.request(`/admin/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role })
+    })
+  }
+
+  async issueSanction(userId: string, data: IssueSanctionData): Promise<AdminSanction> {
+    return this.request(`/admin/users/${userId}/sanction`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async getUserSanctions(userId: string): Promise<AdminSanction[]> {
+    return this.request(`/admin/users/${userId}/sanctions`)
+  }
+
+  async revokeSanction(sanctionId: string): Promise<{ revoked: boolean }> {
+    return this.request(`/admin/sanctions/${sanctionId}`, { method: 'DELETE' })
+  }
+
+  async getAdminReports(params?: { page?: number; limit?: number; status?: string; reason?: string; contentType?: string }): Promise<PaginatedResponse<AdminReport>> {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set('page', params.page.toString())
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+    if (params?.status) searchParams.set('status', params.status)
+    if (params?.reason) searchParams.set('reason', params.reason)
+    if (params?.contentType) searchParams.set('contentType', params.contentType)
+    const query = searchParams.toString()
+    return this.request(`/admin/reports${query ? `?${query}` : ''}`)
+  }
+
+  async getAdminReport(id: string): Promise<AdminReportDetail> {
+    return this.request(`/admin/reports/${id}`)
+  }
+
+  async updateReport(id: string, data: { status: string; reason?: string }): Promise<{ id: string; status: string }> {
+    return this.request(`/admin/reports/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async removeContent(type: string, id: string, reason?: string): Promise<{ hidden: boolean }> {
+    return this.request(`/admin/content/${type}/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason })
+    })
+  }
+
+  async restoreContent(type: string, id: string): Promise<{ restored: boolean }> {
+    return this.request(`/admin/content/${type}/${id}/restore`, { method: 'POST' })
+  }
+
+  async getModLog(params?: { page?: number; limit?: number; actionType?: string; adminId?: string }): Promise<PaginatedResponse<ModLogEntry>> {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set('page', params.page.toString())
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+    if (params?.actionType) searchParams.set('actionType', params.actionType)
+    if (params?.adminId) searchParams.set('adminId', params.adminId)
+    const query = searchParams.toString()
+    return this.request(`/admin/modlog${query ? `?${query}` : ''}`)
+  }
+
+  async getTransparencyStats(from?: string, to?: string): Promise<TransparencyStats> {
+    const searchParams = new URLSearchParams()
+    if (from) searchParams.set('from', from)
+    if (to) searchParams.set('to', to)
+    const query = searchParams.toString()
+    return this.request(`/admin/transparency${query ? `?${query}` : ''}`)
+  }
+
+  async getAdminAppeals(params?: { page?: number; limit?: number; status?: string }): Promise<PaginatedResponse<AdminAppeal>> {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set('page', params.page.toString())
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+    if (params?.status) searchParams.set('status', params.status)
+    const query = searchParams.toString()
+    return this.request(`/admin/appeals${query ? `?${query}` : ''}`)
+  }
+
+  async resolveAppeal(id: string, data: { status: 'accepted' | 'rejected'; adminResponse: string }): Promise<{ id: string; status: string }> {
+    return this.request(`/admin/appeals/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+
+  // ─── User reports & appeals ──────────────────────────────
+
+  async submitReport(data: SubmitReportData): Promise<ContentReportResponse> {
+    return this.request('/reports', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async submitAppeal(data: SubmitAppealData): Promise<AppealResponse> {
+    return this.request('/reports/appeal', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async getMySanctions(): Promise<MySanction[]> {
+    return this.request('/reports/my-sanctions')
+  }
+}
+
+// ─── Admin types ──────────────────────────────────────────
+
+export interface AdminDashboard {
+  stats: {
+    totalUsers: number
+    totalThreads: number
+    totalClubs: number
+    pendingReports: number
+    pendingAppeals: number
+  }
+  recentReports: {
+    id: string
+    contentType: string
+    reason: string
+    status: string
+    createdAt: string
+    reporterName: string
+  }[]
+  recentActions: {
+    id: string
+    actionType: string
+    targetType: string
+    reason: string
+    createdAt: string
+    adminName: string
+  }[]
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  username: string
+  name: string
+  avatarUrl?: string
+  role: 'citizen' | 'institution' | 'admin'
+  institutionType?: string
+  institutionName?: string
+  identityVerified: boolean
+  createdAt: string
+  lastSeenAt?: string
+}
+
+export interface AdminSanction {
+  id: string
+  sanctionType: 'warning' | 'suspension' | 'ban'
+  reason: string
+  issuedAt: string
+  expiresAt?: string
+  revokedAt?: string
+  issuerName?: string
+}
+
+export interface AdminUserDetail extends AdminUser {
+  sanctions: AdminSanction[]
+  threadCount: number
+  commentCount: number
+}
+
+export interface IssueSanctionData {
+  sanctionType: 'warning' | 'suspension' | 'ban'
+  reason: string
+  expiresAt?: string
+}
+
+export interface AdminReport {
+  id: string
+  contentType: string
+  contentId: string
+  reason: string
+  description?: string
+  status: string
+  createdAt: string
+  resolvedAt?: string
+  reporterName: string
+  reporterUserId: string
+}
+
+export interface AdminReportDetail extends AdminReport {
+  content: any
+  assignedTo?: string
+}
+
+export interface ModLogEntry {
+  id: string
+  actionType: string
+  targetType: string
+  targetId: string
+  reason: string
+  metadata: any
+  createdAt: string
+  adminName: string
+  adminUserId: string
+}
+
+export interface TransparencyStats {
+  period: { from: string; to: string }
+  reports: {
+    byStatus: { status: string; count: number }[]
+    byReason: { reason: string; count: number }[]
+    byContentType: { contentType: string; count: number }[]
+    avgResponseTimeHours: number | null
+  }
+  actions: {
+    byType: { actionType: string; count: number }[]
+  }
+  sanctions: {
+    byType: { sanctionType: string; count: number }[]
+  }
+  appeals: {
+    byStatus: { status: string; count: number }[]
+  }
+}
+
+export interface AdminAppeal {
+  id: string
+  reason: string
+  status: 'pending' | 'accepted' | 'rejected'
+  adminResponse?: string
+  createdAt: string
+  respondedAt?: string
+  sanctionId?: string
+  reportId?: string
+  actionId?: string
+  userId: string
+  userName: string
+}
+
+export interface SubmitReportData {
+  contentType: string
+  contentId: string
+  reason: string
+  description?: string
+}
+
+export interface ContentReportResponse {
+  id: string
+  status: string
+  createdAt: string
+}
+
+export interface SubmitAppealData {
+  sanctionId?: string
+  reportId?: string
+  actionId?: string
+  reason: string
+}
+
+export interface AppealResponse {
+  id: string
+  status: string
+  createdAt: string
+}
+
+export interface MySanction {
+  id: string
+  sanctionType: 'warning' | 'suspension' | 'ban'
+  reason?: string
+  issuedAt: string
+  expiresAt?: string
+  revokedAt?: string
 }
 
 // Export singleton instance

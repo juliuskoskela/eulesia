@@ -13,6 +13,8 @@ import locationsRoutes from './locations.js'
 import uploadsRoutes from './uploads.js'
 import dmRoutes from './dm.js'
 import notificationsRoutes from './notifications.js'
+import adminRoutes from './admin.js'
+import reportsRoutes from './reports.js'
 
 const router = Router()
 
@@ -30,6 +32,8 @@ router.use('/locations', locationsRoutes)
 router.use('/uploads', uploadsRoutes)
 router.use('/dm', dmRoutes)
 router.use('/notifications', notificationsRoutes)
+router.use('/admin', adminRoutes)
+router.use('/reports', reportsRoutes)
 
 // Health check
 router.get('/health', (_req, res) => {

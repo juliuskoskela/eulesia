@@ -116,10 +116,15 @@ export const cloudncFetcher: MinuteFetcher = {
       const pathParts = href.split('/')
       const id = pathParts[pathParts.length - 1]  // e.g., "Kokous_1912026"
 
+      // Extract date from title (Finnish format: DD.MM.YYYY)
+      const dateMatch = title.match(/(\d{1,2}\.\d{1,2}\.\d{4})/)
+      const date = dateMatch ? dateMatch[1] : undefined
+
       meetings.push({
         id,
         pageUrl: new URL(href, source.url).toString(),
         title,
+        date,
         organ
       })
     }

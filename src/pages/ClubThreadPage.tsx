@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import DOMPurify from 'dompurify'
 import { useTranslation } from 'react-i18next'
-import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Users, ChevronDown, Lock } from 'lucide-react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Users, ChevronDown, Lock, Unlock, Pin, PinOff, Trash2 } from 'lucide-react'
 import { Layout } from '../components/layout'
 import { ActorBadge, ContentEndMarker } from '../components/common'
 import { CommentThread } from '../components/agora/CommentThread'
-import { useClubThread, useAddClubComment } from '../hooks/useApi'
+import { useClubThread, useAddClubComment, useUpdateClubThread, useDeleteClubThread, useDeleteClubComment, useCurrentUser } from '../hooks/useApi'
 import { formatRelativeTime } from '../lib/formatTime'
 import { transformAuthor, transformComment } from '../utils/transforms'
 
@@ -14,6 +14,7 @@ type CommentSort = 'best' | 'new' | 'old' | 'controversial'
 
 export function ClubThreadPage() {
   const { t } = useTranslation(['clubs', 'agora', 'common'])
+  const navigate = useNavigate()
   const { clubId, threadId } = useParams<{ clubId: string; threadId: string }>()
   const [sort, setSort] = useState<CommentSort>('best')
   const [showSortMenu, setShowSortMenu] = useState(false)
@@ -26,10 +27,16 @@ export function ClubThreadPage() {
   ]
 
   const { data: thread, isLoading, error } = useClubThread(clubId || '', threadId || '')
+  const { data: currentUser } = useCurrentUser()
   const addCommentMutation = useAddClubComment(clubId || '', threadId || '')
+  const updateThreadMutation = useUpdateClubThread(clubId || '', threadId || '')
+  const deleteThreadMutation = useDeleteClubThread(clubId || '')
+  const deleteCommentMutation = useDeleteClubComment(clubId || '', threadId || '')
 
   const [commentContent, setCommentContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [confirmDeleteThread, setConfirmDeleteThread] = useState(false)
+  const [confirmDeleteComment, setConfirmDeleteComment] = useState<string | null>(null)
 
   const handleSubmitComment = async () => {
     if (!commentContent.trim() || !threadId || !clubId) return
@@ -54,6 +61,43 @@ export function ClubThreadPage() {
       await addCommentMutation.mutateAsync({ content, parentId })
     } catch (err) {
       console.error('Failed to reply:', err)
+    }
+  }
+
+  const handleToggleLock = async () => {
+    if (!thread) return
+    try {
+      await updateThreadMutation.mutateAsync({ isLocked: !thread.isLocked })
+    } catch (err) {
+      console.error('Failed to toggle lock:', err)
+    }
+  }
+
+  const handleTogglePin = async () => {
+    if (!thread) return
+    try {
+      await updateThreadMutation.mutateAsync({ isPinned: !thread.isPinned })
+    } catch (err) {
+      console.error('Failed to toggle pin:', err)
+    }
+  }
+
+  const handleDeleteThread = async () => {
+    if (!threadId) return
+    try {
+      await deleteThreadMutation.mutateAsync(threadId)
+      navigate(`/clubs/${clubId}`)
+    } catch (err) {
+      console.error('Failed to delete thread:', err)
+    }
+  }
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await deleteCommentMutation.mutateAsync(commentId)
+      setConfirmDeleteComment(null)
+    } catch (err) {
+      console.error('Failed to delete comment:', err)
     }
   }
 
@@ -82,6 +126,9 @@ export function ClubThreadPage() {
 
   const author = transformAuthor(thread.author)
   const comments = thread.comments?.map(transformComment) || []
+  const memberRole = thread.memberRole
+  const isModOrAdmin = memberRole === 'admin' || memberRole === 'moderator'
+  const isThreadAuthor = currentUser?.id === thread.author.id
 
   return (
     <Layout>
@@ -98,12 +145,27 @@ export function ClubThreadPage() {
 
       {/* Thread header */}
       <div className="px-4 py-6 bg-gradient-to-b from-purple-50 to-white">
-        {/* Club indicator */}
+        {/* Club indicator + locked badge */}
         <div className="flex items-center gap-2 text-sm text-purple-700 mb-3">
           <Users className="w-4 h-4" />
           <span className="font-medium">{t('clubs:clubThread')}</span>
-          <Lock className="w-3 h-3 text-gray-400" />
-          <span className="text-xs text-gray-500">{t('clubs:membersOnly')}</span>
+          {thread.isLocked && (
+            <>
+              <Lock className="w-3 h-3 text-red-500" />
+              <span className="text-xs text-red-600 font-medium">{t('clubs:moderation.threadLocked')}</span>
+            </>
+          )}
+          {thread.isPinned && (
+            <>
+              <Pin className="w-3 h-3 text-amber-500" />
+            </>
+          )}
+          {!thread.isLocked && (
+            <>
+              <Lock className="w-3 h-3 text-gray-400" />
+              <span className="text-xs text-gray-500">{t('clubs:membersOnly')}</span>
+            </>
+          )}
         </div>
 
         {/* Title */}
@@ -116,11 +178,93 @@ export function ClubThreadPage() {
           <span>{t('clubs:published', { time: formatRelativeTime(thread.createdAt) })}</span>
         </div>
 
+        {/* Moderation actions */}
+        {(isModOrAdmin || isThreadAuthor) && (
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {isModOrAdmin && (
+              <>
+                <button
+                  onClick={handleToggleLock}
+                  disabled={updateThreadMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  {thread.isLocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                  {thread.isLocked ? t('clubs:moderation.unlockThread') : t('clubs:moderation.lockThread')}
+                </button>
+                <button
+                  onClick={handleTogglePin}
+                  disabled={updateThreadMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  {thread.isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                  {thread.isPinned ? t('clubs:moderation.unpinThread') : t('clubs:moderation.pinThread')}
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setConfirmDeleteThread(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 rounded-lg border border-red-200 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {t('clubs:moderation.deleteThread')}
+            </button>
+          </div>
+        )}
+
         {/* Author */}
         <div className="pt-4 border-t border-gray-200">
           <ActorBadge user={author} />
         </div>
       </div>
+
+      {/* Confirm delete thread dialog */}
+      {confirmDeleteThread && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-sm p-6">
+            <h3 className="font-semibold text-gray-900 mb-2">{t('clubs:moderation.confirmDelete')}</h3>
+            <p className="text-sm text-gray-600 mb-4">{thread.title}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDeleteThread(false)}
+                className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                {t('common:actions.cancel')}
+              </button>
+              <button
+                onClick={handleDeleteThread}
+                disabled={deleteThreadMutation.isPending}
+                className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleteThreadMutation.isPending ? '...' : t('clubs:moderation.deleteThread')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm delete comment dialog */}
+      {confirmDeleteComment && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-sm p-6">
+            <h3 className="font-semibold text-gray-900 mb-2">{t('clubs:moderation.confirmDelete')}</h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDeleteComment(null)}
+                className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                {t('common:actions.cancel')}
+              </button>
+              <button
+                onClick={() => handleDeleteComment(confirmDeleteComment)}
+                disabled={deleteCommentMutation.isPending}
+                className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleteCommentMutation.isPending ? '...' : t('clubs:moderation.deleteComment')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main content area */}
       <div className="px-4 py-6 space-y-6">
@@ -182,33 +326,58 @@ export function ClubThreadPage() {
             </div>
           </div>
 
-          {/* Comment input */}
-          <div className="bg-white rounded-xl p-4 border border-gray-200 mb-4">
-            <textarea
-              value={commentContent}
-              onChange={(e) => setCommentContent(e.target.value)}
-              placeholder={t('clubs:thread.writeComment')}
-              className="w-full p-3 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              rows={3}
-            />
-            <div className="flex justify-end mt-3">
-              <button
-                onClick={handleSubmitComment}
-                disabled={!commentContent.trim() || isSubmitting}
-                className="bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? t('clubs:submitting') : t('clubs:submitReply')}
-              </button>
+          {/* Comment input - hidden when thread is locked (unless mod/admin) */}
+          {thread.isLocked && !isModOrAdmin ? (
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mb-4 text-center">
+              <div className="flex items-center justify-center gap-2 text-gray-500">
+                <Lock className="w-4 h-4" />
+                <span className="text-sm">{t('clubs:moderation.threadLocked')}</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-white rounded-xl p-4 border border-gray-200 mb-4">
+              <textarea
+                value={commentContent}
+                onChange={(e) => setCommentContent(e.target.value)}
+                placeholder={t('clubs:thread.writeComment')}
+                className="w-full p-3 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                rows={3}
+              />
+              <div className="flex justify-end mt-3">
+                <button
+                  onClick={handleSubmitComment}
+                  disabled={!commentContent.trim() || isSubmitting}
+                  className="bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? t('clubs:submitting') : t('clubs:submitReply')}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Comments */}
           {comments.length > 0 ? (
-            <CommentThread
-              comments={comments}
-              onVote={handleVote}
-              onReply={handleReply}
-            />
+            <div className="space-y-4">
+              {comments.filter(c => !c.parentId).map(comment => (
+                <div key={comment.id} className="relative group/comment">
+                  {/* Delete comment button */}
+                  {(isModOrAdmin || comment.authorId === currentUser?.id) && (
+                    <button
+                      onClick={() => setConfirmDeleteComment(comment.id)}
+                      className="absolute top-2 right-2 p-1 rounded hover:bg-red-50 opacity-0 group-hover/comment:opacity-100 transition-opacity z-10"
+                      title={t('clubs:moderation.deleteComment')}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-400 hover:text-red-600" />
+                    </button>
+                  )}
+                  <CommentThread
+                    comments={[comment, ...comments.filter(c => c.parentId)]}
+                    onVote={handleVote}
+                    onReply={handleReply}
+                  />
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
               <p>{t('clubs:noReplies')}</p>

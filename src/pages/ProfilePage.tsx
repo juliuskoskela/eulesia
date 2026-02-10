@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Shield, Bell, Eye, Database, LogOut, ChevronRight, Info, ExternalLink, Ticket, Plus, Copy, Check, Trash2, Users, Camera, Loader2, Globe, HelpCircle } from 'lucide-react'
+import { Shield, Bell, Eye, Database, LogOut, ChevronRight, Info, ExternalLink, Ticket, Plus, Copy, Check, Trash2, Users, Camera, Loader2, Globe, HelpCircle, AlertTriangle } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Layout } from '../components/layout'
 import { LanguageSwitcher } from '../components/common/LanguageSwitcher'
+import { AppealButton } from '../components/common/AppealButton'
 import { useAuth } from '../hooks/useAuth'
+import { useMySanctions } from '../hooks/useAdminApi'
 import { useGuide } from '../hooks/useGuide'
 import { useUpdateProfile, useExportData } from '../hooks/useApi'
 import { guides } from '../data/guides'
@@ -12,7 +14,8 @@ import { api, type InviteCode, type InvitedUser } from '../lib/api'
 
 export function ProfilePage() {
   const { t } = useTranslation(['profile', 'common', 'auth'])
-  const { currentUser, logout, refreshUser } = useAuth()
+  const { currentUser, logout, refreshUser, sanction } = useAuth()
+  const { data: mySanctions } = useMySanctions()
   const navigate = useNavigate()
   const updateProfileMutation = useUpdateProfile()
   const exportDataMutation = useExportData()
@@ -205,6 +208,32 @@ export function ProfilePage() {
 
   return (
     <Layout>
+      {/* Active sanctions */}
+      {mySanctions && mySanctions.length > 0 && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-4">
+          <div className="flex items-center gap-2 text-red-800 font-medium mb-2">
+            <AlertTriangle className="w-4 h-4" />
+            {t('profile:sanctions.active')}
+          </div>
+          {mySanctions.filter(s => !s.revokedAt).map(s => (
+            <div key={s.id} className="bg-white rounded-lg p-3 border border-red-200 mb-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-red-800 capitalize">{s.sanctionType}</span>
+                {s.expiresAt && (
+                  <span className="text-xs text-red-600">
+                    {t('profile:sanctions.expiresAt', { date: new Date(s.expiresAt).toLocaleDateString() })}
+                  </span>
+                )}
+              </div>
+              {s.reason && <p className="text-xs text-red-700 mt-1">{s.reason}</p>}
+              <div className="mt-2">
+                <AppealButton sanctionId={s.id} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Profile header */}
       <div className="bg-white px-4 py-6 border-b border-gray-200">
         <div className="flex items-center gap-4">

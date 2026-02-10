@@ -86,5 +86,25 @@
     "writeComment": "Kirjoita kommentti...",
     "addComment": "Kommentoi",
     "sortComments": "Lajittele"
+  },
+  "moderation": {
+    "changeRole": "Vaihda rooli",
+    "removeFromClub": "Poista klubista",
+    "confirmRemove": "Haluatko varmasti poistaa jäsenen?",
+    "confirmDelete": "Haluatko varmasti poistaa?",
+    "deleteThread": "Poista ketju",
+    "deleteComment": "Poista kommentti",
+    "lockThread": "Lukitse ketju",
+    "unlockThread": "Avaa ketju",
+    "pinThread": "Kiinnitä ketju",
+    "unpinThread": "Irrota ketju",
+    "threadLocked": "Ketju on lukittu",
+    "threadDeleted": "Ketju poistettu",
+    "commentDeleted": "Kommentti poistettu",
+    "memberRemoved": "Jäsen poistettu",
+    "roleChanged": "Rooli vaihdettu",
+    "admin": "Ylläpitäjä",
+    "moderator": "Moderaattori",
+    "member": "Jäsen"
   }
 }

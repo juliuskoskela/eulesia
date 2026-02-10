@@ -4,7 +4,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Building2, ChevronDown } from 'lucide-react'
 import { Layout } from '../components/layout'
-import { ActorBadge, ScopeBadge, TagList, ContentEndMarker } from '../components/common'
+import { ActorBadge, ScopeBadge, TagList, ContentEndMarker, ReportButton } from '../components/common'
 import { InstitutionalContextBox } from '../components/agora/InstitutionalContextBox'
 import { CommentThread } from '../components/agora/CommentThread'
 import { ThreadVoteButtons } from '../components/agora/ThreadVoteButtons'
@@ -141,9 +141,10 @@ export function ThreadPage() {
           <TagList tags={thread.tags} size="md" />
         </div>
 
-        {/* Author */}
-        <div className="pt-4 border-t border-gray-200">
+        {/* Author + Report */}
+        <div className="pt-4 border-t border-gray-200 flex items-center justify-between">
           <ActorBadge user={author} />
+          {threadId && <ReportButton contentType="thread" contentId={threadId} />}
         </div>
       </div>
 

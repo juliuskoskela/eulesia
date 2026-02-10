@@ -369,6 +369,7 @@ router.get('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest,
         notificationOfficial: user.notificationOfficial,
         locale: user.locale
       },
+      onboardingCompletedAt: user.onboardingCompletedAt,
       createdAt: user.createdAt
     }
   })

@@ -25,6 +25,18 @@ import {
   DMConversationPage,
   UserHomePage
 } from './pages'
+import {
+  AdminDashboardPage,
+  AdminUsersPage,
+  AdminUserDetailPage,
+  AdminReportsPage,
+  AdminReportDetailPage,
+  AdminModLogPage,
+  AdminContentPage,
+  AdminTransparencyPage,
+  AdminAppealsPage,
+  AdminSettingsPage
+} from './pages/admin'
 
 function LoadingScreen() {
   return (
@@ -48,6 +60,24 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />
+  }
+
+  return <>{children}</>
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, currentUser } = useAuth()
+
+  if (isLoading) {
+    return <LoadingScreen />
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />
+  }
+
+  if (currentUser?.role !== 'admin') {
+    return <Navigate to="/agora" replace />
   }
 
   return <>{children}</>
@@ -235,6 +265,18 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      {/* Admin routes */}
+      <Route path="/admin" element={<AdminRoute><AdminDashboardPage /></AdminRoute>} />
+      <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
+      <Route path="/admin/users/:id" element={<AdminRoute><AdminUserDetailPage /></AdminRoute>} />
+      <Route path="/admin/reports" element={<AdminRoute><AdminReportsPage /></AdminRoute>} />
+      <Route path="/admin/reports/:id" element={<AdminRoute><AdminReportDetailPage /></AdminRoute>} />
+      <Route path="/admin/modlog" element={<AdminRoute><AdminModLogPage /></AdminRoute>} />
+      <Route path="/admin/content" element={<AdminRoute><AdminContentPage /></AdminRoute>} />
+      <Route path="/admin/transparency" element={<AdminRoute><AdminTransparencyPage /></AdminRoute>} />
+      <Route path="/admin/appeals" element={<AdminRoute><AdminAppealsPage /></AdminRoute>} />
+      <Route path="/admin/settings" element={<AdminRoute><AdminSettingsPage /></AdminRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

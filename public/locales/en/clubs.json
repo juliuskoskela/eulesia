@@ -86,5 +86,25 @@
     "writeComment": "Write a comment...",
     "addComment": "Comment",
     "sortComments": "Sort"
+  },
+  "moderation": {
+    "changeRole": "Change role",
+    "removeFromClub": "Remove from club",
+    "confirmRemove": "Remove this member?",
+    "confirmDelete": "Are you sure you want to delete?",
+    "deleteThread": "Delete thread",
+    "deleteComment": "Delete comment",
+    "lockThread": "Lock thread",
+    "unlockThread": "Unlock thread",
+    "pinThread": "Pin thread",
+    "unpinThread": "Unpin thread",
+    "threadLocked": "Thread is locked",
+    "threadDeleted": "Thread deleted",
+    "commentDeleted": "Comment deleted",
+    "memberRemoved": "Member removed",
+    "roleChanged": "Role changed",
+    "admin": "Admin",
+    "moderator": "Moderator",
+    "member": "Member"
   }
 }

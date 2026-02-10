@@ -81,5 +81,9 @@
     "maxSize": "Image must be max 5MB",
     "uploadFailed": "Image upload failed",
     "removeFailed": "Image removal failed"
+  },
+  "sanctions": {
+    "active": "Active Sanctions",
+    "expiresAt": "Expires {{date}}"
   }
 }

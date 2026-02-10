@@ -1,0 +1,239 @@
+import { useState } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { ArrowLeft, Shield, Calendar, MessageSquare, FileText, Loader2, AlertTriangle } from 'lucide-react'
+import { AdminLayout } from '../../components/admin'
+import { useAdminUser, useChangeUserRole, useIssueSanction, useRevokeSanction } from '../../hooks/useAdminApi'
+import { formatRelativeTime, formatDateLong } from '../../lib/formatTime'
+
+export function AdminUserDetailPage() {
+  const { t } = useTranslation('admin')
+  const { id } = useParams<{ id: string }>()
+  const { data: user, isLoading } = useAdminUser(id || '')
+  const changeRoleMutation = useChangeUserRole()
+  const issueSanctionMutation = useIssueSanction()
+  const revokeSanctionMutation = useRevokeSanction()
+
+  const [showSanctionForm, setShowSanctionForm] = useState(false)
+  const [sanctionType, setSanctionType] = useState<'warning' | 'suspension' | 'ban'>('warning')
+  const [sanctionReason, setSanctionReason] = useState('')
+  const [sanctionExpiry, setSanctionExpiry] = useState('')
+
+  if (isLoading || !user) {
+    return (
+      <AdminLayout>
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        </div>
+      </AdminLayout>
+    )
+  }
+
+  const handleRoleChange = (newRole: 'citizen' | 'institution' | 'admin') => {
+    if (!id) return
+    changeRoleMutation.mutate({ id, role: newRole })
+  }
+
+  const handleIssueSanction = async () => {
+    if (!id || !sanctionReason.trim()) return
+    await issueSanctionMutation.mutateAsync({
+      userId: id,
+      data: {
+        sanctionType,
+        reason: sanctionReason,
+        expiresAt: sanctionExpiry || undefined
+      }
+    })
+    setShowSanctionForm(false)
+    setSanctionReason('')
+    setSanctionExpiry('')
+  }
+
+  const activeSanctions = user.sanctions?.filter(s => !s.revokedAt) || []
+
+  return (
+    <AdminLayout>
+      {/* Back */}
+      <Link to="/admin/users" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-6">
+        <ArrowLeft className="w-4 h-4" />
+        {t('users.backToUsers')}
+      </Link>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* User info */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                <span className="text-blue-600 text-xl font-bold">{user.name.charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">{user.name}</h1>
+              <p className="text-sm text-gray-500">@{user.username}</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center gap-2 text-gray-600">
+              <Calendar className="w-4 h-4" />
+              {t('userDetail.joined', { date: formatDateLong(user.createdAt) })}
+            </div>
+            <div className="flex items-center gap-2 text-gray-600">
+              <MessageSquare className="w-4 h-4" />
+              {t('userDetail.threads', { count: user.threadCount })}
+            </div>
+            <div className="flex items-center gap-2 text-gray-600">
+              <FileText className="w-4 h-4" />
+              {t('userDetail.comments', { count: user.commentCount })}
+            </div>
+            {user.identityVerified && (
+              <div className="flex items-center gap-2 text-green-700">
+                <Shield className="w-4 h-4" />
+                {t('userDetail.verified')}
+              </div>
+            )}
+          </div>
+
+          {/* Role change */}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <label className="text-sm font-medium text-gray-700 block mb-2">{t('userDetail.role')}</label>
+            <select
+              value={user.role}
+              onChange={(e) => handleRoleChange(e.target.value as any)}
+              disabled={changeRoleMutation.isPending}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+            >
+              <option value="citizen">{t('users.citizen')}</option>
+              <option value="institution">{t('users.institution')}</option>
+              <option value="admin">{t('users.admin')}</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Sanctions */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Active sanctions warning */}
+          {activeSanctions.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 text-red-800 font-medium mb-2">
+                <AlertTriangle className="w-4 h-4" />
+                {t('userDetail.activeSanctions', { count: activeSanctions.length })}
+              </div>
+              {activeSanctions.map(s => (
+                <div key={s.id} className="flex items-center justify-between py-2 border-t border-red-100 first:border-0">
+                  <div>
+                    <span className="text-sm font-medium text-red-800 capitalize">{s.sanctionType}</span>
+                    <span className="text-xs text-red-600 ml-2">{s.reason}</span>
+                    {s.expiresAt && (
+                      <span className="text-xs text-red-500 ml-2">
+                        {t('userDetail.expiresAt', { date: formatDateLong(s.expiresAt) })}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => revokeSanctionMutation.mutate(s.id)}
+                    disabled={revokeSanctionMutation.isPending}
+                    className="text-xs px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
+                  >
+                    {t('userDetail.revoke')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Sanction form */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900">{t('userDetail.sanctions')}</h2>
+              {!showSanctionForm && user.role !== 'admin' && (
+                <button
+                  onClick={() => setShowSanctionForm(true)}
+                  className="text-sm px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  {t('userDetail.issueSanction')}
+                </button>
+              )}
+            </div>
+
+            {showSanctionForm && (
+              <div className="border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">{t('userDetail.sanctionType')}</label>
+                  <select
+                    value={sanctionType}
+                    onChange={(e) => setSanctionType(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                  >
+                    <option value="warning">{t('userDetail.warning')}</option>
+                    <option value="suspension">{t('userDetail.suspension')}</option>
+                    <option value="ban">{t('userDetail.ban')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">{t('userDetail.reason')}</label>
+                  <textarea
+                    value={sanctionReason}
+                    onChange={(e) => setSanctionReason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                    rows={3}
+                  />
+                </div>
+                {sanctionType !== 'ban' && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-1">{t('userDetail.expiryDate')}</label>
+                    <input
+                      type="datetime-local"
+                      value={sanctionExpiry}
+                      onChange={(e) => setSanctionExpiry(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                  </div>
+                )}
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setShowSanctionForm(false)}
+                    className="text-sm px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={handleIssueSanction}
+                    disabled={!sanctionReason.trim() || issueSanctionMutation.isPending}
+                    className="text-sm px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {t('userDetail.confirm')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Sanction history */}
+            <div className="space-y-2">
+              {user.sanctions?.map(s => (
+                <div key={s.id} className={`p-3 rounded-lg ${s.revokedAt ? 'bg-gray-50' : 'bg-red-50'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium capitalize">{s.sanctionType}</span>
+                    <span className="text-xs text-gray-500">{formatRelativeTime(s.issuedAt)}</span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">{s.reason}</p>
+                  {s.revokedAt && (
+                    <span className="text-xs text-green-600 mt-1 inline-block">
+                      {t('userDetail.revokedAt', { date: formatRelativeTime(s.revokedAt) })}
+                    </span>
+                  )}
+                </div>
+              ))}
+              {!user.sanctions?.length && (
+                <p className="text-sm text-gray-500 py-4">{t('userDetail.noSanctions')}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </AdminLayout>
+  )
+}

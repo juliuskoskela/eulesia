@@ -16,6 +16,14 @@ export const threadSourceEnum = pgEnum('thread_source', ['user', 'minutes_import
 export const locationTypeEnum = pgEnum('location_type', ['country', 'region', 'municipality', 'village', 'district'])
 export const subscriptionNotifyEnum = pgEnum('subscription_notify', ['all', 'none', 'highlights'])
 
+// Moderation enums (DSA)
+export const reportReasonEnum = pgEnum('report_reason', ['illegal', 'harassment', 'spam', 'misinformation', 'other'])
+export const reportStatusEnum = pgEnum('report_status', ['pending', 'reviewing', 'resolved', 'dismissed'])
+export const contentTypeEnum = pgEnum('content_type', ['thread', 'comment', 'club_thread', 'club_comment', 'club', 'user', 'room_message', 'dm'])
+export const actionTypeEnum = pgEnum('action_type', ['content_removed', 'content_restored', 'user_warned', 'user_suspended', 'user_banned', 'user_unbanned', 'report_dismissed', 'report_resolved', 'role_changed'])
+export const sanctionTypeEnum = pgEnum('sanction_type', ['warning', 'suspension', 'ban'])
+export const appealStatusEnum = pgEnum('appeal_status', ['pending', 'accepted', 'rejected'])
+
 // Locations (hierarchical administrative areas from OSM)
 export const locations = pgTable('locations', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -153,6 +161,9 @@ export const users = pgTable('users', {
   notificationOfficial: boolean('notification_official').default(true),
   locale: varchar('locale', { length: 10 }).default('en'),
 
+  // Onboarding
+  onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
@@ -235,6 +246,7 @@ export const threads = pgTable('threads', {
   originalContent: text('original_content'),            // Original pöytäkirja text before AI summary
   editedBy: uuid('edited_by').references(() => users.id), // If human edited AI content
   editedAt: timestamp('edited_at', { withTimezone: true }),
+  isHidden: boolean('is_hidden').default(false),
   language: varchar('language', { length: 10 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
@@ -272,6 +284,7 @@ export const comments = pgTable('comments', {
   contentHtml: text('content_html'),
   depth: integer('depth').default(0), // Nesting depth for display
   score: integer('score').default(0), // Cached vote score
+  isHidden: boolean('is_hidden').default(false),
   language: varchar('language', { length: 10 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
@@ -353,6 +366,7 @@ export const clubThreads = pgTable('club_threads', {
   isPinned: boolean('is_pinned').default(false),
   isLocked: boolean('is_locked').default(false),
   replyCount: integer('reply_count').default(0),
+  isHidden: boolean('is_hidden').default(false),
   language: varchar('language', { length: 10 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
@@ -369,6 +383,7 @@ export const clubComments = pgTable('club_comments', {
   authorId: uuid('author_id').notNull().references(() => users.id),
   content: text('content').notNull(),
   contentHtml: text('content_html'),
+  isHidden: boolean('is_hidden').default(false),
   language: varchar('language', { length: 10 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
@@ -508,6 +523,75 @@ export const directMessages = pgTable('direct_messages', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
   conversationIdx: index('dm_conversation_idx').on(table.conversationId, table.createdAt)
+}))
+
+// Content Reports (DSA)
+export const contentReports = pgTable('content_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  reporterUserId: uuid('reporter_user_id').notNull().references(() => users.id),
+  contentType: contentTypeEnum('content_type').notNull(),
+  contentId: uuid('content_id').notNull(),
+  reason: reportReasonEnum('reason').notNull(),
+  description: text('description'),
+  status: reportStatusEnum('status').default('pending'),
+  assignedTo: uuid('assigned_to').references(() => users.id),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  statusIdx: index('content_reports_status_idx').on(table.status),
+  contentIdx: index('content_reports_content_idx').on(table.contentType, table.contentId),
+  reporterIdx: index('content_reports_reporter_idx').on(table.reporterUserId)
+}))
+
+// Moderation Actions (DSA audit log)
+export const moderationActions = pgTable('moderation_actions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  adminUserId: uuid('admin_user_id').notNull().references(() => users.id),
+  actionType: actionTypeEnum('action_type').notNull(),
+  targetType: contentTypeEnum('target_type').notNull(),
+  targetId: uuid('target_id').notNull(),
+  reportId: uuid('report_id').references(() => contentReports.id),
+  reason: text('reason'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  adminIdx: index('moderation_actions_admin_idx').on(table.adminUserId),
+  targetIdx: index('moderation_actions_target_idx').on(table.targetType, table.targetId),
+  createdIdx: index('moderation_actions_created_idx').on(table.createdAt)
+}))
+
+// User Sanctions (DSA)
+export const userSanctions = pgTable('user_sanctions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  sanctionType: sanctionTypeEnum('sanction_type').notNull(),
+  reason: text('reason'),
+  issuedBy: uuid('issued_by').notNull().references(() => users.id),
+  issuedAt: timestamp('issued_at', { withTimezone: true }).defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokedBy: uuid('revoked_by').references(() => users.id)
+}, (table) => ({
+  userIdx: index('user_sanctions_user_idx').on(table.userId),
+  activeIdx: index('user_sanctions_active_idx').on(table.userId, table.sanctionType, table.revokedAt)
+}))
+
+// Moderation Appeals (DSA)
+export const moderationAppeals = pgTable('moderation_appeals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sanctionId: uuid('sanction_id').references(() => userSanctions.id),
+  reportId: uuid('report_id').references(() => contentReports.id),
+  actionId: uuid('action_id').references(() => moderationActions.id),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  reason: text('reason').notNull(),
+  status: appealStatusEnum('status').default('pending'),
+  adminResponse: text('admin_response'),
+  respondedBy: uuid('responded_by').references(() => users.id),
+  respondedAt: timestamp('responded_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  userIdx: index('moderation_appeals_user_idx').on(table.userId),
+  statusIdx: index('moderation_appeals_status_idx').on(table.status)
 }))
 
 // Relations
@@ -754,6 +838,72 @@ export const directMessagesRelations = relations(directMessages, ({ one }) => ({
   })
 }))
 
+// Moderation relations
+export const contentReportsRelations = relations(contentReports, ({ one }) => ({
+  reporter: one(users, {
+    fields: [contentReports.reporterUserId],
+    references: [users.id],
+    relationName: 'reportedByUser'
+  }),
+  assignee: one(users, {
+    fields: [contentReports.assignedTo],
+    references: [users.id],
+    relationName: 'assignedReports'
+  })
+}))
+
+export const moderationActionsRelations = relations(moderationActions, ({ one }) => ({
+  admin: one(users, {
+    fields: [moderationActions.adminUserId],
+    references: [users.id]
+  }),
+  report: one(contentReports, {
+    fields: [moderationActions.reportId],
+    references: [contentReports.id]
+  })
+}))
+
+export const userSanctionsRelations = relations(userSanctions, ({ one }) => ({
+  user: one(users, {
+    fields: [userSanctions.userId],
+    references: [users.id],
+    relationName: 'sanctions'
+  }),
+  issuer: one(users, {
+    fields: [userSanctions.issuedBy],
+    references: [users.id],
+    relationName: 'issuedSanctions'
+  }),
+  revoker: one(users, {
+    fields: [userSanctions.revokedBy],
+    references: [users.id],
+    relationName: 'revokedSanctions'
+  })
+}))
+
+export const moderationAppealsRelations = relations(moderationAppeals, ({ one }) => ({
+  sanction: one(userSanctions, {
+    fields: [moderationAppeals.sanctionId],
+    references: [userSanctions.id]
+  }),
+  report: one(contentReports, {
+    fields: [moderationAppeals.reportId],
+    references: [contentReports.id]
+  }),
+  action: one(moderationActions, {
+    fields: [moderationAppeals.actionId],
+    references: [moderationActions.id]
+  }),
+  user: one(users, {
+    fields: [moderationAppeals.userId],
+    references: [users.id]
+  }),
+  responder: one(users, {
+    fields: [moderationAppeals.respondedBy],
+    references: [users.id]
+  })
+}))
+
 // Types for insertion
 export type NewUser = typeof users.$inferInsert
 export type User = typeof users.$inferSelect
@@ -788,3 +938,11 @@ export type NewConversationParticipant = typeof conversationParticipants.$inferI
 export type ConversationParticipant = typeof conversationParticipants.$inferSelect
 export type NewDirectMessage = typeof directMessages.$inferInsert
 export type DirectMessage = typeof directMessages.$inferSelect
+export type NewContentReport = typeof contentReports.$inferInsert
+export type ContentReport = typeof contentReports.$inferSelect
+export type NewModerationAction = typeof moderationActions.$inferInsert
+export type ModerationAction = typeof moderationActions.$inferSelect
+export type NewUserSanction = typeof userSanctions.$inferInsert
+export type UserSanction = typeof userSanctions.$inferSelect
+export type NewModerationAppeal = typeof moderationAppeals.$inferInsert
+export type ModerationAppeal = typeof moderationAppeals.$inferSelect
