@@ -189,7 +189,7 @@ async function importVnDecisions(
             sourceId,
             sourceInstitutionId,
             aiGenerated: true,
-            aiModel: 'mistral-large-latest',
+            aiModel: process.env.MISTRAL_MODEL || 'mistral-small-latest',
             originalContent: originalText.slice(0, 50000),
             institutionalContext: {
               type: 'decision',
@@ -375,7 +375,7 @@ async function importRssFeeds(
               sourceId,
               sourceInstitutionId,
               aiGenerated: true,
-              aiModel: 'mistral-large-latest',
+              aiModel: process.env.MISTRAL_MODEL || 'mistral-small-latest',
               originalContent: fullContent.slice(0, 50000),
               institutionalContext: {
                 type: source.contentType,

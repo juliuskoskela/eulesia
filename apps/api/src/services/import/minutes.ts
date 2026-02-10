@@ -38,6 +38,7 @@ export interface ImportOptions {
   municipalities?: string[]  // Filter by municipality names
   dryRun?: boolean
   limit?: number  // Max meetings per municipality
+  maxAgeDays?: number  // Only import meetings newer than this (default: 7)
 }
 
 export interface ImportResult {
@@ -45,6 +46,30 @@ export interface ImportResult {
   skipped: number
   errors: string[]
   threads: { id: string; title: string; municipality: string }[]
+}
+
+/**
+ * Parse Finnish date string (DD.MM.YYYY) to Date object
+ */
+function parseFinnishDate(dateStr: string): Date | null {
+  const match = dateStr.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/)
+  if (!match) return null
+  return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]))
+}
+
+/**
+ * Filter meetings to only include recent ones
+ */
+function filterRecentMeetings(meetings: Meeting[], maxAgeDays: number): Meeting[] {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - maxAgeDays)
+
+  return meetings.filter(m => {
+    if (!m.date) return true // If no date, include it (don't silently drop)
+    const meetingDate = parseFinnishDate(m.date)
+    if (!meetingDate) return true
+    return meetingDate >= cutoff
+  })
 }
 
 /**
@@ -214,7 +239,7 @@ ${article.keyPoints.map(p => `- ${p}`).join('\n')}
           sourceUrl,
           sourceId: itemSourceId,
           aiGenerated: true,
-          aiModel: 'mistral-large-latest',
+          aiModel: process.env.MISTRAL_MODEL || 'mistral-small-latest',
           originalContent: item.excerpt.slice(0, 50000),
           institutionalContext: {
             type: 'minutes',
@@ -273,12 +298,14 @@ export async function importMinutes(options: ImportOptions = {}): Promise<Import
   const {
     municipalities: filterMunicipalities,
     dryRun = false,
-    limit = 5
+    limit = 5,
+    maxAgeDays = 7
   } = options
 
   console.log('📋 Starting municipal minutes import...')
   console.log(`   Dry run: ${dryRun}`)
   console.log(`   Limit per municipality: ${limit}`)
+  console.log(`   Max age: ${maxAgeDays} days`)
 
   const result: ImportResult = {
     imported: 0,
@@ -314,8 +341,9 @@ export async function importMinutes(options: ImportOptions = {}): Promise<Import
     }
 
     try {
-      const meetings = await fetcher.fetchMeetings(source)
-      console.log(`   ${source.municipality}: ${meetings.length} meetings`)
+      const allMeetings = await fetcher.fetchMeetings(source)
+      const meetings = filterRecentMeetings(allMeetings, maxAgeDays)
+      console.log(`   ${source.municipality}: ${meetings.length} recent / ${allMeetings.length} total`)
       sourcesWithMeetings.push({ source, meetings: meetings.slice(0, limit) })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

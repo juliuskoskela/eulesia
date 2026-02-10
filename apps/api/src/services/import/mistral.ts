@@ -96,20 +96,32 @@ async function callMistral(messages: MistralMessage[], options?: {
 
     lastCallTime = Date.now()
 
-    const response = await fetch(MISTRAL_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: process.env.MISTRAL_MODEL || 'mistral-large-latest',
-        messages,
-        temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2000,
-        response_format: { type: 'json_object' }
+    let response: Response
+    try {
+      response = await fetch(MISTRAL_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: process.env.MISTRAL_MODEL || 'mistral-small-latest',
+          messages,
+          temperature: options?.temperature ?? 0.3,
+          max_tokens: options?.maxTokens ?? 2000,
+          response_format: { type: 'json_object' }
+        })
       })
-    })
+    } catch (networkErr) {
+      // Network-level error (DNS, connection reset, timeout)
+      if (attempt < MAX_RETRIES) {
+        const backoffMs = Math.min(5_000 * Math.pow(2, attempt), 60_000)
+        console.log(`   ⏳ Network error — retry ${attempt + 1}/${MAX_RETRIES} in ${Math.ceil(backoffMs / 1000)}s: ${networkErr instanceof Error ? networkErr.message : networkErr}`)
+        await sleep(backoffMs)
+        continue
+      }
+      throw new Error(`Mistral network error after ${MAX_RETRIES} retries: ${networkErr instanceof Error ? networkErr.message : networkErr}`)
+    }
 
     if (response.ok) {
       const data = await response.json() as MistralResponse
@@ -128,7 +140,7 @@ async function callMistral(messages: MistralMessage[], options?: {
       const retryAfter = response.headers.get('retry-after')
       const backoffMs = retryAfter
         ? parseInt(retryAfter, 10) * 1000
-        : Math.min(60_000 * Math.pow(2, attempt), 300_000) // 60s, 120s, 240s, 300s, 300s
+        : Math.min(10_000 * Math.pow(2, attempt), 120_000) // 10s, 20s, 40s, 80s, 120s
       console.log(`   ⏳ Mistral ${status} — retry ${attempt + 1}/${MAX_RETRIES} in ${Math.ceil(backoffMs / 1000)}s`)
       await sleep(backoffMs)
       continue
