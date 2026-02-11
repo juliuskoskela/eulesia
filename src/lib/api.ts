@@ -776,6 +776,7 @@ export interface Thread {
   userVote?: number
   editedAt?: string | null
   editedBy?: string | null
+  editorName?: string | null
   createdAt: string
   updatedAt: string
   // AI/Import source tracking

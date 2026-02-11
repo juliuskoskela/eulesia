@@ -17,7 +17,7 @@ export function transformComment(comment: ApiComment) {
   return {
     id: comment.id,
     threadId: '',
-    authorId: comment.author.id,
+    authorId: comment.author?.id ?? '',
     parentId: comment.parentId,
     content: comment.content,
     contentHtml: comment.contentHtml,
@@ -25,7 +25,8 @@ export function transformComment(comment: ApiComment) {
     depth: comment.depth || 0,
     userVote: comment.userVote || 0,
     createdAt: comment.createdAt,
-    author: transformAuthor(comment.author)
+    isHidden: comment.isHidden,
+    author: comment.author ? transformAuthor(comment.author) : null
   }
 }
 

@@ -237,7 +237,7 @@ export function RoomPage() {
               <MessageBubble
                 key={msg.id}
                 message={msg}
-                isOwnMessage={msg.author.id === currentUser?.id}
+                isOwnMessage={msg.author?.id === currentUser?.id}
                 isOwnerOrAdmin={isOwner || currentUser?.role === 'admin'}
                 onEdit={(messageId, content) => editMessageMutation.mutate({ messageId, content })}
                 onDelete={(messageId) => deleteMessageMutation.mutate(messageId)}

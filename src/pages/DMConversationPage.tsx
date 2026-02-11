@@ -251,7 +251,7 @@ export function DMConversationPage() {
               <MessageBubble
                 key={msg.id}
                 message={msg}
-                isOwnMessage={msg.author.id === currentUser?.id}
+                isOwnMessage={msg.author?.id === currentUser?.id}
                 onEdit={(messageId, content) => editMessageMutation.mutate({ messageId, content })}
                 onDelete={(messageId) => deleteMessageMutation.mutate(messageId)}
               />
