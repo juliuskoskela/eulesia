@@ -10,7 +10,7 @@ interface ContentOwnership {
 
 interface UserContext {
   id: string
-  role: 'citizen' | 'institution' | 'admin'
+  role: 'citizen' | 'institution' | 'admin' | null
 }
 
 /** Check if content was created by the Eulesia bot (minutes import or AI generated) */
