@@ -255,7 +255,7 @@ router.get('/rooms/:roomId', optionalAuthMiddleware, asyncHandler(async (req: Au
   res.json({
     success: true,
     data: {
-      room,
+      ...room,
       owner: formatUserSummary(owner),
       members: members.map(formatUserSummary),
       messages: messagesData.map(({ message, author }) => ({
