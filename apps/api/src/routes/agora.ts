@@ -120,8 +120,14 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
 
   // Helper: build subscription-based OR conditions
   // Matches threads by followed authors, institutions, municipalities, OR tags (via subquery)
+  // Always includes the user's own posts
   function buildSubscriptionFilter() {
     const subConditions = []
+
+    // Always include user's own posts
+    if (userId) {
+      subConditions.push(eq(threads.authorId, userId))
+    }
 
     if (followedAuthors.length > 0) {
       subConditions.push(inArray(threads.authorId, followedAuthors))
@@ -146,49 +152,30 @@ router.get('/threads', optionalAuthMiddleware, asyncHandler(async (req: Authenti
     // Scope filter: restrict to this scope
     conditions.push(eq(threads.scope, filters.feedScope))
 
-    if (!userId || !hasAnySubscriptions) {
-      // Not logged in or no subscriptions — empty with onboarding
-      res.json({
-        success: true,
-        data: {
-          items: [],
-          total: 0,
-          page: filters.page,
-          limit: filters.limit,
-          hasMore: false,
-          feedScope: filters.feedScope,
-          hasSubscriptions: false
-        }
-      })
-      return
-    }
-
-    // Add subscription filter
-    const subFilter = buildSubscriptionFilter()
-    if (subFilter.length > 0) {
-      conditions.push(or(...subFilter))
+    if (!userId) {
+      // Not logged in — show recent content as fallback
+      // No additional subscription filter, just scope + default conditions
+    } else if (!hasAnySubscriptions) {
+      // Logged in but no subscriptions — show own posts + recent content as fallback
+      // Don't restrict to subscriptions, just show everything in this scope
+      // User's own posts will appear naturally in the results
+    } else {
+      // Has subscriptions — add subscription filter (includes own posts)
+      const subFilter = buildSubscriptionFilter()
+      if (subFilter.length > 0) {
+        conditions.push(or(...subFilter))
+      }
     }
   } else if (filters.feedScope === 'following' && userId && !isViewingSpecificMunicipality) {
     // 'following' shows subscribed content across all scopes
     if (!hasAnySubscriptions) {
-      res.json({
-        success: true,
-        data: {
-          items: [],
-          total: 0,
-          page: filters.page,
-          limit: filters.limit,
-          hasMore: false,
-          feedScope: filters.feedScope,
-          hasSubscriptions: false
-        }
-      })
-      return
-    }
-
-    const subFilter = buildSubscriptionFilter()
-    if (subFilter.length > 0) {
-      conditions.push(or(...subFilter))
+      // No subscriptions — show only own posts across all scopes
+      conditions.push(eq(threads.authorId, userId))
+    } else {
+      const subFilter = buildSubscriptionFilter()
+      if (subFilter.length > 0) {
+        conditions.push(or(...subFilter))
+      }
     }
   }
   // 'all' shows everything (no additional filter)

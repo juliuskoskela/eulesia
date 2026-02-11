@@ -183,8 +183,9 @@ export function AgoraPage() {
   }, [loadNextPage])
 
   // Is this a personalized scope with no subscriptions?
+  // Show as compact banner above content (content is now always shown as fallback)
   const isPersonalizedScope = ['local', 'national', 'european'].includes(feedScope)
-  const showScopeHint = isPersonalizedScope && !isLoading && !hasSubscriptions && threads.length === 0
+  const showScopeHint = isPersonalizedScope && !isLoading && !hasSubscriptions
 
   const handleTagToggle = (tag: string) => {
     setSelectedTags(prev =>
@@ -264,6 +265,30 @@ export function AgoraPage() {
           </div>
         )}
 
+        {/* Scope-specific banner when no subscriptions — shown above fallback content */}
+        {!isLoading && !error && showScopeHint && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-3">
+            <div className="flex-shrink-0">
+              {feedScope === 'local' && <MapPin className="w-5 h-5 text-blue-600" />}
+              {feedScope === 'national' && <Building2 className="w-5 h-5 text-blue-600" />}
+              {feedScope === 'european' && <Globe className="w-5 h-5 text-blue-600" />}
+            </div>
+            <p className="text-sm text-blue-800 flex-1">
+              {t('emptyScope.hint')}
+            </p>
+            <button
+              onClick={() => {
+                setFeedScope('following')
+                setShowOnboarding(true)
+              }}
+              className="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Users className="w-3.5 h-3.5" />
+              {t('emptyScope.startFollowing')}
+            </button>
+          </div>
+        )}
+
         {/* Thread list */}
         {!isLoading && !error && !showOnboarding && threads.length > 0 && (
           <div className="space-y-3">
@@ -280,37 +305,8 @@ export function AgoraPage() {
           </div>
         )}
 
-        {/* Scope-specific hint when no subscriptions */}
-        {!isLoading && !error && showScopeHint && (
-          <div className="max-w-md mx-auto py-8">
-            <div className="bg-white rounded-xl border border-gray-200 p-5 text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-3 bg-gray-100">
-                {feedScope === 'local' && <MapPin className="w-6 h-6 text-blue-600" />}
-                {feedScope === 'national' && <Building2 className="w-6 h-6 text-blue-600" />}
-                {feedScope === 'european' && <Globe className="w-6 h-6 text-blue-600" />}
-              </div>
-              <p className="text-gray-700 text-sm mb-2">
-                {t(`emptyScope.${feedScope}`)}
-              </p>
-              <p className="text-gray-400 text-xs mb-4">
-                {t('emptyScope.hint')}
-              </p>
-              <button
-                onClick={() => {
-                  setFeedScope('following')
-                  setShowOnboarding(true)
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Users className="w-4 h-4" />
-                {t('emptyScope.startFollowing')}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Empty state (not onboarding, not scope hint) */}
-        {!isLoading && !error && !showOnboarding && !showScopeHint && threads.length === 0 && (
+        {!isLoading && !error && !showOnboarding && threads.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <p>{t('noThreads')}</p>
             {feedScope === 'following' && (
