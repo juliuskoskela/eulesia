@@ -55,7 +55,21 @@
     "view": "View",
     "send": "Send",
     "copyCode": "Copy code",
-    "revokeCode": "Revoke code"
+    "revokeCode": "Revoke code",
+    "expand": "Expand",
+    "editing": "Editing...",
+    "edited": "edited",
+    "editedBy": "edited by {{name}}",
+    "saveEdit": "Save",
+    "cancelEdit": "Cancel",
+    "points": "points"
+  },
+  "deleteConfirm": {
+    "title": "Delete message",
+    "thread": "Are you sure you want to delete this discussion?",
+    "comment": "Are you sure you want to delete this comment?",
+    "message": "Are you sure you want to delete this message?",
+    "warning": "This action cannot be undone."
   },
   "contentEnd": {
     "upToDate": "You're up to date",

@@ -10,5 +10,8 @@
   "loadError": "Could not load conversation",
   "backToMessages": "Back to messages",
   "unread_one": "{{count}} unread",
-  "unread_other": "{{count}} unread"
+  "unread_other": "{{count}} unread",
+  "sendMessage": "Send message",
+  "editMessage": "Edit message",
+  "deleteMessage": "Delete message"
 }

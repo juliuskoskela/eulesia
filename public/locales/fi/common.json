@@ -55,7 +55,21 @@
     "view": "Näytä",
     "send": "Lähetä",
     "copyCode": "Kopioi koodi",
-    "revokeCode": "Peru koodi"
+    "revokeCode": "Peru koodi",
+    "expand": "Laajenna",
+    "editing": "Muokataan...",
+    "edited": "muokattu",
+    "editedBy": "muokannut {{name}}",
+    "saveEdit": "Tallenna",
+    "cancelEdit": "Peruuta",
+    "points": "pistettä"
+  },
+  "deleteConfirm": {
+    "title": "Poista viesti",
+    "thread": "Haluatko varmasti poistaa tämän keskustelun?",
+    "comment": "Haluatko varmasti poistaa tämän kommentin?",
+    "message": "Haluatko varmasti poistaa tämän viestin?",
+    "warning": "Tätä toimintoa ei voi perua."
   },
   "contentEnd": {
     "upToDate": "Olet ajan tasalla",

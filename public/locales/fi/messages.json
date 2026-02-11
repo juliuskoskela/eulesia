@@ -10,5 +10,8 @@
   "loadError": "Keskustelua ei voitu ladata",
   "backToMessages": "Takaisin viesteihin",
   "unread_one": "{{count}} lukematon",
-  "unread_other": "{{count}} lukematonta"
+  "unread_other": "{{count}} lukematonta",
+  "sendMessage": "Lähetä viesti",
+  "editMessage": "Muokkaa viestiä",
+  "deleteMessage": "Poista viesti"
 }

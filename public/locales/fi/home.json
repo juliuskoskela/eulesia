@@ -68,7 +68,10 @@
     "public": "Avoin kaikille",
     "private": "Vain kutsulla",
     "loadError": "Huonetta ei voitu ladata",
-    "backToHome": "Takaisin kotiin"
+    "backToHome": "Takaisin kotiin",
+    "sendMessage": "Lähetä viesti",
+    "editMessage": "Muokkaa viestiä",
+    "deleteMessage": "Poista viesti"
   },
   "userHome": {
     "homePageTitle": "Kotisivu",

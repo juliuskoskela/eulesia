@@ -96,7 +96,15 @@
     "postReply": "Post reply",
     "noReplies": "No replies yet. Be the first to contribute to this discussion.",
     "endOfDiscussion": "End of discussion",
-    "sort": "Sort:"
+    "sort": "Sort:",
+    "editThread": "Edit discussion",
+    "deleteThread": "Delete discussion",
+    "editHistory": "Edit history",
+    "editHistoryTitle": "Edit history",
+    "editHistoryEmpty": "No edits",
+    "editHistoryEntry": "{{name}} edited {{time}}",
+    "previousContent": "Previous content",
+    "previousTitle": "Previous title"
   },
   "municipality": {
     "defaultName": "Municipality",

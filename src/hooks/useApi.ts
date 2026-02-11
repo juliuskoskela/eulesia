@@ -198,6 +198,109 @@ export function useVoteThread(filters?: ThreadFilters) {
   })
 }
 
+// Edit/Delete hooks — Agora
+export function useEditThread(threadId: string, sort?: CommentSort) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: { title?: string; content: string }) => api.editThread(threadId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.thread(threadId, sort) })
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
+    }
+  })
+}
+
+export function useDeleteThread() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (threadId: string) => api.deleteThread(threadId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
+    }
+  })
+}
+
+export function useThreadEditHistory(threadId: string) {
+  return useQuery({
+    queryKey: ['threadEditHistory', threadId] as const,
+    queryFn: () => api.getThreadEditHistory(threadId),
+    enabled: !!threadId
+  })
+}
+
+export function useEditComment(threadId: string, sort?: CommentSort) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ commentId, content }: { commentId: string; content: string }) =>
+      api.editComment(commentId, content),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.thread(threadId, sort) })
+    }
+  })
+}
+
+export function useDeleteComment(threadId: string, sort?: CommentSort) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (commentId: string) => api.deleteComment(commentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.thread(threadId, sort) })
+    }
+  })
+}
+
+// Edit/Delete hooks — Room messages
+export function useEditRoomMessage(roomId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ messageId, content }: { messageId: string; content: string }) =>
+      api.editRoomMessage(roomId, messageId, content),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.room(roomId) })
+    }
+  })
+}
+
+export function useDeleteRoomMessage(roomId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (messageId: string) => api.deleteRoomMessage(roomId, messageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.room(roomId) })
+    }
+  })
+}
+
+// Edit/Delete hooks — Direct messages
+export function useEditDirectMessage(conversationId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ messageId, content }: { messageId: string; content: string }) =>
+      api.editDirectMessage(conversationId, messageId, content),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) })
+    }
+  })
+}
+
+export function useDeleteDirectMessage(conversationId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (messageId: string) => api.deleteDirectMessage(conversationId, messageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) })
+    }
+  })
+}
+
 // Subscription hooks
 export function useSubscriptions() {
   return useQuery({

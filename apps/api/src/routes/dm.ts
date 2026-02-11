@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, and, desc, sql, gt, inArray } from 'drizzle-orm'
-import { db, conversations, conversationParticipants, directMessages, users, notifications } from '../db/index.js'
+import { db, conversations, conversationParticipants, directMessages, users, notifications, editHistory } from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
@@ -243,7 +243,7 @@ router.get('/:conversationId', authMiddleware, asyncHandler(async (req: Authenti
 
   const otherUser = otherParticipants[0]?.user
 
-  // Get messages (newest first, then reverse for display)
+  // Get messages (newest first, then reverse for display; filter hidden)
   const messagesData = await db
     .select({
       message: directMessages,
@@ -251,7 +251,7 @@ router.get('/:conversationId', authMiddleware, asyncHandler(async (req: Authenti
     })
     .from(directMessages)
     .innerJoin(users, eq(directMessages.authorId, users.id))
-    .where(eq(directMessages.conversationId, conversationId))
+    .where(and(eq(directMessages.conversationId, conversationId), eq(directMessages.isHidden, false)))
     .orderBy(desc(directMessages.createdAt))
     .limit(limitNum)
 
@@ -266,6 +266,7 @@ router.get('/:conversationId', authMiddleware, asyncHandler(async (req: Authenti
         content: message.content,
         contentHtml: message.contentHtml,
         author: formatUserSummary(author),
+        editedAt: message.editedAt?.toISOString() || null,
         createdAt: message.createdAt?.toISOString()
       })).reverse() // Oldest first
     }
@@ -367,6 +368,119 @@ router.post('/:conversationId/messages', authMiddleware, asyncHandler(async (req
     success: true,
     data: messageData
   })
+}))
+
+// PATCH /dm/:conversationId/messages/:messageId — Edit a DM
+router.patch('/:conversationId/messages/:messageId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { conversationId, messageId } = req.params
+  const { content } = z.object({ content: z.string().min(1).max(5000) }).parse(req.body)
+
+  // Verify user is a participant
+  const [participation] = await db
+    .select()
+    .from(conversationParticipants)
+    .where(and(
+      eq(conversationParticipants.conversationId, conversationId),
+      eq(conversationParticipants.userId, userId)
+    ))
+    .limit(1)
+
+  if (!participation) {
+    throw new AppError(403, 'Not a participant in this conversation')
+  }
+
+  const [message] = await db
+    .select()
+    .from(directMessages)
+    .where(and(eq(directMessages.id, messageId), eq(directMessages.conversationId, conversationId)))
+    .limit(1)
+
+  if (!message) {
+    throw new AppError(404, 'Message not found')
+  }
+
+  if (message.authorId !== userId) {
+    throw new AppError(403, 'Can only edit your own messages')
+  }
+
+  // Save previous content
+  await db.insert(editHistory).values({
+    contentType: 'dm',
+    contentId: messageId,
+    editedBy: userId,
+    previousContent: message.content,
+    previousContentHtml: message.contentHtml
+  })
+
+  const contentHtml = renderMarkdown(content)
+
+  const [updated] = await db
+    .update(directMessages)
+    .set({
+      content,
+      contentHtml,
+      editedAt: new Date(),
+      updatedAt: new Date()
+    })
+    .where(eq(directMessages.id, messageId))
+    .returning()
+
+  const [author] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+
+  io.to(`dm:${conversationId}`).emit('dm_message_edited', {
+    conversationId,
+    messageId,
+    content: updated.content,
+    contentHtml: updated.contentHtml,
+    editedAt: updated.editedAt,
+    author: formatUserSummary(author)
+  })
+
+  res.json({ success: true, data: updated })
+}))
+
+// DELETE /dm/:conversationId/messages/:messageId — Soft-delete a DM
+router.delete('/:conversationId/messages/:messageId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { conversationId, messageId } = req.params
+
+  // Verify user is a participant
+  const [participation] = await db
+    .select()
+    .from(conversationParticipants)
+    .where(and(
+      eq(conversationParticipants.conversationId, conversationId),
+      eq(conversationParticipants.userId, userId)
+    ))
+    .limit(1)
+
+  if (!participation) {
+    throw new AppError(403, 'Not a participant in this conversation')
+  }
+
+  const [message] = await db
+    .select()
+    .from(directMessages)
+    .where(and(eq(directMessages.id, messageId), eq(directMessages.conversationId, conversationId)))
+    .limit(1)
+
+  if (!message) {
+    throw new AppError(404, 'Message not found')
+  }
+
+  if (message.authorId !== userId) {
+    throw new AppError(403, 'Can only delete your own messages')
+  }
+
+  await db
+    .update(directMessages)
+    .set({ isHidden: true, updatedAt: new Date() })
+    .where(eq(directMessages.id, messageId))
+
+  io.to(`dm:${conversationId}`).emit('dm_message_deleted', { conversationId, messageId })
+
+  res.json({ success: true, data: { deleted: true } })
 }))
 
 // POST /dm/:conversationId/read — Mark conversation as read + dismiss related notifications

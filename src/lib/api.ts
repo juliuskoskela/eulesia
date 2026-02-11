@@ -162,6 +162,55 @@ class ApiClient {
     })
   }
 
+  // Agora - Edit/Delete
+  async editThread(id: string, data: { title?: string; content: string }): Promise<Thread> {
+    return this.request(`/agora/threads/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteThread(id: string): Promise<{ deleted: boolean }> {
+    return this.request(`/agora/threads/${id}`, { method: 'DELETE' })
+  }
+
+  async getThreadEditHistory(threadId: string): Promise<EditHistoryEntry[]> {
+    return this.request(`/agora/threads/${threadId}/edit-history`)
+  }
+
+  async editComment(id: string, content: string): Promise<Comment> {
+    return this.request(`/agora/comments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content })
+    })
+  }
+
+  async deleteComment(id: string): Promise<{ deleted: boolean }> {
+    return this.request(`/agora/comments/${id}`, { method: 'DELETE' })
+  }
+
+  async editRoomMessage(roomId: string, messageId: string, content: string): Promise<RoomMessage> {
+    return this.request(`/home/rooms/${roomId}/messages/${messageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content })
+    })
+  }
+
+  async deleteRoomMessage(roomId: string, messageId: string): Promise<{ deleted: boolean }> {
+    return this.request(`/home/rooms/${roomId}/messages/${messageId}`, { method: 'DELETE' })
+  }
+
+  async editDirectMessage(conversationId: string, messageId: string, content: string): Promise<DirectMessage> {
+    return this.request(`/dm/${conversationId}/messages/${messageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content })
+    })
+  }
+
+  async deleteDirectMessage(conversationId: string, messageId: string): Promise<{ deleted: boolean }> {
+    return this.request(`/dm/${conversationId}/messages/${messageId}`, { method: 'DELETE' })
+  }
+
   async getTags(): Promise<TagWithCategory[]> {
     return this.request('/agora/tags')
   }
@@ -725,6 +774,8 @@ export interface Thread {
   replyCount: number
   score: number
   userVote?: number
+  editedAt?: string | null
+  editedBy?: string | null
   createdAt: string
   updatedAt: string
   // AI/Import source tracking
@@ -749,6 +800,8 @@ export interface Comment {
   score?: number
   depth?: number
   userVote?: number
+  editedAt?: string | null
+  editedBy?: string | null
   createdAt: string
 }
 
@@ -847,6 +900,8 @@ export interface RoomMessage {
   content: string
   contentHtml?: string
   author: UserSummary
+  editedAt?: string | null
+  editedBy?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -901,7 +956,21 @@ export interface DirectMessage {
   content: string
   contentHtml?: string
   author: UserSummary
+  editedAt?: string | null
   createdAt: string
+}
+
+export interface EditHistoryEntry {
+  id: string
+  contentType: string
+  previousContent: string
+  previousTitle?: string | null
+  editedAt: string
+  editor: {
+    id: string
+    name: string
+    avatarUrl?: string
+  }
 }
 
 export interface ConversationWithMessages {

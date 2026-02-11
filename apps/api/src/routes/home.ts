@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, and, desc, sql } from 'drizzle-orm'
-import { db, rooms, roomMembers, roomMessages, roomInvitations, users, threads, clubMembers, clubs } from '../db/index.js'
+import { db, rooms, roomMembers, roomMessages, roomInvitations, users, threads, clubMembers, clubs, editHistory } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
@@ -228,7 +228,7 @@ router.get('/rooms/:roomId', optionalAuthMiddleware, asyncHandler(async (req: Au
     }
   }
 
-  // Get messages
+  // Get messages (filter out hidden)
   const messagesData = await db
     .select({
       message: roomMessages,
@@ -236,7 +236,7 @@ router.get('/rooms/:roomId', optionalAuthMiddleware, asyncHandler(async (req: Au
     })
     .from(roomMessages)
     .innerJoin(users, eq(roomMessages.authorId, users.id))
-    .where(eq(roomMessages.roomId, roomId))
+    .where(and(eq(roomMessages.roomId, roomId), eq(roomMessages.isHidden, false)))
     .orderBy(desc(roomMessages.createdAt))
     .limit(limitNum)
 
@@ -412,6 +412,99 @@ router.post('/rooms/:roomId/messages', authMiddleware, asyncHandler(async (req: 
     success: true,
     data: messageData
   })
+}))
+
+// PATCH /home/rooms/:roomId/messages/:messageId - Edit room message
+router.patch('/rooms/:roomId/messages/:messageId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { roomId, messageId } = req.params
+  const { content } = z.object({ content: z.string().min(1).max(5000) }).parse(req.body)
+
+  const [message] = await db
+    .select()
+    .from(roomMessages)
+    .where(and(eq(roomMessages.id, messageId), eq(roomMessages.roomId, roomId)))
+    .limit(1)
+
+  if (!message) {
+    throw new AppError(404, 'Message not found')
+  }
+
+  if (message.authorId !== userId && req.user!.role !== 'admin') {
+    throw new AppError(403, 'Not authorized to edit this message')
+  }
+
+  // Save previous content
+  await db.insert(editHistory).values({
+    contentType: 'room_message',
+    contentId: messageId,
+    editedBy: userId,
+    previousContent: message.content,
+    previousContentHtml: message.contentHtml
+  })
+
+  const contentHtml = renderMarkdown(content)
+
+  const [updated] = await db
+    .update(roomMessages)
+    .set({
+      content,
+      contentHtml,
+      editedBy: userId,
+      editedAt: new Date(),
+      updatedAt: new Date()
+    })
+    .where(eq(roomMessages.id, messageId))
+    .returning()
+
+  const [author] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+
+  io.to(`room:${roomId}`).emit('room_message_edited', {
+    roomId,
+    messageId,
+    content: updated.content,
+    contentHtml: updated.contentHtml,
+    editedBy: userId,
+    editedAt: updated.editedAt,
+    author: formatUserSummary(author)
+  })
+
+  res.json({ success: true, data: updated })
+}))
+
+// DELETE /home/rooms/:roomId/messages/:messageId - Soft-delete room message
+router.delete('/rooms/:roomId/messages/:messageId', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { roomId, messageId } = req.params
+
+  const [message] = await db
+    .select()
+    .from(roomMessages)
+    .where(and(eq(roomMessages.id, messageId), eq(roomMessages.roomId, roomId)))
+    .limit(1)
+
+  if (!message) {
+    throw new AppError(404, 'Message not found')
+  }
+
+  // Check ownership: author, room owner, or admin
+  const [room] = await db.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
+  const isRoomOwner = room && room.ownerId === userId
+  const isAuthor = message.authorId === userId
+  const isAdmin = req.user!.role === 'admin'
+
+  if (!isAuthor && !isRoomOwner && !isAdmin) {
+    throw new AppError(403, 'Not authorized to delete this message')
+  }
+
+  await db
+    .update(roomMessages)
+    .set({ isHidden: true, updatedAt: new Date() })
+    .where(eq(roomMessages.id, messageId))
+
+  io.to(`room:${roomId}`).emit('room_message_deleted', { roomId, messageId })
+
+  res.json({ success: true, data: { deleted: true } })
 }))
 
 // POST /home/rooms/:roomId/invite - Invite user to private room

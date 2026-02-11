@@ -68,7 +68,10 @@
     "public": "Open to all",
     "private": "Invite only",
     "loadError": "Failed to load room",
-    "backToHome": "Back to Home"
+    "backToHome": "Back to Home",
+    "sendMessage": "Send message",
+    "editMessage": "Edit message",
+    "deleteMessage": "Delete message"
   },
   "userHome": {
     "homePageTitle": "Home page",

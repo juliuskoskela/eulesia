@@ -96,7 +96,15 @@
     "postReply": "Lähetä vastaus",
     "noReplies": "Ei vielä vastauksia. Ole ensimmäinen keskusteluun osallistuja.",
     "endOfDiscussion": "Keskustelu päättyy",
-    "sort": "Järjestys:"
+    "sort": "Järjestys:",
+    "editThread": "Muokkaa keskustelua",
+    "deleteThread": "Poista keskustelu",
+    "editHistory": "Muokkaushistoria",
+    "editHistoryTitle": "Muokkaushistoria",
+    "editHistoryEmpty": "Ei muokkauksia",
+    "editHistoryEntry": "{{name}} muokkasi {{time}}",
+    "previousContent": "Aiempi sisältö",
+    "previousTitle": "Aiempi otsikko"
   },
   "municipality": {
     "defaultName": "Kunta",

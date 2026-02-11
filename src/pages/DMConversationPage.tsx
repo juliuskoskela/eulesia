@@ -1,20 +1,44 @@
 import { useState, useRef, useEffect } from 'react'
 import { sanitizeContent } from '../utils/sanitize'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send } from 'lucide-react'
+import { ArrowLeft, Send, Pencil, Trash2, Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Layout } from '../components/layout'
-import { ActorBadge } from '../components/common'
-import { useConversation, useSendDM, useMarkRead } from '../hooks/useApi'
+import { ActorBadge, EditedIndicator, ConfirmDeleteDialog } from '../components/common'
+import { useConversation, useSendDM, useMarkRead, useEditDirectMessage, useDeleteDirectMessage } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { useSocket } from '../hooks/useSocket'
 import { formatRelativeTime } from '../lib/formatTime'
 import type { DirectMessage } from '../lib/api'
 import { transformAuthor, getAvatarInitials } from '../utils/transforms'
 
-function MessageBubble({ message, isOwnMessage }: { message: DirectMessage; isOwnMessage: boolean }) {
+interface DMMessageBubbleProps {
+  message: DirectMessage
+  isOwnMessage: boolean
+  onEdit: (messageId: string, content: string) => void
+  onDelete: (messageId: string) => void
+}
+
+function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: DMMessageBubbleProps) {
+  const { t } = useTranslation('messages')
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const handleStartEdit = () => {
+    setEditContent(message.content)
+    setIsEditing(true)
+  }
+
+  const handleSaveEdit = () => {
+    if (editContent.trim()) {
+      onEdit(message.id, editContent.trim())
+      setIsEditing(false)
+    }
+  }
+
   return (
-    <div className={`flex gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+    <div className={`group flex gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
       <div className="flex-shrink-0">
         <ActorBadge user={transformAuthor(message.author)} showName={false} size="sm" />
       </div>
@@ -26,21 +50,79 @@ function MessageBubble({ message, isOwnMessage }: { message: DirectMessage; isOw
           <span className="text-xs text-gray-500">
             {formatRelativeTime(message.createdAt)}
           </span>
-        </div>
-        <div
-          className={`inline-block px-4 py-2 rounded-2xl ${
-            isOwnMessage
-              ? 'bg-teal-600 text-white rounded-br-md'
-              : 'bg-gray-100 text-gray-900 rounded-bl-md'
-          }`}
-        >
-          {message.contentHtml ? (
-            <div dangerouslySetInnerHTML={{ __html: sanitizeContent(message.contentHtml) }} className="prose prose-sm max-w-none" />
-          ) : (
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          {message.editedAt && (
+            <EditedIndicator editedAt={message.editedAt} />
           )}
         </div>
+        {isEditing ? (
+          <div className="text-left">
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="w-full p-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              rows={3}
+              autoFocus
+            />
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editContent.trim()}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-teal-600 rounded hover:bg-teal-700 disabled:opacity-50"
+              >
+                <Check className="w-3 h-3" />
+                {t('common:actions.save')}
+              </button>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800"
+              >
+                {t('common:actions.cancel')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="relative inline-block">
+            <div
+              className={`px-4 py-2 rounded-2xl ${
+                isOwnMessage
+                  ? 'bg-teal-600 text-white rounded-br-md'
+                  : 'bg-gray-100 text-gray-900 rounded-bl-md'
+              }`}
+            >
+              {message.contentHtml ? (
+                <div dangerouslySetInnerHTML={{ __html: sanitizeContent(message.contentHtml) }} className="prose prose-sm max-w-none" />
+              ) : (
+                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              )}
+            </div>
+            {/* Hover actions - only own messages */}
+            {isOwnMessage && (
+              <div className="absolute top-0 left-0 -translate-x-full pr-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                <button
+                  onClick={handleStartEdit}
+                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                  title={t('common:actions.edit')}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-red-600"
+                  title={t('common:actions.delete')}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+      <ConfirmDeleteDialog
+        open={showDeleteConfirm}
+        type="message"
+        onConfirm={() => { onDelete(message.id); setShowDeleteConfirm(false) }}
+        onClose={() => setShowDeleteConfirm(false)}
+      />
     </div>
   )
 }
@@ -54,6 +136,8 @@ export function DMConversationPage() {
   const { data: conversationData, isLoading, error } = useConversation(conversationId || '')
   const sendMessageMutation = useSendDM(conversationId || '')
   const markReadMutation = useMarkRead(conversationId || '')
+  const editMessageMutation = useEditDirectMessage(conversationId || '')
+  const deleteMessageMutation = useDeleteDirectMessage(conversationId || '')
 
   const [newMessage, setNewMessage] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -159,6 +243,8 @@ export function DMConversationPage() {
                 key={msg.id}
                 message={msg}
                 isOwnMessage={msg.author.id === currentUser?.id}
+                onEdit={(messageId, content) => editMessageMutation.mutate({ messageId, content })}
+                onDelete={(messageId) => deleteMessageMutation.mutate(messageId)}
               />
             ))
           )}

@@ -81,6 +81,87 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount })
     })
 
+    // Handle room message edits
+    newSocket.on('room_message_edited', (data: { roomId: string; messageId: string; content: string; contentHtml: string; editedAt: string }) => {
+      queryClient.setQueryData(
+        queryKeys.room(data.roomId),
+        (old: RoomWithMessages | undefined) => {
+          if (!old) return old
+          return {
+            ...old,
+            messages: old.messages.map((m: RoomMessage) =>
+              m.id === data.messageId
+                ? { ...m, content: data.content, contentHtml: data.contentHtml, editedAt: data.editedAt }
+                : m
+            )
+          }
+        }
+      )
+    })
+
+    // Handle room message deletes
+    newSocket.on('room_message_deleted', (data: { roomId: string; messageId: string }) => {
+      queryClient.setQueryData(
+        queryKeys.room(data.roomId),
+        (old: RoomWithMessages | undefined) => {
+          if (!old) return old
+          return {
+            ...old,
+            messages: old.messages.filter((m: RoomMessage) => m.id !== data.messageId)
+          }
+        }
+      )
+    })
+
+    // Handle thread/comment edits & deletes via invalidation
+    newSocket.on('thread_edited', () => {
+      queryClient.invalidateQueries({ queryKey: ['thread'] })
+    })
+
+    newSocket.on('thread_deleted', () => {
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
+    })
+
+    newSocket.on('comment_edited', (data: { threadId: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['thread', data.threadId] })
+    })
+
+    newSocket.on('comment_deleted', (data: { threadId: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['thread', data.threadId] })
+    })
+
+    // Handle DM message edits
+    newSocket.on('dm_message_edited', (data: { conversationId: string; messageId: string; content: string; contentHtml: string; editedAt: string }) => {
+      queryClient.setQueryData(
+        queryKeys.conversation(data.conversationId),
+        (old: ConversationWithMessages | undefined) => {
+          if (!old) return old
+          return {
+            ...old,
+            messages: old.messages.map((m: DirectMessage) =>
+              m.id === data.messageId
+                ? { ...m, content: data.content, contentHtml: data.contentHtml, editedAt: data.editedAt }
+                : m
+            )
+          }
+        }
+      )
+    })
+
+    // Handle DM message deletes
+    newSocket.on('dm_message_deleted', (data: { conversationId: string; messageId: string }) => {
+      queryClient.setQueryData(
+        queryKeys.conversation(data.conversationId),
+        (old: ConversationWithMessages | undefined) => {
+          if (!old) return old
+          return {
+            ...old,
+            messages: old.messages.filter((m: DirectMessage) => m.id !== data.messageId)
+          }
+        }
+      )
+    })
+
     // Handle new DM message events
     newSocket.on('new_dm_message', (data: { conversationId: string; message: DirectMessage }) => {
       // Update the conversation messages in the cache

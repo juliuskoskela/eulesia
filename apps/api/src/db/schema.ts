@@ -285,6 +285,8 @@ export const comments = pgTable('comments', {
   depth: integer('depth').default(0), // Nesting depth for display
   score: integer('score').default(0), // Cached vote score
   isHidden: boolean('is_hidden').default(false),
+  editedBy: uuid('edited_by').references(() => users.id),
+  editedAt: timestamp('edited_at', { withTimezone: true }),
   language: varchar('language', { length: 10 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
@@ -423,6 +425,9 @@ export const roomMessages = pgTable('room_messages', {
   authorId: uuid('author_id').notNull().references(() => users.id),
   content: text('content').notNull(),
   contentHtml: text('content_html'),
+  isHidden: boolean('is_hidden').default(false),
+  editedBy: uuid('edited_by').references(() => users.id),
+  editedAt: timestamp('edited_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
@@ -520,9 +525,28 @@ export const directMessages = pgTable('direct_messages', {
   authorId: uuid('author_id').notNull().references(() => users.id),
   content: text('content').notNull(),
   contentHtml: text('content_html'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+  isHidden: boolean('is_hidden').default(false),
+  editedAt: timestamp('edited_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
   conversationIdx: index('dm_conversation_idx').on(table.conversationId, table.createdAt)
+}))
+
+// Edit History (polymorphic audit table for all content edits)
+export const editHistory = pgTable('edit_history', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  contentType: contentTypeEnum('content_type').notNull(),
+  contentId: uuid('content_id').notNull(),
+  editedBy: uuid('edited_by').notNull().references(() => users.id),
+  previousContent: text('previous_content').notNull(),
+  previousContentHtml: text('previous_content_html'),
+  previousTitle: varchar('previous_title', { length: 500 }),
+  editedAt: timestamp('edited_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  contentIdx: index('edit_history_content_idx').on(table.contentType, table.contentId),
+  editedByIdx: index('edit_history_edited_by_idx').on(table.editedBy),
+  editedAtIdx: index('edit_history_edited_at_idx').on(table.editedAt)
 }))
 
 // Content Reports (DSA)
@@ -838,6 +862,14 @@ export const directMessagesRelations = relations(directMessages, ({ one }) => ({
   })
 }))
 
+// Edit History relations
+export const editHistoryRelations = relations(editHistory, ({ one }) => ({
+  editor: one(users, {
+    fields: [editHistory.editedBy],
+    references: [users.id]
+  })
+}))
+
 // Moderation relations
 export const contentReportsRelations = relations(contentReports, ({ one }) => ({
   reporter: one(users, {
@@ -946,3 +978,5 @@ export type NewUserSanction = typeof userSanctions.$inferInsert
 export type UserSanction = typeof userSanctions.$inferSelect
 export type NewModerationAppeal = typeof moderationAppeals.$inferInsert
 export type ModerationAppeal = typeof moderationAppeals.$inferSelect
+export type NewEditHistory = typeof editHistory.$inferInsert
+export type EditHistory = typeof editHistory.$inferSelect

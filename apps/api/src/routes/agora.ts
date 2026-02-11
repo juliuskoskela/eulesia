@@ -1,11 +1,13 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, desc, asc, and, inArray, sql, or, gte } from 'drizzle-orm'
-import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions, tagCategories, institutionTopics } from '../db/index.js'
+import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions, tagCategories, institutionTopics, editHistory } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
+import { canEdit, canDelete } from '../utils/permissions.js'
+import { io } from '../index.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -822,6 +824,229 @@ router.post('/threads/:threadId/vote', authMiddleware, asyncHandler(async (req: 
       userVote: value
     }
   })
+}))
+
+// ============================================================
+// EDIT / DELETE — Threads & Comments
+// ============================================================
+
+const editThreadSchema = z.object({
+  title: z.string().min(5).max(500).optional(),
+  content: z.string().min(10).max(50000)
+})
+
+const editCommentSchema = z.object({
+  content: z.string().min(1).max(10000)
+})
+
+// PATCH /agora/threads/:id - Edit thread
+router.patch('/threads/:id', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { id } = req.params
+  const data = editThreadSchema.parse(req.body)
+
+  // Get current thread
+  const [thread] = await db
+    .select()
+    .from(threads)
+    .where(eq(threads.id, id))
+    .limit(1)
+
+  if (!thread) {
+    throw new AppError(404, 'Thread not found')
+  }
+
+  // Check permissions
+  const userContext = { id: userId, role: req.user!.role }
+  if (!canEdit(userContext, { authorId: thread.authorId, source: thread.source, aiGenerated: thread.aiGenerated })) {
+    throw new AppError(403, 'Not authorized to edit this thread')
+  }
+
+  // Save previous content to edit history
+  await db.insert(editHistory).values({
+    contentType: 'thread',
+    contentId: id,
+    editedBy: userId,
+    previousContent: thread.content,
+    previousContentHtml: thread.contentHtml,
+    previousTitle: data.title && data.title !== thread.title ? thread.title : null
+  })
+
+  // Render new markdown
+  const contentHtml = renderMarkdown(data.content)
+
+  // Update thread
+  const [updated] = await db
+    .update(threads)
+    .set({
+      title: data.title || thread.title,
+      content: data.content,
+      contentHtml,
+      editedBy: userId,
+      editedAt: new Date(),
+      updatedAt: new Date()
+    })
+    .where(eq(threads.id, id))
+    .returning()
+
+  // Emit socket event
+  io.to(`thread:${id}`).emit('thread_edited', {
+    threadId: id,
+    title: updated.title,
+    content: updated.content,
+    contentHtml: updated.contentHtml,
+    editedBy: userId,
+    editedAt: updated.editedAt
+  })
+
+  res.json({ success: true, data: updated })
+}))
+
+// DELETE /agora/threads/:id - Soft-delete thread
+router.delete('/threads/:id', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { id } = req.params
+
+  const [thread] = await db
+    .select()
+    .from(threads)
+    .where(eq(threads.id, id))
+    .limit(1)
+
+  if (!thread) {
+    throw new AppError(404, 'Thread not found')
+  }
+
+  const userContext = { id: userId, role: req.user!.role }
+  if (!canDelete(userContext, { authorId: thread.authorId, source: thread.source, aiGenerated: thread.aiGenerated })) {
+    throw new AppError(403, 'Not authorized to delete this thread')
+  }
+
+  await db
+    .update(threads)
+    .set({ isHidden: true, updatedAt: new Date() })
+    .where(eq(threads.id, id))
+
+  io.to(`thread:${id}`).emit('thread_deleted', { threadId: id })
+
+  res.json({ success: true, data: { deleted: true } })
+}))
+
+// PATCH /agora/comments/:id - Edit comment
+router.patch('/comments/:id', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { id } = req.params
+  const data = editCommentSchema.parse(req.body)
+
+  const [comment] = await db
+    .select()
+    .from(comments)
+    .where(eq(comments.id, id))
+    .limit(1)
+
+  if (!comment) {
+    throw new AppError(404, 'Comment not found')
+  }
+
+  const userContext = { id: userId, role: req.user!.role }
+  if (!canEdit(userContext, { authorId: comment.authorId })) {
+    throw new AppError(403, 'Not authorized to edit this comment')
+  }
+
+  // Save previous content
+  await db.insert(editHistory).values({
+    contentType: 'comment',
+    contentId: id,
+    editedBy: userId,
+    previousContent: comment.content,
+    previousContentHtml: comment.contentHtml
+  })
+
+  const contentHtml = renderMarkdown(data.content)
+
+  const [updated] = await db
+    .update(comments)
+    .set({
+      content: data.content,
+      contentHtml,
+      editedBy: userId,
+      editedAt: new Date(),
+      updatedAt: new Date()
+    })
+    .where(eq(comments.id, id))
+    .returning()
+
+  io.to(`thread:${comment.threadId}`).emit('comment_edited', {
+    threadId: comment.threadId,
+    commentId: id,
+    content: updated.content,
+    contentHtml: updated.contentHtml,
+    editedBy: userId,
+    editedAt: updated.editedAt
+  })
+
+  res.json({ success: true, data: updated })
+}))
+
+// DELETE /agora/comments/:id - Soft-delete comment
+router.delete('/comments/:id', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { id } = req.params
+
+  const [comment] = await db
+    .select()
+    .from(comments)
+    .where(eq(comments.id, id))
+    .limit(1)
+
+  if (!comment) {
+    throw new AppError(404, 'Comment not found')
+  }
+
+  const userContext = { id: userId, role: req.user!.role }
+  if (!canDelete(userContext, { authorId: comment.authorId })) {
+    throw new AppError(403, 'Not authorized to delete this comment')
+  }
+
+  await db
+    .update(comments)
+    .set({ isHidden: true, updatedAt: new Date() })
+    .where(eq(comments.id, id))
+
+  io.to(`thread:${comment.threadId}`).emit('comment_deleted', {
+    threadId: comment.threadId,
+    commentId: id
+  })
+
+  res.json({ success: true, data: { deleted: true } })
+}))
+
+// GET /agora/threads/:id/edit-history - Get edit history for a thread
+router.get('/threads/:id/edit-history', asyncHandler(async (req, res: Response) => {
+  const { id } = req.params
+
+  const history = await db
+    .select({
+      id: editHistory.id,
+      contentType: editHistory.contentType,
+      previousContent: editHistory.previousContent,
+      previousTitle: editHistory.previousTitle,
+      editedAt: editHistory.editedAt,
+      editor: {
+        id: users.id,
+        name: users.name,
+        avatarUrl: users.avatarUrl
+      }
+    })
+    .from(editHistory)
+    .innerJoin(users, eq(editHistory.editedBy, users.id))
+    .where(and(
+      eq(editHistory.contentType, 'thread'),
+      eq(editHistory.contentId, id)
+    ))
+    .orderBy(desc(editHistory.editedAt))
+
+  res.json({ success: true, data: history })
 }))
 
 // GET /agora/tags - Get all available tags with category metadata

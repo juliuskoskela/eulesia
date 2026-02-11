@@ -2,13 +2,14 @@ import { useState, useMemo } from 'react'
 import { sanitizeContent } from '../utils/sanitize'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Building2, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Building2, ChevronDown, Pencil, Trash2, History } from 'lucide-react'
 import { Layout } from '../components/layout'
-import { ActorBadge, ScopeBadge, TagList, ContentEndMarker, ReportButton } from '../components/common'
+import { ActorBadge, ScopeBadge, TagList, ContentEndMarker, ReportButton, ConfirmDeleteDialog, EditedIndicator } from '../components/common'
 import { InstitutionalContextBox } from '../components/agora/InstitutionalContextBox'
 import { CommentThread } from '../components/agora/CommentThread'
 import { ThreadVoteButtons } from '../components/agora/ThreadVoteButtons'
-import { useThread, useAddComment, useVoteComment, useVoteThread, type CommentSort } from '../hooks/useApi'
+import { EditHistoryModal } from '../components/agora/EditHistoryModal'
+import { useThread, useAddComment, useVoteComment, useVoteThread, useEditThread, useDeleteThread, useEditComment, useDeleteComment, type CommentSort } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { formatRelativeTime } from '../lib/formatTime'
 import { transformAuthor, transformComment } from '../utils/transforms'
@@ -32,9 +33,20 @@ export function ThreadPage() {
   const addCommentMutation = useAddComment(threadId || '', sort)
   const voteCommentMutation = useVoteComment(threadId || '', sort)
   const voteThreadMutation = useVoteThread()
+  const editThreadMutation = useEditThread(threadId || '', sort)
+  const deleteThreadMutation = useDeleteThread()
+  const editCommentMutation = useEditComment(threadId || '', sort)
+  const deleteCommentMutation = useDeleteComment(threadId || '', sort)
 
   const [commentContent, setCommentContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Edit/delete state
+  const [isEditingThread, setIsEditingThread] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editContent, setEditContent] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showEditHistory, setShowEditHistory] = useState(false)
 
   const handleThreadVote = (value: number) => {
     if (!currentUser || !threadId) return
@@ -60,6 +72,57 @@ export function ThreadPage() {
       await voteCommentMutation.mutateAsync({ commentId, value })
     } catch (err) {
       console.error('Failed to vote:', err)
+    }
+  }
+
+  // Thread edit/delete
+  const isBotThread = thread?.source === 'minutes_import' || thread?.aiGenerated
+  const isThreadAuthor = currentUser?.id === thread?.author?.id
+  const isAdmin = currentUser?.role === 'admin'
+  const canEditThread = isAdmin || isThreadAuthor || isBotThread
+  const canDeleteThread = isAdmin || isThreadAuthor
+
+  const handleStartEditThread = () => {
+    if (!thread) return
+    setEditTitle(thread.title)
+    setEditContent(thread.content)
+    setIsEditingThread(true)
+  }
+
+  const handleSaveEditThread = async () => {
+    if (!threadId || !editContent.trim()) return
+    try {
+      await editThreadMutation.mutateAsync({ title: editTitle, content: editContent })
+      setIsEditingThread(false)
+    } catch (err) {
+      console.error('Failed to edit thread:', err)
+    }
+  }
+
+  const handleDeleteThread = async () => {
+    if (!threadId) return
+    try {
+      await deleteThreadMutation.mutateAsync(threadId)
+      navigate('/agora')
+    } catch (err) {
+      console.error('Failed to delete thread:', err)
+    }
+  }
+
+  // Comment edit/delete handlers
+  const handleEditComment = async (commentId: string, content: string) => {
+    try {
+      await editCommentMutation.mutateAsync({ commentId, content })
+    } catch (err) {
+      console.error('Failed to edit comment:', err)
+    }
+  }
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await deleteCommentMutation.mutateAsync(commentId)
+    } catch (err) {
+      console.error('Failed to delete comment:', err)
     }
   }
 
@@ -136,12 +199,48 @@ export function ThreadPage() {
           <span className="text-xs text-gray-500">
             {t('thread.posted', { time: formatRelativeTime(thread.createdAt) })}
           </span>
+          {thread.editedAt && (
+            <EditedIndicator editedAt={thread.editedAt} />
+          )}
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          {thread.title}
-        </h1>
+        <div className="flex items-start gap-3 mb-4">
+          <h1 className="text-2xl font-bold text-gray-900 flex-1">
+            {thread.title}
+          </h1>
+          {currentUser && (canEditThread || canDeleteThread) && (
+            <div className="flex items-center gap-1 flex-shrink-0 mt-1">
+              {canEditThread && (
+                <button
+                  onClick={handleStartEditThread}
+                  className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                  title={t('thread.editThread')}
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+              {canDeleteThread && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                  title={t('thread.deleteThread')}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              {isBotThread && (
+                <button
+                  onClick={() => setShowEditHistory(true)}
+                  className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                  title={t('thread.editHistory')}
+                >
+                  <History className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Tags */}
         <div className="mb-4">
@@ -183,7 +282,43 @@ export function ThreadPage() {
 
           {/* Content */}
           <div className="flex-grow p-6">
-            {sanitizedContentHtml ? (
+            {isEditingThread ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('threadForm.title')}</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('threadForm.content')}</label>
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    rows={10}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setIsEditingThread(false)}
+                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  >
+                    {t('common:actions.cancel')}
+                  </button>
+                  <button
+                    onClick={handleSaveEditThread}
+                    disabled={editThreadMutation.isPending || !editContent.trim()}
+                    className="px-4 py-2 text-sm bg-blue-800 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {editThreadMutation.isPending ? t('common:actions.saving') : t('common:actions.save')}
+                  </button>
+                </div>
+              </div>
+            ) : sanitizedContentHtml ? (
               <div
                 className="prose prose-gray max-w-none"
                 dangerouslySetInnerHTML={{ __html: sanitizedContentHtml }}
@@ -295,6 +430,10 @@ export function ThreadPage() {
               comments={comments}
               onVote={handleVote}
               onReply={handleReply}
+              onEdit={handleEditComment}
+              onDelete={handleDeleteComment}
+              currentUserId={currentUser?.id}
+              currentUserRole={currentUser?.role}
             />
           ) : (
             <div className="text-center py-8 text-gray-500">
@@ -306,6 +445,24 @@ export function ThreadPage() {
           <ContentEndMarker message={t('thread.endOfDiscussion')} />
         </div>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDeleteDialog
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteThread}
+        isPending={deleteThreadMutation.isPending}
+        type="thread"
+      />
+
+      {/* Edit history modal */}
+      {threadId && (
+        <EditHistoryModal
+          threadId={threadId}
+          open={showEditHistory}
+          onClose={() => setShowEditHistory(false)}
+        />
+      )}
     </Layout>
   )
 }
