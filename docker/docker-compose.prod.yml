@@ -114,7 +114,6 @@ services:
       - "traefik.http.services.eulesia-web.loadbalancer.server.port=80"
     networks:
       - wp_web
-      - internal  # Nginx proxies bot requests to API for OG meta tags
 
 volumes:
   postgres_data:
