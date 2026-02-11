@@ -19,7 +19,6 @@ interface ThreadCardProps {
 export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadCardProps) {
   const { t } = useTranslation('agora')
   const isInstitutional = author.role === 'institution'
-  const hasInstitutionalContext = !!thread.institutionalContext
   const isAiGenerated = thread.aiGenerated || thread.source === 'minutes_import'
   const isBotSummary = isAiGenerated && thread.source === 'rss_import'
   const isMinutesSummary = isAiGenerated && thread.source === 'minutes_import'
@@ -158,13 +157,6 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
             </div>
           </div>
 
-          {/* Institutional context indicator */}
-          {hasInstitutionalContext && (
-            <div className="mt-3 pt-3 border-t border-violet-100 text-xs text-violet-600 flex items-center gap-1">
-              <span>📋</span>
-              <span>{t('institutionalContext')}</span>
-            </div>
-          )}
         </Link>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Layout } from '../components/layout'
@@ -72,7 +72,7 @@ export function AgoraPage() {
   const { data: subscriptionsData } = useSubscriptions()
 
   const [page, setPage] = useState(1)
-  const [allThreads, setAllThreads] = useState<ReturnType<typeof transformThread>[]>([])
+  const [allThreads, setAllThreads] = useState<{ thread: ReturnType<typeof transformThread>; author: ReturnType<typeof transformAuthor> }[]>([])
 
   // Build filters for the API
   const filters = useMemo(() => ({
@@ -140,19 +140,47 @@ export function AgoraPage() {
   // Accumulate threads across pages
   useEffect(() => {
     if (!threadsData?.items) return
-    const newThreads = threadsData.items.map(transformThread)
+    const newItems = threadsData.items.map(item => ({
+      thread: transformThread(item),
+      author: transformAuthor(item.author)
+    }))
     if (page === 1) {
-      setAllThreads(newThreads)
+      setAllThreads(newItems)
     } else {
       setAllThreads(prev => {
-        const existingIds = new Set(prev.map(t => t.id))
-        const unique = newThreads.filter(t => !existingIds.has(t.id))
+        const existingIds = new Set(prev.map(t => t.thread.id))
+        const unique = newItems.filter(t => !existingIds.has(t.thread.id))
         return [...prev, ...unique]
       })
     }
   }, [threadsData, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const threads = allThreads
+
+  // Infinite scroll with IntersectionObserver
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+  const hasMore = threadsData?.hasMore ?? false
+
+  const loadNextPage = useCallback(() => {
+    if (!isLoading && hasMore) {
+      setPage(p => p + 1)
+    }
+  }, [isLoading, hasMore])
+
+  useEffect(() => {
+    const el = loadMoreRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadNextPage()
+        }
+      },
+      { rootMargin: '200px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [loadNextPage])
 
   // Is this a personalized scope with no subscriptions?
   const isPersonalizedScope = ['local', 'national', 'european'].includes(feedScope)
@@ -216,7 +244,7 @@ export function AgoraPage() {
           </div>
         )}
 
-        {isLoading && (
+        {isLoading && page === 1 && (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
@@ -239,11 +267,11 @@ export function AgoraPage() {
         {/* Thread list */}
         {!isLoading && !error && !showOnboarding && threads.length > 0 && (
           <div className="space-y-3">
-            {threadsData?.items.map((thread, index) => (
-              <div key={thread.id} {...(index === 0 ? { 'data-guide': 'agora-threadcard' } : {})}>
+            {threads.map((item, index) => (
+              <div key={item.thread.id} {...(index === 0 ? { 'data-guide': 'agora-threadcard' } : {})}>
                 <ThreadCard
-                  thread={transformThread(thread)}
-                  author={transformAuthor(thread.author)}
+                  thread={item.thread}
+                  author={item.author}
                   onVote={handleVote}
                   isVoting={voteThreadMutation.isPending}
                 />
@@ -296,25 +324,20 @@ export function AgoraPage() {
           </div>
         )}
 
-        {/* Load more / End marker */}
-        {!isLoading && !showOnboarding && threads.length > 0 && (
-          threadsData?.hasMore ? (
-            <div className="py-6 text-center">
-              <button
-                onClick={() => setPage(p => p + 1)}
-                className="px-6 py-2.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-              >
-                {t('common:loadMore')}
-              </button>
-            </div>
+        {/* Infinite scroll trigger / End marker */}
+        {!showOnboarding && threads.length > 0 && (
+          hasMore ? (
+            <>
+              <div ref={loadMoreRef} className="py-4" />
+              {isLoading && page > 1 && (
+                <div className="flex justify-center py-6">
+                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </>
           ) : (
-            <ContentEndMarker />
+            !isLoading && <ContentEndMarker />
           )
-        )}
-        {isLoading && page > 1 && (
-          <div className="flex justify-center py-6">
-            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
         )}
       </div>
     </Layout>
