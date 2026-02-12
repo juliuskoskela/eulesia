@@ -1,10 +1,11 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, and } from 'drizzle-orm'
-import { db, userSubscriptions, users, municipalities, clubs, places } from '../db/index.js'
+import { db, userSubscriptions, users, municipalities, clubs, places, notifications } from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
+import { io } from '../index.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -92,6 +93,31 @@ router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, 
       notify
     })
     .returning()
+
+  // Notify the followed user
+  if (entityType === 'user' && entityId !== userId) {
+    const [follower] = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+
+    if (follower) {
+      await db.insert(notifications).values({
+        userId: entityId,
+        type: 'new_follower',
+        title: follower.name,
+        body: 'started following you',
+        link: `/user/${userId}`
+      })
+
+      io.to(`user:${entityId}`).emit('new_notification', {
+        type: 'new_follower',
+        title: follower.name,
+        body: 'started following you'
+      })
+    }
+  }
 
   res.status(201).json({
     success: true,

@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, desc, asc, and, inArray, sql, or, gte } from 'drizzle-orm'
-import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions, tagCategories, institutionTopics, editHistory } from '../db/index.js'
+import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions, tagCategories, institutionTopics, editHistory, notifications } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
@@ -660,6 +660,111 @@ router.post('/threads/:id/comments', authMiddleware, asyncHandler(async (req: Au
       updatedAt: new Date()
     })
     .where(eq(threads.id, threadId))
+
+  // --- Notifications ---
+  const [commenter] = await db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  const commenterName = commenter?.name || 'Someone'
+  const truncatedContent = data.content.length > 80 ? data.content.slice(0, 80) + '...' : data.content
+  const notifiedUserIds = new Set<string>() // Prevent duplicate notifications
+
+  // 1. Notify parent comment author (reply to comment)
+  if (data.parentId) {
+    const [parentComment] = await db
+      .select({ authorId: comments.authorId })
+      .from(comments)
+      .where(eq(comments.id, data.parentId))
+      .limit(1)
+
+    if (parentComment && parentComment.authorId !== userId) {
+      // Check user preference
+      const [parentAuthor] = await db
+        .select({ notificationReplies: users.notificationReplies })
+        .from(users)
+        .where(eq(users.id, parentComment.authorId))
+        .limit(1)
+
+      if (parentAuthor?.notificationReplies !== false) {
+        notifiedUserIds.add(parentComment.authorId)
+        await db.insert(notifications).values({
+          userId: parentComment.authorId,
+          type: 'reply',
+          title: commenterName,
+          body: truncatedContent,
+          link: `/agora/thread/${threadId}`
+        })
+        io.to(`user:${parentComment.authorId}`).emit('new_notification', {
+          type: 'reply',
+          title: commenterName,
+          body: truncatedContent
+        })
+      }
+    }
+  }
+
+  // 2. Notify thread author (new comment on their thread)
+  // thread is already available from the scope check above (line ~609)
+  if (thread.authorId !== userId && !notifiedUserIds.has(thread.authorId)) {
+    // Check user preference
+    const [threadAuthorUser] = await db
+      .select({ notificationReplies: users.notificationReplies })
+      .from(users)
+      .where(eq(users.id, thread.authorId))
+      .limit(1)
+
+    if (threadAuthorUser?.notificationReplies !== false) {
+      notifiedUserIds.add(thread.authorId)
+      await db.insert(notifications).values({
+        userId: thread.authorId,
+        type: 'thread_reply',
+        title: commenterName,
+        body: truncatedContent,
+        link: `/agora/thread/${threadId}`
+      })
+      io.to(`user:${thread.authorId}`).emit('new_notification', {
+        type: 'thread_reply',
+        title: commenterName,
+        body: truncatedContent
+      })
+    }
+  }
+
+  // 3. Parse @mentions and notify mentioned users
+  const mentionRegex = /@(\w+(?:\s+\w+)?)/g
+  const mentions = [...data.content.matchAll(mentionRegex)].map(m => m[1].toLowerCase())
+
+  if (mentions.length > 0) {
+    // Find users by name (case-insensitive partial match)
+    for (const mentionName of mentions.slice(0, 10)) { // Limit to 10 mentions
+      const [mentionedUser] = await db
+        .select({ id: users.id, notificationMentions: users.notificationMentions })
+        .from(users)
+        .where(sql`LOWER(${users.name}) = ${mentionName}`)
+        .limit(1)
+
+      if (mentionedUser && mentionedUser.id !== userId && !notifiedUserIds.has(mentionedUser.id)) {
+        if (mentionedUser.notificationMentions !== false) {
+          notifiedUserIds.add(mentionedUser.id)
+          await db.insert(notifications).values({
+            userId: mentionedUser.id,
+            type: 'mention',
+            title: commenterName,
+            body: truncatedContent,
+            link: `/agora/thread/${threadId}`
+          })
+          io.to(`user:${mentionedUser.id}`).emit('new_notification', {
+            type: 'mention',
+            title: commenterName,
+            body: truncatedContent
+          })
+        }
+      }
+    }
+  }
 
   res.status(201).json({
     success: true,

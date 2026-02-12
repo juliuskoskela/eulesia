@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Bell, Shield, X, Search, MessageSquare, Check, Trash2 } from 'lucide-react'
+import { Bell, Shield, X, Search, MessageSquare, Check, Trash2, UserPlus, Reply, AtSign } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../hooks/useAuth'
@@ -35,6 +35,18 @@ function NotificationItem({
         {notification.type === 'dm' ? (
           <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
             <MessageSquare className="w-4 h-4 text-blue-600" />
+          </div>
+        ) : notification.type === 'new_follower' ? (
+          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+            <UserPlus className="w-4 h-4 text-green-600" />
+          </div>
+        ) : notification.type === 'reply' || notification.type === 'thread_reply' ? (
+          <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+            <Reply className="w-4 h-4 text-purple-600" />
+          </div>
+        ) : notification.type === 'mention' ? (
+          <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+            <AtSign className="w-4 h-4 text-orange-600" />
           </div>
         ) : (
           <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
