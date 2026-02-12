@@ -34,6 +34,7 @@ export interface Thread {
   authorId: string
   institutionalContext?: InstitutionalContext
   content: string
+  contentHtml?: string
   createdAt: string
   updatedAt: string
   replyCount: number

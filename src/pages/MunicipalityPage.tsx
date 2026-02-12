@@ -20,6 +20,7 @@ function transformThread(thread: ApiThread) {
     tags: thread.tags,
     authorId: thread.author.id,
     content: thread.content,
+    contentHtml: thread.contentHtml,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     replyCount: thread.replyCount,

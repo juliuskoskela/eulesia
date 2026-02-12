@@ -7,6 +7,7 @@ import { FollowButton } from '../common/FollowButton'
 import { ScopeBadge } from '../common/ScopeBadge'
 import { TagList } from '../common/TagList'
 import { ThreadVoteButtons } from './ThreadVoteButtons'
+import { ThreadCardMedia } from './ThreadCardMedia'
 import { formatRelativeTime } from '../../lib/formatTime'
 
 interface ThreadCardProps {
@@ -138,9 +139,14 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
           </h3>
 
           {/* Preview content */}
-          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+          <p className="text-sm text-gray-600 mb-2 line-clamp-2">
             {thread.content.split('\n')[0].replace(/[*#]/g, '')}
           </p>
+
+          {/* Embedded media preview (YouTube, images, link previews) */}
+          {thread.contentHtml && (
+            <ThreadCardMedia contentHtml={thread.contentHtml} />
+          )}
 
           {/* Tags */}
           <div className="mb-3">
