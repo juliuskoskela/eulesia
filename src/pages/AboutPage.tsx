@@ -1,4 +1,4 @@
-import { ArrowLeft, Globe, Code, Users, Building2, MessageSquare, Shield, Sparkles, BookOpen, Scale, Landmark, FlaskConical, ArrowRight, MapPin, Mail, CircleDot, GraduationCap, UserCheck, Coins } from 'lucide-react'
+import { ArrowLeft, Globe, Code, Users, Building2, Shield, Sparkles, BookOpen, Scale, Landmark, FlaskConical, ArrowRight, MapPin, Mail, CircleDot, GraduationCap, UserCheck, Coins } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Layout } from '../components/layout'
