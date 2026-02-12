@@ -57,7 +57,13 @@
     "activeSanctions": "{{count}} aktiivista sanktiota",
     "expiresAt": "Päättyy {{date}}",
     "revokedAt": "Kumottu {{date}}",
-    "noSanctions": "Ei sanktioita"
+    "noSanctions": "Ei sanktioita",
+    "confirmRoleTitle": "Vahvista roolinvaihto",
+    "confirmRoleDesc": "Haluatko varmasti vaihtaa käyttäjän {{name}} roolin: {{role}}?",
+    "confirmAdminTitle": "Myönnä ylläpitäjäoikeudet",
+    "confirmAdminDesc": "Olet antamassa käyttäjälle {{name}} ylläpitäjäoikeudet. Ylläpitäjä voi hallita kaikkia käyttäjiä, sisältöä ja asetuksia.",
+    "confirmAdminWarning": "Kirjoita ADMIN vahvistaaksesi:",
+    "confirmAdminPlaceholder": "Kirjoita ADMIN"
   },
   "reports": {
     "title": "Ilmiannot",

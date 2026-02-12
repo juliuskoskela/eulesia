@@ -18,6 +18,8 @@ export function AdminUserDetailPage() {
   const [sanctionType, setSanctionType] = useState<'warning' | 'suspension' | 'ban'>('warning')
   const [sanctionReason, setSanctionReason] = useState('')
   const [sanctionExpiry, setSanctionExpiry] = useState('')
+  const [pendingRole, setPendingRole] = useState<'citizen' | 'institution' | 'admin' | null>(null)
+  const [adminConfirmText, setAdminConfirmText] = useState('')
 
   if (isLoading || !user) {
     return (
@@ -30,8 +32,22 @@ export function AdminUserDetailPage() {
   }
 
   const handleRoleChange = (newRole: 'citizen' | 'institution' | 'admin') => {
-    if (!id) return
-    changeRoleMutation.mutate({ id, role: newRole })
+    if (!id || newRole === user?.role) return
+    // Always show confirmation for role changes
+    setPendingRole(newRole)
+    setAdminConfirmText('')
+  }
+
+  const confirmRoleChange = () => {
+    if (!id || !pendingRole) return
+    // Admin role requires typing ADMIN to confirm
+    if (pendingRole === 'admin' && adminConfirmText !== 'ADMIN') return
+    changeRoleMutation.mutate({ id, role: pendingRole }, {
+      onSuccess: () => {
+        setPendingRole(null)
+        setAdminConfirmText('')
+      }
+    })
   }
 
   const handleIssueSanction = async () => {
@@ -234,6 +250,75 @@ export function AdminUserDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Role change confirmation modal */}
+      {pendingRole && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPendingRole(null)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              {pendingRole === 'admin' ? (
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                </div>
+              ) : (
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-blue-600" />
+                </div>
+              )}
+              <div>
+                <h3 className="font-semibold text-gray-900">
+                  {pendingRole === 'admin' ? t('userDetail.confirmAdminTitle') : t('userDetail.confirmRoleTitle')}
+                </h3>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              {pendingRole === 'admin'
+                ? t('userDetail.confirmAdminDesc', { name: user.name })
+                : t('userDetail.confirmRoleDesc', { name: user.name, role: t(`users.${pendingRole}`) })
+              }
+            </p>
+
+            {pendingRole === 'admin' && (
+              <div className="mb-4">
+                <p className="text-sm font-medium text-red-700 mb-2">{t('userDetail.confirmAdminWarning')}</p>
+                <input
+                  type="text"
+                  value={adminConfirmText}
+                  onChange={e => setAdminConfirmText(e.target.value)}
+                  placeholder={t('userDetail.confirmAdminPlaceholder')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setPendingRole(null)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={confirmRoleChange}
+                disabled={changeRoleMutation.isPending || (pendingRole === 'admin' && adminConfirmText !== 'ADMIN')}
+                className={`px-4 py-2 text-sm text-white rounded-lg disabled:opacity-50 ${
+                  pendingRole === 'admin'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {changeRoleMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  t('userDetail.confirm')
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }

@@ -57,7 +57,13 @@
     "activeSanctions": "{{count}} active sanction(s)",
     "expiresAt": "Expires {{date}}",
     "revokedAt": "Revoked {{date}}",
-    "noSanctions": "No sanctions"
+    "noSanctions": "No sanctions",
+    "confirmRoleTitle": "Confirm role change",
+    "confirmRoleDesc": "Are you sure you want to change {{name}}'s role to {{role}}?",
+    "confirmAdminTitle": "Grant admin privileges",
+    "confirmAdminDesc": "You are about to grant admin privileges to {{name}}. Admins can manage all users, content, and settings.",
+    "confirmAdminWarning": "Type ADMIN to confirm:",
+    "confirmAdminPlaceholder": "Type ADMIN"
   },
   "reports": {
     "title": "Reports",
