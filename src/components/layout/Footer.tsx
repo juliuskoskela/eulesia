@@ -18,9 +18,17 @@ export function Footer() {
             <LanguageSwitcher variant="compact" />
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap justify-center">
             <Link to="/about" className="hover:text-gray-900 transition-colors">
               {t('footer.about')}
+            </Link>
+            <span className="text-gray-400">·</span>
+            <Link to="/terms" className="hover:text-gray-900 transition-colors">
+              {t('footer.terms')}
+            </Link>
+            <span className="text-gray-400">·</span>
+            <Link to="/privacy" className="hover:text-gray-900 transition-colors">
+              {t('footer.privacy')}
             </Link>
             <span className="text-gray-400">·</span>
             <span className="text-gray-500">{t('footer.openSource')}</span>

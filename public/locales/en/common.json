@@ -119,6 +119,8 @@
   },
   "footer": {
     "about": "About",
+    "terms": "Terms",
+    "privacy": "Privacy",
     "openSource": "Open source · Non-profit",
     "tagline": "Citizen infrastructure for the common good. Your data is not a product."
   },

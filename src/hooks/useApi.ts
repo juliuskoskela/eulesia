@@ -803,6 +803,12 @@ export function useExportData() {
   })
 }
 
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: () => api.deleteAccount()
+  })
+}
+
 // Search hooks
 export function useSearch(query: string, limit = 5) {
   return useQuery({

@@ -113,6 +113,10 @@ class ApiClient {
     return this.request('/users/me/data')
   }
 
+  async deleteAccount(): Promise<{ deleted: boolean }> {
+    return this.request('/users/me', { method: 'DELETE' })
+  }
+
   // Agora - Threads
   async getThreads(params?: ThreadFilters): Promise<ThreadsResponse> {
     const searchParams = new URLSearchParams()

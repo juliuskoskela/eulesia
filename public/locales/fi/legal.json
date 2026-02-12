@@ -1,0 +1,137 @@
+{
+  "terms": {
+    "title": "Käyttöehdot",
+    "lastUpdated": "Päivitetty viimeksi: {{date}}",
+    "sections": {
+      "intro": {
+        "title": "1. Johdanto",
+        "content": "Tervetuloa Eulesiaan. Nämä käyttöehdot koskevat Eulesia-palvelun (\"Palvelu\") käyttöä. Käyttämällä Palvelua hyväksyt nämä ehdot. Jos et hyväksy näitä ehtoja, älä käytä Palvelua."
+      },
+      "service": {
+        "title": "2. Palvelun kuvaus",
+        "content": "Eulesia on avoin kansalaisinfrastruktuuri, joka tarjoaa alustan demokraattiselle keskustelulle, kansalaisosallistumiselle ja tiedon jakamiselle. Palvelu on voittoa tavoittelematon ja avoimen lähdekoodin projekti."
+      },
+      "account": {
+        "title": "3. Käyttäjätili",
+        "content": "Tilin luominen edellyttää voimassa olevan sähköpostiosoitteen antamista. Olet vastuussa tilisi turvallisuudesta ja kaikesta tilisi kautta tapahtuvasta toiminnasta. Ilmoita meille välittömästi, jos epäilet tilisi luvattomasta käytöstä."
+      },
+      "conduct": {
+        "title": "4. Käyttäytymissäännöt",
+        "content": "Sitoudut käyttämään Palvelua lainmukaisesti ja vastuullisesti. Seuraavat ovat kiellettyjä:",
+        "rules": [
+          "Laittoman sisällön julkaiseminen tai jakaminen",
+          "Häirintä, uhkailu tai syrjintä",
+          "Roskapostin, mainosten tai harhaanjohtavan tiedon levittäminen",
+          "Toisten käyttäjien henkilötietojen luvaton jakaminen",
+          "Palvelun tekninen häirintä tai haavoittuvuuksien hyväksikäyttö",
+          "Toisten käyttäjien esiintyminen tai identiteetin väärinkäyttö"
+        ]
+      },
+      "content": {
+        "title": "5. Sisältö",
+        "content": "Julkaisemasi sisältö on sinun vastuullasi. Säilytät tekijänoikeutesi omaan sisältöösi. Antamalla sisältöä Palveluun myönnät Eulesialle ei-yksinoikaisen lisenssin näyttää, jakaa ja arkistoida sisältösi osana Palvelun toimintaa. Eulesialla on oikeus moderoida ja poistaa sisältöä, joka rikkoo näitä ehtoja."
+      },
+      "moderation": {
+        "title": "6. Moderointi",
+        "content": "Eulesia moderoi sisältöä EU:n digitaalisten palveluiden asetuksen (DSA) mukaisesti. Moderointipäätöksistä voi valittaa. Käyttäjille, jotka toistuvasti rikkovat sääntöjä, voidaan antaa varoituksia, rajoittaa tilin käyttöä tai poistaa tili."
+      },
+      "privacy": {
+        "title": "7. Tietosuoja",
+        "content": "Henkilötietojesi käsittely on kuvattu tietosuojaselosteessamme. Käyttämällä Palvelua hyväksyt tietojesi käsittelyn tietosuojaselosteen mukaisesti."
+      },
+      "liability": {
+        "title": "8. Vastuunrajoitus",
+        "content": "Palvelu tarjotaan \"sellaisenaan\" ilman takuita. Eulesia ei vastaa palvelun keskeytyksistä, tietojen menetyksestä tai vahingoista, jotka aiheutuvat Palvelun käytöstä. Eulesia ei vastaa käyttäjien julkaisemasta sisällöstä."
+      },
+      "changes": {
+        "title": "9. Ehtojen muutokset",
+        "content": "Voimme päivittää näitä ehtoja tarvittaessa. Merkittävistä muutoksista ilmoitetaan Palvelun kautta. Jatkamalla Palvelun käyttöä muutosten jälkeen hyväksyt päivitetyt ehdot."
+      },
+      "termination": {
+        "title": "10. Tilin päättäminen",
+        "content": "Voit milloin tahansa poistaa tilisi asetuksista. Eulesia voi päättää tilisi, jos rikot käyttöehtoja toistuvasti tai vakavasti. Tilin poiston yhteydessä henkilötietosi poistetaan tietosuojaselosteen mukaisesti."
+      },
+      "law": {
+        "title": "11. Sovellettava laki",
+        "content": "Näihin ehtoihin sovelletaan Suomen lakia. Mahdolliset erimielisyydet ratkaistaan ensisijaisesti neuvottelemalla ja toissijaisesti Helsingin käräjäoikeudessa."
+      },
+      "contact": {
+        "title": "12. Yhteystiedot",
+        "content": "Kysymyksiä käyttöehdoista voi lähettää osoitteeseen: info@eulesia.eu"
+      }
+    }
+  },
+  "privacy": {
+    "title": "Tietosuojaseloste",
+    "lastUpdated": "Päivitetty viimeksi: {{date}}",
+    "sections": {
+      "intro": {
+        "title": "1. Rekisterinpitäjä",
+        "content": "Eulesia\nSähköposti: info@eulesia.eu\n\nTämä tietosuojaseloste kuvaa, miten keräämme, käytämme ja suojaamme henkilötietojasi EU:n yleisen tietosuoja-asetuksen (GDPR) mukaisesti."
+      },
+      "data_collected": {
+        "title": "2. Kerättävät tiedot",
+        "content": "Keräämme seuraavia henkilötietoja:",
+        "items": [
+          "Nimi ja sähköpostiosoite (tilin luomiseen)",
+          "Profiilikuva (vapaaehtoinen)",
+          "Julkaisemasi sisältö (keskustelut, kommentit, viestit)",
+          "Äänestys- ja seurantatiedot",
+          "Kirjautumistiedot ja istunnon hallinta (session cookies)",
+          "IP-osoite ja selaintiedot (tietoturva)"
+        ]
+      },
+      "purpose": {
+        "title": "3. Tietojen käyttötarkoitus",
+        "content": "Käytämme henkilötietojasi seuraaviin tarkoituksiin:",
+        "items": [
+          "Käyttäjätilin luominen ja hallinta",
+          "Palvelun toimintojen tarjoaminen (keskustelu, äänestys, viestit)",
+          "Palvelun turvallisuuden ja sääntöjen noudattamisen varmistaminen",
+          "Palvelun kehittäminen ja virheiden korjaaminen",
+          "Lakisääteisten velvoitteiden täyttäminen"
+        ]
+      },
+      "legal_basis": {
+        "title": "4. Oikeusperuste",
+        "content": "Henkilötietojen käsittely perustuu:\n- Suostumukseen (tilin luominen ja käyttö)\n- Sopimuksen täytäntöönpanoon (palvelun tarjoaminen)\n- Lakisääteiseen velvoitteeseen (DSA-asetuksen noudattaminen)\n- Oikeutettuun etuun (tietoturva, väärinkäytösten estäminen)"
+      },
+      "sharing": {
+        "title": "5. Tietojen luovutus",
+        "content": "Emme myy tai luovuta henkilötietojasi kolmansille osapuolille kaupallisiin tarkoituksiin. Tietoja voidaan luovuttaa:\n- Viranomaisille lakisääteisten velvoitteiden noudattamiseksi\n- Palveluntarjoajille, jotka käsittelevät tietoja puolestamme (palvelinhosting)\n\nKaikki palveluntarjoajat ovat sitoutuneet noudattamaan GDPR:ää."
+      },
+      "retention": {
+        "title": "6. Tietojen säilytys",
+        "content": "Henkilötietoja säilytetään niin kauan kuin tili on aktiivinen. Tilin poiston jälkeen:\n- Henkilötiedot (nimi, sähköposti, profiilikuva) poistetaan 30 päivän kuluessa\n- Julkaistu sisältö anonymisoidaan (tekijätiedot poistetaan)\n- Yksityisviestit poistetaan pysyvästi\n- Moderointilokeja säilytetään 1 vuosi lakisääteisistä syistä"
+      },
+      "rights": {
+        "title": "7. Rekisteröidyn oikeudet",
+        "content": "Sinulla on GDPR:n mukaiset oikeudet:",
+        "items": [
+          "Oikeus saada pääsy tietoihisi (data export profiilin asetuksista)",
+          "Oikeus tietojen oikaisemiseen (profiilitietojen muokkaus)",
+          "Oikeus tietojen poistamiseen (tilin poisto)",
+          "Oikeus käsittelyn rajoittamiseen",
+          "Oikeus siirtää tiedot järjestelmästä toiseen (JSON-vienti)",
+          "Oikeus tehdä valitus tietosuojavaltuutetun toimistoon (tietosuoja.fi)"
+        ]
+      },
+      "security": {
+        "title": "8. Tietoturva",
+        "content": "Käytämme asianmukaisia teknisiä ja organisatorisia toimenpiteitä henkilötietojesi suojaamiseksi:\n- Salatut yhteydet (HTTPS/TLS)\n- Salasanojen suojaus (bcrypt-hash)\n- Pääsynhallinta ja roolipohjainen käyttöoikeus\n- Säännölliset tietoturvatarkistukset"
+      },
+      "cookies": {
+        "title": "9. Evästeet",
+        "content": "Käytämme ainoastaan Palvelun toiminnan kannalta välttämättömiä evästeitä:\n- Istuntoeväste (kirjautumistilan ylläpito)\n- Kieliasetus (käyttäjän valitsema kieli)\n\nEmme käytä seuranta-, analytiikka- tai mainosevästeitä."
+      },
+      "changes": {
+        "title": "10. Selosteen muutokset",
+        "content": "Voimme päivittää tätä selostetta tarvittaessa. Merkittävistä muutoksista ilmoitetaan käyttäjille Palvelun kautta."
+      },
+      "contact": {
+        "title": "11. Yhteystiedot",
+        "content": "Tietosuojaan liittyvissä kysymyksissä ota yhteyttä: info@eulesia.eu\n\nVoit myös tehdä valituksen tietosuojavaltuutetun toimistoon:\nTietosuojavaltuutetun toimisto\nhttps://tietosuoja.fi"
+      }
+    }
+  }
+}

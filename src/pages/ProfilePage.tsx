@@ -8,7 +8,7 @@ import { AppealButton } from '../components/common/AppealButton'
 import { useAuth } from '../hooks/useAuth'
 import { useMySanctions } from '../hooks/useAdminApi'
 import { useGuide } from '../hooks/useGuide'
-import { useUpdateProfile, useExportData } from '../hooks/useApi'
+import { useUpdateProfile, useExportData, useDeleteAccount } from '../hooks/useApi'
 import { guides } from '../data/guides'
 import { api, type InviteCode, type InvitedUser } from '../lib/api'
 
@@ -19,6 +19,9 @@ export function ProfilePage() {
   const navigate = useNavigate()
   const updateProfileMutation = useUpdateProfile()
   const exportDataMutation = useExportData()
+  const deleteAccountMutation = useDeleteAccount()
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const { startGuide, hasCompletedGuide, resetAllGuides } = useGuide()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -532,7 +535,7 @@ export function ProfilePage() {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-gray-200">
+            <div className="pt-3 border-t border-gray-200 flex items-center justify-between">
               <button
                 onClick={handleExportData}
                 disabled={exportDataMutation.isPending}
@@ -541,7 +544,60 @@ export function ProfilePage() {
                 <ExternalLink className="w-4 h-4" />
                 {exportDataMutation.isPending ? t('privacy.exporting') : t('privacy.exportData')}
               </button>
+
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {t('privacy.deleteAccount')}
+              </button>
             </div>
+
+            {/* Delete account confirmation */}
+            {showDeleteConfirm && (
+              <div className="mt-3 pt-3 border-t border-red-200 bg-red-50 -mx-4 -mb-4 px-4 pb-4 rounded-b-xl">
+                <p className="text-sm font-medium text-red-800 mb-1">
+                  {t('privacy.deleteConfirmTitle')}
+                </p>
+                <p className="text-xs text-red-700 mb-3">
+                  {t('privacy.deleteConfirmDesc')}
+                </p>
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder={t('privacy.deleteConfirmPlaceholder')}
+                    className="w-full px-3 py-2 text-sm border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      await deleteAccountMutation.mutateAsync()
+                      logout()
+                      navigate('/')
+                    }}
+                    disabled={deleteConfirmText !== 'POISTA' || deleteAccountMutation.isPending}
+                    className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {deleteAccountMutation.isPending ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    {t('privacy.deleteConfirmButton')}
+                  </button>
+                  <button
+                    onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText('') }}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300"
+                  >
+                    {t('common:actions.cancel')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

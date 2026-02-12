@@ -23,7 +23,9 @@ import {
   TopicsPage,
   MessagesPage,
   DMConversationPage,
-  UserHomePage
+  UserHomePage,
+  TermsPage,
+  PrivacyPage
 } from './pages'
 import {
   AdminDashboardPage,
@@ -246,6 +248,14 @@ function AppRoutes() {
       <Route
         path="/about"
         element={<AboutPage />}
+      />
+      <Route
+        path="/terms"
+        element={<TermsPage />}
+      />
+      <Route
+        path="/privacy"
+        element={<PrivacyPage />}
       />
 
       <Route

@@ -119,6 +119,8 @@
   },
   "footer": {
     "about": "Tietoa",
+    "terms": "Käyttöehdot",
+    "privacy": "Tietosuoja",
     "openSource": "Avoin lähdekoodi · Ei voittoa tavoitteleva",
     "tagline": "Kansalaisinfrastruktuuria yhteiseksi hyväksi. Datasi ei ole tuote."
   },

@@ -47,7 +47,12 @@
       "notifications": "Notification preferences"
     },
     "exporting": "Exporting...",
-    "exportData": "Export my data"
+    "exportData": "Export my data",
+    "deleteAccount": "Delete account",
+    "deleteConfirmTitle": "Are you sure you want to delete your account?",
+    "deleteConfirmDesc": "This will remove all your personal data, messages, and votes. Your public discussions and comments will be anonymized. This action cannot be undone. Type POISTA to confirm.",
+    "deleteConfirmPlaceholder": "Type POISTA",
+    "deleteConfirmButton": "Delete account permanently"
   },
   "language": {
     "title": "Language",

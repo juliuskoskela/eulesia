@@ -259,4 +259,64 @@ router.get('/me/data', authMiddleware, asyncHandler(async (req: AuthenticatedReq
   })
 }))
 
+// DELETE /users/me - GDPR account deletion ("right to be forgotten")
+// Soft-deletes: anonymizes user data, removes personal info, keeps public content
+router.delete('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+
+  const { notifications, userSubscriptions, directMessages, conversationParticipants, threadVotes, commentVotes, roomMessages, clubMembers, editHistory } = await import('../db/index.js')
+
+  // 1. Delete user's votes
+  await db.delete(threadVotes).where(eq(threadVotes.userId, userId))
+  await db.delete(commentVotes).where(eq(commentVotes.userId, userId))
+
+  // 2. Delete notifications
+  await db.delete(notifications).where(eq(notifications.userId, userId))
+
+  // 3. Delete subscriptions (both directions)
+  await db.delete(userSubscriptions).where(eq(userSubscriptions.userId, userId))
+
+  // 4. Delete DMs and conversation participation
+  await db.delete(directMessages).where(eq(directMessages.authorId, userId))
+  await db.delete(conversationParticipants).where(eq(conversationParticipants.userId, userId))
+
+  // 5. Delete room messages
+  await db.delete(roomMessages).where(eq(roomMessages.authorId, userId))
+
+  // 6. Delete club memberships
+  await db.delete(clubMembers).where(eq(clubMembers.userId, userId))
+
+  // 7. Delete edit history
+  await db.delete(editHistory).where(eq(editHistory.editedBy, userId))
+
+  // 8. Anonymize the user account (keep row for FK integrity, remove all personal data)
+  // Public threads and comments keep their authorId but the user is now "[Poistettu käyttäjä]"
+  await db
+    .update(users)
+    .set({
+      name: '[Poistettu käyttäjä]',
+      email: `deleted_${userId}@deleted.eulesia.eu`,
+      username: `deleted_${userId.slice(0, 8)}`,
+      passwordHash: '',
+      avatarUrl: null,
+      municipalityId: null,
+      role: 'citizen',
+      institutionType: null,
+      institutionName: null,
+      notificationReplies: false,
+      notificationMentions: false,
+      notificationOfficial: false,
+      deletedAt: new Date()
+    })
+    .where(eq(users.id, userId))
+
+  // 9. Clear session cookie
+  res.clearCookie('connect.sid')
+
+  res.json({
+    success: true,
+    data: { deleted: true }
+  })
+}))
+
 export default router

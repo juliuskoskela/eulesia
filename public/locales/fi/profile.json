@@ -47,7 +47,12 @@
       "notifications": "Ilmoitusasetukset"
     },
     "exporting": "Viedään...",
-    "exportData": "Vie datani"
+    "exportData": "Vie datani",
+    "deleteAccount": "Poista tili",
+    "deleteConfirmTitle": "Haluatko varmasti poistaa tilisi?",
+    "deleteConfirmDesc": "Tämä poistaa kaikki henkilötietosi, viestisi ja äänesi. Julkiset keskustelusi ja kommenttisi anonymisoidaan. Tätä toimintoa ei voi peruuttaa. Kirjoita POISTA vahvistaaksesi.",
+    "deleteConfirmPlaceholder": "Kirjoita POISTA",
+    "deleteConfirmButton": "Poista tili pysyvästi"
   },
   "language": {
     "title": "Kieli",
