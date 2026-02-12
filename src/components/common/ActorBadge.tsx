@@ -1,4 +1,4 @@
-import { Building2, ShieldOff } from 'lucide-react'
+import { Building2, ShieldCheck, ShieldOff } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { User } from '../../types'
 
@@ -47,6 +47,10 @@ export function ActorBadge({ user, showName = true, size = 'md' }: ActorBadgePro
               <span className="inline-flex items-center gap-1 text-xs text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded">
                 <Building2 className="w-3 h-3" />
                 <span>Official</span>
+              </span>
+            ) : user.verified ? (
+              <span className="inline-flex items-center gap-0.5 text-xs text-green-600">
+                <ShieldCheck className="w-3 h-3" />
               </span>
             ) : (
               <span className="inline-flex items-center gap-0.5 text-xs text-gray-400">
