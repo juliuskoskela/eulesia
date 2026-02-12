@@ -314,9 +314,11 @@ function AboutContent() {
             <p className="text-sm text-gray-700 leading-relaxed">
               {t('research.p2')}
             </p>
-            <p className="text-xs text-gray-500 italic mt-2 border-t border-gray-100 pt-3">
-              {t('research.paper')}
-            </p>
+            {t('research.paper') && (
+              <p className="text-xs text-gray-500 italic mt-2 border-t border-gray-100 pt-3">
+                {t('research.paper')}
+              </p>
+            )}
           </div>
         </SectionCard>
 
