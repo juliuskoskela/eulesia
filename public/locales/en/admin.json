@@ -67,7 +67,8 @@
     "confirmAdminTitle": "Grant admin privileges",
     "confirmAdminDesc": "You are about to grant admin privileges to {{name}}. Admins can manage all users, content, and settings.",
     "confirmAdminWarning": "Type ADMIN to confirm:",
-    "confirmAdminPlaceholder": "Type ADMIN"
+    "confirmAdminPlaceholder": "Type ADMIN",
+    "inviteCodes": "Invite codes remaining"
   },
   "reports": {
     "title": "Reports",
@@ -166,6 +167,17 @@
   },
   "settings": {
     "title": "Settings",
+    "save": "Save",
+    "inviteSystem": "Invite System",
+    "inviteSystemDesc": "Manage invite functionality and default settings.",
+    "invitesEnabled": "Invites enabled",
+    "invitesEnabledDesc": "When enabled, users can create and share invite codes.",
+    "defaultInviteCount": "Invites per user",
+    "defaultInviteCountDesc": "How many invite codes new users get by default.",
+    "registration": "Registration",
+    "registrationDesc": "Manage new user registration.",
+    "registrationOpen": "Registration open",
+    "registrationOpenDesc": "When enabled, new users can register with an invite code.",
     "platformSettings": "Platform Settings",
     "dsaCompliance": "DSA Compliance",
     "dsaDescription": "EU Digital Services Act compliant moderation tools are enabled.",

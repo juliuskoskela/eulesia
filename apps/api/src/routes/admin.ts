@@ -4,7 +4,7 @@ import { eq, desc, and, sql, count, or, gt, ilike } from 'drizzle-orm'
 import {
   db, users, threads, comments, clubs, clubThreads, clubComments,
   contentReports, moderationActions, userSanctions, moderationAppeals,
-  notifications
+  notifications, siteSettings
 } from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { requireAdmin } from '../middleware/admin.js'
@@ -775,6 +775,93 @@ router.patch('/appeals/:id', asyncHandler(async (req: AuthenticatedRequest, res:
   })
 
   res.json({ success: true, data: { id, status } })
+}))
+
+// ============================================================
+// SITE SETTINGS
+// ============================================================
+
+// GET /admin/settings - Get all site settings
+router.get('/settings', asyncHandler(async (_req, res: Response) => {
+  const settings = await db.select().from(siteSettings)
+  const settingsMap: Record<string, string> = {}
+  for (const s of settings) {
+    settingsMap[s.key] = s.value
+  }
+
+  // Return with defaults
+  res.json({
+    success: true,
+    data: {
+      invitesEnabled: settingsMap['invites_enabled'] !== 'false', // default: true
+      defaultInviteCount: parseInt(settingsMap['default_invite_count'] || '5', 10),
+      registrationOpen: settingsMap['registration_open'] !== 'false' // default: true
+    }
+  })
+}))
+
+// PATCH /admin/settings - Update site settings
+router.patch('/settings', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const schema = z.object({
+    invitesEnabled: z.boolean().optional(),
+    defaultInviteCount: z.number().int().min(0).max(100).optional(),
+    registrationOpen: z.boolean().optional()
+  })
+  const data = schema.parse(req.body)
+
+  const updates: { key: string; value: string }[] = []
+  if (data.invitesEnabled !== undefined) {
+    updates.push({ key: 'invites_enabled', value: String(data.invitesEnabled) })
+  }
+  if (data.defaultInviteCount !== undefined) {
+    updates.push({ key: 'default_invite_count', value: String(data.defaultInviteCount) })
+  }
+  if (data.registrationOpen !== undefined) {
+    updates.push({ key: 'registration_open', value: String(data.registrationOpen) })
+  }
+
+  for (const { key, value } of updates) {
+    await db
+      .insert(siteSettings)
+      .values({ key, value, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: siteSettings.key,
+        set: { value, updatedAt: new Date() }
+      })
+  }
+
+  await db.insert(moderationActions).values({
+    adminUserId: req.user!.id,
+    actionType: 'settings_changed',
+    targetType: 'system',
+    targetId: 'site_settings',
+    reason: 'Site settings updated',
+    metadata: data
+  })
+
+  res.json({ success: true })
+}))
+
+// PATCH /admin/users/:id/invites - Set invite count for a user
+router.patch('/users/:id/invites', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params
+  const { count: newCount } = z.object({ count: z.number().int().min(0).max(100) }).parse(req.body)
+
+  const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1)
+  if (!user) throw new AppError(404, 'User not found')
+
+  await db.update(users).set({ inviteCodesRemaining: newCount }).where(eq(users.id, id))
+
+  await db.insert(moderationActions).values({
+    adminUserId: req.user!.id,
+    actionType: 'invite_count_changed',
+    targetType: 'user',
+    targetId: id,
+    reason: `Invite count set to ${newCount}`,
+    metadata: { inviteCodesRemaining: newCount }
+  })
+
+  res.json({ success: true, data: { id, inviteCodesRemaining: newCount } })
 }))
 
 export default router

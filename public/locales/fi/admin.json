@@ -67,7 +67,8 @@
     "confirmAdminTitle": "Myönnä ylläpitäjäoikeudet",
     "confirmAdminDesc": "Olet antamassa käyttäjälle {{name}} ylläpitäjäoikeudet. Ylläpitäjä voi hallita kaikkia käyttäjiä, sisältöä ja asetuksia.",
     "confirmAdminWarning": "Kirjoita ADMIN vahvistaaksesi:",
-    "confirmAdminPlaceholder": "Kirjoita ADMIN"
+    "confirmAdminPlaceholder": "Kirjoita ADMIN",
+    "inviteCodes": "Kutsukoodit jäljellä"
   },
   "reports": {
     "title": "Ilmiannot",
@@ -166,6 +167,17 @@
   },
   "settings": {
     "title": "Asetukset",
+    "save": "Tallenna",
+    "inviteSystem": "Kutsujärjestelmä",
+    "inviteSystemDesc": "Hallitse kutsujen toimintaa ja oletusasetuksia.",
+    "invitesEnabled": "Kutsut käytössä",
+    "invitesEnabledDesc": "Kun päällä, käyttäjät voivat luoda ja jakaa kutsukoodeja.",
+    "defaultInviteCount": "Kutsuja per käyttäjä",
+    "defaultInviteCountDesc": "Kuinka monta kutsukoodia uudet käyttäjät saavat oletuksena.",
+    "registration": "Rekisteröinti",
+    "registrationDesc": "Hallitse uusien käyttäjien rekisteröitymistä.",
+    "registrationOpen": "Rekisteröinti auki",
+    "registrationOpenDesc": "Kun päällä, uudet käyttäjät voivat rekisteröityä kutsukoodilla.",
     "platformSettings": "Alusta-asetukset",
     "dsaCompliance": "DSA-yhteensopivuus",
     "dsaDescription": "EU:n Digital Services Act -vaatimusten mukaiset moderointityökalut ovat käytössä.",

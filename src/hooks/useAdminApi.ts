@@ -13,6 +13,7 @@ export const adminKeys = {
   modlog: (params?: any) => ['admin', 'modlog', params] as const,
   transparency: (from?: string, to?: string) => ['admin', 'transparency', from, to] as const,
   appeals: (params?: any) => ['admin', 'appeals', params] as const,
+  settings: ['admin', 'settings'] as const,
   mySanctions: ['mySanctions'] as const,
 }
 
@@ -191,6 +192,40 @@ export function useResolveAppeal() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'appeals'] })
       queryClient.invalidateQueries({ queryKey: adminKeys.dashboard })
+    }
+  })
+}
+
+// Settings
+export function useAdminSettings() {
+  return useQuery({
+    queryKey: adminKeys.settings,
+    queryFn: () => api.getAdminSettings()
+  })
+}
+
+export function useUpdateAdminSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: { invitesEnabled?: boolean; defaultInviteCount?: number; registrationOpen?: boolean }) =>
+      api.updateAdminSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.settings })
+      queryClient.invalidateQueries({ queryKey: adminKeys.modlog() })
+    }
+  })
+}
+
+export function useSetUserInviteCount() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ userId, count }: { userId: string; count: number }) =>
+      api.setUserInviteCount(userId, count),
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.user(userId) })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     }
   })
 }

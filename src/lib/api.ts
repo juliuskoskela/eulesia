@@ -721,6 +721,26 @@ class ApiClient {
     })
   }
 
+  // ─── Admin settings ──────────────────────────────
+
+  async getAdminSettings(): Promise<{ invitesEnabled: boolean; defaultInviteCount: number; registrationOpen: boolean }> {
+    return this.request('/admin/settings')
+  }
+
+  async updateAdminSettings(data: { invitesEnabled?: boolean; defaultInviteCount?: number; registrationOpen?: boolean }): Promise<void> {
+    return this.request('/admin/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async setUserInviteCount(userId: string, count: number): Promise<{ id: string; inviteCodesRemaining: number }> {
+    return this.request(`/admin/users/${userId}/invites`, {
+      method: 'PATCH',
+      body: JSON.stringify({ count })
+    })
+  }
+
   // ─── User reports & appeals ──────────────────────────────
 
   async submitReport(data: SubmitReportData): Promise<ContentReportResponse> {
