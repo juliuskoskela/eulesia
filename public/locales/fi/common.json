@@ -182,6 +182,12 @@
     "send": "Lähetä valitus",
     "submitted": "Valitus lähetetty. Käsittelemme sen mahdollisimman pian."
   },
+  "share": {
+    "share": "Jaa",
+    "copyLink": "Kopioi linkki",
+    "copied": "Kopioitu!",
+    "more": "Lisää..."
+  },
   "messageDeleted": "Tämä viesti on poistettu",
   "loadMore": "Lataa lisää",
   "errorPages": {

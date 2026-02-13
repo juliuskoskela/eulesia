@@ -1,4 +1,4 @@
-import { MessageSquare, Clock, Building2, Bot, FileText } from 'lucide-react'
+import { MessageSquare, Clock, Building2, Bot, FileText, Share2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { Thread, User } from '../../types'
@@ -153,13 +153,31 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
             <TagList tags={(thread.tags || []).slice(0, 3)} />
           </div>
 
-          {/* Footer: author + replies */}
+          {/* Footer: author + replies + share */}
           <div className="flex items-center justify-between pt-3 border-t border-gray-100">
             <ActorBadge user={author} size="sm" />
 
-            <div className="flex items-center gap-1 text-sm text-gray-500">
-              <MessageSquare className="w-4 h-4" />
-              <span>{t('replies', { count: thread.replyCount })}</span>
+            <div className="flex items-center gap-3 text-sm text-gray-500">
+              <span className="flex items-center gap-1">
+                <MessageSquare className="w-4 h-4" />
+                {t('replies', { count: thread.replyCount })}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const url = `${window.location.origin}/agora/thread/${thread.id}`
+                  if (navigator.share) {
+                    navigator.share({ title: thread.title, url })
+                  } else {
+                    navigator.clipboard.writeText(url)
+                  }
+                }}
+                className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                title={t('common:share.share')}
+              >
+                <Share2 className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 

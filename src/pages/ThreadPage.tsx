@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Building2, ChevronDown, Pencil, Trash2, History } from 'lucide-react'
 import { Layout } from '../components/layout'
-import { ActorBadge, ScopeBadge, TagList, ContentEndMarker, ReportButton, ConfirmDeleteDialog, EditedIndicator, ContentWithPreviews } from '../components/common'
+import { ActorBadge, ScopeBadge, TagList, ContentEndMarker, ReportButton, ConfirmDeleteDialog, EditedIndicator, ContentWithPreviews, ShareButtons } from '../components/common'
 import { InstitutionalContextBox } from '../components/agora/InstitutionalContextBox'
 import { CommentThread } from '../components/agora/CommentThread'
 import { ThreadVoteButtons } from '../components/agora/ThreadVoteButtons'
@@ -246,10 +246,17 @@ export function ThreadPage() {
           <TagList tags={thread.tags || []} size="md" />
         </div>
 
-        {/* Author + Report */}
+        {/* Author + Share + Report */}
         <div className="pt-4 border-t border-gray-200 flex items-center justify-between">
           <ActorBadge user={author} />
-          {threadId && <ReportButton contentType="thread" contentId={threadId} />}
+          <div className="flex items-center gap-1">
+            <ShareButtons
+              url={`/agora/thread/${threadId}`}
+              title={thread.title}
+              compact
+            />
+            {threadId && <ReportButton contentType="thread" contentId={threadId} />}
+          </div>
         </div>
       </div>
 

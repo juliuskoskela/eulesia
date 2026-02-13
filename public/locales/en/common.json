@@ -182,6 +182,12 @@
     "send": "Submit Appeal",
     "submitted": "Appeal submitted. We will review it as soon as possible."
   },
+  "share": {
+    "share": "Share",
+    "copyLink": "Copy link",
+    "copied": "Copied!",
+    "more": "More..."
+  },
   "messageDeleted": "This message has been deleted",
   "loadMore": "Load more",
   "errorPages": {
