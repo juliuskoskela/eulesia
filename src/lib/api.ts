@@ -1439,6 +1439,7 @@ export interface AdminUserDetail extends AdminUser {
   sanctions: AdminSanction[]
   threadCount: number
   commentCount: number
+  inviteCodesRemaining: number
 }
 
 export interface IssueSanctionData {
