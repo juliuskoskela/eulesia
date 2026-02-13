@@ -139,7 +139,47 @@ router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: Authenticate
       throw new AppError(404, 'Club not found')
     }
 
+    if (!clubBySlug.isPublic && req.user?.role !== 'admin') {
+      if (!req.user) {
+        throw new AppError(403, 'This club is private')
+      }
+      const [membership] = await db
+        .select({ userId: clubMembers.userId })
+        .from(clubMembers)
+        .where(and(
+          eq(clubMembers.clubId, clubBySlug.id),
+          eq(clubMembers.userId, req.user.id)
+        ))
+        .limit(1)
+      if (!membership) {
+        throw new AppError(403, 'This club is private')
+      }
+    }
+
     return res.redirect(`/api/v1/clubs/${clubBySlug.id}`)
+  }
+
+  // Check membership
+  let isMember = false
+  let memberRole = null
+  if (req.user) {
+    const [membership] = await db
+      .select()
+      .from(clubMembers)
+      .where(and(
+        eq(clubMembers.clubId, club.id),
+        eq(clubMembers.userId, req.user.id)
+      ))
+      .limit(1)
+
+    if (membership) {
+      isMember = true
+      memberRole = membership.role
+    }
+  }
+
+  if (!club.isPublic && !isMember && req.user?.role !== 'admin') {
+    throw new AppError(403, 'This club is private')
   }
 
   // Get moderators and admins
@@ -189,25 +229,6 @@ router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: Authenticate
     .where(and(eq(clubThreads.clubId, club.id), eq(clubThreads.isHidden, false)))
     .orderBy(desc(clubThreads.isPinned), desc(clubThreads.updatedAt))
     .limit(50)
-
-  // Check membership
-  let isMember = false
-  let memberRole = null
-  if (req.user) {
-    const [membership] = await db
-      .select()
-      .from(clubMembers)
-      .where(and(
-        eq(clubMembers.clubId, club.id),
-        eq(clubMembers.userId, req.user.id)
-      ))
-      .limit(1)
-
-    if (membership) {
-      isMember = true
-      memberRole = membership.role
-    }
-  }
 
   res.json({
     success: true,
@@ -346,6 +367,11 @@ router.post('/:id/join', authMiddleware, asyncHandler(async (req: AuthenticatedR
     throw new AppError(404, 'Club not found')
   }
 
+  // Private clubs cannot be joined directly — require invitation
+  if (!club.isPublic && req.user!.role !== 'admin') {
+    throw new AppError(403, 'This club is private — join by invitation only')
+  }
+
   // Check if already member
   const [existing] = await db
     .select()
@@ -475,6 +501,36 @@ router.post('/:id/threads', authMiddleware, asyncHandler(async (req: Authenticat
 router.get('/:clubId/threads/:threadId', optionalAuthMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { clubId, threadId } = req.params
 
+  const [club] = await db
+    .select({ id: clubs.id, isPublic: clubs.isPublic })
+    .from(clubs)
+    .where(eq(clubs.id, clubId))
+    .limit(1)
+
+  if (!club) {
+    throw new AppError(404, 'Club not found')
+  }
+
+  let memberRole = null
+  if (req.user) {
+    const [membership] = await db
+      .select()
+      .from(clubMembers)
+      .where(and(
+        eq(clubMembers.clubId, club.id),
+        eq(clubMembers.userId, req.user.id)
+      ))
+      .limit(1)
+
+    if (membership) {
+      memberRole = membership.role
+    }
+  }
+
+  if (!club.isPublic && !memberRole && req.user?.role !== 'admin') {
+    throw new AppError(403, 'This club is private')
+  }
+
   const [threadData] = await db
     .select({
       thread: clubThreads,
@@ -514,23 +570,6 @@ router.get('/:clubId/threads/:threadId', optionalAuthMiddleware, asyncHandler(as
     .leftJoin(users, eq(clubComments.authorId, users.id))
     .where(eq(clubComments.threadId, threadId))
     .orderBy(clubComments.createdAt)
-
-  // Check membership for memberRole
-  let memberRole = null
-  if (req.user) {
-    const [membership] = await db
-      .select()
-      .from(clubMembers)
-      .where(and(
-        eq(clubMembers.clubId, clubId),
-        eq(clubMembers.userId, req.user.id)
-      ))
-      .limit(1)
-
-    if (membership) {
-      memberRole = membership.role
-    }
-  }
 
   res.json({
     success: true,
