@@ -161,6 +161,7 @@ async function syncThreads(): Promise<number> {
     tags: tagsByThread[t.thread.id] || [],
     score: t.thread.score || 0,
     replyCount: t.thread.replyCount || 0,
+    isHidden: t.thread.isHidden === true,
     createdAt: t.thread.createdAt?.toISOString() || new Date().toISOString(),
     updatedAt: t.thread.updatedAt?.toISOString() || new Date().toISOString()
   }))

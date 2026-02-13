@@ -48,6 +48,7 @@ export interface ThreadDocument {
   tags: string[]
   score: number
   replyCount: number
+  isHidden: boolean
   createdAt: string
   updatedAt: string
 }
@@ -126,7 +127,7 @@ export async function initializeIndexes(): Promise<void> {
   const threadsIndex = client.index(INDEXES.THREADS)
   await threadsIndex.updateSettings({
     searchableAttributes: ['title', 'content', 'tags', 'authorName', 'municipalityName'],
-    filterableAttributes: ['scope', 'municipalityId', 'authorId', 'tags'],
+    filterableAttributes: ['scope', 'municipalityId', 'authorId', 'tags', 'isHidden'],
     sortableAttributes: ['createdAt', 'updatedAt', 'score', 'replyCount'],
     rankingRules: ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness']
   })
@@ -279,6 +280,7 @@ export async function search(query: string, options?: {
         indexUid: INDEXES.THREADS,
         q: query,
         limit: limit * 2, // More threads
+        filter: 'isHidden = false',
         attributesToRetrieve: ['id', 'title', 'content', 'scope', 'authorName', 'municipalityName', 'tags', 'score', 'replyCount', 'createdAt']
       },
       {
@@ -339,7 +341,7 @@ export async function searchThreads(query: string, options?: {
   municipalityId?: string
   tags?: string[]
 }): Promise<ThreadDocument[]> {
-  const filter: string[] = []
+  const filter: string[] = ['isHidden = false']
   if (options?.scope) filter.push(`scope = "${options.scope}"`)
   if (options?.municipalityId) filter.push(`municipalityId = "${options.municipalityId}"`)
   if (options?.tags?.length) {

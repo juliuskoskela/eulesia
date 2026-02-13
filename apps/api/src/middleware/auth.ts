@@ -2,7 +2,16 @@ import type { Response, NextFunction } from 'express'
 import { eq, and, gt, isNull, or, inArray } from 'drizzle-orm'
 import { db, sessions, users, userSanctions } from '../db/index.js'
 import { hashToken } from '../utils/crypto.js'
+import { env } from '../utils/env.js'
 import type { AuthenticatedRequest } from '../types/index.js'
+
+const sessionCookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  domain: env.COOKIE_DOMAIN,
+  path: '/'
+}
 
 export async function authMiddleware(
   req: AuthenticatedRequest,
@@ -31,7 +40,7 @@ export async function authMiddleware(
       .limit(1)
 
     if (!session) {
-      res.clearCookie('session')
+      res.clearCookie('session', sessionCookieOptions)
       res.status(401).json({ success: false, error: 'Session expired' })
       return
     }
@@ -43,7 +52,7 @@ export async function authMiddleware(
       .limit(1)
 
     if (!user) {
-      res.clearCookie('session')
+      res.clearCookie('session', sessionCookieOptions)
       res.status(401).json({ success: false, error: 'User not found' })
       return
     }
@@ -92,11 +101,11 @@ export async function authMiddleware(
   }
 }
 
-export function optionalAuthMiddleware(
+export async function optionalAuthMiddleware(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   const sessionToken = req.cookies?.session
 
   if (!sessionToken) {
@@ -104,5 +113,64 @@ export function optionalAuthMiddleware(
     return
   }
 
-  authMiddleware(req, res, next)
+  try {
+    const tokenHash = hashToken(sessionToken)
+
+    const [session] = await db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.tokenHash, tokenHash),
+          gt(sessions.expiresAt, new Date())
+        )
+      )
+      .limit(1)
+
+    if (!session) {
+      res.clearCookie('session', sessionCookieOptions)
+      next()
+      return
+    }
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1)
+
+    if (!user) {
+      res.clearCookie('session', sessionCookieOptions)
+      next()
+      return
+    }
+
+    const [activeSanction] = await db
+      .select()
+      .from(userSanctions)
+      .where(
+        and(
+          eq(userSanctions.userId, user.id),
+          inArray(userSanctions.sanctionType, ['suspension', 'ban']),
+          isNull(userSanctions.revokedAt),
+          or(
+            isNull(userSanctions.expiresAt),
+            gt(userSanctions.expiresAt, new Date())
+          )
+        )
+      )
+      .limit(1)
+
+    if (activeSanction) {
+      next()
+      return
+    }
+
+    req.user = user
+    req.sessionId = session.id
+    next()
+  } catch (error) {
+    console.error('Optional auth middleware error:', error)
+    next()
+  }
 }

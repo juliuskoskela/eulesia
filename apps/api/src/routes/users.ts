@@ -5,9 +5,18 @@ import { db, users, municipalities, threads, threadTags, institutionTopics } fro
 import { authMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
+import { env } from '../utils/env.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
+
+const sessionCookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  domain: env.COOKIE_DOMAIN,
+  path: '/'
+}
 
 // Validation schemas
 const updateUserSchema = z.object({
@@ -59,7 +68,7 @@ router.get('/:id', asyncHandler(async (req, res: Response) => {
     })
     .from(threads)
     .leftJoin(municipalities, eq(threads.municipalityId, municipalities.id))
-    .where(eq(threads.authorId, id))
+    .where(and(eq(threads.authorId, id), eq(threads.isHidden, false)))
     .orderBy(desc(threads.createdAt))
     .limit(20)
 
@@ -112,7 +121,7 @@ router.get('/:id', asyncHandler(async (req, res: Response) => {
       })
       .from(threads)
       .leftJoin(municipalities, eq(threads.municipalityId, municipalities.id))
-      .where(eq(threads.sourceInstitutionId, id))
+      .where(and(eq(threads.sourceInstitutionId, id), eq(threads.isHidden, false)))
       .orderBy(desc(threads.createdAt))
       .limit(20)
 
@@ -144,7 +153,8 @@ router.get('/:id', asyncHandler(async (req, res: Response) => {
           .leftJoin(municipalities, eq(threads.municipalityId, municipalities.id))
           .where(and(
             inArray(threads.id, taggedIds),
-            eq(threads.source, 'user')
+            eq(threads.source, 'user'),
+            eq(threads.isHidden, false)
           ))
           .orderBy(desc(threads.createdAt))
           .limit(20)
@@ -376,7 +386,7 @@ router.delete('/me', authMiddleware, asyncHandler(async (req: AuthenticatedReque
     .where(eq(users.id, userId))
 
   // 9. Clear session cookie
-  res.clearCookie('session')
+  res.clearCookie('session', sessionCookieOptions)
 
   res.json({
     success: true,

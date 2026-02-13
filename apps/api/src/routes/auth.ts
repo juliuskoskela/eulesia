@@ -14,6 +14,14 @@ import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
 
+const sessionCookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  domain: env.COOKIE_DOMAIN,
+  path: '/'
+}
+
 // Validation schemas
 const magicLinkSchema = z.object({
   email: z.string().email('Invalid email address')
@@ -181,10 +189,7 @@ router.post('/register', asyncHandler(async (req, res: Response) => {
 
   // Set session cookie
   res.cookie('session', sessionToken, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    domain: env.COOKIE_DOMAIN,
+    ...sessionCookieOptions,
     expires: sessionExpiresAt
   })
 
@@ -240,10 +245,7 @@ router.post('/login', asyncHandler(async (req, res: Response) => {
 
   // Set session cookie
   res.cookie('session', sessionToken, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    domain: env.COOKIE_DOMAIN,
+    ...sessionCookieOptions,
     expires: sessionExpiresAt
   })
 
@@ -328,10 +330,7 @@ router.get('/verify/:token', asyncHandler(async (req, res: Response) => {
 
   // Set session cookie
   res.cookie('session', sessionToken, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    domain: env.COOKIE_DOMAIN,
+    ...sessionCookieOptions,
     expires: sessionExpiresAt
   })
 
@@ -345,7 +344,7 @@ router.post('/logout', authMiddleware, asyncHandler(async (req: AuthenticatedReq
     await db.delete(sessions).where(eq(sessions.id, req.sessionId))
   }
 
-  res.clearCookie('session')
+  res.clearCookie('session', sessionCookieOptions)
   res.json({ success: true })
 }))
 
