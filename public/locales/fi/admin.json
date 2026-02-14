@@ -184,7 +184,17 @@
     "moderationPolicy": "Moderointipolitiikka",
     "moderationDescription": "Sisältömoderointia hallitaan ilmiantojonon ja sanktioiden kautta.",
     "autoModeration": "Automaattinen moderointi",
-    "autoModerationDescription": "Automaattinen sisällönsuodatus ei ole vielä käytössä."
+    "autoModerationDescription": "Automaattinen sisällönsuodatus ei ole vielä käytössä.",
+    "generateInvites": "Luo kutsukoodeja",
+    "generateInvitesDesc": "Luo kutsukoodeja jaettavaksi. Adminin koodit eiv\u00e4t kuluta kenk\u00e4\u00e4n kutsukiinti\u00f6t\u00e4.",
+    "generate": "Luo koodit",
+    "generatedCodes": "Luodut kutsukoodit",
+    "copyAll": "Kopioi kaikki",
+    "copied": "Kopioitu!",
+    "inviteAvailable": "Vapaa",
+    "inviteUsed": "K\u00e4ytetty",
+    "inviteRevoked": "Peruttu",
+    "noInviteCodes": "Ei luotuja kutsukoodeja."
   },
   "common": {
     "cancel": "Peruuta"

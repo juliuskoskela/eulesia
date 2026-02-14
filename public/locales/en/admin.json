@@ -184,7 +184,17 @@
     "moderationPolicy": "Moderation Policy",
     "moderationDescription": "Content moderation is managed through the report queue and sanctions.",
     "autoModeration": "Auto Moderation",
-    "autoModerationDescription": "Automatic content filtering is not yet enabled."
+    "autoModerationDescription": "Automatic content filtering is not yet enabled.",
+    "generateInvites": "Generate invite codes",
+    "generateInvitesDesc": "Generate invite codes to share. Admin codes don't consume anyone's invite quota.",
+    "generate": "Generate",
+    "generatedCodes": "Generated invite codes",
+    "copyAll": "Copy all",
+    "copied": "Copied!",
+    "inviteAvailable": "Available",
+    "inviteUsed": "Used",
+    "inviteRevoked": "Revoked",
+    "noInviteCodes": "No invite codes generated yet."
   },
   "common": {
     "cancel": "Cancel"

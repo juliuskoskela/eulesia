@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AdminLayout } from '../../components/admin'
-import { useAdminSettings, useUpdateAdminSettings } from '../../hooks/useAdminApi'
-import { TicketCheck, Users, ShieldCheck, Loader2, Save, Info } from 'lucide-react'
+import { useAdminSettings, useUpdateAdminSettings, useGenerateAdminInvites, useAdminInvites } from '../../hooks/useAdminApi'
+import { TicketCheck, Users, ShieldCheck, Loader2, Save, Info, Plus, Copy, Check, Gift } from 'lucide-react'
 
 function ToggleSwitch({
   enabled,
@@ -34,11 +34,16 @@ export function AdminSettingsPage() {
   const { t } = useTranslation('admin')
   const { data: settings, isLoading } = useAdminSettings()
   const updateSettings = useUpdateAdminSettings()
+  const generateInvites = useGenerateAdminInvites()
+  const { data: adminInvites, isLoading: invitesLoading } = useAdminInvites()
 
   const [invitesEnabled, setInvitesEnabled] = useState(true)
   const [defaultInviteCount, setDefaultInviteCount] = useState(5)
   const [registrationOpen, setRegistrationOpen] = useState(true)
   const [hasChanges, setHasChanges] = useState(false)
+  const [generateCount, setGenerateCount] = useState(5)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [copiedAll, setCopiedAll] = useState(false)
 
   // Sync from server
   useEffect(() => {
@@ -151,6 +156,119 @@ export function AdminSettingsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Admin invite generation */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Gift className="w-4 h-4 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900">{t('settings.generateInvites')}</h2>
+              <p className="text-xs text-gray-500">{t('settings.generateInvitesDesc')}</p>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Generate controls */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setGenerateCount(Math.max(1, generateCount - 1))}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  −
+                </button>
+                <span className="w-10 text-center font-semibold text-gray-900">{generateCount}</span>
+                <button
+                  onClick={() => setGenerateCount(Math.min(50, generateCount + 1))}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  +
+                </button>
+              </div>
+              <button
+                onClick={() => generateInvites.mutate(generateCount)}
+                disabled={generateInvites.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                {generateInvites.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                {t('settings.generate')}
+              </button>
+            </div>
+
+            {/* Invite code list */}
+            {invitesLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              </div>
+            ) : adminInvites && adminInvites.length > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    {t('settings.generatedCodes')}
+                  </p>
+                  {adminInvites.filter(c => c.status === 'available').length > 0 && (
+                    <button
+                      onClick={() => {
+                        const available = adminInvites.filter(c => c.status === 'available').map(c => c.code)
+                        navigator.clipboard.writeText(available.join('\n'))
+                        setCopiedAll(true)
+                        setTimeout(() => setCopiedAll(false), 2000)
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      {copiedAll ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                      {copiedAll ? t('settings.copied') : t('settings.copyAll')}
+                    </button>
+                  )}
+                </div>
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                  {adminInvites.map(code => (
+                    <div key={code.id} className="flex items-center justify-between px-4 py-2.5 bg-gray-50/50">
+                      <div className="flex items-center gap-3">
+                        <code className={`text-sm font-mono ${code.status === 'available' ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+                          {code.code}
+                        </code>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          code.status === 'available' ? 'bg-green-100 text-green-700' :
+                          code.status === 'used' ? 'bg-gray-100 text-gray-500' :
+                          'bg-red-100 text-red-600'
+                        }`}>
+                          {code.status === 'available' ? t('settings.inviteAvailable') :
+                           code.status === 'used' ? (code.usedBy ? code.usedBy.name : t('settings.inviteUsed')) :
+                           t('settings.inviteRevoked')}
+                        </span>
+                      </div>
+                      {code.status === 'available' && (
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(code.code)
+                            setCopiedCode(code.id)
+                            setTimeout(() => setCopiedCode(null), 2000)
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                          {copiedCode === code.id ? (
+                            <Check className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic">{t('settings.noInviteCodes')}</p>
+            )}
           </div>
         </div>
 

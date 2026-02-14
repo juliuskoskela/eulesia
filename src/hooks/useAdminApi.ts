@@ -230,6 +230,26 @@ export function useSetUserInviteCount() {
   })
 }
 
+// Admin invites
+export function useGenerateAdminInvites() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (count: number) => api.generateAdminInvites(count),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'invites'] })
+      queryClient.invalidateQueries({ queryKey: adminKeys.modlog() })
+    }
+  })
+}
+
+export function useAdminInvites(status?: string) {
+  return useQuery({
+    queryKey: ['admin', 'invites', status],
+    queryFn: () => api.getAdminInvites(status)
+  })
+}
+
 // User-facing hooks
 export function useSubmitReport() {
   return useMutation({

@@ -4,8 +4,9 @@ import { eq, desc, and, sql, count, or, gt, ilike } from 'drizzle-orm'
 import {
   db, users, threads, comments, clubs, clubThreads, clubComments,
   contentReports, moderationActions, userSanctions, moderationAppeals,
-  notifications, siteSettings
+  notifications, siteSettings, inviteCodes
 } from '../db/index.js'
+import { randomBytes } from 'crypto'
 import { authMiddleware } from '../middleware/auth.js'
 import { requireAdmin } from '../middleware/admin.js'
 import { AppError } from '../middleware/errorHandler.js'
@@ -862,6 +863,99 @@ router.patch('/users/:id/invites', asyncHandler(async (req: AuthenticatedRequest
   })
 
   res.json({ success: true, data: { id, inviteCodesRemaining: newCount } })
+}))
+
+// ─── Admin Invite Generation ─────────────────────────────────
+
+function generateInviteCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const randomPart = Array.from(randomBytes(6))
+    .map(b => chars[b % chars.length])
+    .join('')
+  return `EULESIA-${randomPart}`
+}
+
+// POST /admin/invites/generate - Generate invite codes (admin, no limit)
+router.post('/invites/generate', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { count: codeCount } = z.object({ count: z.number().int().min(1).max(50) }).parse(req.body)
+  const adminId = req.user!.id
+
+  const generatedCodes: { id: string; code: string; createdAt: Date }[] = []
+
+  for (let i = 0; i < codeCount; i++) {
+    let code: string = ''
+    let attempts = 0
+    while (attempts < 10) {
+      code = generateInviteCode()
+      const [existing] = await db
+        .select({ id: inviteCodes.id })
+        .from(inviteCodes)
+        .where(eq(inviteCodes.code, code))
+        .limit(1)
+      if (!existing) break
+      attempts++
+    }
+    if (attempts >= 10) {
+      throw new AppError(500, 'Failed to generate unique invite code')
+    }
+
+    const [created] = await db.insert(inviteCodes).values({
+      code,
+      createdBy: adminId,
+      status: 'available'
+    }).returning()
+
+    generatedCodes.push({ id: created.id, code: created.code, createdAt: created.createdAt ?? new Date() })
+  }
+
+  // Log action
+  await db.insert(moderationActions).values({
+    adminUserId: adminId,
+    actionType: 'invite_count_changed',
+    targetType: 'system',
+    targetId: 'admin_invite_generation',
+    reason: `Admin generated ${codeCount} invite code(s)`,
+    metadata: { count: codeCount, codes: generatedCodes.map(c => c.code) }
+  })
+
+  res.status(201).json({ success: true, data: generatedCodes })
+}))
+
+// GET /admin/invites - List all admin-generated invite codes
+router.get('/invites', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { status } = req.query
+
+  const conditions = [eq(inviteCodes.createdBy, req.user!.id)]
+  if (status && ['available', 'used', 'revoked'].includes(status as string)) {
+    conditions.push(eq(inviteCodes.status, status as any))
+  }
+
+  const codes = await db
+    .select({
+      id: inviteCodes.id,
+      code: inviteCodes.code,
+      status: inviteCodes.status,
+      usedAt: inviteCodes.usedAt,
+      createdAt: inviteCodes.createdAt,
+      usedByName: users.name
+    })
+    .from(inviteCodes)
+    .leftJoin(users, eq(inviteCodes.usedBy, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(inviteCodes.createdAt))
+    .limit(100)
+
+  res.json({
+    success: true,
+    data: codes.map(c => ({
+      id: c.id,
+      code: c.code,
+      status: c.status,
+      usedAt: c.usedAt,
+      createdAt: c.createdAt,
+      usedBy: c.usedByName ? { name: c.usedByName } : null
+    }))
+  })
 }))
 
 export default router

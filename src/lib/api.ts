@@ -741,6 +741,18 @@ class ApiClient {
     })
   }
 
+  async generateAdminInvites(count: number): Promise<{ id: string; code: string; createdAt: string }[]> {
+    return this.request('/admin/invites/generate', {
+      method: 'POST',
+      body: JSON.stringify({ count })
+    })
+  }
+
+  async getAdminInvites(status?: string): Promise<{ id: string; code: string; status: string; usedAt: string | null; createdAt: string; usedBy: { name: string } | null }[]> {
+    const params = status ? `?status=${status}` : ''
+    return this.request(`/admin/invites${params}`)
+  }
+
   // ─── User reports & appeals ──────────────────────────────
 
   async submitReport(data: SubmitReportData): Promise<ContentReportResponse> {
