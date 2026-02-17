@@ -4,7 +4,7 @@ import { eq, desc, and, sql, count, or, gt, ilike } from 'drizzle-orm'
 import {
   db, users, threads, comments, clubs, clubThreads, clubComments,
   contentReports, moderationActions, userSanctions, moderationAppeals,
-  notifications, siteSettings, inviteCodes
+  notifications, siteSettings, inviteCodes, systemAnnouncements
 } from '../db/index.js'
 import { randomBytes } from 'crypto'
 import { authMiddleware } from '../middleware/auth.js'
@@ -956,6 +956,84 @@ router.get('/invites', asyncHandler(async (req: AuthenticatedRequest, res: Respo
       usedBy: c.usedByName ? { name: c.usedByName } : null
     }))
   })
+}))
+
+// ─── System Announcements ───────────────────────────────────
+
+// POST /admin/announcements - Create system announcement
+router.post('/announcements', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const schema = z.object({
+    title: z.string().min(1).max(200),
+    message: z.string().min(1).max(2000),
+    type: z.enum(['info', 'warning', 'critical']).default('info'),
+    expiresAt: z.string().datetime().optional()
+  })
+  const data = schema.parse(req.body)
+
+  const [announcement] = await db.insert(systemAnnouncements).values({
+    title: data.title,
+    message: data.message,
+    type: data.type,
+    createdBy: req.user!.id,
+    expiresAt: data.expiresAt ? new Date(data.expiresAt) : null
+  }).returning()
+
+  await db.insert(moderationActions).values({
+    adminUserId: req.user!.id,
+    actionType: 'settings_changed',
+    targetType: 'system',
+    targetId: announcement.id,
+    reason: `System announcement created: ${data.title}`,
+    metadata: { type: data.type }
+  })
+
+  res.status(201).json({ success: true, data: announcement })
+}))
+
+// GET /admin/announcements - List all announcements
+router.get('/announcements', asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
+  const announcements = await db
+    .select({
+      id: systemAnnouncements.id,
+      title: systemAnnouncements.title,
+      message: systemAnnouncements.message,
+      type: systemAnnouncements.type,
+      active: systemAnnouncements.active,
+      createdAt: systemAnnouncements.createdAt,
+      expiresAt: systemAnnouncements.expiresAt,
+      createdByName: users.name
+    })
+    .from(systemAnnouncements)
+    .leftJoin(users, eq(systemAnnouncements.createdBy, users.id))
+    .orderBy(desc(systemAnnouncements.createdAt))
+    .limit(50)
+
+  res.json({ success: true, data: announcements })
+}))
+
+// PATCH /admin/announcements/:id - Toggle announcement active status
+router.patch('/announcements/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params
+  const { active } = z.object({ active: z.boolean() }).parse(req.body)
+
+  const [existing] = await db.select().from(systemAnnouncements).where(eq(systemAnnouncements.id, id)).limit(1)
+  if (!existing) throw new AppError(404, 'Announcement not found')
+
+  await db.update(systemAnnouncements).set({ active }).where(eq(systemAnnouncements.id, id))
+
+  res.json({ success: true, data: { id, active } })
+}))
+
+// DELETE /admin/announcements/:id - Delete announcement
+router.delete('/announcements/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params
+
+  const [existing] = await db.select().from(systemAnnouncements).where(eq(systemAnnouncements.id, id)).limit(1)
+  if (!existing) throw new AppError(404, 'Announcement not found')
+
+  await db.delete(systemAnnouncements).where(eq(systemAnnouncements.id, id))
+
+  res.json({ success: true })
 }))
 
 export default router

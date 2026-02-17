@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AdminLayout } from '../../components/admin'
-import { useAdminSettings, useUpdateAdminSettings, useGenerateAdminInvites, useAdminInvites } from '../../hooks/useAdminApi'
-import { TicketCheck, Users, ShieldCheck, Loader2, Save, Info, Plus, Copy, Check, Gift } from 'lucide-react'
+import { useAdminSettings, useUpdateAdminSettings, useGenerateAdminInvites, useAdminInvites, useAdminAnnouncements, useCreateAnnouncement, useToggleAnnouncement, useDeleteAnnouncement } from '../../hooks/useAdminApi'
+import { TicketCheck, Users, ShieldCheck, Loader2, Save, Info, Plus, Copy, Check, Gift, Megaphone, Trash2, Eye, EyeOff } from 'lucide-react'
 
 function ToggleSwitch({
   enabled,
@@ -44,6 +44,15 @@ export function AdminSettingsPage() {
   const [generateCount, setGenerateCount] = useState(5)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [copiedAll, setCopiedAll] = useState(false)
+
+  // Announcement state
+  const { data: adminAnnouncements } = useAdminAnnouncements()
+  const createAnnouncement = useCreateAnnouncement()
+  const toggleAnnouncement = useToggleAnnouncement()
+  const deleteAnnouncement = useDeleteAnnouncement()
+  const [announcementTitle, setAnnouncementTitle] = useState('')
+  const [announcementMessage, setAnnouncementMessage] = useState('')
+  const [announcementType, setAnnouncementType] = useState<'info' | 'warning' | 'critical'>('info')
 
   // Sync from server
   useEffect(() => {
@@ -298,6 +307,131 @@ export function AdminSettingsPage() {
                 }}
               />
             </div>
+          </div>
+        </div>
+
+        {/* System announcements */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+              <Megaphone className="w-4 h-4 text-red-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900">{t('settings.announcements')}</h2>
+              <p className="text-xs text-gray-500">{t('settings.announcementsDesc')}</p>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Create new */}
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={announcementTitle}
+                onChange={(e) => setAnnouncementTitle(e.target.value)}
+                placeholder={t('settings.announcementTitle')}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                maxLength={200}
+              />
+              <textarea
+                value={announcementMessage}
+                onChange={(e) => setAnnouncementMessage(e.target.value)}
+                placeholder={t('settings.announcementMessage')}
+                rows={2}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                maxLength={2000}
+              />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  {(['info', 'warning', 'critical'] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setAnnouncementType(type)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        announcementType === type
+                          ? type === 'info' ? 'bg-blue-600 text-white' :
+                            type === 'warning' ? 'bg-amber-500 text-white' :
+                            'bg-red-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {t(`settings.announcementType.${type}`)}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex-1" />
+                <button
+                  onClick={() => {
+                    if (!announcementTitle.trim()) return
+                    createAnnouncement.mutate({
+                      title: announcementTitle.trim(),
+                      message: announcementMessage.trim() || announcementTitle.trim(),
+                      type: announcementType
+                    }, {
+                      onSuccess: () => {
+                        setAnnouncementTitle('')
+                        setAnnouncementMessage('')
+                        setAnnouncementType('info')
+                      }
+                    })
+                  }}
+                  disabled={!announcementTitle.trim() || createAnnouncement.isPending}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {createAnnouncement.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Megaphone className="w-4 h-4" />
+                  )}
+                  {t('settings.publishAnnouncement')}
+                </button>
+              </div>
+            </div>
+
+            {/* Existing announcements */}
+            {adminAnnouncements && adminAnnouncements.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {t('settings.existingAnnouncements')}
+                </p>
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                  {adminAnnouncements.map(a => (
+                    <div key={a.id} className={`flex items-center justify-between px-4 py-3 ${a.active ? 'bg-white' : 'bg-gray-50'}`}>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          a.type === 'info' ? 'bg-blue-500' :
+                          a.type === 'warning' ? 'bg-amber-500' : 'bg-red-500'
+                        }`} />
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium truncate ${a.active ? 'text-gray-900' : 'text-gray-400'}`}>
+                            {a.title}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {a.createdByName} — {new Date(a.createdAt).toLocaleDateString('fi')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => toggleAnnouncement.mutate({ id: a.id, active: !a.active })}
+                          className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                          title={a.active ? t('settings.hideAnnouncement') : t('settings.showAnnouncement')}
+                        >
+                          {a.active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => deleteAnnouncement.mutate(a.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                          title={t('settings.deleteAnnouncement')}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

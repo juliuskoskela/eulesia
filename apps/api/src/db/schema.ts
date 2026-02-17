@@ -1010,3 +1010,20 @@ export const linkPreviews = pgTable('link_previews', {
 
 export type NewLinkPreview = typeof linkPreviews.$inferInsert
 export type LinkPreviewRecord = typeof linkPreviews.$inferSelect
+
+// System announcements (admin broadcast)
+export const announcementTypeEnum = pgEnum('announcement_type', ['info', 'warning', 'critical'])
+
+export const systemAnnouncements = pgTable('system_announcements', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  type: announcementTypeEnum('type').default('info').notNull(),
+  active: boolean('active').default(true).notNull(),
+  createdBy: uuid('created_by').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true })
+})
+
+export type SystemAnnouncement = typeof systemAnnouncements.$inferSelect
+export type NewSystemAnnouncement = typeof systemAnnouncements.$inferInsert

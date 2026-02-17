@@ -194,7 +194,21 @@
     "inviteAvailable": "Available",
     "inviteUsed": "Used",
     "inviteRevoked": "Revoked",
-    "noInviteCodes": "No invite codes generated yet."
+    "noInviteCodes": "No invite codes generated yet.",
+    "announcements": "System Announcements",
+    "announcementsDesc": "Send announcements to all users (e.g. maintenance, updates)",
+    "announcementTitle": "Announcement title",
+    "announcementMessage": "Message (optional details)",
+    "announcementType": {
+      "info": "Info",
+      "warning": "Warning",
+      "critical": "Critical"
+    },
+    "publishAnnouncement": "Publish",
+    "existingAnnouncements": "Announcements",
+    "hideAnnouncement": "Hide",
+    "showAnnouncement": "Show",
+    "deleteAnnouncement": "Delete"
   },
   "common": {
     "cancel": "Cancel"

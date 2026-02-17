@@ -15,6 +15,7 @@ export const adminKeys = {
   appeals: (params?: any) => ['admin', 'appeals', params] as const,
   settings: ['admin', 'settings'] as const,
   mySanctions: ['mySanctions'] as const,
+  announcements: ['admin', 'announcements'] as const,
 }
 
 // Dashboard
@@ -267,5 +268,45 @@ export function useMySanctions() {
   return useQuery({
     queryKey: adminKeys.mySanctions,
     queryFn: () => api.getMySanctions()
+  })
+}
+
+// System announcements (admin)
+export function useAdminAnnouncements() {
+  return useQuery({
+    queryKey: adminKeys.announcements,
+    queryFn: () => api.getAdminAnnouncements()
+  })
+}
+
+export function useCreateAnnouncement() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { title: string; message: string; type: 'info' | 'warning' | 'critical'; expiresAt?: string }) =>
+      api.createAnnouncement(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.announcements })
+    }
+  })
+}
+
+export function useToggleAnnouncement() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      api.toggleAnnouncement(id, active),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.announcements })
+    }
+  })
+}
+
+export function useDeleteAnnouncement() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.deleteAnnouncement(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.announcements })
+    }
   })
 }

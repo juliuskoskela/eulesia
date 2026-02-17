@@ -777,6 +777,36 @@ class ApiClient {
   async getLinkPreview(url: string): Promise<LinkPreviewData> {
     return this.request(`/link-preview?url=${encodeURIComponent(url)}`)
   }
+
+  // System announcements (public)
+  async getAnnouncements(): Promise<SystemAnnouncement[]> {
+    return this.request('/announcements')
+  }
+
+  // Admin announcements
+  async createAnnouncement(data: { title: string; message: string; type: 'info' | 'warning' | 'critical'; expiresAt?: string }): Promise<SystemAnnouncement> {
+    return this.request('/admin/announcements', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async getAdminAnnouncements(): Promise<AdminAnnouncement[]> {
+    return this.request('/admin/announcements')
+  }
+
+  async toggleAnnouncement(id: string, active: boolean): Promise<void> {
+    return this.request(`/admin/announcements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active })
+    })
+  }
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    return this.request(`/admin/announcements/${id}`, {
+      method: 'DELETE'
+    })
+  }
 }
 
 // Types
@@ -1565,6 +1595,20 @@ export interface LinkPreviewData {
   imageUrl: string | null
   siteName: string | null
   faviconUrl: string | null
+}
+
+export interface SystemAnnouncement {
+  id: string
+  title: string
+  message: string
+  type: 'info' | 'warning' | 'critical'
+  createdAt: string
+  expiresAt: string | null
+}
+
+export interface AdminAnnouncement extends SystemAnnouncement {
+  active: boolean
+  createdByName: string | null
 }
 
 // Export singleton instance

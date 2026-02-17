@@ -1,4 +1,6 @@
 import { Router } from 'express'
+import { eq, and, or, isNull, gt } from 'drizzle-orm'
+import { db, systemAnnouncements } from '../db/index.js'
 import authRoutes from './auth.js'
 import eudiRoutes from './eudi.js'
 import userRoutes from './users.js'
@@ -36,6 +38,35 @@ router.use('/notifications', notificationsRoutes)
 router.use('/admin', adminRoutes)
 router.use('/reports', reportsRoutes)
 router.use('/', linkPreviewRoutes)
+
+// Public: active system announcements
+router.get('/announcements', async (_req, res) => {
+  try {
+    const now = new Date()
+    const announcements = await db
+      .select({
+        id: systemAnnouncements.id,
+        title: systemAnnouncements.title,
+        message: systemAnnouncements.message,
+        type: systemAnnouncements.type,
+        createdAt: systemAnnouncements.createdAt,
+        expiresAt: systemAnnouncements.expiresAt
+      })
+      .from(systemAnnouncements)
+      .where(and(
+        eq(systemAnnouncements.active, true),
+        or(
+          isNull(systemAnnouncements.expiresAt),
+          gt(systemAnnouncements.expiresAt, now)
+        )
+      ))
+      .orderBy(systemAnnouncements.createdAt)
+
+    res.json({ success: true, data: announcements })
+  } catch {
+    res.json({ success: true, data: [] })
+  }
+})
 
 // Health check
 router.get('/health', (_req, res) => {

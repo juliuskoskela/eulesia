@@ -57,7 +57,10 @@ export const queryKeys = {
   mapLocation: (type: string, id: string) => ['mapLocation', type, id] as const,
 
   // Link previews
-  linkPreview: (url: string) => ['linkPreview', url] as const
+  linkPreview: (url: string) => ['linkPreview', url] as const,
+
+  // System announcements
+  announcements: ['announcements'] as const
 }
 
 // Auth hooks
@@ -895,5 +898,15 @@ export function useLinkPreview(url: string) {
     enabled: !!url,
     staleTime: 24 * 60 * 60_000, // 24h
     retry: false
+  })
+}
+
+// System announcements
+export function useAnnouncements() {
+  return useQuery({
+    queryKey: queryKeys.announcements,
+    queryFn: () => api.getAnnouncements(),
+    staleTime: 60_000, // 1 min
+    refetchInterval: 5 * 60_000 // poll every 5 min
   })
 }

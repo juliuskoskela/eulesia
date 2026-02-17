@@ -5,7 +5,7 @@ import { Layout } from '../components/layout'
 import { ThreadCard, FeedFilters, FeedOnboarding, InlineThreadForm } from '../components/agora'
 import { ContentEndMarker } from '../components/common'
 import { MapPin, Building2, Globe, Users } from 'lucide-react'
-import { useThreads, useTags, useMunicipalities, useVoteThread, useSubscriptions, useCompleteOnboarding } from '../hooks/useApi'
+import { useThreads, useVoteThread, useSubscriptions, useCompleteOnboarding } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { useGuide } from '../hooks/useGuide'
 import type { Thread as ApiThread, UserSummary, FeedScope, SortBy, TopPeriod } from '../lib/api'
@@ -60,16 +60,14 @@ export function AgoraPage() {
   const [feedScopeInitialized, setFeedScopeInitialized] = useState(false)
   const [sortBy, setSortBy] = useState<SortBy>('recent')
   const [topPeriod, setTopPeriod] = useState<TopPeriod>('week')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedMunicipality, setSelectedMunicipality] = useState<string | undefined>()
+  const [selectedTags] = useState<string[]>([])
+  const [selectedMunicipality] = useState<string | undefined>()
   const [showOnboarding, setShowOnboarding] = useState(false)
   const onboardingDone = !!currentUser?.onboardingCompletedAt
   const completeOnboardingMutation = useCompleteOnboarding()
 
   const { hasCompletedGuide, startGuide, isGuideActive } = useGuide()
 
-  const { data: tagsData } = useTags()
-  const { data: municipalitiesData } = useMunicipalities()
   const { data: subscriptionsData } = useSubscriptions()
 
   const [page, setPage] = useState(1)
@@ -141,9 +139,6 @@ export function AgoraPage() {
     return () => clearTimeout(timer)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const availableTags = useMemo(() => {
-    return tagsData?.map(t => t.tag) || []
-  }, [tagsData])
 
   // Accumulate threads across pages
   useEffect(() => {
@@ -194,14 +189,6 @@ export function AgoraPage() {
   // Show as compact banner above content (content is now always shown as fallback)
   const isPersonalizedScope = ['local', 'national', 'european'].includes(feedScope)
   const showScopeHint = isPersonalizedScope && !isLoading && !hasSubscriptions
-
-  const handleTagToggle = (tag: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    )
-  }
 
   const handleVote = (threadId: string, value: number) => {
     if (!currentUser) return
@@ -271,23 +258,6 @@ export function AgoraPage() {
         </p>
       </div>
 
-      {/* Filters */}
-      <FeedFilters
-        feedScope={feedScope}
-        onFeedScopeChange={setFeedScope}
-        sortBy={sortBy}
-        onSortByChange={setSortBy}
-        topPeriod={topPeriod}
-        onTopPeriodChange={setTopPeriod}
-        selectedTags={selectedTags}
-        availableTags={availableTags}
-        onTagToggle={handleTagToggle}
-        municipalities={municipalitiesData}
-        selectedMunicipality={selectedMunicipality}
-        onMunicipalityChange={setSelectedMunicipality}
-        hasSubscriptions={hasSubscriptions}
-      />
-
       {/* Thread list */}
       <div className="px-4 py-4 space-y-4">
         {/* Inline thread creation */}
@@ -296,6 +266,16 @@ export function AgoraPage() {
             <InlineThreadForm onSuccess={handleThreadCreated} />
           </div>
         )}
+
+        {/* Scope tabs + sort */}
+        <FeedFilters
+          feedScope={feedScope}
+          onFeedScopeChange={setFeedScope}
+          sortBy={sortBy}
+          onSortByChange={setSortBy}
+          topPeriod={topPeriod}
+          onTopPeriodChange={setTopPeriod}
+        />
 
         {isLoading && page === 1 && (
           <div className="flex justify-center py-12">

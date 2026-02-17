@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef } from 'react'
 import { TopBar } from './TopBar'
 import { BottomNav } from './BottomNav'
 import { Footer } from './Footer'
+import { AnnouncementBanner } from './AnnouncementBanner'
 import { GuideTour, GuideHelpButton } from '../guide'
 import { useGuide } from '../../hooks/useGuide'
 
@@ -31,6 +32,7 @@ export function Layout({ children, showFooter = true, fullWidth = false }: Layou
   return (
     <div className="min-h-screen bg-gray-50">
       <TopBar />
+      <AnnouncementBanner />
 
       <main className={fullWidth ? 'pt-14 pb-16' : 'pt-14 pb-20'}>
         {fullWidth ? (

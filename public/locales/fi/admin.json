@@ -194,7 +194,21 @@
     "inviteAvailable": "Vapaa",
     "inviteUsed": "K\u00e4ytetty",
     "inviteRevoked": "Peruttu",
-    "noInviteCodes": "Ei luotuja kutsukoodeja."
+    "noInviteCodes": "Ei luotuja kutsukoodeja.",
+    "announcements": "Järjestelmäilmoitukset",
+    "announcementsDesc": "Lähetä ilmoitus kaikille käyttäjille (esim. huoltokatko, päivitys)",
+    "announcementTitle": "Ilmoituksen otsikko",
+    "announcementMessage": "Viesti (valinnainen lisätieto)",
+    "announcementType": {
+      "info": "Info",
+      "warning": "Varoitus",
+      "critical": "Kriittinen"
+    },
+    "publishAnnouncement": "Julkaise",
+    "existingAnnouncements": "Ilmoitukset",
+    "hideAnnouncement": "Piilota",
+    "showAnnouncement": "Näytä",
+    "deleteAnnouncement": "Poista"
   },
   "common": {
     "cancel": "Peruuta"
