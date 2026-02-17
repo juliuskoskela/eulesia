@@ -13,9 +13,9 @@
   },
   "replies_one": "{{count}} vastaus",
   "replies_other": "{{count}} vastausta",
-  "aiSummary": "Automatisoitu yhteenveto",
-  "aiSummarySource": "Automatisoitu yhteenveto — {{source}}",
-  "minutesSummary": "Automatisoitu yhteenveto — pöytäkirja",
+  "aiSummary": "Eulesia summary",
+  "aiSummarySource": "Eulesia summary — {{source}}",
+  "minutesSummary": "Eulesia summary — pöytäkirja",
   "original": "Alkuperäinen",
   "officialInfo": "Virallinen tieto — {{name}}",
   "institutionalContext": "Sisältää viralliset asiakirjat, aikajana ja UKK",
@@ -81,7 +81,7 @@
     "faq": "UKK",
     "contact": "Yhteystiedot",
     "source": "Lähde",
-    "aiGenerated": "Automatisoitu yhteenveto — Eulesia Bot",
+    "aiGenerated": "Eulesia summary — Generated with Mistral AI",
     "official": "Virallinen tieto"
   },
   "thread": {

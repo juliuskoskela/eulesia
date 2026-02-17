@@ -51,7 +51,7 @@ AI-powered import of municipal meeting minutes, ministry press releases, and EU 
 
 ## Automated Content Import
 
-Eulesia Bot imports and summarizes official documents using Mistral AI:
+Eulesia imports and summarizes official documents using [Mistral AI](https://mistral.ai):
 
 | Source | Scope | Schedule |
 |--------|-------|----------|
@@ -59,7 +59,7 @@ Eulesia Bot imports and summarizes official documents using Mistral AI:
 | Valtioneuvosto, Finlex | National | 08:00, 14:00, 20:00 |
 | European Commission, EUR-Lex, European Parliament | European | 10:00, 16:00 |
 
-AI-generated summaries are transparent (marked as bot-generated) and link to original sources.
+AI-generated summaries are transparent (marked as "Eulesia summary — Generated with Mistral AI") and link to original sources.
 
 ## Development
 

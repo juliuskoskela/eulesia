@@ -236,7 +236,7 @@ export async function importEuContent(options: ImportOptions = {}): Promise<Impo
 function buildThreadContent(
   summary: { summary: string; keyPoints: string[]; discussionPrompt: string },
   item: FeedItem,
-  source: EuSource
+  _source: EuSource
 ): string {
   return `${summary.summary}
 
@@ -250,7 +250,7 @@ ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
 *${summary.discussionPrompt}*
 
 ---
-🤖 *Tämä on automatisoitu yhteenveto ${source.institution}n julkaisusta. [Alkuperäinen lähde →](${item.link})*`
+*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen lähde →](${item.link})*`
 }
 
 /**

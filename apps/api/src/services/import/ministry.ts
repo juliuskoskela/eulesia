@@ -265,7 +265,7 @@ ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
 *${summary.discussionPrompt}*
 
 ---
-🤖 *Tämä on automatisoitu yhteenveto valtioneuvoston päätöksestä. [Alkuperäinen päätös →](${decision.sourceUrl})*`
+*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen päätös →](${decision.sourceUrl})*`
 }
 
 /** Parse Finnish date format "5.2.2026" to Date */
@@ -427,7 +427,7 @@ async function importRssFeeds(
 function buildRssThreadContent(
   summary: { summary: string; keyPoints: string[]; discussionPrompt: string },
   item: FeedItem,
-  source: MinistrySource
+  _source: MinistrySource
 ): string {
   return `${summary.summary}
 
@@ -441,7 +441,7 @@ ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
 *${summary.discussionPrompt}*
 
 ---
-🤖 *Tämä on automatisoitu yhteenveto ${source.name}n tiedotteesta. [Alkuperäinen lähde →](${item.link})*`
+*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen lähde →](${item.link})*`
 }
 
 // ============================================

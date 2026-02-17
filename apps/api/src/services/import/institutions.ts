@@ -29,6 +29,8 @@ export async function getOrCreateBotUser(): Promise<string> {
     .limit(1)
 
   if (existing.length > 0) {
+    // Ensure display name is up to date
+    await db.update(users).set({ name: 'Eulesia Summary' }).where(eq(users.id, existing[0].id))
     return existing[0].id
   }
 
@@ -36,7 +38,7 @@ export async function getOrCreateBotUser(): Promise<string> {
     .insert(users)
     .values({
       username: 'eulesia-bot',
-      name: 'Eulesia Bot',
+      name: 'Eulesia Summary',
       email: 'bot@eulesia.eu',
       role: 'institution',
       institutionType: 'agency',

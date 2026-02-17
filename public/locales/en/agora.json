@@ -13,9 +13,9 @@
   },
   "replies_one": "{{count}} reply",
   "replies_other": "{{count}} replies",
-  "aiSummary": "Automated summary",
-  "aiSummarySource": "Automated summary — {{source}}",
-  "minutesSummary": "Automated summary — meeting minutes",
+  "aiSummary": "Eulesia summary",
+  "aiSummarySource": "Eulesia summary — {{source}}",
+  "minutesSummary": "Eulesia summary — meeting minutes",
   "original": "Original",
   "officialInfo": "Official information — {{name}}",
   "institutionalContext": "Includes official documents, timeline & FAQ",
@@ -81,7 +81,7 @@
     "faq": "FAQ",
     "contact": "Contact",
     "source": "Source",
-    "aiGenerated": "Automated summary — Eulesia Bot",
+    "aiGenerated": "Eulesia summary — Generated with Mistral AI",
     "official": "Official information"
   },
   "thread": {

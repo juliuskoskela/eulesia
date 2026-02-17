@@ -227,7 +227,7 @@ ${article.keyPoints.map(p => `- ${p}`).join('\n')}
 *${article.discussionPrompt}*
 
 ---
-🤖 *Tämä on automatisoitu yhteenveto kunnan pöytäkirjasta (${item.itemNumber}). [Näytä alkuperäinen →](${sourceUrl})*`
+*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Näytä alkuperäinen →](${sourceUrl})*`
 
       const contentHtml = renderMarkdown(content)
 
