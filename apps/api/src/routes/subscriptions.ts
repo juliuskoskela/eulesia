@@ -1,11 +1,11 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, and } from 'drizzle-orm'
-import { db, userSubscriptions, users, municipalities, clubs, places, notifications } from '../db/index.js'
+import { db, userSubscriptions, users, municipalities, clubs, places } from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { io } from '../index.js'
+import { notify as sendNotification } from '../services/notify.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -103,18 +103,12 @@ router.post('/', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, 
       .limit(1)
 
     if (follower) {
-      await db.insert(notifications).values({
+      await sendNotification({
         userId: entityId,
         type: 'new_follower',
         title: follower.name,
         body: 'started following you',
         link: `/user/${userId}`
-      })
-
-      io.to(`user:${entityId}`).emit('new_notification', {
-        type: 'new_follower',
-        title: follower.name,
-        body: 'started following you'
       })
     }
   }

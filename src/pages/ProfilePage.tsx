@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { Shield, Bell, Eye, Database, LogOut, ChevronRight, Info, ExternalLink, Ticket, Plus, Copy, Check, Trash2, Users, Camera, Loader2, Globe, HelpCircle, AlertTriangle, Building2, CheckCircle, Clock, X, Sun, Moon, Monitor } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Shield, Bell, BellRing, Eye, Database, LogOut, ChevronRight, Info, ExternalLink, Ticket, Plus, Copy, Check, Trash2, Users, Camera, Loader2, Globe, HelpCircle, AlertTriangle, Building2, CheckCircle, Clock, X, Sun, Moon, Monitor } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Layout } from '../components/layout'
@@ -40,6 +40,54 @@ export function ProfilePage() {
     mentions: currentUser?.settings?.notificationMentions ?? true,
     official: currentUser?.settings?.notificationOfficial ?? true
   })
+
+  // Push notification state
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+
+  const checkPushStatus = useCallback(async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+    setPushSupported(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      setPushEnabled(!!sub)
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => { checkPushStatus() }, [checkPushStatus])
+
+  const handlePushToggle = async () => {
+    setPushLoading(true)
+    try {
+      if (pushEnabled) {
+        // Unsubscribe
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.getSubscription()
+        if (sub) {
+          await api.unsubscribePush(sub.endpoint)
+          await sub.unsubscribe()
+        }
+        setPushEnabled(false)
+      } else {
+        // Subscribe
+        const { vapidPublicKey, enabled } = await api.getPushVapidKey()
+        if (!enabled || !vapidPublicKey) return
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidPublicKey
+        })
+        await api.subscribePush(sub)
+        setPushEnabled(true)
+      }
+    } catch (err) {
+      console.error('Push toggle failed:', err)
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   // Avatar upload state
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
@@ -206,7 +254,7 @@ export function ProfilePage() {
     return (
       <Layout>
         <div className="p-8 text-center">
-          <p className="text-gray-500">{t('auth:pleaseLogin')}</p>
+          <p className="text-gray-500 dark:text-gray-400">{t('auth:pleaseLogin')}</p>
         </div>
       </Layout>
     )
@@ -249,7 +297,7 @@ export function ProfilePage() {
       )}
 
       {/* Profile header */}
-      <div className="bg-white px-4 py-6 border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-900 px-4 py-6 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-4">
           {/* Avatar with upload */}
           <div className="relative">
@@ -291,7 +339,7 @@ export function ProfilePage() {
             )}
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{currentUser.name}</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{currentUser.name}</h1>
             <div className="flex items-center gap-2 mt-1">
               {currentUser.identityVerified && (
                 <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full">
@@ -302,7 +350,7 @@ export function ProfilePage() {
                 </span>
               )}
               {currentUser.municipality && (
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
                   {currentUser.municipality.name}
                 </span>
               )}
@@ -316,9 +364,9 @@ export function ProfilePage() {
 
       <div className="px-4 py-6 space-y-6">
         {/* Identity section */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Shield className="w-4 h-4 text-blue-600" />
               {t('identity.title')}
             </h2>
@@ -326,17 +374,17 @@ export function ProfilePage() {
           <div className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {currentUser.identityLevel === 'high' ? t('identity.eudiConnected') : t('identity.emailVerified')}
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {currentUser.identityLevel === 'high' ? t('identity.eudiDescription') : t('identity.magicLink')}
                 </p>
               </div>
               <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">{t('identity.active')}</span>
             </div>
-            <div className="pt-3 border-t border-gray-100">
-              <p className="text-xs text-gray-500">
+            <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {currentUser.identityLevel === 'high'
                   ? t('identity.eudiInfo')
                   : t('identity.upgradeInfo')}
@@ -346,9 +394,9 @@ export function ProfilePage() {
         </div>
 
         {/* Institution Management */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Building2 className="w-4 h-4 text-purple-600" />
               {t('institutions.title')}
             </h2>
@@ -358,14 +406,14 @@ export function ProfilePage() {
             {myInstitutions && myInstitutions.length > 0 ? (
               <div className="space-y-2">
                 {myInstitutions.map(mgr => (
-                  <div key={mgr.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50">
+                  <div key={mgr.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-purple-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                         <Building2 className="w-5 h-5 text-purple-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{mgr.institution.institutionName || mgr.institution.name}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{mgr.institution.institutionName || mgr.institution.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {t(`institutions.${mgr.institution.institutionType}`)} · {t(`institutions.role${mgr.role === 'owner' ? 'Owner' : 'Editor'}`)}
                         </p>
                       </div>
@@ -394,12 +442,12 @@ export function ProfilePage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">{t('institutions.noInstitutions')}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('institutions.noInstitutions')}</p>
             )}
 
             {/* Claim an institution */}
-            <div className="pt-3 border-t border-gray-200">
-              <p className="text-sm text-gray-600 mb-3">{t('institutions.claimDesc')}</p>
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-800">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{t('institutions.claimDesc')}</p>
               <button
                 onClick={() => setShowAvailableInstitutions(!showAvailableInstitutions)}
                 className="text-sm text-purple-600 hover:text-purple-700 font-medium"
@@ -423,10 +471,10 @@ export function ProfilePage() {
                 )}
                 {availableInstitutions && availableInstitutions.length > 0 ? (
                   availableInstitutions.map(inst => (
-                    <div key={inst.id} className="flex items-center justify-between p-3 rounded-lg border border-purple-200 bg-purple-50">
+                    <div key={inst.id} className="flex items-center justify-between p-3 rounded-lg border border-purple-200 dark:border-gray-800 bg-purple-50 dark:bg-blue-900/30">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{inst.institutionName || inst.name}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{inst.institutionName || inst.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {t(`institutions.${inst.institutionType}`)}
                         </p>
                       </div>
@@ -444,14 +492,14 @@ export function ProfilePage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-gray-500">{t('institutions.noAvailable')}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('institutions.noAvailable')}</p>
                 )}
               </div>
             )}
 
             {/* Create Organization */}
-            <div className="pt-3 border-t border-gray-200">
-              <p className="text-sm text-gray-600 mb-3">{t('institutions.createOrgDesc')}</p>
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-800">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{t('institutions.createOrgDesc')}</p>
               <button
                 onClick={() => setShowCreateOrg(!showCreateOrg)}
                 className="text-sm text-purple-600 hover:text-purple-700 font-medium"
@@ -461,7 +509,7 @@ export function ProfilePage() {
             </div>
 
             {showCreateOrg && (
-              <div className="space-y-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
+              <div className="space-y-3 p-4 bg-purple-50 dark:bg-blue-900/30 rounded-lg border border-purple-200 dark:border-gray-800">
                 {createOrgMutation.isSuccess && (
                   <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
                     {t('institutions.orgCreated')}
@@ -562,9 +610,9 @@ export function ProfilePage() {
         </div>
 
         {/* Invite Codes */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Ticket className="w-4 h-4 text-green-600" />
               {t('invites.title')}
             </h2>
@@ -573,10 +621,10 @@ export function ProfilePage() {
             {/* Create invite button */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {t('invites.remaining', { count: invitesRemaining })}
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {t('invites.shareInfo')}
                 </p>
               </div>
@@ -606,15 +654,15 @@ export function ProfilePage() {
                     key={code.id}
                     className={`flex items-center justify-between p-3 rounded-lg border ${
                       code.status === 'available' ? 'bg-green-50 border-green-200' :
-                      code.status === 'used' ? 'bg-gray-50 border-gray-200' :
+                      code.status === 'used' ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-800' :
                       'bg-red-50 border-red-200'
                     }`}
                   >
                     <div>
-                      <p className={`font-mono text-sm ${code.status === 'available' ? 'text-green-700' : 'text-gray-500'}`}>
+                      <p className={`font-mono text-sm ${code.status === 'available' ? 'text-green-700' : 'text-gray-500 dark:text-gray-400'}`}>
                         {code.code}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {code.status === 'available' && t('invites.available')}
                         {code.status === 'used' && code.usedBy && t('invites.usedBy', { name: code.usedBy.name })}
                         {code.status === 'revoked' && t('invites.revoked')}
@@ -646,15 +694,15 @@ export function ProfilePage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500 text-center py-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
                 {t('invites.noCodesYet')}
               </p>
             )}
 
             {/* People I've invited */}
             {invitedUsers.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <h3 className="text-sm font-medium text-gray-900 flex items-center gap-2 mb-3">
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-3">
                   <Users className="w-4 h-4 text-blue-600" />
                   {t('invites.peopleInvited', { count: invitedUsers.length })}
                 </h3>
@@ -664,8 +712,8 @@ export function ProfilePage() {
                       <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center text-xs font-medium text-teal-700">
                         {user.name.charAt(0)}
                       </div>
-                      <span className="text-gray-700">{user.name}</span>
-                      <span className="text-gray-400 text-xs">@{user.username}</span>
+                      <span className="text-gray-700 dark:text-gray-300">{user.name}</span>
+                      <span className="text-gray-400 dark:text-gray-500 text-xs">@{user.username}</span>
                     </div>
                   ))}
                 </div>
@@ -675,18 +723,18 @@ export function ProfilePage() {
         </div>
 
         {/* Notification preferences */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Bell className="w-4 h-4 text-blue-600" />
               {t('notifications.title')}
             </h2>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
             <div className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">{t('notifications.replies')}</p>
-                <p className="text-xs text-gray-500">{t('notifications.repliesDesc')}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('notifications.replies')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('notifications.repliesDesc')}</p>
               </div>
               <input
                 type="checkbox"
@@ -697,8 +745,8 @@ export function ProfilePage() {
             </div>
             <div className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">{t('notifications.mentions')}</p>
-                <p className="text-xs text-gray-500">{t('notifications.mentionsDesc')}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('notifications.mentions')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('notifications.mentionsDesc')}</p>
               </div>
               <input
                 type="checkbox"
@@ -709,8 +757,8 @@ export function ProfilePage() {
             </div>
             <div className="p-4 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">{t('notifications.official')}</p>
-                <p className="text-xs text-gray-500">{t('notifications.officialDesc')}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('notifications.official')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('notifications.officialDesc')}</p>
               </div>
               <input
                 type="checkbox"
@@ -720,8 +768,28 @@ export function ProfilePage() {
               />
             </div>
           </div>
-          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-            <p className="text-xs text-gray-500 flex items-center gap-1">
+          {pushSupported && (
+            <div className="border-t border-gray-100 dark:border-gray-800">
+              <div className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                    <BellRing className="w-3.5 h-3.5 text-blue-600" />
+                    {t('notifications.push')}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('notifications.pushDesc')}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={pushEnabled}
+                  onChange={handlePushToggle}
+                  disabled={pushLoading}
+                  className="w-4 h-4 text-blue-600"
+                />
+              </div>
+            </div>
+          )}
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-800">
+            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
               <Info className="w-3 h-3" />
               {t('notifications.noGrowthNudges')}
             </p>
@@ -729,9 +797,9 @@ export function ProfilePage() {
         </div>
 
         {/* Privacy & Data */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Eye className="w-4 h-4 text-blue-600" />
               {t('privacy.title')}
             </h2>
@@ -747,8 +815,8 @@ export function ProfilePage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-700">{t('privacy.dataStored')}</span>
+                  <Database className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{t('privacy.dataStored')}</span>
                 </div>
                 <Link to="/profile/data" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
                   {t('common:actions.view')}
@@ -756,7 +824,7 @@ export function ProfilePage() {
                 </Link>
               </div>
 
-              <div className="text-xs text-gray-500 space-y-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                 <p>• {t('privacy.dataList.profile')}</p>
                 <p>• {t('privacy.dataList.posts')}</p>
                 <p>• {t('privacy.dataList.clubs')}</p>
@@ -764,11 +832,11 @@ export function ProfilePage() {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-gray-200 flex items-center justify-between">
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between">
               <button
                 onClick={handleExportData}
                 disabled={exportDataMutation.isPending}
-                className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2 disabled:opacity-50"
+                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 flex items-center gap-2 disabled:opacity-50"
               >
                 <ExternalLink className="w-4 h-4" />
                 {exportDataMutation.isPending ? t('privacy.exporting') : t('privacy.exportData')}
@@ -878,24 +946,24 @@ export function ProfilePage() {
         </div>
 
         {/* Guides */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <HelpCircle className="w-4 h-4 text-blue-600" />
               {t('guide:guidesSection')}
             </h2>
           </div>
           <div className="p-4 space-y-3">
-            <p className="text-sm text-gray-600">{t('guide:guidesDescription')}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t('guide:guidesDescription')}</p>
             <div className="space-y-2">
               {Object.values(guides).map(guide => {
                 const completed = hasCompletedGuide(guide.id)
                 return (
                   <div
                     key={guide.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
                   >
-                    <span className="text-sm text-gray-700">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
                       {t(guide.titleKey.replace('guide:', ''), { ns: 'guide' })}
                     </span>
                     <div className="flex items-center gap-2">
@@ -906,7 +974,7 @@ export function ProfilePage() {
                       )}
                       <button
                         onClick={() => startGuide(guide.id)}
-                        className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                        className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         {t('guide:viewGuide')}
                       </button>
@@ -917,7 +985,7 @@ export function ProfilePage() {
             </div>
             <button
               onClick={resetAllGuides}
-              className="text-xs text-gray-500 hover:text-gray-700 mt-2"
+              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 mt-2"
             >
               {t('guide:resetAll')}
             </button>
@@ -927,19 +995,19 @@ export function ProfilePage() {
         {/* About Eulesia */}
         <Link
           to="/about"
-          className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow"
+          className="block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 hover:shadow-md transition-shadow"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                 <span className="text-blue-800 font-bold">E</span>
               </div>
               <div>
-                <p className="font-medium text-gray-900">{t('aboutEulesia')}</p>
-                <p className="text-xs text-gray-500">{t('aboutDesc')}</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">{t('aboutEulesia')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('aboutDesc')}</p>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
+            <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />
           </div>
         </Link>
 

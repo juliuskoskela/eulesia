@@ -23,6 +23,11 @@ const envSchema = z.object({
   // Capacitor native app origins (comma-separated)
   ALLOWED_ORIGINS: z.string().optional(),
 
+  // Web Push (VAPID keys — generate with: npx web-push generate-vapid-keys)
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().optional().default('mailto:admin@eulesia.eu'),
+
   // eIDAS (future)
   EIDAS_ENABLED: z.string().transform(v => v === 'true').default('false')
 })

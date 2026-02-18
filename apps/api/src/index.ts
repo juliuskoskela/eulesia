@@ -13,6 +13,8 @@ import ogRoutes from './routes/og.js'
 import sitemapRoutes from './routes/sitemap.js'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { initScheduler } from './services/scheduler.js'
+import { initWebPush } from './services/pushNotifications.js'
+import { setNotifyIO } from './services/notify.js'
 import { fullSync, startPeriodicSync, healthCheck as meiliHealthCheck } from './services/search/index.js'
 import { hashToken } from './utils/crypto.js'
 
@@ -292,6 +294,10 @@ io.on('connection', (socket) => {
 // Export io for use in routes
 export { io }
 
+// Initialize services
+initWebPush()
+setNotifyIO(io)
+
 // Run pending migrations before starting
 async function runMigrations() {
   const { db } = await import('./db/index.js')
@@ -334,6 +340,18 @@ async function runMigrations() {
     await db.execute(sql`CREATE TABLE IF NOT EXISTS "moderation_actions" ("id" UUID PRIMARY KEY DEFAULT gen_random_uuid(), "admin_user_id" UUID NOT NULL REFERENCES "users"("id"), "action_type" action_type NOT NULL, "target_type" content_type NOT NULL, "target_id" UUID NOT NULL, "report_id" UUID REFERENCES "content_reports"("id"), "reason" TEXT, "metadata" JSONB, "created_at" TIMESTAMPTZ DEFAULT NOW())`)
     await db.execute(sql`CREATE TABLE IF NOT EXISTS "user_sanctions" ("id" UUID PRIMARY KEY DEFAULT gen_random_uuid(), "user_id" UUID NOT NULL REFERENCES "users"("id"), "sanction_type" sanction_type NOT NULL, "reason" TEXT, "issued_by" UUID NOT NULL REFERENCES "users"("id"), "issued_at" TIMESTAMPTZ DEFAULT NOW(), "expires_at" TIMESTAMPTZ, "revoked_at" TIMESTAMPTZ, "revoked_by" UUID REFERENCES "users"("id"))`)
     await db.execute(sql`CREATE TABLE IF NOT EXISTS "moderation_appeals" ("id" UUID PRIMARY KEY DEFAULT gen_random_uuid(), "sanction_id" UUID REFERENCES "user_sanctions"("id"), "report_id" UUID REFERENCES "content_reports"("id"), "action_id" UUID REFERENCES "moderation_actions"("id"), "user_id" UUID NOT NULL REFERENCES "users"("id"), "reason" TEXT NOT NULL, "status" appeal_status DEFAULT 'pending', "admin_response" TEXT, "responded_by" UUID REFERENCES "users"("id"), "responded_at" TIMESTAMPTZ, "created_at" TIMESTAMPTZ DEFAULT NOW())`)
+    // 0015: Push subscriptions table
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS "push_subscriptions" (
+      "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      "user_id" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+      "endpoint" TEXT NOT NULL,
+      "p256dh" TEXT NOT NULL,
+      "auth" TEXT NOT NULL,
+      "user_agent" TEXT,
+      "created_at" TIMESTAMPTZ DEFAULT NOW()
+    )`)
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "push_subscriptions_user_idx" ON "push_subscriptions" ("user_id")`)
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "push_subscriptions_endpoint_idx" ON "push_subscriptions" ("endpoint")`)
     console.log('Migrations OK')
   } catch (error) {
     console.error('Migration error:', error)

@@ -33,7 +33,9 @@
     "mentionsDesc": "When someone mentions you",
     "official": "Official updates",
     "officialDesc": "From institutions you follow",
-    "noGrowthNudges": "No \"growth\" nudges. Only meaningful notifications."
+    "noGrowthNudges": "No \"growth\" nudges. Only meaningful notifications.",
+    "push": "Push notifications",
+    "pushDesc": "Receive notifications even when the browser is closed"
   },
   "privacy": {
     "title": "Privacy & Data",
@@ -76,6 +78,13 @@
   "language": {
     "title": "Language",
     "description": "Choose the interface language"
+  },
+  "theme": {
+    "title": "Theme",
+    "description": "Choose the app appearance",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
   },
   "aboutEulesia": "About Eulesia",
   "aboutDesc": "Governance, foundation, open source",

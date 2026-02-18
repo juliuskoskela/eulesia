@@ -7,6 +7,7 @@ import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { io } from '../index.js'
+import { notify } from '../services/notify.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -362,15 +363,8 @@ router.post('/:conversationId/messages', authMiddleware, asyncHandler(async (req
   if (otherUserId) {
     const truncatedBody = content.length > 100 ? content.slice(0, 100) + '...' : content
 
-    await db.insert(notifications).values({
+    await notify({
       userId: otherUserId,
-      type: 'dm',
-      title: author.name,
-      body: truncatedBody,
-      link: `/messages/${conversationId}`
-    })
-
-    io.to(`user:${otherUserId}`).emit('new_notification', {
       type: 'dm',
       title: author.name,
       body: truncatedBody,

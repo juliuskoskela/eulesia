@@ -1064,6 +1064,23 @@ export type ModerationAppeal = typeof moderationAppeals.$inferSelect
 export type NewEditHistory = typeof editHistory.$inferInsert
 export type EditHistory = typeof editHistory.$inferSelect
 
+// Push Subscriptions (Web Push API)
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  userIdx: index('push_subscriptions_user_idx').on(table.userId),
+  endpointIdx: index('push_subscriptions_endpoint_idx').on(table.endpoint)
+}))
+
+export type NewPushSubscription = typeof pushSubscriptions.$inferInsert
+export type PushSubscription = typeof pushSubscriptions.$inferSelect
+
 // Site settings (key-value)
 export const siteSettings = pgTable('site_settings', {
   key: varchar('key', { length: 255 }).primaryKey(),

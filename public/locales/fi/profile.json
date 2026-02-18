@@ -33,7 +33,9 @@
     "mentionsDesc": "Kun joku mainitsee sinut",
     "official": "Viralliset päivitykset",
     "officialDesc": "Seuraamiltasi instituutioilta",
-    "noGrowthNudges": "Ei \"kasvuhäkkyröitä\". Vain merkitykselliset ilmoitukset."
+    "noGrowthNudges": "Ei \"kasvuhäkkyröitä\". Vain merkitykselliset ilmoitukset.",
+    "push": "Push-ilmoitukset",
+    "pushDesc": "Saat ilmoituksia myös kun selain on kiinni"
   },
   "privacy": {
     "title": "Yksityisyys ja data",

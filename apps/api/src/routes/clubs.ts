@@ -1,12 +1,12 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, desc, and, or, sql, inArray } from 'drizzle-orm'
-import { db, clubs, clubMembers, clubThreads, clubComments, clubThreadVotes, clubCommentVotes, users, notifications } from '../db/index.js'
+import { db, clubs, clubMembers, clubThreads, clubComments, clubThreadVotes, clubCommentVotes, users } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { io } from '../index.js'
+import { notify } from '../services/notify.js'
 import { indexClub } from '../services/search/index.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
@@ -137,7 +137,7 @@ router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: Authenticate
   const { id } = req.params
 
   // Get club (by ID or slug)
-  const [club] = await db
+  let [club] = await db
     .select()
     .from(clubs)
     .where(eq(clubs.id, id))
@@ -155,24 +155,7 @@ router.get('/:id', optionalAuthMiddleware, asyncHandler(async (req: Authenticate
       throw new AppError(404, 'Club not found')
     }
 
-    if (!clubBySlug.isPublic && req.user?.role !== 'admin') {
-      if (!req.user) {
-        throw new AppError(403, 'This club is private')
-      }
-      const [membership] = await db
-        .select({ userId: clubMembers.userId })
-        .from(clubMembers)
-        .where(and(
-          eq(clubMembers.clubId, clubBySlug.id),
-          eq(clubMembers.userId, req.user.id)
-        ))
-        .limit(1)
-      if (!membership) {
-        throw new AppError(403, 'This club is private')
-      }
-    }
-
-    return res.redirect(`/api/v1/clubs/${clubBySlug.id}`)
+    club = clubBySlug
   }
 
   // Check membership
@@ -766,17 +749,12 @@ router.post('/:clubId/threads/:threadId/comments', authMiddleware, asyncHandler(
 
     if (parentComment && parentComment.authorId !== userId) {
       notifiedUserIds.add(parentComment.authorId)
-      await db.insert(notifications).values({
+      await notify({
         userId: parentComment.authorId,
         type: 'reply',
         title: commenterName,
         body: truncatedContent,
         link: `/clubs/${clubId}/thread/${threadId}`
-      })
-      io.to(`user:${parentComment.authorId}`).emit('new_notification', {
-        type: 'reply',
-        title: commenterName,
-        body: truncatedContent
       })
     }
   }
@@ -784,17 +762,12 @@ router.post('/:clubId/threads/:threadId/comments', authMiddleware, asyncHandler(
   // 2. Notify thread author (new comment on their thread)
   if (thread.authorId !== userId && !notifiedUserIds.has(thread.authorId)) {
     notifiedUserIds.add(thread.authorId)
-    await db.insert(notifications).values({
+    await notify({
       userId: thread.authorId,
       type: 'thread_reply',
       title: commenterName,
       body: truncatedContent,
       link: `/clubs/${clubId}/thread/${threadId}`
-    })
-    io.to(`user:${thread.authorId}`).emit('new_notification', {
-      type: 'thread_reply',
-      title: commenterName,
-      body: truncatedContent
     })
   }
 

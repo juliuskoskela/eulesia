@@ -595,6 +595,29 @@ class ApiClient {
     await this.request(`/notifications/${id}`, { method: 'DELETE' })
   }
 
+  // Push notifications
+  async getPushVapidKey(): Promise<{ enabled: boolean; vapidPublicKey: string | null }> {
+    return this.request('/notifications/push/vapid-public-key')
+  }
+
+  async subscribePush(subscription: PushSubscription): Promise<void> {
+    const json = subscription.toJSON()
+    await this.request('/notifications/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({
+        endpoint: json.endpoint,
+        keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth }
+      })
+    })
+  }
+
+  async unsubscribePush(endpoint: string): Promise<void> {
+    await this.request('/notifications/push/subscribe', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint })
+    })
+  }
+
   // Uploads
   async uploadAvatar(file: File): Promise<UploadAvatarResponse> {
     const formData = new FormData()

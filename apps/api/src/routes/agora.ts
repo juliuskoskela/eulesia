@@ -1,13 +1,14 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, desc, asc, and, inArray, sql, or, gte } from 'drizzle-orm'
-import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions, tagCategories, institutionTopics, editHistory, notifications } from '../db/index.js'
+import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions, tagCategories, institutionTopics, editHistory } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { canEdit, canDelete } from '../utils/permissions.js'
 import { io } from '../index.js'
+import { notify } from '../services/notify.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -693,17 +694,12 @@ router.post('/threads/:id/comments', authMiddleware, asyncHandler(async (req: Au
 
       if (parentAuthor?.notificationReplies !== false) {
         notifiedUserIds.add(parentComment.authorId)
-        await db.insert(notifications).values({
+        await notify({
           userId: parentComment.authorId,
           type: 'reply',
           title: commenterName,
           body: truncatedContent,
           link: `/agora/thread/${threadId}`
-        })
-        io.to(`user:${parentComment.authorId}`).emit('new_notification', {
-          type: 'reply',
-          title: commenterName,
-          body: truncatedContent
         })
       }
     }
@@ -721,17 +717,12 @@ router.post('/threads/:id/comments', authMiddleware, asyncHandler(async (req: Au
 
     if (threadAuthorUser?.notificationReplies !== false) {
       notifiedUserIds.add(thread.authorId)
-      await db.insert(notifications).values({
+      await notify({
         userId: thread.authorId,
         type: 'thread_reply',
         title: commenterName,
         body: truncatedContent,
         link: `/agora/thread/${threadId}`
-      })
-      io.to(`user:${thread.authorId}`).emit('new_notification', {
-        type: 'thread_reply',
-        title: commenterName,
-        body: truncatedContent
       })
     }
   }
@@ -752,17 +743,12 @@ router.post('/threads/:id/comments', authMiddleware, asyncHandler(async (req: Au
       if (mentionedUser && mentionedUser.id !== userId && !notifiedUserIds.has(mentionedUser.id)) {
         if (mentionedUser.notificationMentions !== false) {
           notifiedUserIds.add(mentionedUser.id)
-          await db.insert(notifications).values({
+          await notify({
             userId: mentionedUser.id,
             type: 'mention',
             title: commenterName,
             body: truncatedContent,
             link: `/agora/thread/${threadId}`
-          })
-          io.to(`user:${mentionedUser.id}`).emit('new_notification', {
-            type: 'mention',
-            title: commenterName,
-            body: truncatedContent
           })
         }
       }

@@ -4,13 +4,14 @@ import { eq, desc, and, sql, count, or, gt, ilike } from 'drizzle-orm'
 import {
   db, users, threads, comments, clubs, clubThreads, clubComments,
   contentReports, moderationActions, userSanctions, moderationAppeals,
-  notifications, siteSettings, inviteCodes, systemAnnouncements
+  siteSettings, inviteCodes, systemAnnouncements
 } from '../db/index.js'
 import { randomBytes } from 'crypto'
 import { authMiddleware } from '../middleware/auth.js'
 import { requireAdmin } from '../middleware/admin.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
+import { notify } from '../services/notify.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -248,7 +249,7 @@ router.post('/users/:id/sanction', asyncHandler(async (req: AuthenticatedRequest
   })
 
   // Notify user
-  await db.insert(notifications).values({
+  await notify({
     userId: id,
     type: 'sanction',
     title: sanctionType === 'warning' ? 'You have received a warning'
@@ -302,7 +303,7 @@ router.delete('/sanctions/:id', asyncHandler(async (req: AuthenticatedRequest, r
   })
 
   // Notify user
-  await db.insert(notifications).values({
+  await notify({
     userId: sanction.userId,
     type: 'sanction_revoked',
     title: 'Your sanction has been revoked',
@@ -767,7 +768,7 @@ router.patch('/appeals/:id', asyncHandler(async (req: AuthenticatedRequest, res:
   }
 
   // Notify user
-  await db.insert(notifications).values({
+  await notify({
     userId: appeal.userId,
     type: 'appeal_response',
     title: status === 'accepted' ? 'Your appeal has been accepted' : 'Your appeal has been rejected',

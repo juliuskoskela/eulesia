@@ -1,12 +1,13 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
 import { eq, and, desc, sql, inArray } from 'drizzle-orm'
-import { db, rooms, roomMembers, roomMessages, roomInvitations, messageReactions, users, threads, clubMembers, clubs, editHistory, notifications } from '../db/index.js'
+import { db, rooms, roomMembers, roomMessages, roomInvitations, messageReactions, users, threads, clubMembers, clubs, editHistory } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { io } from '../index.js'
+import { notify } from '../services/notify.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -672,17 +673,12 @@ router.post('/rooms/:roomId/invite', authMiddleware, asyncHandler(async (req: Au
 
   // Notify invitee
   const inviterName = req.user!.name || 'Someone'
-  await db.insert(notifications).values({
+  await notify({
     userId: inviteeId,
     type: 'room_invite',
     title: inviterName,
     body: room.name,
     link: '/home'
-  })
-  io.to(`user:${inviteeId}`).emit('new_notification', {
-    type: 'room_invite',
-    title: inviterName,
-    body: room.name
   })
 
   res.status(201).json({
@@ -748,17 +744,12 @@ router.post('/rooms/:roomId/members', authMiddleware, asyncHandler(async (req: A
 
   // Notify the added user
   const adderName = req.user!.name || 'Someone'
-  await db.insert(notifications).values({
+  await notify({
     userId: targetUserId,
     type: 'room_invite',
     title: adderName,
     body: room.name,
     link: `/home/rooms/${roomId}`
-  })
-  io.to(`user:${targetUserId}`).emit('new_notification', {
-    type: 'room_invite',
-    title: adderName,
-    body: room.name
   })
 
   res.status(201).json({

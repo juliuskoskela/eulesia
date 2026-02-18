@@ -1,9 +1,10 @@
 import { Router, type Response } from 'express'
 import { eq, and, desc, sql } from 'drizzle-orm'
-import { db, notifications } from '../db/index.js'
+import { db, notifications, pushSubscriptions } from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
+import { getVapidPublicKey, isWebPushEnabled } from '../services/pushNotifications.js'
 import type { AuthenticatedRequest } from '../types/index.js'
 
 const router = Router()
@@ -107,6 +108,64 @@ router.delete('/:id', authMiddleware, asyncHandler(async (req: AuthenticatedRequ
   }
 
   res.json({ success: true, data: { deleted: true } })
+}))
+
+// GET /notifications/push/vapid-public-key — Get VAPID public key for push subscription
+router.get('/push/vapid-public-key', authMiddleware, asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
+  const key = getVapidPublicKey()
+  res.json({
+    success: true,
+    data: {
+      enabled: isWebPushEnabled(),
+      vapidPublicKey: key || null
+    }
+  })
+}))
+
+// POST /notifications/push/subscribe — Register a push subscription
+router.post('/push/subscribe', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { endpoint, keys } = req.body
+
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    throw new AppError(400, 'Invalid push subscription: endpoint, keys.p256dh, and keys.auth required')
+  }
+
+  if (!isWebPushEnabled()) {
+    throw new AppError(503, 'Push notifications are not configured on this server')
+  }
+
+  // Upsert: delete existing subscription for this endpoint, then insert
+  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint))
+
+  await db.insert(pushSubscriptions).values({
+    userId,
+    endpoint,
+    p256dh: keys.p256dh,
+    auth: keys.auth,
+    userAgent: req.headers['user-agent'] || null
+  })
+
+  res.json({ success: true, data: { subscribed: true } })
+}))
+
+// DELETE /notifications/push/subscribe — Unsubscribe from push notifications
+router.delete('/push/subscribe', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id
+  const { endpoint } = req.body
+
+  if (!endpoint) {
+    throw new AppError(400, 'Endpoint required')
+  }
+
+  await db.delete(pushSubscriptions).where(
+    and(
+      eq(pushSubscriptions.userId, userId),
+      eq(pushSubscriptions.endpoint, endpoint)
+    )
+  )
+
+  res.json({ success: true, data: { unsubscribed: true } })
 }))
 
 export default router
