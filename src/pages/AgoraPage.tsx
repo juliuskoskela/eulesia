@@ -264,10 +264,10 @@ export function AgoraPage() {
         }}
       />
       {/* Page header */}
-      <div className="bg-white px-4 py-4 border-b border-gray-200" data-guide="agora-header">
-        <h1 className="text-xl font-bold text-gray-900">{t('title')}</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          {t('subtitle')}
+      <div className="bg-white dark:bg-gray-900 px-4 py-4 border-b border-gray-200 dark:border-gray-800" data-guide="agora-header">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          {t(`subtitle_${Math.floor(Date.now() / 86400000) % 5}`, { defaultValue: t('subtitle') })}
         </p>
       </div>
 
