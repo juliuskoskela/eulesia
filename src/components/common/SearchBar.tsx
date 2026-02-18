@@ -77,7 +77,7 @@ export function SearchBar({ className = '', placeholder, autoFocus = false, onCl
     <div ref={containerRef} className={`relative ${className}`}>
       {/* Search input */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
         <input
           ref={inputRef}
           type="text"
@@ -86,21 +86,21 @@ export function SearchBar({ className = '', placeholder, autoFocus = false, onCl
           onFocus={() => query.length >= 2 && setIsOpen(true)}
           placeholder={placeholder ?? t('search.placeholderShort')}
           autoFocus={autoFocus}
-          className="w-full pl-9 pr-8 py-2 bg-gray-100 border-0 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
+          className="w-full pl-9 pr-8 py-2 bg-gray-100 dark:bg-gray-800 border-0 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-900 transition-colors"
         />
         {query && (
           <button
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
           >
-            <X className="w-4 h-4 text-gray-400" />
+            <X className="w-4 h-4 text-gray-400 dark:text-gray-500" />
           </button>
         )}
       </div>
 
       {/* Results dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-[70vh] overflow-y-auto z-50">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 max-h-[70vh] overflow-y-auto z-50">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
@@ -108,7 +108,7 @@ export function SearchBar({ className = '', placeholder, autoFocus = false, onCl
           ) : hasResults ? (
             <SearchResultsList results={results} onResultClick={handleResultClick} />
           ) : query.length >= 2 ? (
-            <div className="py-8 text-center text-gray-500 text-sm">
+            <div className="py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
               {t('search.noResults', { query })}
             </div>
           ) : null}
@@ -136,7 +136,7 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
               key={user.id}
               to={`/user/${user.id}`}
               onClick={onResultClick}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               {user.avatarUrl ? (
                 <img src={user.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
@@ -146,8 +146,8 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 truncate">{user.name}</div>
-                <div className="text-xs text-gray-500 truncate">
+                <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{user.name}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   @{user.username}
                   {user.institutionName && ` · ${user.institutionName}`}
                 </div>
@@ -170,13 +170,13 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
               key={m.id}
               to={`/kunnat/${m.id}`}
               onClick={onResultClick}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
-              <Building2 className="w-5 h-5 text-gray-400" />
+              <Building2 className="w-5 h-5 text-gray-400 dark:text-gray-500" />
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900">{m.name}</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{m.name}</div>
                 {m.region && (
-                  <div className="text-xs text-gray-500">{m.region}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{m.region}</div>
                 )}
               </div>
             </Link>
@@ -192,10 +192,10 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
               key={thread.id}
               to={`/agora/thread/${thread.id}`}
               onClick={onResultClick}
-              className="block px-4 py-2 hover:bg-gray-50 transition-colors"
+              className="block px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
-              <div className="font-medium text-gray-900 line-clamp-1">{thread.title}</div>
-              <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+              <div className="font-medium text-gray-900 dark:text-gray-100 line-clamp-1">{thread.title}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-0.5">
                 <span>{thread.authorName}</span>
                 {thread.municipalityName && (
                   <>
@@ -217,14 +217,14 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
           {results.clubs.map(club => (
             <Link
               key={club.id}
-              to={`/klubit/${club.slug}`}
+              to={`/clubs/${club.id}`}
               onClick={onResultClick}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               <Users className="w-5 h-5 text-purple-500" />
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900">{club.name}</div>
-                <div className="text-xs text-gray-500">
+                <div className="font-medium text-gray-900 dark:text-gray-100">{club.name}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   {club.category && `${club.category} · `}
                   {t('search.members', { count: club.memberCount })}
                 </div>
@@ -242,13 +242,13 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
               key={place.id}
               to={`/kartta?place=${place.id}`}
               onClick={onResultClick}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
-              <MapPin className="w-5 h-5 text-gray-400" />
+              <MapPin className="w-5 h-5 text-gray-400 dark:text-gray-500" />
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900">{place.name}</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{place.name}</div>
                 {(place.category || place.municipalityName) && (
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
                     {place.category}
                     {place.category && place.municipalityName && ' · '}
                     {place.municipalityName}
@@ -268,12 +268,12 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
               key={loc.id || `osm-${loc.osmId}`}
               to={loc.osmId ? `/paikka/${loc.osmType}/${loc.osmId}` : `/kartta?loc=${loc.id}`}
               onClick={onResultClick}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               <MapPin className="w-5 h-5 text-emerald-500" />
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900">{loc.nameFi || loc.name}</div>
-                <div className="text-xs text-gray-500">
+                <div className="font-medium text-gray-900 dark:text-gray-100">{loc.nameFi || loc.name}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   {loc.parentName && `${loc.parentName} · `}
                   {loc.type === 'municipality' ? t('search.municipality') : loc.type}
                   {loc.contentCount > 0 && ` · ${loc.contentCount} ${t('search.posts')}`}
@@ -293,11 +293,11 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
                 key={tag.tag}
                 to={`/agora?tags=${encodeURIComponent(tag.tag)}`}
                 onClick={onResultClick}
-                className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-sm text-gray-700 dark:text-gray-300 transition-colors"
               >
                 <Hash className="w-3 h-3" />
                 {tag.tag}
-                <span className="text-gray-400 text-xs">({tag.count})</span>
+                <span className="text-gray-400 dark:text-gray-500 text-xs">({tag.count})</span>
               </Link>
             ))}
           </div>
@@ -306,7 +306,7 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
 
       {/* Processing time */}
       {results.processingTimeMs && (
-        <div className="px-4 py-2 text-xs text-gray-400 border-t border-gray-100">
+        <div className="px-4 py-2 text-xs text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-800">
           {t('search.processingTime', { ms: results.processingTimeMs })}
         </div>
       )}
@@ -322,10 +322,10 @@ interface ResultSectionProps {
 
 function ResultSection({ title, icon: Icon, children }: ResultSectionProps) {
   return (
-    <div className="border-b border-gray-100 last:border-b-0">
-      <div className="px-4 py-1.5 bg-gray-50 flex items-center gap-2">
-        <Icon className="w-4 h-4 text-gray-400" />
-        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{title}</span>
+    <div className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
+      <div className="px-4 py-1.5 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2">
+        <Icon className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{title}</span>
       </div>
       {children}
     </div>

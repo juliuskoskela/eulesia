@@ -183,7 +183,7 @@ export function ClubViewPage() {
     return (
       <Layout>
         <div className="p-8 text-center">
-          <p className="text-gray-500">{t('clubNotFound')}</p>
+          <p className="text-gray-500 dark:text-gray-400">{t('clubNotFound')}</p>
           <Link to="/clubs" className="text-teal-600 hover:underline mt-2 inline-block">
             {t('returnToClubs')}
           </Link>
@@ -211,10 +211,10 @@ export function ClubViewPage() {
         />
       )}
       {/* Back navigation */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
         <button
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           {t('backToClubs')}
@@ -223,7 +223,7 @@ export function ClubViewPage() {
 
       {/* Cover image */}
       {club.coverImageUrl ? (
-        <div className="h-40 sm:h-48 bg-gray-100">
+        <div className="h-40 sm:h-48 bg-gray-100 dark:bg-gray-800">
           <img
             src={club.coverImageUrl}
             alt=""
@@ -258,17 +258,17 @@ export function ClubViewPage() {
               )}
             </div>
 
-            <h1 className="text-2xl font-bold text-gray-900 mt-3 mb-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-3 mb-2">
               {club.name}
             </h1>
 
             {club.description && (
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
                 {club.description}
               </p>
             )}
 
-            <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
+            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
               <div className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
                 <span>{t('members', { count: club.memberCount })}</span>
@@ -293,7 +293,7 @@ export function ClubViewPage() {
               className="p-2 hover:bg-teal-100 rounded-lg transition-colors"
               title={t('settings')}
             >
-              <Settings className="w-5 h-5 text-gray-600" />
+              <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </button>
           )}
         </div>
@@ -304,7 +304,7 @@ export function ClubViewPage() {
             <button
               onClick={handleLeave}
               disabled={leaveClubMutation.isPending}
-              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+              className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
             >
               {leaveClubMutation.isPending ? t('leaving') : t('leave')}
             </button>
@@ -329,28 +329,28 @@ export function ClubViewPage() {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white rounded-t-xl z-10">
-              <h3 className="font-semibold text-gray-900">{t('editClub')}</h3>
-              <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-gray-100 rounded">
-                <X className="w-5 h-5 text-gray-500" />
+          <div className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 rounded-t-xl z-10">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('editClub')}</h3>
+              <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
             <div className="p-4 space-y-4">
               {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.name')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.name')}</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.description')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.description')}</label>
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
@@ -361,19 +361,19 @@ export function ClubViewPage() {
 
               {/* Category */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.category')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.category')}</label>
                 <input
                   type="text"
                   value={editCategory}
                   onChange={(e) => setEditCategory(e.target.value)}
                   placeholder={t('create.categoryPlaceholder')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                 />
               </div>
 
               {/* Cover Image */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.coverImage')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.coverImage')}</label>
                 {editCoverImage ? (
                   <div className="relative">
                     <img src={editCoverImage} alt="" className="w-full h-32 object-cover rounded-lg" />
@@ -390,7 +390,7 @@ export function ClubViewPage() {
                     type="button"
                     onClick={() => settingsImageRef.current?.click()}
                     disabled={isUploadingImage}
-                    className="w-full h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center gap-2 text-gray-500 hover:border-teal-400 hover:text-teal-600 transition-colors disabled:opacity-50"
+                    className="w-full h-24 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400 hover:border-teal-400 hover:text-teal-600 transition-colors disabled:opacity-50"
                   >
                     {isUploadingImage ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -413,19 +413,19 @@ export function ClubViewPage() {
 
               {/* Location */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.location')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.location')}</label>
                 <LocationSearch
                   value={editLocation}
                   onChange={setEditLocation}
                 />
                 {!editLocation && editAddress && (
-                  <p className="text-xs text-gray-500 mt-1">{t('location')}: {editAddress}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('location')}: {editAddress}</p>
                 )}
               </div>
 
               {/* Visibility */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('create.visibility')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('create.visibility')}</label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -454,19 +454,19 @@ export function ClubViewPage() {
 
               {/* Rules */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('create.rules')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.rules')}</label>
                 {editRules.length > 0 && (
                   <ol className="space-y-1 mb-2">
                     {editRules.map((rule, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
-                        <span className="text-gray-400 font-medium">{i + 1}.</span>
-                        <span className="flex-1 text-gray-700">{rule}</span>
+                      <li key={i} className="flex items-center gap-2 text-sm bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 rounded-lg">
+                        <span className="text-gray-400 dark:text-gray-500 font-medium">{i + 1}.</span>
+                        <span className="flex-1 text-gray-700 dark:text-gray-300">{rule}</span>
                         <button
                           type="button"
                           onClick={() => setEditRules(prev => prev.filter((_, idx) => idx !== i))}
-                          className="p-0.5 hover:bg-gray-200 rounded"
+                          className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-gray-400" />
+                          <Trash2 className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
                         </button>
                       </li>
                     ))}
@@ -485,7 +485,7 @@ export function ClubViewPage() {
                         }
                       }}
                       placeholder={t('create.rulePlaceholder')}
-                      className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                     />
                     <button
                       type="button"
@@ -504,7 +504,7 @@ export function ClubViewPage() {
                 <button
                   type="button"
                   onClick={() => setShowSettings(false)}
-                  className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   {t('common:actions.cancel')}
                 </button>
@@ -525,16 +525,16 @@ export function ClubViewPage() {
       <div className="px-4 py-6 space-y-6">
         {/* Community rules */}
         {club.rules && club.rules.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-              <ScrollText className="w-4 h-4 text-gray-600" />
-              <h2 className="font-semibold text-gray-900">{t('rules')}</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
+              <ScrollText className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('rules')}</h2>
             </div>
             <div className="p-4">
               <ol className="space-y-2">
                 {club.rules.map((rule, i) => (
-                  <li key={i} className="flex gap-2 text-sm text-gray-700">
-                    <span className="text-gray-400 font-medium">{i + 1}.</span>
+                  <li key={i} className="flex gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <span className="text-gray-400 dark:text-gray-500 font-medium">{i + 1}.</span>
                     <span>{rule}</span>
                   </li>
                 ))}
@@ -545,8 +545,8 @@ export function ClubViewPage() {
 
         {/* Moderators */}
         {moderators.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
               <Shield className="w-4 h-4 text-teal-600" />
               {t('moderators')}
             </h3>
@@ -560,14 +560,14 @@ export function ClubViewPage() {
 
         {/* Members */}
         {members.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
               <Users className="w-4 h-4 text-teal-600" />
               {t('memberList')} ({members.length})
             </h3>
             <div className="flex flex-wrap gap-2">
               {members.slice(0, 20).map(member => (
-                <div key={member.id} className="relative flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full text-sm hover:bg-gray-100 transition-colors group">
+                <div key={member.id} className="relative flex items-center gap-1.5 px-2 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-full text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group">
                   <Link
                     to={`/home/${member.id}`}
                     className="flex items-center gap-1.5"
@@ -579,7 +579,7 @@ export function ClubViewPage() {
                         {member.name.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="text-gray-700">{member.name}</span>
+                    <span className="text-gray-700 dark:text-gray-300">{member.name}</span>
                     {member.role === 'admin' && (
                       <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">{t('moderation.admin')}</span>
                     )}
@@ -592,9 +592,9 @@ export function ClubViewPage() {
                   {isAdminOrMod && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setMemberMenuOpen(memberMenuOpen === member.id ? null : member.id) }}
-                      className="ml-1 p-0.5 rounded hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="ml-1 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
-                      <MoreVertical className="w-3.5 h-3.5 text-gray-400" />
+                      <MoreVertical className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
                     </button>
                   )}
 
@@ -602,25 +602,25 @@ export function ClubViewPage() {
                   {memberMenuOpen === member.id && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setMemberMenuOpen(null)} />
-                      <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                      <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 py-1 z-20">
                         {/* Role change - admin only */}
                         {club.memberRole === 'admin' && (
                           <>
-                            <div className="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase">{t('moderation.changeRole')}</div>
+                            <div className="px-3 py-1.5 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase">{t('moderation.changeRole')}</div>
                             {(['member', 'moderator', 'admin'] as const).map(role => (
                               <button
                                 key={role}
                                 onClick={() => handleChangeRole(member.id, role)}
                                 disabled={member.role === role || updateRoleMutation.isPending}
-                                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40 ${
-                                  member.role === role ? 'text-teal-600 font-medium' : 'text-gray-700'
+                                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 ${
+                                  member.role === role ? 'text-teal-600 font-medium' : 'text-gray-700 dark:text-gray-300'
                                 }`}
                               >
                                 {t(`moderation.${role}`)}
                                 {member.role === role && ' ✓'}
                               </button>
                             ))}
-                            <div className="border-t border-gray-100 my-1" />
+                            <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
                           </>
                         )}
                         {/* Remove member - admin + mod (mod can't remove admin/mod) */}
@@ -639,7 +639,7 @@ export function ClubViewPage() {
                 </div>
               ))}
               {members.length > 20 && (
-                <span className="text-sm text-gray-500 px-2 py-1">
+                <span className="text-sm text-gray-500 dark:text-gray-400 px-2 py-1">
                   +{members.length - 20}
                 </span>
               )}
@@ -650,13 +650,13 @@ export function ClubViewPage() {
         {/* Confirm remove member dialog */}
         {confirmRemoveMember && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-sm p-6">
-              <h3 className="font-semibold text-gray-900 mb-2">{t('moderation.confirmRemove')}</h3>
-              <p className="text-sm text-gray-600 mb-4">{confirmRemoveMember.name}</p>
+            <div className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-sm p-6">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('moderation.confirmRemove')}</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{confirmRemoveMember.name}</p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setConfirmRemoveMember(null)}
-                  className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   {t('common:actions.cancel')}
                 </button>
@@ -680,9 +680,9 @@ export function ClubViewPage() {
               <span className="text-sm font-medium">{t('pinnedThread')}</span>
             </div>
             <Link to={`/clubs/${club.id}/thread/${pinnedThread.id}`} className="block p-4 hover:bg-amber-100/50 transition-colors">
-              <h3 className="font-semibold text-gray-900 mb-1">{pinnedThread.title}</h3>
-              <p className="text-sm text-gray-600 line-clamp-2">{pinnedThread.content.substring(0, 150)}...</p>
-              <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{pinnedThread.title}</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{pinnedThread.content.substring(0, 150)}...</p>
+              <div className="mt-2 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                 <span>{t('replies', { count: pinnedThread.replyCount })}</span>
                 <span>·</span>
                 <span>{formatRelativeTime(pinnedThread.updatedAt)}</span>
@@ -693,7 +693,7 @@ export function ClubViewPage() {
 
         {/* Threads */}
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('discussions')}</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('discussions')}</h2>
 
           {regularThreads.length > 0 ? (
             <div className="space-y-3">
@@ -701,15 +701,15 @@ export function ClubViewPage() {
                 <Link
                   key={thread.id}
                   to={`/clubs/${club.id}/thread/${thread.id}`}
-                  className="block bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-shadow"
+                  className="block bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 hover:shadow-md transition-shadow"
                 >
-                  <h3 className="font-semibold text-gray-900 mb-1">{thread.title}</h3>
-                  <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{thread.title}</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
                     {thread.content.substring(0, 150)}...
                   </p>
                   <div className="flex items-center justify-between">
                     <ActorBadge user={transformUser(thread.author)} size="sm" />
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                       {(thread.score ?? 0) !== 0 && (
                         <span className={`font-medium ${(thread.score ?? 0) > 0 ? 'text-orange-600' : 'text-blue-600'}`}>
                           {(thread.score ?? 0) > 0 ? '+' : ''}{thread.score}
@@ -726,7 +726,7 @@ export function ClubViewPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <p>{t('noThreads')}</p>
             </div>
           )}
@@ -735,14 +735,14 @@ export function ClubViewPage() {
           {club.isMember && (
             <>
               {showNewThreadForm ? (
-                <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
+                <div className="mt-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-gray-900">{t('newDiscussion')}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('newDiscussion')}</h3>
                     <button
                       onClick={() => setShowNewThreadForm(false)}
-                      className="p-1 hover:bg-gray-100 rounded"
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
                     >
-                      <X className="w-5 h-5 text-gray-500" />
+                      <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                     </button>
                   </div>
                   <input
@@ -750,19 +750,19 @@ export function ClubViewPage() {
                     placeholder={t('discussionTitle')}
                     value={newThreadTitle}
                     onChange={(e) => setNewThreadTitle(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-800 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-800 dark:text-gray-100"
                   />
                   <textarea
                     placeholder={t('discussionContent')}
                     value={newThreadContent}
                     onChange={(e) => setNewThreadContent(e.target.value)}
                     rows={4}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-800 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none dark:bg-gray-800 dark:text-gray-100"
                   />
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => setShowNewThreadForm(false)}
-                      className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                      className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                     >
                       {t('common:actions.cancel')}
                     </button>
@@ -779,7 +779,7 @@ export function ClubViewPage() {
               ) : (
                 <button
                   onClick={() => setShowNewThreadForm(true)}
-                  className="mt-4 w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+                  className="mt-4 w-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 >
                   {t('startDiscussion')}
                 </button>

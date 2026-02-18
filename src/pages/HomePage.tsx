@@ -29,9 +29,9 @@ export function HomePage() {
     return (
       <Layout>
         <div className="px-4 py-12 text-center">
-          <Home className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-gray-900 mb-2">{t('welcome')}</h2>
-          <p className="text-gray-600 mb-4">{t('signInPrompt')}</p>
+          <Home className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">{t('welcome')}</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{t('signInPrompt')}</p>
           <Link to="/login" className="text-blue-600 hover:underline">
             {t('signIn')}
           </Link>
@@ -106,10 +106,10 @@ export function HomePage() {
             </h2>
             <div className="space-y-2">
               {pendingInvitations.map((inv: RoomInvitationWithDetails) => (
-                <div key={inv.id} className="flex items-center justify-between bg-white p-3 rounded-lg">
+                <div key={inv.id} className="flex items-center justify-between bg-white dark:bg-gray-900 p-3 rounded-lg">
                   <div>
-                    <p className="font-medium text-gray-900">{inv.room.name}</p>
-                    <p className="text-xs text-gray-500">{t('fromUser', { name: inv.inviter.name })}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{inv.room.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('fromUser', { name: inv.inviter.name })}</p>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -122,7 +122,7 @@ export function HomePage() {
                     <button
                       onClick={() => declineInvitationMutation.mutate(inv.id)}
                       disabled={declineInvitationMutation.isPending}
-                      className="text-xs text-gray-600 px-3 py-1 rounded-full hover:bg-gray-100 disabled:opacity-50"
+                      className="text-xs text-gray-600 dark:text-gray-400 px-3 py-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
                     >
                       {declineInvitationMutation.isPending ? '...' : t('decline')}
                     </button>
@@ -150,7 +150,7 @@ export function HomePage() {
             {/* Rooms Section */}
             <div data-guide="home-rooms">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
                   <MessageSquare className="w-4 h-4" />
                   {t('rooms.title')}
                 </h2>
@@ -165,22 +165,22 @@ export function HomePage() {
 
               {/* Create Room Form */}
               {showCreateRoom && (
-                <form onSubmit={handleCreateRoom} className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
-                  <h3 className="font-medium text-gray-900 mb-3">{t('rooms.createTitle')}</h3>
+                <form onSubmit={handleCreateRoom} className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 rounded-xl p-4 mb-4">
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-3">{t('rooms.createTitle')}</h3>
                   <div className="space-y-3">
                     <input
                       type="text"
                       value={newRoomName}
                       onChange={(e) => setNewRoomName(e.target.value)}
                       placeholder={t('rooms.namePlaceholder')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                       required
                     />
                     <textarea
                       value={newRoomDescription}
                       onChange={(e) => setNewRoomDescription(e.target.value)}
                       placeholder={t('rooms.description')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                       rows={2}
                     />
                     <div className="flex gap-4">
@@ -218,7 +218,7 @@ export function HomePage() {
                       <button
                         type="button"
                         onClick={() => setShowCreateRoom(false)}
-                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
                       >
                         {t('common:actions.cancel')}
                       </button>
@@ -230,7 +230,7 @@ export function HomePage() {
               {/* Public Rooms */}
               {publicRooms.length > 0 && (
                 <div className="space-y-2 mb-4">
-                  <p className="text-xs text-gray-500 font-medium flex items-center gap-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium flex items-center gap-1">
                     <Globe className="w-3 h-3" /> {t('rooms.public')}
                   </p>
                   {publicRooms.map((room: Room) => (
@@ -242,7 +242,7 @@ export function HomePage() {
               {/* Private Rooms */}
               {privateRooms.length > 0 && (
                 <div className="space-y-2 mb-4">
-                  <p className="text-xs text-gray-500 font-medium flex items-center gap-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium flex items-center gap-1">
                     <Lock className="w-3 h-3" /> {t('rooms.private')}
                   </p>
                   {privateRooms.map((room: Room) => (
@@ -252,33 +252,33 @@ export function HomePage() {
               )}
 
               {publicRooms.length === 0 && privateRooms.length === 0 && (
-                <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                  <MessageSquare className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-600 mb-1">{t('rooms.noRooms')}</p>
-                  <p className="text-sm text-gray-500">{t('rooms.noRoomsHint')}</p>
+                <div className="text-center py-8 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                  <MessageSquare className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
+                  <p className="text-gray-600 dark:text-gray-400 mb-1">{t('rooms.noRooms')}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('rooms.noRoomsHint')}</p>
                 </div>
               )}
             </div>
 
             {/* Recent Activity */}
             <div data-guide="home-activity">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Activity className="w-4 h-4" />
                 {t('recentActivity')}
               </h2>
 
               {homeData?.recentActivity?.threads && homeData.recentActivity.threads.length > 0 && (
                 <div className="space-y-2 mb-4">
-                  <p className="text-xs text-gray-500">{t('agoraDiscussions')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('agoraDiscussions')}</p>
                   {homeData.recentActivity.threads.slice(0, 3).map((thread: { id: string; title: string; scope: string }) => (
                     <Link
                       key={thread.id}
                       to={`/agora/thread/${thread.id}`}
-                      className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 hover:shadow-sm transition-shadow"
+                      className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 hover:shadow-sm transition-shadow"
                     >
                       <BookOpen className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm text-gray-900 flex-1 truncate">{thread.title}</span>
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-900 dark:text-gray-100 flex-1 truncate">{thread.title}</span>
+                      <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </Link>
                   ))}
                 </div>
@@ -286,16 +286,16 @@ export function HomePage() {
 
               {homeData?.recentActivity?.clubs && homeData.recentActivity.clubs.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs text-gray-500">{t('clubs')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('clubs')}</p>
                   {homeData.recentActivity.clubs.slice(0, 3).map((club: { id: string; name: string; slug: string }) => (
                     <Link
                       key={club.id}
-                      to={`/clubs/${club.slug}`}
-                      className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 hover:shadow-sm transition-shadow"
+                      to={`/clubs/${club.id}`}
+                      className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 hover:shadow-sm transition-shadow"
                     >
                       <Users className="w-4 h-4 text-violet-600" />
-                      <span className="text-sm text-gray-900 flex-1 truncate">{club.name}</span>
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-900 dark:text-gray-100 flex-1 truncate">{club.name}</span>
+                      <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     </Link>
                   ))}
                 </div>
@@ -316,7 +316,7 @@ function RoomCard({ room }: { room: Room }) {
   return (
     <Link
       to={`/home/room/${room.id}`}
-      className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow"
+      className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 hover:shadow-md transition-shadow"
     >
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
@@ -329,17 +329,17 @@ function RoomCard({ room }: { room: Room }) {
           )}
         </div>
         <div>
-          <h3 className="font-medium text-gray-900">{room.name}</h3>
+          <h3 className="font-medium text-gray-900 dark:text-gray-100">{room.name}</h3>
           {room.description && (
-            <p className="text-xs text-gray-500 truncate max-w-[200px]">{room.description}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">{room.description}</p>
           )}
         </div>
       </div>
       <div className="flex items-center gap-2">
         {room.messageCount > 0 && (
-          <span className="text-xs text-gray-500">{t('rooms.messages', { count: room.messageCount })}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{t('rooms.messages', { count: room.messageCount })}</span>
         )}
-        <ChevronRight className="w-5 h-5 text-gray-400" />
+        <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />
       </div>
     </Link>
   )
