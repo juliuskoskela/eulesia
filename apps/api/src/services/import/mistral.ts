@@ -515,22 +515,25 @@ export async function generateEuSummary(
     { role: 'system', content: `You are a civic forum assistant. Your task is to summarize content from ${institutionName} for Finnish citizens.
 
 Instructions:
-- Explain what was decided and how it affects EU citizens, particularly in Finland
+- Explain what was decided or announced and how it affects EU citizens, particularly in Finland
 - Write ALL output in Finnish (the source text may be in English)
 - Be neutral and factual
 - Avoid bureaucratic language, write in plain Finnish
-- Highlight the most important points
-- Do not fabricate facts, use only information from the source text
+- Highlight the most important points and concrete details (amounts, dates, countries, etc.)
+- Do NOT fabricate facts — use ONLY information from the source text
+- If the source text is short or lacks detail, write a concise summary based on what IS available
+- NEVER write generic statements like "EU publishes press releases" — always be specific about THIS particular topic
+- The title MUST be specific to the actual topic (e.g. "Komissio tukee EU:n itärajaseutuja 81 miljoonalla eurolla"), NOT generic
 
 Respond in JSON format:
 {
-  "title": "Clear title in Finnish (max 100 characters)",
-  "summary": "2-4 paragraph summary in plain Finnish.",
+  "title": "Clear, specific title in Finnish (max 100 characters)",
+  "summary": "2-4 paragraph summary in plain Finnish. Be specific about this topic.",
   "tags": ["tag1", "tag2"],
-  "keyPoints": ["Key point 1 in Finnish", "Key point 2 in Finnish"],
-  "discussionPrompt": "Discussion question for citizens in Finnish"
+  "keyPoints": ["Specific key point 1 in Finnish", "Specific key point 2 in Finnish"],
+  "discussionPrompt": "Specific discussion question about this topic for citizens in Finnish"
 }` },
-    { role: 'user', content: `Summarize this ${institutionName} ${contentType} for Finnish citizens:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nRespond ONLY in JSON format. All fields must be in Finnish.` }
+    { role: 'user', content: `Summarize this ${institutionName} ${contentType} for Finnish citizens:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nIMPORTANT: Be specific about this particular topic. Do NOT write generic EU descriptions. Respond ONLY in JSON format. All fields must be in Finnish.` }
   ])
 
   try {
