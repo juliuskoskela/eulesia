@@ -111,7 +111,6 @@ Eulesia — European Civic Digital Infrastructure
       text
     })
   }
-}
 
   async sendWaitlistApproval(email: string, inviteCode: string, locale: string = 'en'): Promise<boolean> {
     const appUrl = env.APP_URL || 'https://eulesia.eu'
