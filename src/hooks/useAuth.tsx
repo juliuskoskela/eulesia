@@ -16,7 +16,7 @@ interface AuthContextType {
   currentUser: User | null
   sanction: SanctionInfo | null
   login: (username: string, password: string) => Promise<void>
-  register: (data: { inviteCode: string; username: string; password: string; name: string }) => Promise<void>
+  register: (data: { inviteCode: string; username: string; password: string; name: string; ftnToken?: string }) => Promise<void>
   requestMagicLink: (email: string) => Promise<{ message: string }>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const register = async (data: { inviteCode: string; username: string; password: string; name: string }) => {
+  const register = async (data: { inviteCode: string; username: string; password: string; name: string; ftnToken?: string }) => {
     const user = await api.register(data)
     setCurrentUser(user)
     setIsAuthenticated(true)

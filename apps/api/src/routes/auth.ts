@@ -1,9 +1,10 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
-import { eq, and, gt, or } from 'drizzle-orm'
+import { eq, and, gt, or, lt } from 'drizzle-orm'
 import * as argon2 from 'argon2'
-import { db, users, magicLinks, sessions, inviteCodes, siteSettings } from '../db/index.js'
-import { generateMagicLinkToken, generateSessionToken, hashToken } from '../utils/crypto.js'
+import expressSession from 'express-session'
+import { db, users, magicLinks, sessions, inviteCodes, siteSettings, ftnPendingRegistrations } from '../db/index.js'
+import { generateMagicLinkToken, generateSessionToken, generateToken, hashToken } from '../utils/crypto.js'
 import { emailService } from '../services/email.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
@@ -28,12 +29,133 @@ const registerSchema = z.object({
   inviteCode: z.string().min(1, 'Invite code is required'),
   username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  name: z.string().min(2).max(255)
+  name: z.string().min(2).max(255),
+  ftnToken: z.string().optional()
 })
 
 const loginSchema = z.object({
   username: z.string().min(1, 'Username or email is required'),
   password: z.string().min(1, 'Password is required')
+})
+
+// ============================================
+// FTN (Finnish Trust Network) via Idura Verify
+// ============================================
+
+// Only initialize Idura if credentials are configured
+let iduraRedirect: any = null
+if (process.env.IDURA_DOMAIN && process.env.IDURA_CLIENT_ID && process.env.IDURA_CLIENT_SECRET) {
+  // express-session middleware for FTN routes only (SDK needs it for OIDC state/nonce)
+  const ftnSession = expressSession({
+    secret: process.env.SESSION_SECRET || 'ftn-session-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 5 * 60 * 1000 } // 5 min – only needed during OIDC flow
+  })
+
+  // Apply session middleware only to FTN routes
+  router.use('/ftn', ftnSession)
+
+  // Dynamic import to avoid startup crash if SDK not installed
+  import('@criipto/verify-express').then(({ CriiptoVerifyExpressRedirect }) => {
+    iduraRedirect = new CriiptoVerifyExpressRedirect({
+      domain: process.env.IDURA_DOMAIN!,
+      clientID: process.env.IDURA_CLIENT_ID!,
+      clientSecret: process.env.IDURA_CLIENT_SECRET!,
+      redirectUri: '/api/v1/auth/ftn/callback',
+      postLogoutRedirectUri: '/',
+      beforeAuthorize(_req: any, options: any) {
+        return {
+          ...options,
+          acr_values: 'urn:grn:authn:fi:all', // FTN – all Finnish banks + mobile ID
+        }
+      },
+    })
+
+    // GET /auth/ftn/start - Begin FTN authentication
+    // Query params: ?inviteCode=EULESIA-XXXXXX
+    router.get('/ftn/start', (req, res, next) => {
+      if (!iduraRedirect) {
+        return res.status(503).json({ success: false, error: 'FTN authentication not configured' })
+      }
+
+      // Store invite code in session for use after callback
+      const invite = req.query.invite || req.query.inviteCode
+      if (invite) {
+        (req as any).session.inviteCode = invite
+      }
+
+      iduraRedirect.middleware({
+        failureRedirect: '/api/v1/auth/ftn/error',
+        successReturnToOrRedirect: '/api/v1/auth/ftn/callback',
+      })(req, res, next)
+    })
+
+    // GET /auth/ftn/callback - Handle Idura callback with JWT claims
+    router.get('/ftn/callback',
+      (req, res, next) => {
+        if (!iduraRedirect) {
+          return res.status(503).json({ success: false, error: 'FTN authentication not configured' })
+        }
+        iduraRedirect.middleware({
+          failureRedirect: '/api/v1/auth/ftn/error',
+          successReturnToOrRedirect: '/api/v1/auth/ftn/complete',
+        })(req, res, next)
+      },
+      asyncHandler(async (req, res: Response) => {
+        const claims = (req as any).claims
+        if (!claims || !claims.sub || !claims.given_name || !claims.family_name) {
+          return res.redirect(`${env.APP_URL}/?ftn_error=missing_claims`)
+        }
+
+        // Check for duplicate identity (one-person-one-account)
+        const [existing] = await db.select({ id: users.id })
+          .from(users)
+          .where(eq(users.rpSubject, claims.sub))
+          .limit(1)
+
+        if (existing) {
+          return res.redirect(`${env.APP_URL}/?ftn_error=duplicate_identity`)
+        }
+
+        // Create temporary token to bridge claims to registration form
+        const ftnToken = generateToken(32)
+        const inviteCode = (req as any).session?.inviteCode || null
+
+        await db.insert(ftnPendingRegistrations).values({
+          token: hashToken(ftnToken),
+          givenName: claims.given_name,
+          familyName: claims.family_name,
+          sub: claims.sub,
+          country: claims.country || 'FI',
+          inviteCode,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min
+        })
+
+        // Clean up expired pending registrations (housekeeping)
+        await db.delete(ftnPendingRegistrations)
+          .where(lt(ftnPendingRegistrations.expiresAt, new Date()))
+          .catch(() => {}) // Non-critical
+
+        // Redirect to registration form with FTN token and name
+        const params = new URLSearchParams({
+          ftn: ftnToken,
+          firstName: claims.given_name,
+          lastName: claims.family_name,
+          ...(inviteCode ? { invite: inviteCode } : {}),
+        })
+        res.redirect(`${env.APP_URL}/?${params.toString()}`)
+      })
+    )
+  }).catch((err) => {
+    console.warn('Idura SDK not available, FTN authentication disabled:', err.message)
+  })
+}
+
+// GET /auth/ftn/error - Handle FTN authentication errors
+router.get('/ftn/error', (req, res) => {
+  const errorDesc = req.query.error_description || req.query.error || 'ftn_failed'
+  res.redirect(`${env.APP_URL}/?ftn_error=${encodeURIComponent(String(errorDesc))}`)
 })
 
 // POST /auth/magic-link - Request a magic link
@@ -76,8 +198,9 @@ router.post('/magic-link', asyncHandler(async (req, res: Response) => {
 }))
 
 // POST /auth/register - Register with invite code, username and password
+// Optionally accepts ftnToken for strong authentication via FTN
 router.post('/register', asyncHandler(async (req, res: Response) => {
-  const { inviteCode, username, password, name } = registerSchema.parse(req.body)
+  const { inviteCode, username, password, name, ftnToken } = registerSchema.parse(req.body)
 
   // Check if registration is open
   const [regSetting] = await db
@@ -87,6 +210,43 @@ router.post('/register', asyncHandler(async (req, res: Response) => {
     .limit(1)
   if (regSetting && regSetting.value === 'false') {
     throw new AppError(403, 'Registration is currently closed')
+  }
+
+  // Resolve FTN claims if ftnToken provided (strong authentication)
+  let ftnClaims: { givenName: string; familyName: string; sub: string; country: string | null } | null = null
+  if (ftnToken) {
+    const [pending] = await db.select()
+      .from(ftnPendingRegistrations)
+      .where(and(
+        eq(ftnPendingRegistrations.token, hashToken(ftnToken)),
+        gt(ftnPendingRegistrations.expiresAt, new Date())
+      ))
+      .limit(1)
+
+    if (!pending) {
+      throw new AppError(400, 'Invalid or expired FTN token. Please authenticate again.')
+    }
+
+    // Check duplicate identity
+    const [existingIdentity] = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.rpSubject, pending.sub))
+      .limit(1)
+
+    if (existingIdentity) {
+      throw new AppError(400, 'This identity is already linked to another account')
+    }
+
+    ftnClaims = {
+      givenName: pending.givenName,
+      familyName: pending.familyName,
+      sub: pending.sub,
+      country: pending.country,
+    }
+
+    // Clean up used FTN pending registration
+    await db.delete(ftnPendingRegistrations)
+      .where(eq(ftnPendingRegistrations.token, hashToken(ftnToken)))
   }
 
   // Hash password before transaction (CPU-intensive work outside tx)
@@ -124,18 +284,24 @@ router.post('/register', asyncHandler(async (req, res: Response) => {
       throw new AppError(400, 'Username already exists')
     }
 
-    // Create user
+    // Create user — with FTN strong auth data if available
     const [created] = await tx
       .insert(users)
       .values({
         username: username.toLowerCase(),
         passwordHash,
-        name,
+        name: ftnClaims ? `${ftnClaims.givenName} ${ftnClaims.familyName}` : name,
         invitedBy: invite.createdBy,
         inviteCodesRemaining: 5,
-        identityProvider: 'invite',
-        identityVerified: false,
-        identityLevel: 'basic'
+        identityProvider: ftnClaims ? 'ftn' : 'invite',
+        identityVerified: !!ftnClaims,
+        identityLevel: ftnClaims ? 'substantial' : 'basic',
+        ...(ftnClaims ? {
+          verifiedName: `${ftnClaims.givenName} ${ftnClaims.familyName}`,
+          rpSubject: ftnClaims.sub,
+          identityIssuer: 'idura_ftn',
+          identityVerifiedAt: new Date(),
+        } : {})
       })
       .returning()
 
