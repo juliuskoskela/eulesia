@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import type { Request, Response } from 'express'
 import { z } from 'zod'
-import { eq, and, count, desc, sql } from 'drizzle-orm'
+import { eq, and, count, desc } from 'drizzle-orm'
 import { db, waitlist, inviteCodes, users } from '../db/index.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { requireAdmin } from '../middleware/admin.js'
