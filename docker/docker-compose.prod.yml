@@ -39,8 +39,12 @@ services:
       APP_URL: https://${DOMAIN}
       API_URL: https://api.${DOMAIN}
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
-      EMAIL_API_KEY: ${RESEND_API_KEY:-}
-      EMAIL_FROM: auth@${DOMAIN}
+      EMAIL_FROM: ${EMAIL_FROM:-auth@${DOMAIN}}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       MEILI_URL: http://meilisearch:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
