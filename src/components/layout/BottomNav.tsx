@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useUnreadDmCount } from '../../hooks/useApi'
 import { useAuth } from '../../hooks/useAuth'
+import { useKeyboard } from '../../hooks/useKeyboard'
 
 const allNavItems = [
   { to: '/agora', icon: Landmark, tKey: 'nav.agora', public: true },
@@ -16,12 +17,16 @@ export function BottomNav() {
   const { t } = useTranslation()
   const { currentUser } = useAuth()
   const { data: dmUnread } = useUnreadDmCount()
+  const { isKeyboardOpen } = useKeyboard()
   const unreadCount = dmUnread?.count ?? 0
 
   const navItems = currentUser ? allNavItems : allNavItems.filter(item => item.public)
 
+  // Hide bottom nav when virtual keyboard is open (mobile)
+  if (isKeyboardOpen) return null
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50 pb-[env(safe-area-inset-bottom)]" data-guide="bottomnav">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }} data-guide="bottomnav">
       <div className="max-w-4xl mx-auto px-4">
         <div className="flex justify-around">
           {navItems.map(({ to, icon: Icon, tKey, badge }) => (

@@ -4,7 +4,7 @@ import { TopBar } from './TopBar'
 import { BottomNav } from './BottomNav'
 import { Footer } from './Footer'
 import { AnnouncementBanner } from './AnnouncementBanner'
-import { GuideTour, GuideHelpButton } from '../guide'
+import { GuideTour } from '../guide'
 import { useGuide } from '../../hooks/useGuide'
 
 interface LayoutProps {
@@ -56,7 +56,6 @@ export function Layout({ children, showFooter = true, fullWidth = false }: Layou
 
       <BottomNav />
       <GuideTour />
-      <GuideHelpButton />
     </div>
   )
 }

@@ -13,6 +13,7 @@ import {
   useDeleteNotification
 } from '../../hooks/useApi'
 import type { AppNotification } from '../../lib/api'
+import { GuideHelpButton } from '../guide/GuideHelpButton'
 
 function NotificationItem({
   notification,
@@ -157,6 +158,9 @@ export function TopBar() {
           >
             <Search className="w-5 h-5" />
           </button>
+
+          {/* Guide help */}
+          <GuideHelpButton />
 
           {currentUser ? (
             <>

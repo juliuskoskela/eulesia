@@ -9,6 +9,7 @@ import { ActorBadge, EditedIndicator, ConfirmDeleteDialog } from '../components/
 import { useConversation, useSendDM, useMarkRead, useEditDirectMessage, useDeleteDirectMessage } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { useSocket } from '../hooks/useSocket'
+import { useKeyboard } from '../hooks/useKeyboard'
 import { formatRelativeTime } from '../lib/formatTime'
 import type { DirectMessage } from '../lib/api'
 import { transformAuthor, getAvatarInitials } from '../utils/transforms'
@@ -143,6 +144,8 @@ export function DMConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>()
   const { currentUser } = useAuth()
   const { joinDm, leaveDm, emitTypingDm, typingInDm } = useSocket()
+  const { isKeyboardOpen, keyboardHeight } = useKeyboard()
+  const inputRef = useRef<HTMLInputElement>(null)
   const { data: conversationData, isLoading, error } = useConversation(conversationId || '')
   const sendMessageMutation = useSendDM(conversationId || '')
   const markReadMutation = useMarkRead(conversationId || '')
@@ -171,6 +174,15 @@ export function DMConversationPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [conversationData?.messages])
+
+  // Scroll to bottom when keyboard opens
+  useEffect(() => {
+    if (isKeyboardOpen) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
+    }
+  }, [isKeyboardOpen])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -212,7 +224,14 @@ export function DMConversationPage() {
   return (
     <Layout>
       <SEOHead title={t('title')} path={`/messages/${conversationId}`} noIndex />
-      <div className="flex flex-col" style={{ height: 'calc(100dvh - 3.5rem - 5rem)' }}>
+      <div
+        className="flex flex-col"
+        style={{
+          height: isKeyboardOpen
+            ? `calc(100dvh - 3.5rem - ${keyboardHeight}px)`
+            : 'calc(100dvh - 3.5rem - 5rem)',
+        }}
+      >
         {/* Header */}
         <div className="bg-teal-700 px-4 py-4 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -274,9 +293,10 @@ export function DMConversationPage() {
         </div>
 
         {/* Message input */}
-        <div className="flex-shrink-0 bg-white border-t border-gray-200 px-4 py-3">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 py-3">
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <input
+              ref={inputRef}
               type="text"
               value={newMessage}
               onChange={(e) => {
@@ -285,7 +305,7 @@ export function DMConversationPage() {
               }}
               placeholder={t('writeMessage')}
               enterKeyHint="send"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-full focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
             />
             <button
               type="submit"

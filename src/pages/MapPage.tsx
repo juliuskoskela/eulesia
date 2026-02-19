@@ -34,7 +34,7 @@ export function MapPage() {
   return (
     <Layout fullWidth showFooter={false}>
       <SEOHead title="Kartta" path="/map" noIndex />
-      <div className="fixed inset-0 top-14 bottom-16" data-guide="map-header">
+      <div className="fixed inset-0 bottom-16 z-0" style={{ top: 'var(--topbar-total)' }} data-guide="map-header">
         <EulesiaMap
           filters={filters}
           onFiltersChange={setFilters}

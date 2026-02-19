@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { ContentWithPreviews } from '../components/common/ContentWithPreviews'
 import { useTranslation } from 'react-i18next'
 import { useParams, Link, useNavigate } from 'react-router-dom'
@@ -39,8 +39,16 @@ export function ClubThreadPage() {
 
   const [commentContent, setCommentContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const commentInputRef = useRef<HTMLTextAreaElement>(null)
   const [confirmDeleteThread, setConfirmDeleteThread] = useState(false)
   const [confirmDeleteComment, setConfirmDeleteComment] = useState<string | null>(null)
+
+  // Scroll textarea into view when focused (for mobile keyboard)
+  const handleCommentFocus = useCallback(() => {
+    setTimeout(() => {
+      commentInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 300)
+  }, [])
 
   const handleSubmitComment = async () => {
     if (!commentContent.trim() || !threadId || !clubId) return
@@ -359,8 +367,10 @@ export function ClubThreadPage() {
           ) : (
             <div className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 mb-4">
               <textarea
+                ref={commentInputRef}
                 value={commentContent}
                 onChange={(e) => setCommentContent(e.target.value)}
+                onFocus={handleCommentFocus}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()

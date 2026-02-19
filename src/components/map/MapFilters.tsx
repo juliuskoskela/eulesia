@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Landmark, Users, MapPin, Building2, Settings } from 'lucide-react'
+import { Landmark, Users, MapPin, Building2, Settings, SlidersHorizontal, X } from 'lucide-react'
 import type { MapFilterState, MapFilterType, TimePreset } from './types'
 import { MapAdvancedFilters } from './MapAdvancedFilters'
 
@@ -26,6 +26,7 @@ const timePresets: { value: TimePreset; labelKey: string }[] = [
 export function MapFilters({ filters, onFiltersChange }: MapFiltersProps) {
   const { t } = useTranslation('map')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showMobilePanel, setShowMobilePanel] = useState(false)
 
   const handleToggleType = (type: MapFilterType) => {
     const types = filters.types.includes(type)
@@ -42,6 +43,16 @@ export function MapFilters({ filters, onFiltersChange }: MapFiltersProps) {
       dateTo: undefined
     })
   }
+
+  // Count active non-default filters for badge
+  const activeFilterCount = (
+    (filters.types.length < 4 ? 1 : 0) +
+    (filters.timePreset !== 'all' ? 1 : 0) +
+    (filters.scopes?.length ? 1 : 0) +
+    (filters.languages?.length ? 1 : 0) +
+    (filters.tags?.length ? 1 : 0) +
+    (filters.dateFrom ? 1 : 0)
+  )
 
   return (
     <>
@@ -109,68 +120,118 @@ export function MapFilters({ filters, onFiltersChange }: MapFiltersProps) {
         </button>
       </div>
 
-      {/* Mobile: compact bottom-left bar, avoiding zoom controls (top-left) */}
-      <div className="sm:hidden absolute bottom-4 left-2 right-2 z-[1000] flex flex-col gap-2">
-        {/* Type toggles row */}
-        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-1.5 flex items-center justify-between">
-          <div className="flex gap-1 flex-1">
-            {typeFilters.map(({ type, icon: Icon, labelKey, color }) => {
-              const isActive = filters.types.includes(type)
-              return (
-                <button
-                  key={type}
-                  onClick={() => handleToggleType(type)}
-                  className={`flex-1 flex items-center justify-center gap-1 px-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    isActive
-                      ? `${color} text-white`
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                  }`}
-                  title={t(labelKey)}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
-
-          {/* Time presets - compact */}
-          <div className="flex gap-0.5">
-            {timePresets.map(({ value, labelKey }) => {
-              const isActive = filters.timePreset === value && !filters.dateFrom && !filters.dateTo
-              return (
-                <button
-                  key={value}
-                  onClick={() => handleTimePreset(value)}
-                  className={`px-1.5 py-1 rounded text-[10px] font-medium transition-colors ${
-                    isActive
-                      ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
-                  }`}
-                >
-                  {t(labelKey)}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
-
-          {/* Advanced */}
-          <button
-            onClick={() => setShowAdvanced(true)}
-            className={`p-1.5 rounded-md transition-colors ${
-              (filters.scopes?.length || filters.languages?.length || filters.tags?.length || filters.dateFrom)
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-            }`}
-            title={t('filters.advanced')}
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
-        </div>
+      {/* Mobile: single filter button (top-right, below loading indicator area) */}
+      <div className="sm:hidden absolute top-3 right-3 z-[1000]">
+        <button
+          onClick={() => setShowMobilePanel(true)}
+          className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          aria-label={t('filters.title', { defaultValue: 'Filters' })}
+        >
+          <SlidersHorizontal className="w-5 h-5" />
+          {activeFilterCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* Mobile: filter panel (slide-up sheet) */}
+      {showMobilePanel && (
+        <div className="sm:hidden fixed inset-0 z-[1001]">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setShowMobilePanel(false)}
+          />
+
+          {/* Panel */}
+          <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl max-h-[70vh] overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pb-3 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                {t('filters.title', { defaultValue: 'Suodattimet' })}
+              </h3>
+              <button
+                onClick={() => setShowMobilePanel(false)}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Type toggles */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  {t('filters.showOnMap', { defaultValue: 'Näytä kartalla' })}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {typeFilters.map(({ type, icon: Icon, labelKey, color }) => {
+                    const isActive = filters.types.includes(type)
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => handleToggleType(type)}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? `${color} text-white`
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{t(labelKey)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Time presets */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  {t('filters.timePeriod', { defaultValue: 'Aikaväli' })}
+                </label>
+                <div className="flex gap-2">
+                  {timePresets.map(({ value, labelKey }) => {
+                    const isActive = filters.timePreset === value && !filters.dateFrom && !filters.dateTo
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => handleTimePreset(value)}
+                        className={`flex-1 px-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                        }`}
+                      >
+                        {t(labelKey)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Advanced filters link */}
+              <button
+                onClick={() => {
+                  setShowMobilePanel(false)
+                  setShowAdvanced(true)
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                {t('filters.advanced')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAdvanced && (
         <MapAdvancedFilters

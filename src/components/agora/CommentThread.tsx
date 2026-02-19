@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { ContentWithPreviews } from '../common/ContentWithPreviews'
 import { ChevronUp, ChevronDown, MessageSquare, Minus, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -72,6 +72,7 @@ function CommentItem({
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const author = comment.author
   const maxVisualDepth = 6
 
@@ -326,8 +327,14 @@ function CommentItem({
                 {replyingTo === comment.id && (
                   <div className="mt-3 ml-2 pl-3 border-l-2 border-blue-200">
                     <textarea
+                      ref={replyTextareaRef}
                       value={replyContent}
                       onChange={(e) => setReplyContent(e.target.value)}
+                      onFocus={() => {
+                        setTimeout(() => {
+                          replyTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        }, 300)
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault()
@@ -335,7 +342,7 @@ function CommentItem({
                         }
                       }}
                       placeholder={t('writeReply')}
-                      className="w-full p-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full p-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                       rows={3}
                       autoFocus
                     />

@@ -17,6 +17,10 @@ const config: CapacitorConfig = {
     CapacitorHttp: {
       enabled: true,
     },
+    Keyboard: {
+      resize: 'none',
+      resizeOnFullScreen: false,
+    },
     SplashScreen: {
       launchAutoHide: true,
       launchShowDuration: 2000,
