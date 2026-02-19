@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Shield, Fingerprint, CheckCircle, Lock, Users, Building2, UserPlus, LogIn, ArrowRight, ArrowLeft, Ticket, AlertTriangle, Clock, Mail } from 'lucide-react'
+import { Shield, Fingerprint, CheckCircle, Lock, Users, Building2, UserPlus, LogIn, ArrowRight, ArrowLeft, Ticket, Clock, Mail } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SEOHead } from '../components/SEOHead'
 import { useAuth } from '../hooks/useAuth'
