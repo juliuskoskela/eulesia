@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Building2, ChevronDown, Pencil, Trash2, History } from 'lucide-react'
@@ -13,6 +13,7 @@ import { useThread, useAddComment, useVoteComment, useVoteThread, useEditThread,
 import { useAuth } from '../hooks/useAuth'
 import { formatRelativeTime } from '../lib/formatTime'
 import { transformAuthor, transformComment } from '../utils/transforms'
+import { api } from '../lib/api'
 
 export function ThreadPage() {
   const { t } = useTranslation(['agora', 'common'])
@@ -38,8 +39,25 @@ export function ThreadPage() {
   const editCommentMutation = useEditComment(threadId || '', sort)
   const deleteCommentMutation = useDeleteComment(threadId || '', sort)
 
+  // Record view once per session
+  useEffect(() => {
+    if (!threadId) return
+    const viewedKey = `viewed:${threadId}`
+    if (sessionStorage.getItem(viewedKey)) return
+    sessionStorage.setItem(viewedKey, '1')
+    api.recordView(threadId).catch(() => {})
+  }, [threadId])
+
   const [commentContent, setCommentContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const commentInputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Scroll textarea into view when focused (for mobile keyboard)
+  const handleCommentFocus = useCallback(() => {
+    setTimeout(() => {
+      commentInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 300)
+  }, [])
 
   // Edit/delete state
   const [isEditingThread, setIsEditingThread] = useState(false)
@@ -435,8 +453,10 @@ export function ThreadPage() {
           {currentUser ? (
             <div className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 mb-4">
               <textarea
+                ref={commentInputRef}
                 value={commentContent}
                 onChange={(e) => setCommentContent(e.target.value)}
+                onFocus={handleCommentFocus}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
@@ -444,7 +464,7 @@ export function ThreadPage() {
                   }
                 }}
                 placeholder={t('thread.shareThoughts')}
-                className="w-full p-3 border border-gray-200 dark:border-gray-800 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full p-3 border border-gray-200 dark:border-gray-800 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                 rows={3}
               />
               <div className="flex justify-end mt-3">

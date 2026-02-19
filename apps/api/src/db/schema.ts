@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, boolean, timestamp, integer, jsonb, primaryKey, inet, index, pgEnum, decimal } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, text, boolean, timestamp, integer, jsonb, primaryKey, inet, index, uniqueIndex, pgEnum, decimal } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 // Enums
@@ -243,7 +243,8 @@ export const threads = pgTable('threads', {
   isPinned: boolean('is_pinned').default(false),
   isLocked: boolean('is_locked').default(false),
   replyCount: integer('reply_count').default(0),
-  score: integer('score').default(0), // Cached vote score
+  score: integer('score').default(0), // Cached vote score (upvotes - downvotes)
+  viewCount: integer('view_count').default(0), // Cached unique view count
   // Location fields
   locationId: uuid('location_id').references(() => locations.id),
   placeId: uuid('place_id').references(() => places.id),
@@ -1120,3 +1121,51 @@ export const systemAnnouncements = pgTable('system_announcements', {
 
 export type SystemAnnouncement = typeof systemAnnouncements.$inferSelect
 export type NewSystemAnnouncement = typeof systemAnnouncements.$inferInsert
+
+// ============================================
+// DISCOVERY & TRENDING
+// ============================================
+
+// Thread views — track unique views per thread
+export const threadViews = pgTable('thread_views', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  threadId: uuid('thread_id').notNull().references(() => threads.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  sessionHash: varchar('session_hash', { length: 64 }), // Anonymous tracking via hashed session
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  threadIdx: index('thread_views_thread_idx').on(table.threadId),
+  createdIdx: index('thread_views_created_idx').on(table.createdAt),
+  // Prevent duplicate views from same user/session
+  userThreadIdx: index('thread_views_user_thread_idx').on(table.threadId, table.userId)
+}))
+
+// Bookmarks — user-saved threads
+export const bookmarks = pgTable('bookmarks', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  threadId: uuid('thread_id').notNull().references(() => threads.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.threadId] }),
+  userIdx: index('bookmarks_user_idx').on(table.userId)
+}))
+
+// Trending cache — pre-computed trending data, refreshed every 15 minutes
+export const trendingCache = pgTable('trending_cache', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  entityType: varchar('entity_type', { length: 50 }).notNull(), // 'thread', 'tag', 'municipality'
+  entityId: varchar('entity_id', { length: 255 }).notNull(),
+  score: decimal('score', { precision: 12, scale: 4 }).notNull(),
+  metadata: jsonb('metadata').default({}), // Extra data (title, tag count, etc.)
+  computedAt: timestamp('computed_at', { withTimezone: true }).notNull()
+}, (table) => ({
+  typeScoreIdx: index('trending_cache_type_score_idx').on(table.entityType, table.score),
+  uniqueEntity: uniqueIndex('trending_cache_unique_idx').on(table.entityType, table.entityId)
+}))
+
+export type ThreadView = typeof threadViews.$inferSelect
+export type NewThreadView = typeof threadViews.$inferInsert
+export type Bookmark = typeof bookmarks.$inferSelect
+export type NewBookmark = typeof bookmarks.$inferInsert
+export type TrendingCacheEntry = typeof trendingCache.$inferSelect
+export type NewTrendingCacheEntry = typeof trendingCache.$inferInsert

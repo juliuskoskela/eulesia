@@ -9,10 +9,11 @@ import { MapPin, Building2, Globe, Users } from 'lucide-react'
 import { useThreads, useVoteThread, useSubscriptions, useCompleteOnboarding } from '../hooks/useApi'
 import { useAuth } from '../hooks/useAuth'
 import { useGuide } from '../hooks/useGuide'
-import type { Thread as ApiThread, UserSummary, FeedScope, SortBy, TopPeriod } from '../lib/api'
+import type { Thread as ApiThread, UserSummary, FeedScope, SortBy, TopPeriod, ExploreThread } from '../lib/api'
 
 // Transform API thread to component format
-function transformThread(thread: ApiThread) {
+function transformThread(thread: ApiThread | ExploreThread) {
+  const exploreThread = thread as ExploreThread
   return {
     id: thread.id,
     title: thread.title,
@@ -33,7 +34,11 @@ function transformThread(thread: ApiThread) {
     sourceUrl: thread.sourceUrl,
     aiGenerated: thread.aiGenerated,
     sourceInstitutionId: thread.sourceInstitutionId,
-    sourceInstitutionName: thread.sourceInstitutionName
+    sourceInstitutionName: thread.sourceInstitutionName,
+    // CVS score (only present in explore feed)
+    cvsScore: exploreThread.cvsScore,
+    scoreBreakdown: exploreThread.scoreBreakdown,
+    isBookmarked: (thread as any).isBookmarked
   }
 }
 
@@ -118,17 +123,22 @@ export function AgoraPage() {
     }
   }, [currentUser, subscriptionsData, hasSubscriptions, feedScopeInitialized])
 
-  // Show onboarding when following feed is empty AND user hasn't completed it before
+  // Show onboarding banner for users without subscriptions
+  // In Tutustu (all) tab: show compact onboarding banner above CVS content
+  // In Following tab: show full onboarding (existing behavior)
   useEffect(() => {
     if (
-      feedScope === 'following' &&
       !isLoading &&
-      threadsData?.hasSubscriptions === false &&
-      !onboardingDone
+      !hasSubscriptions &&
+      !onboardingDone &&
+      currentUser &&
+      (feedScope === 'following' || feedScope === 'all')
     ) {
       setShowOnboarding(true)
+    } else if (feedScope !== 'following' && feedScope !== 'all') {
+      setShowOnboarding(false)
     }
-  }, [feedScope, isLoading, threadsData?.hasSubscriptions, onboardingDone])
+  }, [feedScope, isLoading, hasSubscriptions, onboardingDone, currentUser])
 
   // Auto-trigger agora guide on first visit
   useEffect(() => {
@@ -301,11 +311,14 @@ export function AgoraPage() {
           </div>
         )}
 
-        {/* Onboarding for empty following feed */}
+        {/* Onboarding: full on following, compact banner on Tutustu */}
         {!isLoading && !error && showOnboarding && feedScope === 'following' && (
           <div className="py-8">
             <FeedOnboarding onComplete={handleOnboardingComplete} />
           </div>
+        )}
+        {!isLoading && !error && showOnboarding && feedScope === 'all' && (
+          <FeedOnboarding onComplete={handleOnboardingComplete} compact />
         )}
 
         {/* Scope-specific banner when no subscriptions — shown above fallback content */}
@@ -332,8 +345,8 @@ export function AgoraPage() {
           </div>
         )}
 
-        {/* Thread list */}
-        {!isLoading && !error && !showOnboarding && threads.length > 0 && (
+        {/* Thread list — show when not in full-page onboarding mode */}
+        {!isLoading && !error && !(showOnboarding && feedScope === 'following') && threads.length > 0 && (
           <div className="space-y-3">
             {threads.map((item, index) => (
               <div key={item.thread.id} {...(index === 0 ? { 'data-guide': 'agora-threadcard' } : {})}>
@@ -349,7 +362,7 @@ export function AgoraPage() {
         )}
 
         {/* Empty state (not onboarding, not scope hint) */}
-        {!isLoading && !error && !showOnboarding && threads.length === 0 && (
+        {!isLoading && !error && !(showOnboarding && feedScope === 'following') && threads.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <p>{t('noThreads')}</p>
             {feedScope === 'following' && (
@@ -364,7 +377,7 @@ export function AgoraPage() {
         )}
 
         {/* Infinite scroll trigger / End marker */}
-        {!showOnboarding && threads.length > 0 && (
+        {!(showOnboarding && feedScope === 'following') && threads.length > 0 && (
           hasMore ? (
             <>
               <div ref={loadMoreRef} className="py-4" />

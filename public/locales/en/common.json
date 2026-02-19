@@ -10,7 +10,20 @@
     "local": "Local",
     "national": "National",
     "european": "EU",
-    "all": "All"
+    "all": "All",
+    "explore": "Explore"
+  },
+  "discover": {
+    "whyShown": "Why am I seeing this?",
+    "engagement": "Engagement",
+    "sourceQuality": "Source quality",
+    "sourceMinutes": "Meeting minutes",
+    "sourceRss": "Gov/EU press release",
+    "sourceInstitution": "Official actor",
+    "sourceVerified": "Verified citizen",
+    "freshness": "Freshness",
+    "totalScore": "Total score",
+    "learnMore": "Learn more about our algorithm"
   },
   "time": {
     "justNow": "just now",

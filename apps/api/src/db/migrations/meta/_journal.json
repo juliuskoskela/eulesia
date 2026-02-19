@@ -8,6 +8,13 @@
       "when": 1769543243525,
       "tag": "0000_nosy_gamma_corps",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771523232992,
+      "tag": "0001_high_kronos",
+      "breakpoints": true
     }
   ]
 }

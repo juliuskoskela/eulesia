@@ -1,17 +1,17 @@
-import { MessageSquare, Clock, Building2, Bot, FileText, Share2 } from 'lucide-react'
+import { MessageSquare, Building2, Bot, Share2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { Thread, User } from '../../types'
-import { ActorBadge } from '../common/ActorBadge'
-import { FollowButton } from '../common/FollowButton'
+import type { CvsBreakdown } from '../../lib/api'
 import { ScopeBadge } from '../common/ScopeBadge'
-import { TagList } from '../common/TagList'
 import { ThreadVoteButtons } from './ThreadVoteButtons'
 import { ThreadCardMedia } from './ThreadCardMedia'
+import { BookmarkButton } from '../discover/BookmarkButton'
+import { ScoreBreakdown } from '../discover/ScoreBreakdown'
 import { formatRelativeTime } from '../../lib/formatTime'
 
 interface ThreadCardProps {
-  thread: Thread & { score?: number; userVote?: number }
+  thread: Thread & { score?: number; userVote?: number; cvsScore?: number; scoreBreakdown?: CvsBreakdown; isBookmarked?: boolean }
   author: User
   onVote?: (threadId: string, value: number) => void
   isVoting?: boolean
@@ -24,9 +24,6 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
   const isBotSummary = isAiGenerated && thread.source === 'rss_import'
   const isMinutesSummary = isAiGenerated && thread.source === 'minutes_import'
   const showVoting = typeof thread.score === 'number'
-  // Source institution name from the resolved join, or from institutionalContext
-  const sourceInstitutionName = thread.sourceInstitutionName
-    || (thread.institutionalContext as any)?.institution
 
   const handleVote = (value: number) => {
     if (onVote) {
@@ -43,7 +40,7 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
       <div className="flex">
         {/* Vote buttons column */}
         {showVoting && (
-          <div className="flex-shrink-0 py-4 pl-3 pr-2">
+          <div className="flex-shrink-0 py-3 pl-3 pr-1">
             <ThreadVoteButtons
               threadId={thread.id}
               score={thread.score ?? 0}
@@ -58,83 +55,37 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
         {/* Content column */}
         <Link
           to={`/agora/thread/${thread.id}`}
-          className={`flex-grow p-4 ${showVoting ? 'pl-2' : ''}`}
+          className={`flex-grow p-3 ${showVoting ? 'pl-2' : ''} min-w-0`}
         >
-          {/* Bot RSS import summary indicator */}
-          {isBotSummary && (
-            <div className="flex items-center flex-wrap gap-1.5 text-xs text-purple-700 mb-2">
-              <Bot className="w-3.5 h-3.5" />
-              <span className="font-medium">
-                {sourceInstitutionName ? t('aiSummarySource', { source: sourceInstitutionName }) : t('aiSummary')}
+          {/* Top row: avatar + name + indicators + time */}
+          <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+            {author.avatarUrl ? (
+              <img src={author.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+            ) : (
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 ${isInstitutional ? 'bg-violet-600' : 'bg-teal-600'}`}>
+                {author.avatarInitials}
+              </div>
+            )}
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+              {author.name}
+            </span>
+            {isInstitutional && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-1 py-0.5 rounded flex-shrink-0">
+                <Building2 className="w-2.5 h-2.5" />
               </span>
-              {thread.sourceInstitutionId && (
-                <FollowButton entityType="user" entityId={thread.sourceInstitutionId} size="sm" variant="ghost" />
-              )}
-              {thread.sourceUrl && (
-                <a
-                  href={thread.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="ml-1 flex items-center gap-0.5 text-purple-500 hover:text-purple-700 underline"
-                >
-                  <FileText className="w-3 h-3" />
-                  {t('original')}
-                </a>
-              )}
-            </div>
-          )}
-
-          {/* Minutes import summary indicator */}
-          {isMinutesSummary && (
-            <div className="flex items-center flex-wrap gap-1.5 text-xs text-purple-700 mb-2">
-              <Bot className="w-3.5 h-3.5" />
-              <span className="font-medium">
-                {sourceInstitutionName ? t('aiSummarySource', { source: sourceInstitutionName }) : t('minutesSummary')}
+            )}
+            {(isBotSummary || isMinutesSummary) && (
+              <span className="inline-flex items-center text-purple-500 dark:text-purple-400 flex-shrink-0">
+                <Bot className="w-3.5 h-3.5" />
               </span>
-              {thread.sourceInstitutionId && (
-                <FollowButton entityType="user" entityId={thread.sourceInstitutionId} size="sm" variant="ghost" />
-              )}
-              {thread.sourceUrl && (
-                <a
-                  href={thread.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="ml-1 flex items-center gap-0.5 text-purple-500 hover:text-purple-700 underline"
-                >
-                  <FileText className="w-3 h-3" />
-                  {t('original')}
-                </a>
-              )}
-            </div>
-          )}
-
-          {/* Institutional own post indicator */}
-          {isInstitutional && !isAiGenerated && (
-            <div className="flex items-center gap-1.5 text-xs text-violet-700 mb-2">
-              <Building2 className="w-3.5 h-3.5" />
-              <span className="font-medium">{t('officialInfo', { name: author.institutionName || author.name })}</span>
-            </div>
-          )}
-
-          {/* Header: scope + meta */}
-          <div className="flex items-center justify-between mb-2">
-            <ScopeBadge
-              scope={thread.scope}
-              municipalityId={thread.municipalityId}
-              municipalityName={thread.municipalityName}
-            />
-            <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-              <span className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" />
-                {formatRelativeTime(thread.updatedAt)}
-              </span>
-            </div>
+            )}
+            <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 ml-auto">
+              {formatRelativeTime(thread.updatedAt)}
+            </span>
           </div>
 
           {/* Title */}
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2 leading-snug">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1 leading-snug">
             {thread.title}
           </h3>
 
@@ -143,25 +94,24 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
             {thread.content.split('\n')[0].replace(/[*#]/g, '')}
           </p>
 
-          {/* Embedded media preview (YouTube, images, link previews) */}
+          {/* Embedded media preview */}
           {thread.contentHtml && (
             <ThreadCardMedia contentHtml={thread.contentHtml} />
           )}
 
-          {/* Tags */}
-          <div className="mb-3">
-            <TagList tags={(thread.tags || []).slice(0, 3)} />
-          </div>
-
-          {/* Footer: author + replies + share */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
-            <ActorBadge user={author} size="sm" />
-
-            <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+          {/* Bottom row: scope + replies + share */}
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <ScopeBadge
+              scope={thread.scope}
+              municipalityId={thread.municipalityId}
+              municipalityName={thread.municipalityName}
+            />
+            <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
               <span className="flex items-center gap-1">
-                <MessageSquare className="w-4 h-4" />
-                {t('replies', { count: thread.replyCount })}
+                <MessageSquare className="w-3.5 h-3.5" />
+                {thread.replyCount}
               </span>
+              <BookmarkButton threadId={thread.id} isBookmarked={thread.isBookmarked} size="sm" />
               <button
                 onClick={(e) => {
                   e.preventDefault()
@@ -173,11 +123,14 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
                     navigator.clipboard.writeText(url)
                   }
                 }}
-                className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                className="flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 title={t('common:share.share')}
               >
                 <Share2 className="w-3.5 h-3.5" />
               </button>
+              {thread.cvsScore != null && thread.scoreBreakdown && (
+                <ScoreBreakdown score={thread.cvsScore} breakdown={thread.scoreBreakdown} />
+              )}
             </div>
           </div>
 

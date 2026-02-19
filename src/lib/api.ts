@@ -829,6 +829,52 @@ class ApiClient {
     return this.request('/reports/my-sanctions')
   }
 
+  // ─── Discovery ────────────────────────────────────────────
+
+  async getExplore(params?: { page?: number; limit?: number; scope?: string }): Promise<ExploreResponse> {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set('page', params.page.toString())
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+    if (params?.scope) searchParams.set('scope', params.scope)
+    const query = searchParams.toString()
+    return this.request(`/discover/explore${query ? `?${query}` : ''}`)
+  }
+
+  async getTrending(type: 'threads' | 'tags' = 'threads', limit = 10): Promise<TrendingResponse> {
+    return this.request(`/discover/trending?type=${type}&limit=${limit}`)
+  }
+
+  async getAlgorithm(): Promise<AlgorithmDocumentation> {
+    return this.request('/discover/algorithm')
+  }
+
+  // ─── Bookmarks ────────────────────────────────────────────
+
+  async addBookmark(threadId: string): Promise<{ threadId: string; bookmarked: boolean }> {
+    return this.request('/bookmarks', {
+      method: 'POST',
+      body: JSON.stringify({ threadId })
+    })
+  }
+
+  async removeBookmark(threadId: string): Promise<{ threadId: string; bookmarked: boolean }> {
+    return this.request(`/bookmarks/${threadId}`, { method: 'DELETE' })
+  }
+
+  async getBookmarks(params?: { page?: number; limit?: number }): Promise<BookmarksResponse> {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set('page', params.page.toString())
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+    const query = searchParams.toString()
+    return this.request(`/bookmarks${query ? `?${query}` : ''}`)
+  }
+
+  // ─── View tracking ────────────────────────────────────────
+
+  async recordView(threadId: string): Promise<void> {
+    await this.request(`/agora/threads/${threadId}/view`, { method: 'POST' })
+  }
+
   // Link previews
   async getLinkPreview(url: string): Promise<LinkPreviewData> {
     return this.request(`/link-preview?url=${encodeURIComponent(url)}`)
@@ -963,8 +1009,54 @@ export interface Thread {
 }
 
 export interface ThreadWithComments extends Thread {
+  isBookmarked?: boolean
+  viewCount?: number
   comments: Comment[]
 }
+
+// Discovery types
+export interface CvsBreakdown {
+  engagement: number
+  sourceQuality: number
+  freshness: number
+  total: number
+}
+
+export interface ExploreThread extends Thread {
+  cvsScore: number
+  scoreBreakdown: CvsBreakdown
+}
+
+export interface ExploreResponse extends PaginatedResponse<ExploreThread> {
+  feedScope: 'explore'
+}
+
+export interface TrendingItem {
+  entityId: string
+  score: number
+  metadata: Record<string, unknown>
+  computedAt: string | null
+}
+
+export interface TrendingResponse {
+  type: 'threads' | 'tags'
+  items: TrendingItem[]
+  computedAt: string | null
+}
+
+export interface AlgorithmDocumentation {
+  name: string
+  version: string
+  updatedAt: string
+  description: Record<string, string>
+  formula: string
+  components: Record<string, unknown>
+  whatIsNotUsed: Record<string, string[]>
+  transparency: Record<string, string>
+  changelog: { date: string; version: string; description: Record<string, string> }[]
+}
+
+export interface BookmarksResponse extends PaginatedResponse<Thread & { isBookmarked: true; bookmarkedAt: string }> {}
 
 export interface Comment {
   id: string

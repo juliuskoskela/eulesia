@@ -1,4 +1,4 @@
-import { Users, MapPin, Building2, Globe, ChevronDown, Clock, TrendingUp, Sparkles } from 'lucide-react'
+import { Users, MapPin, Building2, Globe, ChevronDown, Clock, TrendingUp, Sparkles, Compass } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FeedScope, SortBy, TopPeriod } from '../../lib/api'
@@ -14,6 +14,7 @@ interface FeedFiltersProps {
 
 const feedScopeOptions: { value: FeedScope; tKey: string; icon: React.ElementType }[] = [
   { value: 'following', tKey: 'scope.all', icon: Users },
+  { value: 'all', tKey: 'scope.explore', icon: Compass },
   { value: 'local', tKey: 'scope.local', icon: MapPin },
   { value: 'national', tKey: 'scope.national', icon: Building2 },
   { value: 'european', tKey: 'scope.european', icon: Globe }

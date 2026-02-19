@@ -1,12 +1,13 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
-import { eq, desc, asc, and, inArray, sql, or, gte } from 'drizzle-orm'
-import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions, tagCategories, institutionTopics, editHistory } from '../db/index.js'
+import { eq, desc, asc, and, inArray, sql, or, gte, gt } from 'drizzle-orm'
+import { db, threads, threadTags, threadVotes, comments, commentVotes, users, municipalities, userSubscriptions, tagCategories, institutionTopics, editHistory, threadViews, bookmarks } from '../db/index.js'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth.js'
 import { AppError } from '../middleware/errorHandler.js'
 import { renderMarkdown } from '../utils/markdown.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { canEdit, canDelete } from '../utils/permissions.js'
+import crypto from 'crypto'
 import { io } from '../index.js'
 import { notify } from '../services/notify.js'
 import type { AuthenticatedRequest } from '../types/index.js'
@@ -454,6 +455,20 @@ router.get('/threads/:id', optionalAuthMiddleware, asyncHandler(async (req: Auth
     sourceInstitutionName = srcInst?.name || null
   }
 
+  // Check if user has bookmarked this thread
+  let isBookmarked = false
+  if (userId) {
+    const [bookmark] = await db
+      .select({ threadId: bookmarks.threadId })
+      .from(bookmarks)
+      .where(and(
+        eq(bookmarks.userId, userId),
+        eq(bookmarks.threadId, id)
+      ))
+      .limit(1)
+    isBookmarked = !!bookmark
+  }
+
   // Resolve editor name if thread was edited
   let editorName: string | null = null
   if (threadData.thread.editedBy) {
@@ -474,6 +489,8 @@ router.get('/threads/:id', optionalAuthMiddleware, asyncHandler(async (req: Auth
       author: threadData.author,
       municipality: threadData.municipality,
       userVote: threadUserVote,
+      isBookmarked,
+      viewCount: threadData.thread.viewCount || 0,
       sourceInstitutionName,
       comments: commentList.map(({ comment, author }) => {
         if (comment.isHidden) {
@@ -935,6 +952,48 @@ router.post('/threads/:threadId/vote', authMiddleware, asyncHandler(async (req: 
       userVote: value
     }
   })
+}))
+
+// ============================================================
+// VIEW TRACKING
+// ============================================================
+
+// POST /agora/threads/:id/view - Record a thread view (deduplicated)
+router.post('/threads/:id/view', optionalAuthMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id: threadId } = req.params
+  const userId = req.user?.id || null
+
+  // Generate session hash from IP + user agent for anonymous dedup
+  const sessionHash = !userId
+    ? crypto.createHash('sha256')
+        .update(`${req.ip}:${req.headers['user-agent'] || ''}`)
+        .digest('hex')
+        .slice(0, 64)
+    : null
+
+  // Check for existing view (deduplicate: 1 view per user/session per thread per day)
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const existing = await db
+    .select({ id: threadViews.id })
+    .from(threadViews)
+    .where(and(
+      eq(threadViews.threadId, threadId),
+      userId
+        ? eq(threadViews.userId, userId)
+        : eq(threadViews.sessionHash, sessionHash!),
+      gt(threadViews.createdAt, oneDayAgo)
+    ))
+    .limit(1)
+
+  if (existing.length === 0) {
+    await db.insert(threadViews).values({
+      threadId,
+      userId,
+      sessionHash
+    })
+  }
+
+  res.json({ success: true })
 }))
 
 // ============================================================

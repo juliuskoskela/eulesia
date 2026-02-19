@@ -13,12 +13,15 @@ import { importMinutes } from './import/minutes.js'
 import { importMinistryContent } from './import/ministry.js'
 import { importEuContent } from './import/eu.js'
 import { runGdprCleanup } from './gdprCleanup.js'
+import { refreshTrendingCache, batchUpdateViewCounts } from './trending.js'
 import { env } from '../utils/env.js'
 
 let minutesRunning = false
 let ministryRunning = false
 let euRunning = false
 let gdprCleanupRunning = false
+let trendingRunning = false
+let viewCountRunning = false
 
 /**
  * Run the minutes import with error handling
@@ -126,6 +129,42 @@ async function runGdprCleanupJob(): Promise<void> {
 }
 
 /**
+ * Refresh the trending cache (CVS scores, trending threads/tags)
+ */
+async function runTrendingRefresh(): Promise<void> {
+  if (trendingRunning) {
+    return
+  }
+
+  trendingRunning = true
+  try {
+    await refreshTrendingCache()
+  } catch (err) {
+    console.error('❌ Trending cache refresh failed:', err instanceof Error ? err.message : err)
+  } finally {
+    trendingRunning = false
+  }
+}
+
+/**
+ * Batch update view counts from thread_views to threads.view_count
+ */
+async function runViewCountUpdate(): Promise<void> {
+  if (viewCountRunning) {
+    return
+  }
+
+  viewCountRunning = true
+  try {
+    await batchUpdateViewCounts()
+  } catch (err) {
+    console.error('❌ View count update failed:', err instanceof Error ? err.message : err)
+  } finally {
+    viewCountRunning = false
+  }
+}
+
+/**
  * Initialize the scheduler
  *
  * Schedules:
@@ -175,6 +214,18 @@ export function initScheduler(): void {
   })
   console.log('   ✓ GDPR cleanup scheduled: 04:00 Europe/Helsinki')
 
+  // Trending cache refresh: every 15 minutes
+  cron.schedule('*/15 * * * *', () => {
+    runTrendingRefresh()
+  })
+  console.log('   ✓ Trending cache refresh scheduled: every 15 minutes')
+
+  // View count batch update: every 5 minutes
+  cron.schedule('*/5 * * * *', () => {
+    runViewCountUpdate()
+  })
+  console.log('   ✓ View count batch update scheduled: every 5 minutes')
+
   // Run initial imports at startup (staggered to avoid overload)
   setTimeout(() => {
     console.log('🚀 Running initial minutes import...')
@@ -196,4 +247,10 @@ export function initScheduler(): void {
     console.log('🚀 Running initial GDPR cleanup...')
     runGdprCleanupJob()
   }, 120000)
+
+  // Run initial trending cache refresh at startup (after 2.5 min — needs threads loaded)
+  setTimeout(() => {
+    console.log('🚀 Running initial trending cache refresh...')
+    runTrendingRefresh()
+  }, 150000)
 }

@@ -7,6 +7,7 @@ import type { Municipality, TagWithCategory } from '../../lib/api'
 
 interface FeedOnboardingProps {
   onComplete: () => void
+  compact?: boolean
 }
 
 function groupTagsByCategory(tags: TagWithCategory[]): Record<string, TagWithCategory[]> {
@@ -19,7 +20,7 @@ function groupTagsByCategory(tags: TagWithCategory[]): Record<string, TagWithCat
   return groups
 }
 
-export function FeedOnboarding({ onComplete }: FeedOnboardingProps) {
+export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingProps) {
   const { t } = useTranslation(['agora', 'common'])
   const [selectedMunicipalities, setSelectedMunicipalities] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -86,6 +87,70 @@ export function FeedOnboarding({ onComplete }: FeedOnboardingProps) {
   }
 
   const hasSelections = selectedMunicipalities.length > 0 || selectedTags.length > 0
+
+  // Compact inline banner mode for Tutustu tab
+  if (compact) {
+    return (
+      <div className="bg-gradient-to-r from-blue-50 to-teal-50 dark:from-blue-900/20 dark:to-teal-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4 mb-4">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center">
+            <MapPin className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+              {t('agora:onboarding.compactTitle', { defaultValue: 'Seuraa aiheita saadaksesi oman syötteen' })}
+            </h3>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {topMunicipalities.slice(0, 4).map((m: Municipality) => (
+                <button
+                  key={m.id}
+                  onClick={() => toggleMunicipality(m.id)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    selectedMunicipalities.includes(m.id)
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  {selectedMunicipalities.includes(m.id) && '✓ '}{m.name}
+                </button>
+              ))}
+              {featuredTags.slice(0, 4).map(tag => (
+                <button
+                  key={tag.tag}
+                  onClick={() => toggleTag(tag.tag)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    selectedTags.includes(tag.tag)
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  {selectedTags.includes(tag.tag) && '✓ '}{tag.displayName || tag.tag.replace(/-/g, ' ')}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              {hasSelections && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  {t('agora:onboarding.ready', { defaultValue: 'Valmis' })}
+                </button>
+              )}
+              <button
+                onClick={onComplete}
+                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                {t('common:actions.dismiss', { defaultValue: 'Piilota' })}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 max-w-lg mx-auto">

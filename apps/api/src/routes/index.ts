@@ -19,6 +19,8 @@ import adminRoutes from './admin.js'
 import reportsRoutes from './reports.js'
 import institutionsRoutes from './institutions.js'
 import linkPreviewRoutes from './linkPreview.js'
+import discoverRoutes from './discover.js'
+import bookmarksRoutes from './bookmarks.js'
 
 const router = Router()
 
@@ -39,6 +41,8 @@ router.use('/notifications', notificationsRoutes)
 router.use('/admin', adminRoutes)
 router.use('/reports', reportsRoutes)
 router.use('/institutions', institutionsRoutes)
+router.use('/discover', discoverRoutes)
+router.use('/bookmarks', bookmarksRoutes)
 router.use('/', linkPreviewRoutes)
 
 // Public: active system announcements
