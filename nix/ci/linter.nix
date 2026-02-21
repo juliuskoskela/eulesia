@@ -1,4 +1,4 @@
-{...}: {
+_: {
   perSystem = {
     config,
     pkgs,
@@ -10,7 +10,8 @@
       text = ''
         set -euo pipefail
 
-        statix check flake.nix nix
+        statix check flake.nix
+        statix check nix
         deadnix --fail flake.nix nix
       '';
     };

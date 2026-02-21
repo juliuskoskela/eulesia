@@ -1,4 +1,4 @@
-{...}: {
+_: {
   perSystem = {pkgs, ...}: let
     repoSrc = pkgs.lib.cleanSource ../.;
     generateIduraJwks = import ./generate-idura-jwks.nix {inherit pkgs;};
