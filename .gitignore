@@ -1,3 +1,62 @@
+# =============================================================================
+# WHITELIST GITIGNORE
+# =============================================================================
+#
+# Pattern: Ignore everything (*), then explicitly allow tracked/project paths.
+# =============================================================================
+
+*
+
+# === Directories ===
+!android/
+!android/**
+!apps/
+!apps/**
+!assets/
+!assets/**
+!docker/
+!docker/**
+!docs/
+!docs/**
+!icons/
+!icons/**
+!ios/
+!ios/**
+!nix/
+!nix/**
+!public/
+!public/**
+!scripts/
+!scripts/**
+!src/
+!src/**
+
+# === Root Files (anchored with /) ===
+!/.gitignore
+!/.npmrc
+!/.env.production
+!/.sops.yaml
+!/LICENSE
+!/README.md
+!/capacitor.config.ts
+!/eslint.config.js
+!/flake.lock
+!/flake.nix
+!/index.html
+!/package-lock.json
+!/package.json
+!/tsconfig.app.json
+!/tsconfig.json
+!/tsconfig.node.json
+!/vite.config.ts
+!/vitest.config.ts
+
+# === Exclusions (re-ignore in whitelisted dirs) ===
+# Local untracked files
+local/
+result
+result-*
+
 # Logs
 logs
 *.log
@@ -7,9 +66,12 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Build artifacts
 node_modules
+apps/*/node_modules
 dist
 dist-ssr
+apps/*/dist
 *.local
 
 # Environment files
