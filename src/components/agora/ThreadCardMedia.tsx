@@ -1,23 +1,26 @@
-import { useMemo } from 'react'
-import { useLinkPreview } from '../../hooks/useApi'
-import { ExternalLink } from 'lucide-react'
+import { useMemo } from "react";
+import { useLinkPreview } from "../../hooks/useApi";
+import { ExternalLink } from "lucide-react";
 
 interface ThreadCardMediaProps {
-  contentHtml: string
+  contentHtml: string;
 }
 
 // Regex patterns to extract media from contentHtml
-const YOUTUBE_REGEX = /src="https:\/\/www\.youtube-nocookie\.com\/embed\/([^"]+)"/g
-const IMAGE_REGEX = /<img[^>]+src="([^"]+)"[^>]*class="(?:embedded-image|uploaded-image)"[^>]*>/g
-const IMAGE_SRC_ALT_REGEX = /<img[^>]+class="(?:embedded-image|uploaded-image)"[^>]*src="([^"]+)"[^>]*>/g
-const LINK_PREVIEW_REGEX = /class="link-preview"\s+data-url="([^"]+)"/g
+const YOUTUBE_REGEX =
+  /src="https:\/\/www\.youtube-nocookie\.com\/embed\/([^"]+)"/g;
+const IMAGE_REGEX =
+  /<img[^>]+src="([^"]+)"[^>]*class="(?:embedded-image|uploaded-image)"[^>]*>/g;
+const IMAGE_SRC_ALT_REGEX =
+  /<img[^>]+class="(?:embedded-image|uploaded-image)"[^>]*src="([^"]+)"[^>]*>/g;
+const LINK_PREVIEW_REGEX = /class="link-preview"\s+data-url="([^"]+)"/g;
 
 function decodeHtmlEntities(str: string): string {
   return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"');
 }
 
 /**
@@ -26,7 +29,7 @@ function decodeHtmlEntities(str: string): string {
  * the parent <Link> without invalid HTML nesting.
  */
 function InlineCardPreview({ url }: { url: string }) {
-  const { data, isLoading, isError } = useLinkPreview(url)
+  const { data, isLoading, isError } = useLinkPreview(url);
 
   if (isLoading) {
     return (
@@ -40,24 +43,29 @@ function InlineCardPreview({ url }: { url: string }) {
           <div className="w-20 h-16 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
         </div>
       </div>
-    )
+    );
   }
 
-  if (isError || !data) return null
+  if (isError || !data) return null;
 
   const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div
       role="link"
       tabIndex={0}
       onClick={handleClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e as any) } }}
-      className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick(e as any);
+        }
+      }}
+      className="border border-gray-200 rounded-lg overflow-hidden hover:bg-gray-50 transition-colors cursor-pointer"
     >
       <div className="flex">
         <div className="flex-1 p-2.5 min-w-0">
@@ -68,7 +76,9 @@ function InlineCardPreview({ url }: { url: string }) {
                 src={data.faviconUrl}
                 alt=""
                 className="w-3.5 h-3.5 rounded-sm flex-shrink-0"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
               />
             )}
             <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
@@ -98,53 +108,59 @@ function InlineCardPreview({ url }: { url: string }) {
               className="w-full h-full object-cover"
               loading="lazy"
               referrerPolicy="no-referrer"
-              onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).parentElement!.style.display =
+                  "none";
+              }}
             />
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }
 
 export function ThreadCardMedia({ contentHtml }: ThreadCardMediaProps) {
   const media = useMemo(() => {
-    const youtubeIds: string[] = []
-    const imageUrls: string[] = []
-    const linkPreviewUrls: string[] = []
+    const youtubeIds: string[] = [];
+    const imageUrls: string[] = [];
+    const linkPreviewUrls: string[] = [];
 
     // Extract YouTube video IDs
-    let match
-    const ytRegex = new RegExp(YOUTUBE_REGEX.source, 'g')
+    let match;
+    const ytRegex = new RegExp(YOUTUBE_REGEX.source, "g");
     while ((match = ytRegex.exec(contentHtml)) !== null) {
-      youtubeIds.push(match[1].split('?')[0]) // Remove query params
+      youtubeIds.push(match[1].split("?")[0]); // Remove query params
     }
 
     // Extract image URLs (try both attribute orders)
-    const imgRegex1 = new RegExp(IMAGE_REGEX.source, 'g')
+    const imgRegex1 = new RegExp(IMAGE_REGEX.source, "g");
     while ((match = imgRegex1.exec(contentHtml)) !== null) {
-      imageUrls.push(decodeHtmlEntities(match[1]))
+      imageUrls.push(decodeHtmlEntities(match[1]));
     }
-    const imgRegex2 = new RegExp(IMAGE_SRC_ALT_REGEX.source, 'g')
+    const imgRegex2 = new RegExp(IMAGE_SRC_ALT_REGEX.source, "g");
     while ((match = imgRegex2.exec(contentHtml)) !== null) {
-      const url = decodeHtmlEntities(match[1])
+      const url = decodeHtmlEntities(match[1]);
       if (!imageUrls.includes(url)) {
-        imageUrls.push(url)
+        imageUrls.push(url);
       }
     }
 
     // Extract link preview URLs
-    const lpRegex = new RegExp(LINK_PREVIEW_REGEX.source, 'g')
+    const lpRegex = new RegExp(LINK_PREVIEW_REGEX.source, "g");
     while ((match = lpRegex.exec(contentHtml)) !== null) {
-      linkPreviewUrls.push(decodeHtmlEntities(match[1]))
+      linkPreviewUrls.push(decodeHtmlEntities(match[1]));
     }
 
-    return { youtubeIds, imageUrls, linkPreviewUrls }
-  }, [contentHtml])
+    return { youtubeIds, imageUrls, linkPreviewUrls };
+  }, [contentHtml]);
 
-  const hasMedia = media.youtubeIds.length > 0 || media.imageUrls.length > 0 || media.linkPreviewUrls.length > 0
+  const hasMedia =
+    media.youtubeIds.length > 0 ||
+    media.imageUrls.length > 0 ||
+    media.linkPreviewUrls.length > 0;
 
-  if (!hasMedia) return null
+  if (!hasMedia) return null;
 
   return (
     <div className="mt-1 mb-2">
@@ -152,8 +168,15 @@ export function ThreadCardMedia({ contentHtml }: ThreadCardMediaProps) {
       {media.youtubeIds.length > 0 && (
         <div className="flex gap-2 mb-2">
           {media.youtubeIds.slice(0, 2).map((videoId) => (
-            <div key={videoId} className="relative rounded-lg overflow-hidden bg-gray-100 flex-shrink-0" style={{ width: '100%', maxWidth: media.youtubeIds.length === 1 ? '100%' : '50%' }}>
-              <div className="relative" style={{ paddingBottom: '56.25%' }}>
+            <div
+              key={videoId}
+              className="relative rounded-lg overflow-hidden bg-gray-100 flex-shrink-0"
+              style={{
+                width: "100%",
+                maxWidth: media.youtubeIds.length === 1 ? "100%" : "50%",
+              }}
+            >
+              <div className="relative" style={{ paddingBottom: "56.25%" }}>
                 <img
                   src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
                   alt="YouTube video"
@@ -163,7 +186,11 @@ export function ThreadCardMedia({ contentHtml }: ThreadCardMediaProps) {
                 {/* Play button overlay */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-10 h-10 bg-red-600 bg-opacity-90 rounded-full flex items-center justify-center shadow-lg">
-                    <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className="w-5 h-5 text-white ml-0.5"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   </div>
@@ -176,12 +203,16 @@ export function ThreadCardMedia({ contentHtml }: ThreadCardMediaProps) {
 
       {/* Embedded images */}
       {media.imageUrls.length > 0 && (
-        <div className={`mb-2 ${media.imageUrls.length > 1 ? 'grid grid-cols-2 gap-1.5' : ''} rounded-lg overflow-hidden`}>
+        <div
+          className={`mb-2 ${media.imageUrls.length > 1 ? "grid grid-cols-2 gap-1.5" : ""} rounded-lg overflow-hidden`}
+        >
           {media.imageUrls.slice(0, 4).map((url, i) => (
             <div
               key={url}
-              className={`relative bg-gray-100 overflow-hidden ${media.imageUrls.length === 1 ? 'rounded-lg' : 'rounded'}`}
-              style={{ maxHeight: media.imageUrls.length === 1 ? '240px' : '140px' }}
+              className={`relative bg-gray-100 overflow-hidden ${media.imageUrls.length === 1 ? "rounded-lg" : "rounded"}`}
+              style={{
+                maxHeight: media.imageUrls.length === 1 ? "240px" : "140px",
+              }}
             >
               <img
                 src={url}
@@ -189,12 +220,17 @@ export function ThreadCardMedia({ contentHtml }: ThreadCardMediaProps) {
                 className="w-full h-full object-cover"
                 loading="lazy"
                 referrerPolicy="no-referrer"
-                onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).parentElement!.style.display =
+                    "none";
+                }}
               />
               {/* Show count overlay on last image if more than 4 */}
               {i === 3 && media.imageUrls.length > 4 && (
                 <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                  <span className="text-white text-lg font-bold">+{media.imageUrls.length - 4}</span>
+                  <span className="text-white text-lg font-bold">
+                    +{media.imageUrls.length - 4}
+                  </span>
                 </div>
               )}
             </div>
@@ -207,5 +243,5 @@ export function ThreadCardMedia({ contentHtml }: ThreadCardMediaProps) {
         <InlineCardPreview url={media.linkPreviewUrls[0]} />
       )}
     </div>
-  )
+  );
 }

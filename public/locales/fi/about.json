@@ -109,9 +109,7 @@
       "Ota yhteyttä: info@eulesia.eu"
     ],
     "q2q3": "Q2–Q3 2026",
-    "q2q3Items": [
-      "Vahva tunnistautuminen pankkitunnuksilla (vapaaehtoinen)"
-    ],
+    "q2q3Items": ["Vahva tunnistautuminen pankkitunnuksilla (vapaaehtoinen)"],
     "late2026": "Loppu 2026 / Alku 2027",
     "late2026Items": [
       "EUDI Wallet -kirjautuminen käyttöön",
@@ -129,10 +127,7 @@
   "funding": {
     "title": "Rahoitus",
     "description": "Eulesia on voittoa tavoittelematon projekti. Rahoituslähteet:",
-    "items": [
-      "Tutkimus- ja kehityshankerahoitus",
-      "Lahjoitukset"
-    ]
+    "items": ["Tutkimus- ja kehityshankerahoitus", "Lahjoitukset"]
   },
 
   "cta": {

@@ -1,14 +1,14 @@
-import { useTranslation } from 'react-i18next'
-import { Users, ChevronRight, MapPin, Lock } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import type { Club } from '../../lib/api'
+import { useTranslation } from "react-i18next";
+import { Users, ChevronRight, MapPin, Lock } from "lucide-react";
+import { Link } from "react-router-dom";
+import type { Club } from "../../lib/api";
 
 interface ClubCardProps {
-  club: Club
+  club: Club;
 }
 
 export function ClubCard({ club }: ClubCardProps) {
-  const { t } = useTranslation('clubs')
+  const { t } = useTranslation("clubs");
 
   return (
     <Link
@@ -41,7 +41,7 @@ export function ClubCard({ club }: ClubCardProps) {
               {!club.isPublic && (
                 <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Lock className="w-3 h-3" />
-                  {t('closedClub')}
+                  {t("closedClub")}
                 </span>
               )}
             </div>
@@ -62,7 +62,7 @@ export function ClubCard({ club }: ClubCardProps) {
             <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
               <div className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
-                <span>{t('members', { count: club.memberCount })}</span>
+                <span>{t("members", { count: club.memberCount })}</span>
               </div>
               {club.address && (
                 <div className="flex items-center gap-1">
@@ -77,5 +77,5 @@ export function ClubCard({ club }: ClubCardProps) {
         </div>
       </div>
     </Link>
-  )
+  );
 }

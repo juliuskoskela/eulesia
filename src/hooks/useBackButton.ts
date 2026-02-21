@@ -1,26 +1,26 @@
-import { useEffect } from 'react'
-import { Capacitor } from '@capacitor/core'
-import { App as CapApp } from '@capacitor/app'
+import { useEffect } from "react";
+import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
 
 export function useBackButton() {
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return
+    if (!Capacitor.isNativePlatform()) return;
 
-    const listener = CapApp.addListener('backButton', ({ canGoBack }) => {
+    const listener = CapApp.addListener("backButton", ({ canGoBack }) => {
       if (canGoBack) {
-        window.history.back()
+        window.history.back();
       } else {
-        CapApp.exitApp()
+        CapApp.exitApp();
       }
-    })
+    });
 
     return () => {
-      listener.then(l => l.remove())
-    }
-  }, [])
+      listener.then((l) => l.remove());
+    };
+  }, []);
 }
 
 export function BackButtonHandler() {
-  useBackButton()
-  return null
+  useBackButton();
+  return null;
 }

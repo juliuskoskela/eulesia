@@ -1,24 +1,24 @@
-import type { Response, NextFunction } from 'express'
-import { eq, and, gt, isNull, or, inArray } from 'drizzle-orm'
-import { db, sessions, users, userSanctions } from '../db/index.js'
-import { hashToken } from '../utils/crypto.js'
-import { getSessionCookieOptions } from '../utils/cookies.js'
-import type { AuthenticatedRequest } from '../types/index.js'
+import type { Response, NextFunction } from "express";
+import { eq, and, gt, isNull, or, inArray } from "drizzle-orm";
+import { db, sessions, users, userSanctions } from "../db/index.js";
+import { hashToken } from "../utils/crypto.js";
+import { getSessionCookieOptions } from "../utils/cookies.js";
+import type { AuthenticatedRequest } from "../types/index.js";
 
 export async function authMiddleware(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   try {
-    const sessionToken = req.cookies?.session
+    const sessionToken = req.cookies?.session;
 
     if (!sessionToken) {
-      res.status(401).json({ success: false, error: 'Not authenticated' })
-      return
+      res.status(401).json({ success: false, error: "Not authenticated" });
+      return;
     }
 
-    const tokenHash = hashToken(sessionToken)
+    const tokenHash = hashToken(sessionToken);
 
     const [session] = await db
       .select()
@@ -26,27 +26,27 @@ export async function authMiddleware(
       .where(
         and(
           eq(sessions.tokenHash, tokenHash),
-          gt(sessions.expiresAt, new Date())
-        )
+          gt(sessions.expiresAt, new Date()),
+        ),
       )
-      .limit(1)
+      .limit(1);
 
     if (!session) {
-      res.clearCookie('session', getSessionCookieOptions(req))
-      res.status(401).json({ success: false, error: 'Session expired' })
-      return
+      res.clearCookie("session", getSessionCookieOptions(req));
+      res.status(401).json({ success: false, error: "Session expired" });
+      return;
     }
 
     const [user] = await db
       .select()
       .from(users)
       .where(eq(users.id, session.userId))
-      .limit(1)
+      .limit(1);
 
     if (!user) {
-      res.clearCookie('session', getSessionCookieOptions(req))
-      res.status(401).json({ success: false, error: 'User not found' })
-      return
+      res.clearCookie("session", getSessionCookieOptions(req));
+      res.status(401).json({ success: false, error: "User not found" });
+      return;
     }
 
     // Check for active bans/suspensions
@@ -56,57 +56,60 @@ export async function authMiddleware(
       .where(
         and(
           eq(userSanctions.userId, user.id),
-          inArray(userSanctions.sanctionType, ['suspension', 'ban']),
+          inArray(userSanctions.sanctionType, ["suspension", "ban"]),
           isNull(userSanctions.revokedAt),
           or(
             isNull(userSanctions.expiresAt),
-            gt(userSanctions.expiresAt, new Date())
-          )
-        )
+            gt(userSanctions.expiresAt, new Date()),
+          ),
+        ),
       )
-      .limit(1)
+      .limit(1);
 
     if (activeSanction) {
       res.status(403).json({
         success: false,
-        error: activeSanction.sanctionType === 'ban' ? 'Account banned' : 'Account suspended',
+        error:
+          activeSanction.sanctionType === "ban"
+            ? "Account banned"
+            : "Account suspended",
         sanctionType: activeSanction.sanctionType,
         reason: activeSanction.reason,
-        expiresAt: activeSanction.expiresAt?.toISOString() || null
-      })
-      return
+        expiresAt: activeSanction.expiresAt?.toISOString() || null,
+      });
+      return;
     }
 
-    req.user = user
-    req.sessionId = session.id
+    req.user = user;
+    req.sessionId = session.id;
 
     // Update last seen
     await db
       .update(users)
       .set({ lastSeenAt: new Date() })
-      .where(eq(users.id, user.id))
+      .where(eq(users.id, user.id));
 
-    next()
+    next();
   } catch (error) {
-    console.error('Auth middleware error:', error)
-    res.status(500).json({ success: false, error: 'Authentication error' })
+    console.error("Auth middleware error:", error);
+    res.status(500).json({ success: false, error: "Authentication error" });
   }
 }
 
 export async function optionalAuthMiddleware(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
-  const sessionToken = req.cookies?.session
+  const sessionToken = req.cookies?.session;
 
   if (!sessionToken) {
-    next()
-    return
+    next();
+    return;
   }
 
   try {
-    const tokenHash = hashToken(sessionToken)
+    const tokenHash = hashToken(sessionToken);
 
     const [session] = await db
       .select()
@@ -114,27 +117,27 @@ export async function optionalAuthMiddleware(
       .where(
         and(
           eq(sessions.tokenHash, tokenHash),
-          gt(sessions.expiresAt, new Date())
-        )
+          gt(sessions.expiresAt, new Date()),
+        ),
       )
-      .limit(1)
+      .limit(1);
 
     if (!session) {
-      res.clearCookie('session', getSessionCookieOptions(req))
-      next()
-      return
+      res.clearCookie("session", getSessionCookieOptions(req));
+      next();
+      return;
     }
 
     const [user] = await db
       .select()
       .from(users)
       .where(eq(users.id, session.userId))
-      .limit(1)
+      .limit(1);
 
     if (!user) {
-      res.clearCookie('session', getSessionCookieOptions(req))
-      next()
-      return
+      res.clearCookie("session", getSessionCookieOptions(req));
+      next();
+      return;
     }
 
     const [activeSanction] = await db
@@ -143,26 +146,26 @@ export async function optionalAuthMiddleware(
       .where(
         and(
           eq(userSanctions.userId, user.id),
-          inArray(userSanctions.sanctionType, ['suspension', 'ban']),
+          inArray(userSanctions.sanctionType, ["suspension", "ban"]),
           isNull(userSanctions.revokedAt),
           or(
             isNull(userSanctions.expiresAt),
-            gt(userSanctions.expiresAt, new Date())
-          )
-        )
+            gt(userSanctions.expiresAt, new Date()),
+          ),
+        ),
       )
-      .limit(1)
+      .limit(1);
 
     if (activeSanction) {
-      next()
-      return
+      next();
+      return;
     }
 
-    req.user = user
-    req.sessionId = session.id
-    next()
+    req.user = user;
+    req.sessionId = session.id;
+    next();
   } catch (error) {
-    console.error('Optional auth middleware error:', error)
-    next()
+    console.error("Optional auth middleware error:", error);
+    next();
   }
 }

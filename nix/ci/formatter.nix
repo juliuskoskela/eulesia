@@ -1,11 +1,16 @@
-{ ... }:
-{
-  perSystem = { config, pkgs, ... }: {
+{...}: {
+  perSystem = {
+    config,
+    pkgs,
+    ...
+  }: {
     treefmt = {
       projectRootFile = "flake.nix";
 
       programs = {
         alejandra.enable = true;
+        prettier.enable = true;
+        shfmt.enable = true;
       };
 
       settings = {
@@ -29,7 +34,7 @@
 
     packages.fmt-check = pkgs.writeShellApplication {
       name = "fmt-check";
-      runtimeInputs = [ config.treefmt.build.wrapper ];
+      runtimeInputs = [config.treefmt.build.wrapper];
       text = ''
         set -euo pipefail
         treefmt --fail-on-change

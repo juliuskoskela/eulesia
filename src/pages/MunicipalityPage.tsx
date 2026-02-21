@@ -1,14 +1,18 @@
-import { useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import { Layout } from '../components/layout'
-import { SEOHead } from '../components/SEOHead'
-import { ThreadCard, InlineThreadForm } from '../components/agora'
-import { ContentEndMarker, FollowButton, ErrorState } from '../components/common'
-import { useThreads, useMunicipalities } from '../hooks/useApi'
-import { useAuth } from '../hooks/useAuth'
-import type { Thread as ApiThread, UserSummary, Municipality } from '../lib/api'
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Layout } from "../components/layout";
+import { SEOHead } from "../components/SEOHead";
+import { ThreadCard, InlineThreadForm } from "../components/agora";
+import { ContentEndMarker, FollowButton } from "../components/common";
+import { useThreads, useMunicipalities } from "../hooks/useApi";
+import { useAuth } from "../hooks/useAuth";
+import type {
+  Thread as ApiThread,
+  UserSummary,
+  Municipality,
+} from "../lib/api";
 
 // Transform API thread to component format
 function transformThread(thread: ApiThread) {
@@ -28,8 +32,8 @@ function transformThread(thread: ApiThread) {
     institutionalContext: thread.institutionalContext,
     source: thread.source,
     sourceUrl: thread.sourceUrl,
-    aiGenerated: thread.aiGenerated
-  }
+    aiGenerated: thread.aiGenerated,
+  };
 }
 
 // Transform API user to component format
@@ -40,37 +44,56 @@ function transformAuthor(author: UserSummary) {
     role: author.role,
     verified: author.identityVerified ?? false,
     avatarUrl: author.avatarUrl,
-    avatarInitials: author.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-    institutionType: author.institutionType as 'municipality' | 'agency' | 'ministry' | undefined,
-    institutionName: author.institutionName
-  }
+    avatarInitials: author.name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase(),
+    institutionType: author.institutionType as
+      | "municipality"
+      | "agency"
+      | "ministry"
+      | undefined,
+    institutionName: author.institutionName,
+  };
 }
 
 export function MunicipalityPage() {
-  const { t } = useTranslation(['agora', 'common'])
-  const { municipalityId } = useParams<{ municipalityId: string }>()
-  const navigate = useNavigate()
-  const { currentUser } = useAuth()
+  const { t } = useTranslation(["agora", "common"]);
+  const { municipalityId } = useParams<{ municipalityId: string }>();
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
-  const { data: municipalitiesData } = useMunicipalities()
-  const { data: threadsData, isLoading, error, refetch } = useThreads({ municipalityId })
+  const { data: municipalitiesData } = useMunicipalities();
+  const {
+    data: threadsData,
+    isLoading,
+    error,
+  } = useThreads({ municipalityId });
 
   const municipality = useMemo(() => {
-    return municipalitiesData?.find((m: Municipality) => m.id === municipalityId)
-  }, [municipalitiesData, municipalityId])
+    return municipalitiesData?.find(
+      (m: Municipality) => m.id === municipalityId,
+    );
+  }, [municipalitiesData, municipalityId]);
 
   const threads = useMemo(() => {
-    if (!threadsData?.items) return []
+    if (!threadsData?.items) return [];
     return threadsData.items
       .map(transformThread)
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-  }, [threadsData])
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+  }, [threadsData]);
 
   const handleThreadCreated = (threadId: string) => {
-    navigate(`/agora/thread/${threadId}`)
-  }
+    navigate(`/agora/thread/${threadId}`);
+  };
 
-  const municipalityName = municipality?.name || t('agora:municipality.defaultName')
+  const municipalityName =
+    municipality?.name || t("agora:municipality.defaultName");
 
   return (
     <Layout>
@@ -80,11 +103,16 @@ export function MunicipalityPage() {
         path={`/kunnat/${municipalityId}`}
         type="place"
         jsonLd={{
-          '@context': 'https://schema.org',
-          '@type': 'Place',
+          "@context": "https://schema.org",
+          "@type": "Place",
           name: municipalityName,
-          ...(municipality?.region && { containedInPlace: { '@type': 'AdministrativeArea', name: municipality.region } }),
-          url: `https://eulesia.eu/kunnat/${municipalityId}`
+          ...(municipality?.region && {
+            containedInPlace: {
+              "@type": "AdministrativeArea",
+              name: municipality.region,
+            },
+          }),
+          url: `https://eulesia.eu/kunnat/${municipalityId}`,
         }}
       />
       {/* Page header */}
@@ -98,8 +126,8 @@ export function MunicipalityPage() {
               <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                {municipality?.name || t('agora:municipality.defaultName')}
+              <h1 className="text-xl font-bold text-gray-900">
+                {municipality?.name || t("agora:municipality.defaultName")}
               </h1>
               {municipality?.region && (
                 <p className="text-sm text-gray-500 dark:text-gray-400">{municipality.region}</p>
@@ -110,8 +138,8 @@ export function MunicipalityPage() {
             <FollowButton entityType="municipality" entityId={municipalityId} />
           )}
         </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {t('agora:municipality.discussions', { count: threads.length })}
+        <p className="text-sm text-gray-600">
+          {t("agora:municipality.discussions", { count: threads.length })}
         </p>
       </div>
 
@@ -132,16 +160,19 @@ export function MunicipalityPage() {
         )}
 
         {error && (
-          <ErrorState
-            title={t('agora:municipality.loadError')}
-            description={error instanceof Error ? error.message : undefined}
-            onRetry={() => refetch()}
-          />
+          <div className="text-center py-12 text-red-600">
+            <p>{t("agora:municipality.loadError")}</p>
+            <p className="text-sm mt-1">
+              {error instanceof Error
+                ? error.message
+                : t("common:errors.unknown")}
+            </p>
+          </div>
         )}
 
         {!isLoading && !error && threads.length > 0 && (
           <div className="space-y-3">
-            {threadsData?.items.map(thread => (
+            {threadsData?.items.map((thread) => (
               <ThreadCard
                 key={thread.id}
                 thread={transformThread(thread)}
@@ -153,21 +184,19 @@ export function MunicipalityPage() {
 
         {!isLoading && !error && threads.length === 0 && (
           <div className="text-center py-12 text-gray-500">
-            <p>{t('agora:municipality.noDiscussions')}</p>
+            <p>{t("agora:municipality.noDiscussions")}</p>
             <Link
               to="/agora"
               className="mt-2 text-blue-600 hover:underline text-sm inline-block"
             >
-              {t('agora:municipality.goToAgora')}
+              {t("agora:municipality.goToAgora")}
             </Link>
           </div>
         )}
 
         {/* End marker */}
-        {!isLoading && threads.length > 0 && (
-          <ContentEndMarker />
-        )}
+        {!isLoading && threads.length > 0 && <ContentEndMarker />}
       </div>
     </Layout>
-  )
+  );
 }

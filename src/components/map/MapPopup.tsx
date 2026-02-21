@@ -1,37 +1,52 @@
-import { Link } from 'react-router-dom'
-import { Landmark, Users, MapPin, Building2, MessageCircle, ChevronRight } from 'lucide-react'
-import type { MapPoint } from '../../lib/api'
+import { Link } from "react-router-dom";
+import {
+  Landmark,
+  Users,
+  MapPin,
+  Building2,
+  MessageCircle,
+  ChevronRight,
+} from "lucide-react";
+import type { MapPoint } from "../../lib/api";
 
 interface MapPopupProps {
-  point: MapPoint
-  onViewDetails?: () => void
+  point: MapPoint;
+  onViewDetails?: () => void;
 }
 
 const typeConfig = {
-  municipality: { icon: Building2, color: 'text-blue-600', bgColor: 'bg-blue-100' },
-  thread: { icon: Landmark, color: 'text-purple-600', bgColor: 'bg-purple-100' },
-  club: { icon: Users, color: 'text-green-600', bgColor: 'bg-green-100' },
-  place: { icon: MapPin, color: 'text-orange-600', bgColor: 'bg-orange-100' }
-}
+  municipality: {
+    icon: Building2,
+    color: "text-blue-600",
+    bgColor: "bg-blue-100",
+  },
+  thread: {
+    icon: Landmark,
+    color: "text-purple-600",
+    bgColor: "bg-purple-100",
+  },
+  club: { icon: Users, color: "text-green-600", bgColor: "bg-green-100" },
+  place: { icon: MapPin, color: "text-orange-600", bgColor: "bg-orange-100" },
+};
 
 export function MapPopup({ point, onViewDetails }: MapPopupProps) {
-  const config = typeConfig[point.type]
-  const Icon = config.icon
+  const config = typeConfig[point.type];
+  const Icon = config.icon;
 
   const getLink = () => {
     switch (point.type) {
-      case 'thread':
-        return `/agora/thread/${point.id}`
-      case 'club':
-        return `/clubs/${point.id}`
-      case 'municipality':
-        return `/kunnat/${point.id}`
+      case "thread":
+        return `/agora/thread/${point.id}`;
+      case "club":
+        return `/clubs/${point.id}`;
+      case "municipality":
+        return `/kunnat/${point.id}`;
       default:
-        return null
+        return null;
     }
-  }
+  };
 
-  const link = getLink()
+  const link = getLink();
 
   return (
     <div className="min-w-[200px] max-w-[280px]">
@@ -40,8 +55,12 @@ export function MapPopup({ point, onViewDetails }: MapPopupProps) {
           <Icon className={`w-5 h-5 ${config.color}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{point.name}</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{point.type}</p>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+            {point.name}
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+            {point.type}
+          </p>
         </div>
       </div>
 
@@ -95,5 +114,5 @@ export function MapPopup({ point, onViewDetails }: MapPopupProps) {
         )}
       </div>
     </div>
-  )
+  );
 }

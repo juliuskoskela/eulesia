@@ -1,214 +1,260 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Building2, ChevronDown, Pencil, Trash2, History } from 'lucide-react'
-import { Layout } from '../components/layout'
-import { SEOHead } from '../components/SEOHead'
-import { ActorBadge, ScopeBadge, TagList, ContentEndMarker, ReportButton, ConfirmDeleteDialog, EditedIndicator, ContentWithPreviews, ShareButtons, PageSkeleton } from '../components/common'
-import { InstitutionalContextBox } from '../components/agora/InstitutionalContextBox'
-import { CommentThread } from '../components/agora/CommentThread'
-import { ThreadVoteButtons } from '../components/agora/ThreadVoteButtons'
-import { EditHistoryModal } from '../components/agora/EditHistoryModal'
-import { useThread, useAddComment, useVoteComment, useVoteThread, useEditThread, useDeleteThread, useEditComment, useDeleteComment, type CommentSort } from '../hooks/useApi'
-import { useAuth } from '../hooks/useAuth'
-import { formatRelativeTime } from '../lib/formatTime'
-import { transformAuthor, transformComment } from '../utils/transforms'
-import { api } from '../lib/api'
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import {
+  ArrowLeft,
+  Building2,
+  ChevronDown,
+  Pencil,
+  Trash2,
+  History,
+} from "lucide-react";
+import { Layout } from "../components/layout";
+import { SEOHead } from "../components/SEOHead";
+import {
+  ActorBadge,
+  ScopeBadge,
+  TagList,
+  ContentEndMarker,
+  ReportButton,
+  ConfirmDeleteDialog,
+  EditedIndicator,
+  ContentWithPreviews,
+  ShareButtons,
+  PageSkeleton,
+} from "../components/common";
+import { InstitutionalContextBox } from "../components/agora/InstitutionalContextBox";
+import { CommentThread } from "../components/agora/CommentThread";
+import { ThreadVoteButtons } from "../components/agora/ThreadVoteButtons";
+import { EditHistoryModal } from "../components/agora/EditHistoryModal";
+import {
+  useThread,
+  useAddComment,
+  useVoteComment,
+  useVoteThread,
+  useEditThread,
+  useDeleteThread,
+  useEditComment,
+  useDeleteComment,
+  type CommentSort,
+} from "../hooks/useApi";
+import { useAuth } from "../hooks/useAuth";
+import { formatRelativeTime } from "../lib/formatTime";
+import { transformAuthor, transformComment } from "../utils/transforms";
+import { api } from "../lib/api";
 
 export function ThreadPage() {
-  const { t } = useTranslation(['agora', 'common'])
-  const { threadId } = useParams<{ threadId: string }>()
-  const navigate = useNavigate()
-  const { currentUser } = useAuth()
-  const [sort, setSort] = useState<CommentSort>('best')
-  const [showSortMenu, setShowSortMenu] = useState(false)
+  const { t } = useTranslation(["agora", "common"]);
+  const { threadId } = useParams<{ threadId: string }>();
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const [sort, setSort] = useState<CommentSort>("best");
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   const sortOptions: { value: CommentSort; label: string }[] = [
-    { value: 'best', label: t('commentSort.best') },
-    { value: 'new', label: t('commentSort.new') },
-    { value: 'old', label: t('commentSort.old') },
-    { value: 'controversial', label: t('commentSort.controversial') }
-  ]
+    { value: "best", label: t("commentSort.best") },
+    { value: "new", label: t("commentSort.new") },
+    { value: "old", label: t("commentSort.old") },
+    { value: "controversial", label: t("commentSort.controversial") },
+  ];
 
-  const { data: thread, isLoading, error } = useThread(threadId || '', sort)
-  const addCommentMutation = useAddComment(threadId || '', sort)
-  const voteCommentMutation = useVoteComment(threadId || '', sort)
-  const voteThreadMutation = useVoteThread()
-  const editThreadMutation = useEditThread(threadId || '', sort)
-  const deleteThreadMutation = useDeleteThread()
-  const editCommentMutation = useEditComment(threadId || '', sort)
-  const deleteCommentMutation = useDeleteComment(threadId || '', sort)
+  const { data: thread, isLoading, error } = useThread(threadId || "", sort);
+  const addCommentMutation = useAddComment(threadId || "", sort);
+  const voteCommentMutation = useVoteComment(threadId || "", sort);
+  const voteThreadMutation = useVoteThread();
+  const editThreadMutation = useEditThread(threadId || "", sort);
+  const deleteThreadMutation = useDeleteThread();
+  const editCommentMutation = useEditComment(threadId || "", sort);
+  const deleteCommentMutation = useDeleteComment(threadId || "", sort);
 
   // Record view once per session
   useEffect(() => {
-    if (!threadId) return
-    const viewedKey = `viewed:${threadId}`
-    if (sessionStorage.getItem(viewedKey)) return
-    sessionStorage.setItem(viewedKey, '1')
-    api.recordView(threadId).catch(() => {})
-  }, [threadId])
+    if (!threadId) return;
+    const viewedKey = `viewed:${threadId}`;
+    if (sessionStorage.getItem(viewedKey)) return;
+    sessionStorage.setItem(viewedKey, "1");
+    api.recordView(threadId).catch(() => {});
+  }, [threadId]);
 
-  const [commentContent, setCommentContent] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const commentInputRef = useRef<HTMLTextAreaElement>(null)
+  const [commentContent, setCommentContent] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Scroll textarea into view when focused (for mobile keyboard)
   const handleCommentFocus = useCallback(() => {
     setTimeout(() => {
-      commentInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 300)
-  }, [])
+      commentInputRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 300);
+  }, []);
 
   // Edit/delete state
-  const [isEditingThread, setIsEditingThread] = useState(false)
-  const [editTitle, setEditTitle] = useState('')
-  const [editContent, setEditContent] = useState('')
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [showEditHistory, setShowEditHistory] = useState(false)
-  const threadContentRef = useRef<HTMLDivElement>(null)
+  const [isEditingThread, setIsEditingThread] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEditHistory, setShowEditHistory] = useState(false);
+  const threadContentRef = useRef<HTMLDivElement>(null);
 
   // Must be called before any early returns to maintain consistent hook call order
   const contentHtml = useMemo(
     () => thread?.contentHtml ?? null,
-    [thread?.contentHtml]
-  )
+    [thread?.contentHtml],
+  );
 
   const handleThreadVote = (value: number) => {
-    if (!currentUser || !threadId) return
-    voteThreadMutation.mutate({ threadId, value })
-  }
+    if (!currentUser || !threadId) return;
+    voteThreadMutation.mutate({ threadId, value });
+  };
 
   const handleSubmitComment = async () => {
-    if (!commentContent.trim() || !threadId) return
+    if (!commentContent.trim() || !threadId) return;
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
-      await addCommentMutation.mutateAsync({ content: commentContent })
-      setCommentContent('')
+      await addCommentMutation.mutateAsync({ content: commentContent });
+      setCommentContent("");
     } catch (err) {
-      console.error('Failed to post comment:', err)
+      console.error("Failed to post comment:", err);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleVote = async (commentId: string, value: number) => {
     try {
-      await voteCommentMutation.mutateAsync({ commentId, value })
+      await voteCommentMutation.mutateAsync({ commentId, value });
     } catch (err) {
-      console.error('Failed to vote:', err)
+      console.error("Failed to vote:", err);
     }
-  }
+  };
 
   // Thread edit/delete
-  const isBotThread = thread?.source === 'minutes_import' || thread?.aiGenerated
-  const isThreadAuthor = currentUser?.id === thread?.author?.id
-  const isAdmin = currentUser?.role === 'admin'
-  const canEditThread = isAdmin || isThreadAuthor || isBotThread
-  const canDeleteThread = isAdmin || isThreadAuthor
+  const isBotThread =
+    thread?.source === "minutes_import" || thread?.aiGenerated;
+  const isThreadAuthor = currentUser?.id === thread?.author?.id;
+  const isAdmin = currentUser?.role === "admin";
+  const canEditThread = isAdmin || isThreadAuthor || isBotThread;
+  const canDeleteThread = isAdmin || isThreadAuthor;
 
   const handleStartEditThread = () => {
-    if (!thread) return
-    setEditTitle(thread.title)
-    setEditContent(thread.content)
-    setIsEditingThread(true)
-  }
+    if (!thread) return;
+    setEditTitle(thread.title);
+    setEditContent(thread.content);
+    setIsEditingThread(true);
+  };
 
   const handleSaveEditThread = async () => {
-    if (!threadId || !editContent.trim()) return
+    if (!threadId || !editContent.trim()) return;
     try {
-      await editThreadMutation.mutateAsync({ title: editTitle, content: editContent })
-      setIsEditingThread(false)
+      await editThreadMutation.mutateAsync({
+        title: editTitle,
+        content: editContent,
+      });
+      setIsEditingThread(false);
       // Auto-scroll to the edited content after closing the edit form
       setTimeout(() => {
-        threadContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 100)
+        threadContentRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
     } catch (err) {
-      console.error('Failed to edit thread:', err)
+      console.error("Failed to edit thread:", err);
     }
-  }
+  };
 
   const handleDeleteThread = async () => {
-    if (!threadId) return
+    if (!threadId) return;
     try {
-      await deleteThreadMutation.mutateAsync(threadId)
-      navigate('/agora')
+      await deleteThreadMutation.mutateAsync(threadId);
+      navigate("/agora");
     } catch (err) {
-      console.error('Failed to delete thread:', err)
+      console.error("Failed to delete thread:", err);
     }
-  }
+  };
 
   // Comment edit/delete handlers
   const handleEditComment = async (commentId: string, content: string) => {
     try {
-      await editCommentMutation.mutateAsync({ commentId, content })
+      await editCommentMutation.mutateAsync({ commentId, content });
     } catch (err) {
-      console.error('Failed to edit comment:', err)
+      console.error("Failed to edit comment:", err);
     }
-  }
+  };
 
   const handleDeleteComment = async (commentId: string) => {
     try {
-      await deleteCommentMutation.mutateAsync(commentId)
+      await deleteCommentMutation.mutateAsync(commentId);
     } catch (err) {
-      console.error('Failed to delete comment:', err)
+      console.error("Failed to delete comment:", err);
     }
-  }
+  };
 
   const handleReply = async (parentId: string, content: string) => {
     try {
-      await addCommentMutation.mutateAsync({ content, parentId })
+      await addCommentMutation.mutateAsync({ content, parentId });
     } catch (err) {
-      console.error('Failed to reply:', err)
+      console.error("Failed to reply:", err);
     }
-  }
+  };
 
   if (isLoading) {
     return (
       <Layout>
         <PageSkeleton />
       </Layout>
-    )
+    );
   }
 
   if (error || !thread) {
     return (
       <Layout>
         <div className="p-8 text-center">
-          <p className="text-gray-500 dark:text-gray-400">{t('thread.notFound')}</p>
-          <Link to="/agora" className="text-blue-600 hover:underline mt-2 inline-block">
-            {t('thread.returnToAgora')}
+          <p className="text-gray-500 dark:text-gray-400">
+            {t("thread.notFound")}
+          </p>
+          <Link
+            to="/agora"
+            className="text-blue-600 hover:underline mt-2 inline-block"
+          >
+            {t("thread.returnToAgora")}
           </Link>
         </div>
       </Layout>
-    )
+    );
   }
 
-  const author = transformAuthor(thread.author)
-  const isInstitutional = thread.author.role === 'institution'
-  const comments = thread.comments?.map(transformComment) || []
+  const author = transformAuthor(thread.author);
+  const isInstitutional = thread.author.role === "institution";
+  const comments = thread.comments?.map(transformComment) || [];
 
   const threadJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'DiscussionForumPosting',
+    "@context": "https://schema.org",
+    "@type": "DiscussionForumPosting",
     headline: thread.title,
     text: thread.content.substring(0, 200),
-    author: { '@type': 'Person', name: author.name },
+    author: { "@type": "Person", name: author.name },
     datePublished: thread.createdAt,
     ...(thread.editedAt && { dateModified: thread.editedAt }),
     interactionStatistic: {
-      '@type': 'InteractionCounter',
-      interactionType: 'https://schema.org/CommentAction',
-      userInteractionCount: comments.length
+      "@type": "InteractionCounter",
+      interactionType: "https://schema.org/CommentAction",
+      userInteractionCount: comments.length,
     },
-    url: `https://eulesia.eu/agora/thread/${threadId}`
-  }
+    url: `https://eulesia.eu/agora/thread/${threadId}`,
+  };
 
   return (
     <Layout>
       <SEOHead
         title={thread.title}
-        description={thread.content.substring(0, 160).replace(/[#*_~`>\n]+/g, ' ').trim()}
+        description={thread.content
+          .substring(0, 160)
+          .replace(/[#*_~`>\n]+/g, " ")
+          .trim()}
         path={`/agora/thread/${threadId}`}
         type="article"
         jsonLd={threadJsonLd}
@@ -220,17 +266,19 @@ export function ThreadPage() {
           className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          {t('thread.backToAgora')}
+          {t("thread.backToAgora")}
         </button>
       </div>
 
       {/* Thread header */}
-      <div className={`px-4 py-2 sm:py-3 ${isInstitutional ? 'bg-violet-50 dark:bg-violet-900/20' : 'bg-white dark:bg-gray-900'}`}>
+      <div
+        className={`px-4 py-2 sm:py-3 ${isInstitutional ? "bg-violet-50 dark:bg-violet-900/20" : "bg-white dark:bg-gray-900"}`}
+      >
         {/* Institutional indicator */}
         {isInstitutional && (
           <div className="flex items-center gap-1.5 text-sm text-violet-700 mb-1">
             <Building2 className="w-4 h-4" />
-            <span className="font-medium">{t('thread.officialChannel')}</span>
+            <span className="font-medium">{t("thread.officialChannel")}</span>
           </div>
         )}
 
@@ -242,10 +290,13 @@ export function ThreadPage() {
             municipalityName={thread.municipality?.name}
           />
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            {t('thread.posted', { time: formatRelativeTime(thread.createdAt) })}
+            {t("thread.posted", { time: formatRelativeTime(thread.createdAt) })}
           </span>
           {thread.editedAt && (
-            <EditedIndicator editedAt={thread.editedAt} editorName={thread.editorName} />
+            <EditedIndicator
+              editedAt={thread.editedAt}
+              editorName={thread.editorName}
+            />
           )}
         </div>
 
@@ -260,7 +311,7 @@ export function ThreadPage() {
                 <button
                   onClick={handleStartEditThread}
                   className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  title={t('thread.editThread')}
+                  title={t("thread.editThread")}
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
@@ -269,7 +320,7 @@ export function ThreadPage() {
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                  title={t('thread.deleteThread')}
+                  title={t("thread.deleteThread")}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -278,7 +329,7 @@ export function ThreadPage() {
                 <button
                   onClick={() => setShowEditHistory(true)}
                   className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  title={t('thread.editHistory')}
+                  title={t("thread.editHistory")}
                 >
                   <History className="w-4 h-4" />
                 </button>
@@ -301,7 +352,9 @@ export function ThreadPage() {
               title={thread.title}
               compact
             />
-            {threadId && <ReportButton contentType="thread" contentId={threadId} />}
+            {threadId && (
+              <ReportButton contentType="thread" contentId={threadId} />
+            )}
           </div>
         </div>
       </div>
@@ -319,7 +372,10 @@ export function ThreadPage() {
         )}
 
         {/* Thread content */}
-        <div ref={threadContentRef} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 flex">
+        <div
+          ref={threadContentRef}
+          className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 flex"
+        >
           {/* Vote buttons */}
           <div className="flex-shrink-0 p-2 sm:p-4 border-r border-gray-100 dark:border-gray-800">
             <ThreadVoteButtons
@@ -337,7 +393,9 @@ export function ThreadPage() {
             {isEditingThread ? (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('threadForm.title')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t("threadForm.title")}
+                  </label>
                   <input
                     type="text"
                     value={editTitle}
@@ -346,7 +404,9 @@ export function ThreadPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('threadForm.content')}</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t("threadForm.content")}
+                  </label>
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
@@ -359,14 +419,18 @@ export function ThreadPage() {
                     onClick={() => setIsEditingThread(false)}
                     className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
                   >
-                    {t('common:actions.cancel')}
+                    {t("common:actions.cancel")}
                   </button>
                   <button
                     onClick={handleSaveEditThread}
-                    disabled={editThreadMutation.isPending || !editContent.trim()}
+                    disabled={
+                      editThreadMutation.isPending || !editContent.trim()
+                    }
                     className="px-4 py-2 text-sm bg-blue-800 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {editThreadMutation.isPending ? t('common:actions.saving') : t('common:actions.save')}
+                    {editThreadMutation.isPending
+                      ? t("common:actions.saving")
+                      : t("common:actions.save")}
                   </button>
                 </div>
               </div>
@@ -376,30 +440,39 @@ export function ThreadPage() {
                 className="prose prose-gray dark:prose-invert max-w-none"
               />
             ) : (
-              <div className="prose prose-gray dark:prose-invert max-w-none">
-                {thread.content.split('\n').map((paragraph, i) => {
-                  if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
+              <div className="prose prose-gray max-w-none">
+                {thread.content.split("\n").map((paragraph, i) => {
+                  if (paragraph.startsWith("**") && paragraph.endsWith("**")) {
                     return (
-                      <h3 key={i} className="font-semibold text-gray-900 dark:text-gray-100 mt-4 first:mt-0">
-                        {paragraph.replace(/\*\*/g, '')}
+                      <h3
+                        key={i}
+                        className="font-semibold text-gray-900 dark:text-gray-100 mt-4 first:mt-0"
+                      >
+                        {paragraph.replace(/\*\*/g, "")}
                       </h3>
-                    )
+                    );
                   }
-                  if (paragraph.startsWith('- ')) {
+                  if (paragraph.startsWith("- ")) {
                     return (
-                      <li key={i} className="ml-4 text-gray-700 dark:text-gray-300">
-                        {paragraph.replace('- ', '')}
+                      <li
+                        key={i}
+                        className="ml-4 text-gray-700 dark:text-gray-300"
+                      >
+                        {paragraph.replace("- ", "")}
                       </li>
-                    )
+                    );
                   }
-                  if (paragraph.trim() === '') {
-                    return <br key={i} />
+                  if (paragraph.trim() === "") {
+                    return <br key={i} />;
                   }
                   return (
-                    <p key={i} className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                    <p
+                      key={i}
+                      className="text-gray-700 dark:text-gray-300 leading-relaxed"
+                    >
                       {paragraph}
                     </p>
-                  )
+                  );
                 })}
               </div>
             )}
@@ -410,7 +483,8 @@ export function ThreadPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {t('thread.discussion')} ({t('replies', { count: comments.length })})
+              {t("thread.discussion")} (
+              {t("replies", { count: comments.length })})
             </h2>
 
             {/* Sort dropdown */}
@@ -419,7 +493,8 @@ export function ThreadPage() {
                 onClick={() => setShowSortMenu(!showSortMenu)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >
-                {t('thread.sort')} {sortOptions.find(o => o.value === sort)?.label}
+                {t("thread.sort")}{" "}
+                {sortOptions.find((o) => o.value === sort)?.label}
                 <ChevronDown className="w-4 h-4" />
               </button>
 
@@ -430,15 +505,17 @@ export function ThreadPage() {
                     onClick={() => setShowSortMenu(false)}
                   />
                   <div className="absolute right-0 mt-1 w-36 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 py-1 z-20">
-                    {sortOptions.map(option => (
+                    {sortOptions.map((option) => (
                       <button
                         key={option.value}
                         onClick={() => {
-                          setSort(option.value)
-                          setShowSortMenu(false)
+                          setSort(option.value);
+                          setShowSortMenu(false);
                         }}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
-                          sort === option.value ? 'text-blue-600 font-medium' : 'text-gray-700 dark:text-gray-300'
+                          sort === option.value
+                            ? "text-blue-600 font-medium"
+                            : "text-gray-700 dark:text-gray-300"
                         }`}
                       >
                         {option.label}
@@ -459,12 +536,13 @@ export function ThreadPage() {
                 onChange={(e) => setCommentContent(e.target.value)}
                 onFocus={handleCommentFocus}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    if (commentContent.trim() && !isSubmitting) handleSubmitComment()
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (commentContent.trim() && !isSubmitting)
+                      handleSubmitComment();
                   }
                 }}
-                placeholder={t('thread.shareThoughts')}
+                placeholder={t("thread.shareThoughts")}
                 className="w-full p-3 border border-gray-200 dark:border-gray-800 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                 rows={3}
               />
@@ -474,14 +552,19 @@ export function ThreadPage() {
                   disabled={!commentContent.trim() || isSubmitting}
                   className="bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? t('thread.posting') : t('thread.postReply')}
+                  {isSubmitting ? t("thread.posting") : t("thread.postReply")}
                 </button>
               </div>
             </div>
           ) : (
             <div className="bg-blue-50 rounded-xl p-4 border border-blue-200 mb-4 text-center">
               <p className="text-sm text-blue-800">
-                <a href="/" className="font-medium underline hover:text-blue-900">{t('common:actions.loginToVote')}</a>
+                <a
+                  href="/"
+                  className="font-medium underline hover:text-blue-900"
+                >
+                  {t("common:actions.loginToVote")}
+                </a>
               </p>
             </div>
           )}
@@ -499,12 +582,12 @@ export function ThreadPage() {
             />
           ) : (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <p>{t('thread.noReplies')}</p>
+              <p>{t("thread.noReplies")}</p>
             </div>
           )}
 
           {/* End marker */}
-          <ContentEndMarker message={t('thread.endOfDiscussion')} />
+          <ContentEndMarker message={t("thread.endOfDiscussion")} />
         </div>
       </div>
 
@@ -526,5 +609,5 @@ export function ThreadPage() {
         />
       )}
     </Layout>
-  )
+  );
 }

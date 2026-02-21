@@ -6,7 +6,7 @@
 
 Eulesia is an open-source civic platform that combines the social features people expect from modern social media — feeds, messaging, communities — with civic identity and institutional participation. No algorithms, no ads, no attention economy.
 
-> *"The value proposition is not dopamine but efficacy: meaningful participation in decisions that matter."*
+> _"The value proposition is not dopamine but efficacy: meaningful participation in decisions that matter."_
 
 ## What is Eulesia?
 
@@ -15,6 +15,7 @@ Commercial social media offers **agency without citizenship**: social functional
 ### Core Features
 
 **Agora** — Public civic discussion with scope-based threads:
+
 - **Local** — municipal issues anchored to administrative areas
 - **National** — government decisions, legislation, ministry announcements
 - **European** — EU legislation, Commission decisions, Parliament resolutions
@@ -29,41 +30,42 @@ AI-powered import of municipal meeting minutes, ministry press releases, and EU 
 
 ### Design Principles
 
-| Principle | Description |
-|-----------|-------------|
-| **Verified Identity** | One-person-one-account via EUDI Wallet integration |
-| **Institutional Anchoring** | Discussion spaces tied to administrative entities |
-| **Anti-Attention Design** | No engagement metrics, trending, viral amplification, or algorithmic curation |
-| **Privacy by Default** | GDPR compliance embedded architecturally |
-| **Public Governance** | Operated under democratic accountability |
+| Principle                   | Description                                                                   |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| **Verified Identity**       | One-person-one-account via EUDI Wallet integration                            |
+| **Institutional Anchoring** | Discussion spaces tied to administrative entities                             |
+| **Anti-Attention Design**   | No engagement metrics, trending, viral amplification, or algorithmic curation |
+| **Privacy by Default**      | GDPR compliance embedded architecturally                                      |
+| **Public Governance**       | Operated under democratic accountability                                      |
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS |
-| API | Node.js, Express, Drizzle ORM |
-| Database | PostgreSQL |
-| Search | Meilisearch (typo-tolerant, federated) |
-| Real-time | Socket.io (session-authenticated) |
-| AI | Mistral Large (EU-hosted, GDPR-compliant) |
-| Deployment | Docker Compose, Traefik reverse proxy |
+| Layer      | Technology                                |
+| ---------- | ----------------------------------------- |
+| Frontend   | React 19, TypeScript, Vite, Tailwind CSS  |
+| API        | Node.js, Express, Drizzle ORM             |
+| Database   | PostgreSQL                                |
+| Search     | Meilisearch (typo-tolerant, federated)    |
+| Real-time  | Socket.io (session-authenticated)         |
+| AI         | Mistral Large (EU-hosted, GDPR-compliant) |
+| Deployment | Docker Compose, Traefik reverse proxy     |
 
 ## Automated Content Import
 
 Eulesia imports and summarizes official documents using [Mistral AI](https://mistral.ai):
 
-| Source | Scope | Schedule |
-|--------|-------|----------|
-| Municipal meeting minutes (CloudNC, Tweb, Dynasty) | Local | 06:00, 18:00 |
-| Valtioneuvosto, Finlex | National | 08:00, 14:00, 20:00 |
-| European Commission, EUR-Lex, European Parliament | European | 10:00, 16:00 |
+| Source                                             | Scope    | Schedule            |
+| -------------------------------------------------- | -------- | ------------------- |
+| Municipal meeting minutes (CloudNC, Tweb, Dynasty) | Local    | 06:00, 18:00        |
+| Valtioneuvosto, Finlex                             | National | 08:00, 14:00, 20:00 |
+| European Commission, EUR-Lex, European Parliament  | European | 10:00, 16:00        |
 
 AI-generated summaries are transparent (marked as "Eulesia summary — Generated with Mistral AI") and link to original sources.
 
 ## Development
 
 ### Prerequisites
+
 - Node.js 20+
 - PostgreSQL 15+
 - Meilisearch (optional, for search)
@@ -88,6 +90,7 @@ npm run dev                  # Frontend (port 5173)
 ```
 
 ### Building
+
 ```bash
 npm run build                   # Frontend
 cd apps/api && npm run build    # API
@@ -95,10 +98,10 @@ cd apps/api && npm run build    # API
 
 ## Authentication
 
-| Method | Status |
-|--------|--------|
+| Method                 | Status     |
+| ---------------------- | ---------- |
 | Invite Code + Password | Production |
-| EUDI Wallet (PID) | Planned |
+| EUDI Wallet (PID)      | Planned    |
 
 ## Documentation
 

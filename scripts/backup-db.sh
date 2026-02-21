@@ -18,7 +18,7 @@ DOCKER_COMPOSE_DIR="/opt/eulesia/docker"
 
 # Load environment
 if [ -f "$DOCKER_COMPOSE_DIR/.env" ]; then
-    source "$DOCKER_COMPOSE_DIR/.env"
+  source "$DOCKER_COMPOSE_DIR/.env"
 fi
 
 DB_NAME="${DB_NAME:-eulesia}"
@@ -32,15 +32,15 @@ mkdir -p "$BACKUP_DIR"
 
 # Create backup
 echo -e "${YELLOW}Creating backup...${NC}"
-docker exec eulesia-db pg_dump -U "$DB_NAME" "$DB_NAME" | gzip > "$BACKUP_FILE"
+docker exec eulesia-db pg_dump -U "$DB_NAME" "$DB_NAME" | gzip >"$BACKUP_FILE"
 
 # Verify backup
 if [ -f "$BACKUP_FILE" ] && [ -s "$BACKUP_FILE" ]; then
-    BACKUP_SIZE=$(ls -lh "$BACKUP_FILE" | awk '{print $5}')
-    echo -e "${GREEN}Backup created: $BACKUP_FILE ($BACKUP_SIZE)${NC}"
+  BACKUP_SIZE=$(ls -lh "$BACKUP_FILE" | awk '{print $5}')
+  echo -e "${GREEN}Backup created: $BACKUP_FILE ($BACKUP_SIZE)${NC}"
 else
-    echo "Error: Backup failed!"
-    exit 1
+  echo "Error: Backup failed!"
+  exit 1
 fi
 
 # Remove old backups

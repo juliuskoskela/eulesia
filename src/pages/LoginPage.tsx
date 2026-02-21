@@ -1,131 +1,151 @@
-import { useState, useEffect } from 'react'
-import { Shield, Fingerprint, CheckCircle, Lock, Users, Building2, UserPlus, LogIn, ArrowRight, ArrowLeft, Ticket, Clock, Mail } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { SEOHead } from '../components/SEOHead'
-import { useAuth } from '../hooks/useAuth'
-import { api } from '../lib/api'
+import { useState, useEffect } from "react";
+import {
+  Shield,
+  Fingerprint,
+  CheckCircle,
+  Lock,
+  Users,
+  Building2,
+  UserPlus,
+  LogIn,
+  ArrowRight,
+  ArrowLeft,
+  Ticket,
+  Clock,
+  Mail,
+} from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { SEOHead } from "../components/SEOHead";
+import { useAuth } from "../hooks/useAuth";
+import { api } from "../lib/api";
 
-type LoginStep = 'initial' | 'login' | 'register' | 'invite-check'
+type LoginStep = "initial" | "login" | "register" | "invite-check";
 
 export function LoginPage() {
-  const { t, i18n } = useTranslation(['auth', 'common'])
-  const { login, register } = useAuth()
-  const [step, setStep] = useState<LoginStep>('initial')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { t, i18n } = useTranslation(["auth", "common"]);
+  const { login, register } = useAuth();
+  const [step, setStep] = useState<LoginStep>("initial");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Login form
-  const [loginUsername, setLoginUsername] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   // Register form
-  const [inviteCode, setInviteCode] = useState('')
-  const [inviteValid, setInviteValid] = useState(false)
-  const [invitedBy, setInvitedBy] = useState<string | null>(null)
-  const [regUsername, setRegUsername] = useState('')
-  const [regPassword, setRegPassword] = useState('')
-  const [regFirstName, setRegFirstName] = useState('')
-  const [regLastName, setRegLastName] = useState('')
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteValid, setInviteValid] = useState(false);
+  const [invitedBy, setInvitedBy] = useState<string | null>(null);
+  const [regUsername, setRegUsername] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regFirstName, setRegFirstName] = useState("");
+  const [regLastName, setRegLastName] = useState("");
 
   // FTN (strong authentication)
-  const [ftnToken, setFtnToken] = useState<string | null>(null)
-  const ftnVerified = !!ftnToken
+  const [ftnToken, setFtnToken] = useState<string | null>(null);
+  const ftnVerified = !!ftnToken;
 
   // Handle FTN callback parameters from URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const token = params.get('ftn')
-    const firstName = params.get('firstName')
-    const lastName = params.get('lastName')
-    const invite = params.get('invite')
-    const ftnError = params.get('ftn_error')
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("ftn");
+    const firstName = params.get("firstName");
+    const lastName = params.get("lastName");
+    const invite = params.get("invite");
+    const ftnError = params.get("ftn_error");
 
     if (ftnError) {
-      if (ftnError === 'duplicate_identity') {
-        setError(t('ftn.alreadyRegistered'))
+      if (ftnError === "duplicate_identity") {
+        setError(t("ftn.alreadyRegistered"));
       } else {
-        setError(t('ftn.authFailed'))
+        setError(t("ftn.authFailed"));
       }
-      window.history.replaceState({}, '', window.location.pathname)
-      return
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
     }
 
     if (token && firstName && lastName) {
-      setFtnToken(token)
-      setRegFirstName(decodeURIComponent(firstName))
-      setRegLastName(decodeURIComponent(lastName))
+      setFtnToken(token);
+      setRegFirstName(decodeURIComponent(firstName));
+      setRegLastName(decodeURIComponent(lastName));
       if (invite) {
-        setInviteCode(decodeURIComponent(invite))
-        setInviteValid(true)
+        setInviteCode(decodeURIComponent(invite));
+        setInviteValid(true);
       }
-      setStep('register')
-      window.history.replaceState({}, '', window.location.pathname)
+      setStep("register");
+      window.history.replaceState({}, "", window.location.pathname);
     }
-  }, [t])
+  }, [t]);
 
   // Waitlist form
-  const [waitlistEmail, setWaitlistEmail] = useState('')
-  const [waitlistName, setWaitlistName] = useState('')
-  const [showWaitlist, setShowWaitlist] = useState(false)
-  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false)
-  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null)
-  const [waitlistLoading, setWaitlistLoading] = useState(false)
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistName, setWaitlistName] = useState("");
+  const [showWaitlist, setShowWaitlist] = useState(false);
+  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
     try {
-      await login(loginUsername, loginPassword)
+      await login(loginUsername, loginPassword);
       // Navigation handled by App.tsx
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('loginFailed'))
+      setError(err instanceof Error ? err.message : t("loginFailed"));
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setWaitlistLoading(true)
-    setError(null)
+    e.preventDefault();
+    setWaitlistLoading(true);
+    setError(null);
     try {
-      const result = await api.joinWaitlist(waitlistEmail, waitlistName || undefined, i18n.language)
-      setWaitlistSubmitted(true)
-      setWaitlistPosition(result.position ?? null)
+      const result = await api.joinWaitlist(
+        waitlistEmail,
+        waitlistName || undefined,
+        i18n.language,
+      );
+      setWaitlistSubmitted(true);
+      setWaitlistPosition(result.position ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('waitlist.submitFailed'))
+      setError(err instanceof Error ? err.message : t("waitlist.submitFailed"));
     } finally {
-      setWaitlistLoading(false)
+      setWaitlistLoading(false);
     }
-  }
+  };
 
   const handleCheckInvite = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
     try {
-      const result = await api.validateInviteCode(inviteCode)
+      const result = await api.validateInviteCode(inviteCode);
       if (result.valid) {
-        setInviteValid(true)
-        setInvitedBy(result.invitedBy || null)
-        setStep('register')
+        setInviteValid(true);
+        setInvitedBy(result.invitedBy || null);
+        setStep("register");
       } else {
-        setError(result.reason || t('invalidInvite'))
+        setError(result.reason || t("invalidInvite"));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('inviteValidationFailed'))
+      setError(
+        err instanceof Error ? err.message : t("inviteValidationFailed"),
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
     try {
       await register({
@@ -133,15 +153,15 @@ export function LoginPage() {
         username: regUsername,
         password: regPassword,
         name: `${regFirstName.trim()} ${regLastName.trim()}`,
-        ...(ftnToken ? { ftnToken } : {})
-      })
+        ...(ftnToken ? { ftnToken } : {}),
+      });
       // Navigation handled by App.tsx
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('registrationFailed'))
+      setError(err instanceof Error ? err.message : t("registrationFailed"));
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-900 to-blue-800 flex flex-col">
@@ -150,11 +170,11 @@ export function LoginPage() {
         description="Eulesia on eurooppalainen kansalaisdemokratia-alusta. Kirjaudu sisään tai rekisteröidy osallistuaksesi kansalaiskeskusteluun."
         path="/"
         jsonLd={{
-          '@context': 'https://schema.org',
-          '@type': 'WebSite',
-          name: 'Eulesia',
-          url: 'https://eulesia.eu',
-          description: 'Eurooppalainen kansalaisdemokratia-alusta'
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "Eulesia",
+          url: "https://eulesia.eu",
+          description: "Eurooppalainen kansalaisdemokratia-alusta",
         }}
       />
       {/* Header */}
@@ -171,41 +191,41 @@ export function LoginPage() {
       <main className="flex-1 flex flex-col justify-center px-6 pb-12">
         <div className="max-w-md mx-auto w-full">
           {/* Tagline */}
-          <h1 className="text-white text-3xl font-bold mb-3">
-            {t('tagline')}
-          </h1>
-          <p className="text-blue-200 text-lg mb-8">
-            {t('taglineBody')}
-          </p>
+          <h1 className="text-white text-3xl font-bold mb-3">{t("tagline")}</h1>
+          <p className="text-blue-200 text-lg mb-8">{t("taglineBody")}</p>
 
           {/* Login/Register card */}
           <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-xl">
-            {step === 'initial' && (
+            {step === "initial" && (
               <>
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
                     <Fingerprint className="w-6 h-6 text-blue-800 dark:text-blue-300" />
                   </div>
                   <div>
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('welcome')}</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{t('inviteOnlyBeta')}</p>
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {t("welcome")}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {t("inviteOnlyBeta")}
+                    </p>
                   </div>
                 </div>
 
                 <button
-                  onClick={() => setStep('login')}
+                  onClick={() => setStep("login")}
                   className="w-full bg-blue-800 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 mb-3"
                 >
                   <LogIn className="w-5 h-5" />
-                  {t('signIn')}
+                  {t("signIn")}
                 </button>
 
                 <button
-                  onClick={() => setStep('invite-check')}
+                  onClick={() => setStep("invite-check")}
                   className="w-full bg-white dark:bg-gray-800 text-blue-800 dark:text-blue-300 border-2 border-blue-800 dark:border-blue-700 py-3 px-4 rounded-xl font-medium hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <Ticket className="w-5 h-5" />
-                  {t('iHaveInvite')}
+                  {t("iHaveInvite")}
                 </button>
 
                 {/* Waitlist */}
@@ -216,24 +236,27 @@ export function LoginPage() {
                       className="w-full text-blue-600 dark:text-blue-400 text-sm hover:underline flex items-center justify-center gap-1"
                     >
                       <Clock className="w-4 h-4" />
-                      {t('waitlist.noInvite')}
+                      {t("waitlist.noInvite")}
                     </button>
                   )}
 
                   {showWaitlist && !waitlistSubmitted && (
-                    <form onSubmit={handleWaitlistSubmit} className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <form
+                      onSubmit={handleWaitlistSubmit}
+                      className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800"
+                    >
                       <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                        {t('waitlist.title')}
+                        {t("waitlist.title")}
                       </h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                        {t('waitlist.description')}
+                        {t("waitlist.description")}
                       </p>
                       <div className="space-y-2">
                         <input
                           type="email"
                           value={waitlistEmail}
                           onChange={(e) => setWaitlistEmail(e.target.value)}
-                          placeholder={t('waitlist.emailPlaceholder')}
+                          placeholder={t("waitlist.emailPlaceholder")}
                           className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-100"
                           required
                           autoFocus
@@ -242,11 +265,15 @@ export function LoginPage() {
                           type="text"
                           value={waitlistName}
                           onChange={(e) => setWaitlistName(e.target.value)}
-                          placeholder={t('waitlist.namePlaceholder')}
+                          placeholder={t("waitlist.namePlaceholder")}
                           className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-100"
                         />
                       </div>
-                      {error && <div className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</div>}
+                      {error && (
+                        <div className="mt-2 text-sm text-red-600 dark:text-red-400">
+                          {error}
+                        </div>
+                      )}
                       <div className="flex gap-2 mt-3">
                         <button
                           type="submit"
@@ -258,16 +285,19 @@ export function LoginPage() {
                           ) : (
                             <>
                               <Mail className="w-4 h-4" />
-                              {t('waitlist.submit')}
+                              {t("waitlist.submit")}
                             </>
                           )}
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setShowWaitlist(false); setError(null) }}
+                          onClick={() => {
+                            setShowWaitlist(false);
+                            setError(null);
+                          }}
                           className="text-gray-500 dark:text-gray-400 text-sm px-3 hover:text-gray-700 dark:hover:text-gray-200"
                         >
-                          {t('common:actions.cancel')}
+                          {t("common:actions.cancel")}
                         </button>
                       </div>
                     </form>
@@ -277,14 +307,18 @@ export function LoginPage() {
                     <div className="mt-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
                       <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
                         <CheckCircle className="w-5 h-5" />
-                        <span className="font-medium text-sm">{t('waitlist.success')}</span>
+                        <span className="font-medium text-sm">
+                          {t("waitlist.success")}
+                        </span>
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                        {t('waitlist.successDescription')}
+                        {t("waitlist.successDescription")}
                       </p>
                       {waitlistPosition && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {t('waitlist.position', { position: waitlistPosition })}
+                          {t("waitlist.position", {
+                            position: waitlistPosition,
+                          })}
                         </p>
                       )}
                     </div>
@@ -298,35 +332,42 @@ export function LoginPage() {
                     className="w-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 py-3 px-4 rounded-xl font-medium flex items-center justify-center gap-2 cursor-not-allowed"
                   >
                     <Shield className="w-5 h-5" />
-                    {t('eudiWallet')}
+                    {t("eudiWallet")}
                   </button>
                 </div>
               </>
             )}
 
-            {step === 'login' && (
+            {step === "login" && (
               <form onSubmit={handleLogin}>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
                     <LogIn className="w-6 h-6 text-blue-800 dark:text-blue-300" />
                   </div>
                   <div>
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('signIn')}</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{t('enterCredentials')}</p>
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {t("signIn")}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {t("enterCredentials")}
+                    </p>
                   </div>
                 </div>
 
                 <div className="space-y-4 mb-4">
                   <div>
-                    <label htmlFor="login-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('username')}
+                    <label
+                      htmlFor="login-username"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >
+                      {t("username")}
                     </label>
                     <input
                       type="text"
                       id="login-username"
                       value={loginUsername}
                       onChange={(e) => setLoginUsername(e.target.value)}
-                      placeholder={t('usernamePlaceholder')}
+                      placeholder={t("usernamePlaceholder")}
                       className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                       required
                       autoFocus
@@ -335,8 +376,11 @@ export function LoginPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('password')}
+                    <label
+                      htmlFor="login-password"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >
+                      {t("password")}
                     </label>
                     <input
                       type="password"
@@ -365,11 +409,11 @@ export function LoginPage() {
                   {isLoading ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      {t('signingIn')}
+                      {t("signingIn")}
                     </>
                   ) : (
                     <>
-                      {t('signIn')}
+                      {t("signIn")}
                       <ArrowRight className="w-5 h-5" />
                     </>
                   )}
@@ -377,36 +421,48 @@ export function LoginPage() {
 
                 <button
                   type="button"
-                  onClick={() => { setStep('initial'); setError(null) }}
+                  onClick={() => {
+                    setStep("initial");
+                    setError(null);
+                  }}
                   className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  {t('common:actions.back')}
+                  {t("common:actions.back")}
                 </button>
               </form>
             )}
 
-            {step === 'invite-check' && (
+            {step === "invite-check" && (
               <form onSubmit={handleCheckInvite}>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                     <Ticket className="w-6 h-6 text-green-700" />
                   </div>
                   <div>
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('enterInviteCode')}</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{t('needInvite')}</p>
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {t("enterInviteCode")}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {t("needInvite")}
+                    </p>
                   </div>
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="invite-code" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('inviteCode')}
+                  <label
+                    htmlFor="invite-code"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t("inviteCode")}
                   </label>
                   <input
                     type="text"
                     id="invite-code"
                     value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                    onChange={(e) =>
+                      setInviteCode(e.target.value.toUpperCase())
+                    }
                     placeholder="EULESIA-XXXXXX"
                     className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-center text-lg tracking-wider dark:bg-gray-800 dark:text-gray-100"
                     required
@@ -428,11 +484,11 @@ export function LoginPage() {
                   {isLoading ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      {t('checking')}
+                      {t("checking")}
                     </>
                   ) : (
                     <>
-                      {t('common:actions.continue')}
+                      {t("common:actions.continue")}
                       <ArrowRight className="w-5 h-5" />
                     </>
                   )}
@@ -440,25 +496,33 @@ export function LoginPage() {
 
                 <button
                   type="button"
-                  onClick={() => { setStep('initial'); setError(null); setInviteCode('') }}
+                  onClick={() => {
+                    setStep("initial");
+                    setError(null);
+                    setInviteCode("");
+                  }}
                   className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  {t('common:actions.back')}
+                  {t("common:actions.back")}
                 </button>
               </form>
             )}
 
-            {step === 'register' && inviteValid && (
+            {step === "register" && inviteValid && (
               <form onSubmit={handleRegister}>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                     <UserPlus className="w-6 h-6 text-green-700" />
                   </div>
                   <div>
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('createAccount')}</h2>
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {t("createAccount")}
+                    </h2>
                     {invitedBy && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{t('invitedBy', { name: invitedBy })}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {t("invitedBy", { name: invitedBy })}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -466,7 +530,12 @@ export function LoginPage() {
                 <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl">
                   <div className="flex items-center gap-2 text-green-700 text-sm">
                     <CheckCircle className="w-4 h-4" />
-                    <span>{t('inviteCodeConfirmed')} <span className="font-mono font-medium">{inviteCode}</span></span>
+                    <span>
+                      {t("inviteCodeConfirmed")}{" "}
+                      <span className="font-mono font-medium">
+                        {inviteCode}
+                      </span>
+                    </span>
                   </div>
                 </div>
 
@@ -475,9 +544,11 @@ export function LoginPage() {
                   <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
                     <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 text-sm">
                       <Fingerprint className="w-4 h-4" />
-                      <span className="font-medium">{t('ftn.verified')}</span>
+                      <span className="font-medium">{t("ftn.verified")}</span>
                     </div>
-                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{t('ftn.nameFromBank')}</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      {t("ftn.nameFromBank")}
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -486,19 +557,23 @@ export function LoginPage() {
                       <div className="flex items-start gap-2">
                         <Fingerprint className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
                         <div className="text-sm text-amber-800 dark:text-amber-200">
-                          <p className="font-medium">{t('ftn.requiredTitle')}</p>
-                          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{t('ftn.requiredDescription')}</p>
+                          <p className="font-medium">
+                            {t("ftn.requiredTitle")}
+                          </p>
+                          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                            {t("ftn.requiredDescription")}
+                          </p>
                         </div>
                       </div>
                     </div>
 
                     {/* FTN strong authentication button */}
                     <a
-                      href={`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/v1/auth/ftn/start?invite=${encodeURIComponent(inviteCode)}`}
+                      href={`${import.meta.env.VITE_API_URL || "http://localhost:3001"}/api/v1/auth/ftn/start?invite=${encodeURIComponent(inviteCode)}`}
                       className="w-full mb-4 bg-blue-700 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 no-underline block"
                     >
                       <Fingerprint className="w-5 h-5" />
-                      {t('ftn.authenticateWithBank')}
+                      {t("ftn.authenticateWithBank")}
                     </a>
                   </>
                 )}
@@ -515,24 +590,32 @@ export function LoginPage() {
                     <div className="space-y-4 mb-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label htmlFor="reg-firstname" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('firstName')}
+                          <label
+                            htmlFor="reg-firstname"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                          >
+                            {t("firstName")}
                           </label>
                           <input
                             type="text"
                             id="reg-firstname"
                             value={regFirstName}
                             onChange={(e) => setRegFirstName(e.target.value)}
-                            placeholder={t('firstNamePlaceholder')}
+                            placeholder={t("firstNamePlaceholder")}
                             className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                             required
                             autoComplete="given-name"
                           />
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('ftn.firstNameHint')}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {t("ftn.firstNameHint")}
+                          </p>
                         </div>
                         <div>
-                          <label htmlFor="reg-lastname" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('lastName')}
+                          <label
+                            htmlFor="reg-lastname"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                          >
+                            {t("lastName")}
                           </label>
                           <input
                             type="text"
@@ -547,27 +630,41 @@ export function LoginPage() {
                       </div>
 
                       <div>
-                        <label htmlFor="reg-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {t('username')}
+                        <label
+                          htmlFor="reg-username"
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                        >
+                          {t("username")}
                         </label>
                         <input
                           type="text"
                           id="reg-username"
                           value={regUsername}
-                          onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                          placeholder={t('usernamePlaceholder')}
+                          onChange={(e) =>
+                            setRegUsername(
+                              e.target.value
+                                .toLowerCase()
+                                .replace(/[^a-z0-9_]/g, ""),
+                            )
+                          }
+                          placeholder={t("usernamePlaceholder")}
                           className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                           required
                           autoFocus
                           autoComplete="username"
                           pattern="[a-z0-9_]+"
                         />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('usernameHint')}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {t("usernameHint")}
+                        </p>
                       </div>
 
                       <div>
-                        <label htmlFor="reg-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {t('password')}
+                        <label
+                          htmlFor="reg-password"
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                        >
+                          {t("password")}
                         </label>
                         <input
                           type="password"
@@ -580,23 +677,31 @@ export function LoginPage() {
                           minLength={6}
                           autoComplete="new-password"
                         />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('passwordHint')}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {t("passwordHint")}
+                        </p>
                       </div>
                     </div>
 
                     <button
                       type="submit"
-                      disabled={isLoading || !regUsername || !regPassword || !regFirstName.trim() || !regLastName.trim()}
+                      disabled={
+                        isLoading ||
+                        !regUsername ||
+                        !regPassword ||
+                        !regFirstName.trim() ||
+                        !regLastName.trim()
+                      }
                       className="w-full bg-green-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isLoading ? (
                         <>
                           <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          {t('creatingAccount')}
+                          {t("creatingAccount")}
                         </>
                       ) : (
                         <>
-                          {t('createAccount')}
+                          {t("createAccount")}
                           <ArrowRight className="w-5 h-5" />
                         </>
                       )}
@@ -606,11 +711,16 @@ export function LoginPage() {
 
                 <button
                   type="button"
-                  onClick={() => { setStep('invite-check'); setError(null); setInviteValid(false); setFtnToken(null) }}
+                  onClick={() => {
+                    setStep("invite-check");
+                    setError(null);
+                    setInviteValid(false);
+                    setFtnToken(null);
+                  }}
                   className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  {t('common:actions.back')}
+                  {t("common:actions.back")}
                 </button>
               </form>
             )}
@@ -620,10 +730,10 @@ export function LoginPage() {
           <div className="mt-6 bg-blue-800/50 rounded-xl p-4 border border-blue-700">
             <h3 className="text-white font-medium flex items-center gap-2 mb-2">
               <Lock className="w-4 h-4" />
-              {t('invitePhase.title')}
+              {t("invitePhase.title")}
             </h3>
             <p className="text-blue-200 text-sm">
-              {t('invitePhase.description')}
+              {t("invitePhase.description")}
             </p>
           </div>
         </div>
@@ -633,7 +743,7 @@ export function LoginPage() {
       <div className="bg-white dark:bg-gray-900 px-6 py-8">
         <div className="max-w-md mx-auto">
           <h3 className="text-gray-900 dark:text-gray-100 font-semibold mb-4 text-center">
-            {t('features.title')}
+            {t("features.title")}
           </h3>
 
           <div className="space-y-4">
@@ -642,9 +752,11 @@ export function LoginPage() {
                 <CheckCircle className="w-4 h-4 text-green-700" />
               </div>
               <div>
-                <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">{t('features.noAttentionEconomy.title')}</h4>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                  {t("features.noAttentionEconomy.title")}
+                </h4>
                 <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  {t('features.noAttentionEconomy.description')}
+                  {t("features.noAttentionEconomy.description")}
                 </p>
               </div>
             </div>
@@ -654,9 +766,11 @@ export function LoginPage() {
                 <Building2 className="w-4 h-4 text-violet-700" />
               </div>
               <div>
-                <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">{t('features.institutions.title')}</h4>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                  {t("features.institutions.title")}
+                </h4>
                 <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  {t('features.institutions.description')}
+                  {t("features.institutions.description")}
                 </p>
               </div>
             </div>
@@ -666,9 +780,11 @@ export function LoginPage() {
                 <Users className="w-4 h-4 text-teal-700" />
               </div>
               <div>
-                <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">{t('features.socialNotSurveillance.title')}</h4>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                  {t("features.socialNotSurveillance.title")}
+                </h4>
                 <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  {t('features.socialNotSurveillance.description')}
+                  {t("features.socialNotSurveillance.description")}
                 </p>
               </div>
             </div>
@@ -678,19 +794,19 @@ export function LoginPage() {
           <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-800 space-y-3">
             <div className="flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <span className="text-lg">🇪🇺</span>
-              <span>{t('euInfrastructure')}</span>
+              <span>{t("euInfrastructure")}</span>
             </div>
             <div className="text-center">
               <a
                 href="/about"
                 className="text-sm text-blue-600 hover:underline"
               >
-                {t('readMore')}
+                {t("readMore")}
               </a>
             </div>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

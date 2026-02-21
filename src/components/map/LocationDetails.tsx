@@ -1,27 +1,60 @@
-import { Link } from 'react-router-dom'
-import { X, Landmark, Users, MapPin, Building2, MessageCircle, Clock, ChevronRight } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import type { MapPoint } from '../../lib/api'
-import { useMapLocationDetails } from '../../hooks/useApi'
+import { Link } from "react-router-dom";
+import {
+  X,
+  Landmark,
+  Users,
+  MapPin,
+  Building2,
+  MessageCircle,
+  Clock,
+  ChevronRight,
+} from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { MapPoint } from "../../lib/api";
+import { useMapLocationDetails } from "../../hooks/useApi";
 
 interface LocationDetailsProps {
-  point: MapPoint
-  onClose: () => void
+  point: MapPoint;
+  onClose: () => void;
 }
 
 const typeConfig = {
-  municipality: { icon: Building2, color: 'text-blue-600', bgColor: 'bg-blue-100', label: 'Municipality' },
-  thread: { icon: Landmark, color: 'text-purple-600', bgColor: 'bg-purple-100', label: 'Discussion' },
-  club: { icon: Users, color: 'text-green-600', bgColor: 'bg-green-100', label: 'Club' },
-  place: { icon: MapPin, color: 'text-orange-600', bgColor: 'bg-orange-100', label: 'Place' }
-}
+  municipality: {
+    icon: Building2,
+    color: "text-blue-600",
+    bgColor: "bg-blue-100",
+    label: "Municipality",
+  },
+  thread: {
+    icon: Landmark,
+    color: "text-purple-600",
+    bgColor: "bg-purple-100",
+    label: "Discussion",
+  },
+  club: {
+    icon: Users,
+    color: "text-green-600",
+    bgColor: "bg-green-100",
+    label: "Club",
+  },
+  place: {
+    icon: MapPin,
+    color: "text-orange-600",
+    bgColor: "bg-orange-100",
+    label: "Place",
+  },
+};
 
 export function LocationDetails({ point, onClose }: LocationDetailsProps) {
-  const { t } = useTranslation('map')
-  const { data: details, isLoading, error } = useMapLocationDetails(point.type, point.id)
+  const { t } = useTranslation("map");
+  const {
+    data: details,
+    isLoading,
+    error,
+  } = useMapLocationDetails(point.type, point.id);
 
-  const config = typeConfig[point.type]
-  const Icon = config.icon
+  const config = typeConfig[point.type];
+  const Icon = config.icon;
 
   return (
     <div className="absolute bottom-20 left-4 right-4 z-[1000] max-w-md mx-auto bg-white dark:bg-gray-900 rounded-xl shadow-xl overflow-hidden max-h-[60vh] flex flex-col">
@@ -31,8 +64,12 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
           <Icon className={`w-6 h-6 ${config.color}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="font-bold text-lg text-gray-900 dark:text-gray-100 truncate">{point.name}</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{config.label}</p>
+          <h2 className="font-bold text-lg text-gray-900 dark:text-gray-100 truncate">
+            {point.name}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {config.label}
+          </p>
         </div>
         <button
           onClick={onClose}
@@ -49,21 +86,23 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : error ? (
-          <div className="text-center py-8 text-red-500">{t('loading')}</div>
+          <div className="text-center py-8 text-red-500">{t("loading")}</div>
         ) : details ? (
           <div className="space-y-4">
             {/* Quick actions based on type */}
-            {point.type === 'thread' && (
+            {point.type === "thread" && (
               <Link
                 to={`/agora/thread/${point.id}`}
                 className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
               >
-                <span className="font-medium text-purple-700">Open discussion</span>
+                <span className="font-medium text-purple-700">
+                  Open discussion
+                </span>
                 <ChevronRight className="w-5 h-5 text-purple-600" />
               </Link>
             )}
 
-            {point.type === 'club' && (
+            {point.type === "club" && (
               <Link
                 to={`/clubs/${point.id}`}
                 className="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
@@ -73,12 +112,14 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
               </Link>
             )}
 
-            {point.type === 'municipality' && (
+            {point.type === "municipality" && (
               <Link
                 to={`/kunnat/${point.id}`}
                 className="flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
               >
-                <span className="font-medium text-blue-700">View municipality</span>
+                <span className="font-medium text-blue-700">
+                  View municipality
+                </span>
                 <ChevronRight className="w-5 h-5 text-blue-600" />
               </Link>
             )}
@@ -97,7 +138,9 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
                       to={`/agora/thread/${thread.id}`}
                       className="block p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
-                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">{thread.title}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">
+                        {thread.title}
+                      </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
                         <Clock className="w-3 h-3" />
                         {new Date(thread.createdAt).toLocaleDateString()}
@@ -122,9 +165,13 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
                       to={`/clubs/${club.id}`}
                       className="block p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
-                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{club.name}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                        {club.name}
+                      </p>
                       {club.memberCount && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{club.memberCount} members</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {club.memberCount} members
+                        </p>
                       )}
                     </Link>
                   ))}
@@ -136,26 +183,28 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
             {details.municipality && (
               <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium">Municipality:</span>{' '}
+                  <span className="font-medium">Municipality:</span>{" "}
                   {details.municipality.name}
                 </p>
               </div>
             )}
 
             {/* Place info */}
-            {details.place && point.type !== 'place' && (
+            {details.place && point.type !== "place" && (
               <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium">Location:</span>{' '}
+                  <span className="font-medium">Location:</span>{" "}
                   {details.place.name}
                 </p>
               </div>
             )}
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">{t('noResults')}</div>
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            {t("noResults")}
+          </div>
         )}
       </div>
     </div>
-  )
+  );
 }

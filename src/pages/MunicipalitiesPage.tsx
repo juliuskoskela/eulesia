@@ -1,24 +1,23 @@
-import { useTranslation } from 'react-i18next'
-import { MapPin, MessageSquare, ChevronRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { Layout } from '../components/layout'
-import { SEOHead } from '../components/SEOHead'
-import { ErrorState } from '../components/common'
-import { useMunicipalities, useThreads } from '../hooks/useApi'
-import type { Municipality } from '../lib/api'
+import { useTranslation } from "react-i18next";
+import { MapPin, MessageSquare, ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Layout } from "../components/layout";
+import { SEOHead } from "../components/SEOHead";
+import { useMunicipalities, useThreads } from "../hooks/useApi";
+import type { Municipality } from "../lib/api";
 
 export function MunicipalitiesPage() {
-  const { t } = useTranslation(['common', 'agora'])
-  const { data: municipalities, isLoading, error, refetch } = useMunicipalities()
-  const { data: threadsData } = useThreads({ scope: 'local' })
+  const { t } = useTranslation(["common", "agora"]);
+  const { data: municipalities, isLoading, error } = useMunicipalities();
+  const { data: threadsData } = useThreads({ scope: "local" });
 
   // Count threads per municipality
-  const threadCounts = new Map<string, number>()
+  const threadCounts = new Map<string, number>();
   if (threadsData?.items) {
     for (const thread of threadsData.items) {
       if (thread.municipality?.id) {
-        const count = threadCounts.get(thread.municipality.id) || 0
-        threadCounts.set(thread.municipality.id, count + 1)
+        const count = threadCounts.get(thread.municipality.id) || 0;
+        threadCounts.set(thread.municipality.id, count + 1);
       }
     }
   }
@@ -27,10 +26,10 @@ export function MunicipalitiesPage() {
   const municipalitiesWithThreads = municipalities
     ?.filter((m: Municipality) => threadCounts.has(m.id))
     .sort((a: Municipality, b: Municipality) => {
-      const countA = threadCounts.get(a.id) || 0
-      const countB = threadCounts.get(b.id) || 0
-      return countB - countA
-    })
+      const countA = threadCounts.get(a.id) || 0;
+      const countB = threadCounts.get(b.id) || 0;
+      return countB - countA;
+    });
 
   return (
     <Layout>
@@ -42,9 +41,11 @@ export function MunicipalitiesPage() {
       {/* Page header */}
       <div className="bg-white dark:bg-gray-900 px-4 py-4 border-b border-gray-200 dark:border-gray-800">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t('common:municipalities.title')}</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {t('common:municipalities.subtitle')}
+          <h1 className="text-xl font-bold text-gray-900">
+            {t("common:municipalities.title")}
+          </h1>
+          <p className="text-sm text-gray-600 mt-1">
+            {t("common:municipalities.subtitle")}
           </p>
         </div>
       </div>
@@ -58,42 +59,54 @@ export function MunicipalitiesPage() {
         )}
 
         {error && (
-          <ErrorState
-            title={t('common:municipalities.loadError')}
-            description={error instanceof Error ? error.message : undefined}
-            onRetry={() => refetch()}
-          />
-        )}
-
-        {!isLoading && !error && municipalitiesWithThreads && municipalitiesWithThreads.length > 0 && (
-          <div className="space-y-3">
-            {municipalitiesWithThreads.map((municipality: Municipality) => (
-              <MunicipalityCard
-                key={municipality.id}
-                municipality={municipality}
-                threadCount={threadCounts.get(municipality.id) || 0}
-              />
-            ))}
+          <div className="text-center py-12 text-red-600">
+            <p>{t("common:municipalities.loadError")}</p>
+            <p className="text-sm mt-1">
+              {error instanceof Error
+                ? error.message
+                : t("common:errors.unknown")}
+            </p>
           </div>
         )}
 
-        {!isLoading && !error && (!municipalitiesWithThreads || municipalitiesWithThreads.length === 0) && (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            <MapPin className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-            <p>{t('common:municipalities.noDiscussions')}</p>
-          </div>
-        )}
+        {!isLoading &&
+          !error &&
+          municipalitiesWithThreads &&
+          municipalitiesWithThreads.length > 0 && (
+            <div className="space-y-3">
+              {municipalitiesWithThreads.map((municipality: Municipality) => (
+                <MunicipalityCard
+                  key={municipality.id}
+                  municipality={municipality}
+                  threadCount={threadCounts.get(municipality.id) || 0}
+                />
+              ))}
+            </div>
+          )}
+
+        {!isLoading &&
+          !error &&
+          (!municipalitiesWithThreads ||
+            municipalitiesWithThreads.length === 0) && (
+            <div className="text-center py-12 text-gray-500">
+              <MapPin className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p>{t("common:municipalities.noDiscussions")}</p>
+            </div>
+          )}
       </div>
     </Layout>
-  )
+  );
 }
 
 interface MunicipalityCardProps {
-  municipality: Municipality
-  threadCount: number
+  municipality: Municipality;
+  threadCount: number;
 }
 
-function MunicipalityCard({ municipality, threadCount }: MunicipalityCardProps) {
+function MunicipalityCard({
+  municipality,
+  threadCount,
+}: MunicipalityCardProps) {
   return (
     <Link
       to={`/kunnat/${municipality.id}`}
@@ -120,5 +133,5 @@ function MunicipalityCard({ municipality, threadCount }: MunicipalityCardProps) 
         </div>
       </div>
     </Link>
-  )
+  );
 }

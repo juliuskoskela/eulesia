@@ -1,53 +1,68 @@
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Shield, Building2, Calendar, MessageSquare, Hash, Bot, Users, Send, Home } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { Layout } from '../components/layout'
-import { SEOHead } from '../components/SEOHead'
-import { FollowButton, ReportButton } from '../components/common'
-import { useAuth } from '../hooks/useAuth'
-import { useStartConversation } from '../hooks/useApi'
-import { formatDateLong } from '../lib/formatTime'
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  Shield,
+  Building2,
+  Calendar,
+  MessageSquare,
+  Hash,
+  Bot,
+  Users,
+  Send,
+  Home,
+} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Layout } from "../components/layout";
+import { SEOHead } from "../components/SEOHead";
+import { FollowButton, ReportButton } from "../components/common";
+import { useAuth } from "../hooks/useAuth";
+import { useStartConversation } from "../hooks/useApi";
+import { formatDateLong } from "../lib/formatTime";
 
 interface UserThread {
-  id: string
-  title: string
-  content: string
-  scope: 'municipal' | 'regional' | 'national'
-  replyCount: number
-  score: number
-  createdAt: string
-  municipalityId?: string
-  municipalityName?: string
-  tags: string[]
+  id: string;
+  title: string;
+  content: string;
+  scope: "municipal" | "regional" | "national";
+  replyCount: number;
+  score: number;
+  createdAt: string;
+  municipalityName?: string;
+  tags: string[];
 }
 
 interface InstitutionTopic {
-  institutionId: string
-  topicTag: string
-  relatedTags: string[]
-  description: string | null
+  institutionId: string;
+  topicTag: string;
+  relatedTags: string[];
+  description: string | null;
 }
 
 interface UserProfile {
-  id: string
-  name: string
-  avatarUrl?: string
-  role: 'citizen' | 'institution' | 'admin'
-  institutionType?: string
-  institutionName?: string
-  identityVerified: boolean
-  createdAt: string
-  threads: UserThread[]
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  role: "citizen" | "institution" | "admin";
+  institutionType?: string;
+  institutionName?: string;
+  identityVerified: boolean;
+  createdAt: string;
+  threads: UserThread[];
   // Institution-specific
-  institutionTopic?: InstitutionTopic | null
-  botSummaries?: UserThread[]
-  citizenDiscussions?: UserThread[]
+  institutionTopic?: InstitutionTopic | null;
+  botSummaries?: UserThread[];
+  citizenDiscussions?: UserThread[];
 }
 
 function getAvatarInitials(name: string): string {
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
 function ThreadListItem({ thread }: { thread: UserThread }) {
@@ -57,7 +72,9 @@ function ThreadListItem({ thread }: { thread: UserThread }) {
       to={`/agora/thread/${thread.id}`}
       className="block bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 hover:shadow-md transition-shadow"
     >
-      <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2">{thread.title}</h3>
+      <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2">
+        {thread.title}
+      </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mt-1">
         {thread.content.substring(0, 150)}...
       </p>
@@ -85,53 +102,63 @@ function ThreadListItem({ thread }: { thread: UserThread }) {
       </div>
       {thread.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
-          {thread.tags.slice(0, 3).map(tag => (
-            <span key={tag} className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded">
+          {thread.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded"
+            >
               {tag}
             </span>
           ))}
         </div>
       )}
     </Link>
-  )
+  );
 }
 
 export function UserProfilePage() {
-  const { t } = useTranslation(['profile', 'agora', 'common'])
-  const { userId } = useParams<{ userId: string }>()
-  const { currentUser } = useAuth()
-  const navigate = useNavigate()
-  const startConversationMutation = useStartConversation()
-  const [sendingMessage, setSendingMessage] = useState(false)
+  const { t } = useTranslation(["profile", "agora", "common"]);
+  const { userId } = useParams<{ userId: string }>();
+  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  const startConversationMutation = useStartConversation();
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const handleSendMessage = async () => {
-    if (!userId || sendingMessage) return
-    setSendingMessage(true)
+    if (!userId || sendingMessage) return;
+    setSendingMessage(true);
     try {
-      const conversation = await startConversationMutation.mutateAsync(userId)
-      navigate(`/messages/${conversation.id}`)
+      const conversation = await startConversationMutation.mutateAsync(userId);
+      navigate(`/messages/${conversation.id}`);
     } catch (err) {
-      console.error('Failed to start conversation:', err)
-      setSendingMessage(false)
+      console.error("Failed to start conversation:", err);
+      setSendingMessage(false);
     }
-  }
+  };
 
-  const { data: user, isLoading, error } = useQuery({
-    queryKey: ['userProfile', userId],
+  const {
+    data: user,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["userProfile", userId],
     queryFn: async () => {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/${userId}`, {
-        credentials: 'include'
-      })
-      const data = await response.json()
-      if (!data.success) throw new Error(data.error)
-      return data.data as UserProfile
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/v1/users/${userId}`,
+        {
+          credentials: "include",
+        },
+      );
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error);
+      return data.data as UserProfile;
     },
-    enabled: !!userId
-  })
+    enabled: !!userId,
+  });
 
-  const isOwnProfile = currentUser?.id === userId
-  const isInstitution = user?.role === 'institution'
-  const hasTopic = isInstitution && user?.institutionTopic
+  const isOwnProfile = currentUser?.id === userId;
+  const isInstitution = user?.role === "institution";
+  const hasTopic = isInstitution && user?.institutionTopic;
 
   if (isLoading) {
     return (
@@ -140,20 +167,25 @@ export function UserProfilePage() {
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
       </Layout>
-    )
+    );
   }
 
   if (error || !user) {
     return (
       <Layout>
         <div className="p-8 text-center">
-          <p className="text-gray-500 dark:text-gray-400">{t('profile:userProfile.notFound')}</p>
-          <Link to="/agora" className="text-blue-600 hover:underline mt-2 inline-block">
-            {t('profile:userProfile.backToAgora')}
+          <p className="text-gray-500 dark:text-gray-400">
+            {t("profile:userProfile.notFound")}
+          </p>
+          <Link
+            to="/agora"
+            className="text-blue-600 hover:underline mt-2 inline-block"
+          >
+            {t("profile:userProfile.backToAgora")}
           </Link>
         </div>
       </Layout>
-    )
+    );
   }
 
   return (
@@ -165,14 +197,14 @@ export function UserProfilePage() {
         type="profile"
         image={user.avatarUrl}
         jsonLd={{
-          '@context': 'https://schema.org',
-          '@type': 'ProfilePage',
+          "@context": "https://schema.org",
+          "@type": "ProfilePage",
           mainEntity: {
-            '@type': 'Person',
+            "@type": "Person",
             name: user.name,
             ...(user.avatarUrl && { image: user.avatarUrl }),
-            url: `https://eulesia.eu/user/${userId}`
-          }
+            url: `https://eulesia.eu/user/${userId}`,
+          },
         }}
       />
       {/* Back navigation */}
@@ -182,17 +214,25 @@ export function UserProfilePage() {
           className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          {t('profile:userProfile.back')}
+          {t("profile:userProfile.back")}
         </button>
       </div>
 
       {/* Profile header */}
-      <div className={`bg-gradient-to-b ${isInstitution ? 'from-violet-50' : 'from-blue-50'} to-white px-4 py-6`}>
+      <div
+        className={`bg-gradient-to-b ${isInstitution ? "from-violet-50" : "from-blue-50"} to-white px-4 py-6`}
+      >
         <div className="flex items-start gap-4">
           {/* Avatar */}
-          <div className={`w-20 h-20 ${isInstitution ? 'bg-violet-600' : 'bg-blue-600'} rounded-full flex items-center justify-center flex-shrink-0`}>
+          <div
+            className={`w-20 h-20 ${isInstitution ? "bg-violet-600" : "bg-blue-600"} rounded-full flex items-center justify-center flex-shrink-0`}
+          >
             {user.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+              <img
+                src={user.avatarUrl}
+                alt=""
+                className="w-full h-full rounded-full object-cover"
+              />
             ) : (
               <span className="text-white text-2xl font-bold">
                 {getAvatarInitials(user.name)}
@@ -202,7 +242,9 @@ export function UserProfilePage() {
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 truncate">{user.name}</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
+              {user.name}
+            </h1>
 
             {isInstitution && user.institutionName && (
               <div className="flex items-center gap-1.5 text-sm text-teal-700 mt-1">
@@ -214,13 +256,17 @@ export function UserProfilePage() {
             {user.identityVerified && (
               <div className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full w-fit mt-2">
                 <Shield className="w-3 h-3" />
-                <span>{t('profile:userProfile.verified')}</span>
+                <span>{t("profile:userProfile.verified")}</span>
               </div>
             )}
 
             <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mt-2">
               <Calendar className="w-3 h-3" />
-              <span>{t('profile:userProfile.joined', { date: formatDateLong(user.createdAt) })}</span>
+              <span>
+                {t("profile:userProfile.joined", {
+                  date: formatDateLong(user.createdAt),
+                })}
+              </span>
             </div>
           </div>
         </div>
@@ -241,14 +287,16 @@ export function UserProfilePage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
-              {sendingMessage ? t('profile:userProfile.opening') : t('profile:userProfile.sendMessage')}
+              {sendingMessage
+                ? t("profile:userProfile.opening")
+                : t("profile:userProfile.sendMessage")}
             </button>
             <Link
               to={`/home/${userId}`}
               className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             >
               <Home className="w-4 h-4" />
-              {t('profile:userProfile.visitHome')}
+              {t("profile:userProfile.visitHome")}
             </Link>
           </div>
         )}
@@ -259,14 +307,21 @@ export function UserProfilePage() {
             {/* Follow institution (official posts) */}
             <div className="flex items-center gap-3">
               <FollowButton entityType="user" entityId={userId} />
-              <span className="text-xs text-gray-500 dark:text-gray-400">{t('profile:userProfile.followOfficialPosts')}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {t("profile:userProfile.followOfficialPosts")}
+              </span>
             </div>
 
             {/* Follow topic (AI summaries + citizen discussion) */}
             {hasTopic && (
               <div className="flex items-center gap-3">
-                <FollowButton entityType="tag" entityId={user.institutionTopic!.topicTag} />
-                <span className="text-xs text-gray-500 dark:text-gray-400">{t('profile:userProfile.followAiSummaries')}</span>
+                <FollowButton
+                  entityType="tag"
+                  entityId={user.institutionTopic!.topicTag}
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {t("profile:userProfile.followAiSummaries")}
+                </span>
               </div>
             )}
           </div>
@@ -285,7 +340,7 @@ export function UserProfilePage() {
             to="/profile"
             className="mt-4 inline-block px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
-            {t('profile:userProfile.editProfile')}
+            {t("profile:userProfile.editProfile")}
           </Link>
         )}
 
@@ -298,21 +353,23 @@ export function UserProfilePage() {
                 to={`/agora/tag/${encodeURIComponent(user.institutionTopic!.topicTag)}`}
                 className="text-sm font-medium text-violet-700 hover:underline"
               >
-                {user.institutionTopic!.topicTag.replace(/-/g, ' ')}
+                {user.institutionTopic!.topicTag.replace(/-/g, " ")}
               </Link>
             </div>
             {user.institutionTopic!.description && (
-              <p className="text-xs text-violet-600">{user.institutionTopic!.description}</p>
+              <p className="text-xs text-violet-600">
+                {user.institutionTopic!.description}
+              </p>
             )}
             {user.institutionTopic!.relatedTags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
-                {user.institutionTopic!.relatedTags.map(tag => (
+                {user.institutionTopic!.relatedTags.map((tag) => (
                   <Link
                     key={tag}
                     to={`/agora/tag/${encodeURIComponent(tag)}`}
                     className="text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full hover:bg-violet-200"
                   >
-                    {tag.replace(/-/g, ' ')}
+                    {tag.replace(/-/g, " ")}
                   </Link>
                 ))}
               </div>
@@ -323,22 +380,25 @@ export function UserProfilePage() {
 
       {/* Content sections */}
       <div className="px-4 py-6 space-y-8">
-
         {/* Section 1: Official posts (institution's own threads) */}
         {isInstitution && (
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Building2 className="w-5 h-5 text-violet-600" />
-              {t('profile:userProfile.officialPosts', { count: user.threads.length })}
+              {t("profile:userProfile.officialPosts", {
+                count: user.threads.length,
+              })}
             </h2>
             {user.threads.length > 0 ? (
               <div className="space-y-3">
-                {user.threads.map(thread => (
+                {user.threads.map((thread) => (
                   <ThreadListItem key={thread.id} thread={thread} />
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400 py-4">{t('profile:userProfile.noOfficialPosts')}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 py-4">
+                {t("profile:userProfile.noOfficialPosts")}
+              </p>
             )}
           </div>
         )}
@@ -348,10 +408,12 @@ export function UserProfilePage() {
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Bot className="w-5 h-5 text-purple-600" />
-              {t('profile:userProfile.aiSummaries', { count: user.botSummaries.length })}
+              {t("profile:userProfile.aiSummaries", {
+                count: user.botSummaries.length,
+              })}
             </h2>
             <div className="space-y-3">
-              {user.botSummaries.map(thread => (
+              {user.botSummaries.map((thread) => (
                 <ThreadListItem key={thread.id} thread={thread} />
               ))}
             </div>
@@ -359,40 +421,46 @@ export function UserProfilePage() {
         )}
 
         {/* Section 3: Citizen discussion */}
-        {isInstitution && user.citizenDiscussions && user.citizenDiscussions.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-teal-600" />
-              {t('profile:userProfile.citizenDiscussion', { count: user.citizenDiscussions.length })}
-            </h2>
-            <div className="space-y-3">
-              {user.citizenDiscussions.map(thread => (
-                <ThreadListItem key={thread.id} thread={thread} />
-              ))}
+        {isInstitution &&
+          user.citizenDiscussions &&
+          user.citizenDiscussions.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5 text-teal-600" />
+                {t("profile:userProfile.citizenDiscussion", {
+                  count: user.citizenDiscussions.length,
+                })}
+              </h2>
+              <div className="space-y-3">
+                {user.citizenDiscussions.map((thread) => (
+                  <ThreadListItem key={thread.id} thread={thread} />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Non-institution: just show threads */}
         {!isInstitution && (
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              {t('profile:userProfile.discussions', { count: user.threads.length })}
+              {t("profile:userProfile.discussions", {
+                count: user.threads.length,
+              })}
             </h2>
             {user.threads.length > 0 ? (
               <div className="space-y-3">
-                {user.threads.map(thread => (
+                {user.threads.map((thread) => (
                   <ThreadListItem key={thread.id} thread={thread} />
                 ))}
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p>{t('profile:userProfile.noPublicDiscussions')}</p>
+                <p>{t("profile:userProfile.noPublicDiscussions")}</p>
               </div>
             )}
           </div>
         )}
       </div>
     </Layout>
-  )
+  );
 }

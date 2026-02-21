@@ -109,9 +109,7 @@
       "Get in touch: info@eulesia.eu"
     ],
     "q2q3": "Q2–Q3 2026",
-    "q2q3Items": [
-      "Strong authentication with bank credentials (optional)"
-    ],
+    "q2q3Items": ["Strong authentication with bank credentials (optional)"],
     "late2026": "Late 2026 / Early 2027",
     "late2026Items": [
       "EUDI Wallet login enabled",
@@ -129,10 +127,7 @@
   "funding": {
     "title": "Funding",
     "description": "Eulesia is a non-profit project. Funding sources:",
-    "items": [
-      "Research and development grants",
-      "Donations"
-    ]
+    "items": ["Research and development grants", "Donations"]
   },
 
   "cta": {

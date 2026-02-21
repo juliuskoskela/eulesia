@@ -92,7 +92,18 @@
     "markdown": "Markdown supported",
     "imageUpload": "Add image",
     "imageError": "Only JPEG, PNG, WebP and GIF allowed (max 5MB)",
-    "suggestedTags": ["transport", "education", "health", "environment", "housing", "culture", "economy", "security", "social services", "infrastructure"]
+    "suggestedTags": [
+      "transport",
+      "education",
+      "health",
+      "environment",
+      "housing",
+      "culture",
+      "economy",
+      "security",
+      "social services",
+      "infrastructure"
+    ]
   },
   "institutionalBox": {
     "documents": "Documents",

@@ -1,5 +1,4 @@
-{ pkgs }:
-
+{pkgs}:
 pkgs.writeShellApplication {
   name = "generate-idura-jwks";
   runtimeInputs = with pkgs; [

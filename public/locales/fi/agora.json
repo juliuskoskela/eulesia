@@ -92,7 +92,18 @@
     "markdown": "Markdown tuettu",
     "imageUpload": "Lisää kuva",
     "imageError": "Vain JPEG, PNG, WebP ja GIF sallittu (max 5MB)",
-    "suggestedTags": ["liikenne", "koulutus", "terveys", "ympäristö", "asuminen", "kulttuuri", "talous", "turvallisuus", "sosiaalipalvelut", "infrastruktuuri"]
+    "suggestedTags": [
+      "liikenne",
+      "koulutus",
+      "terveys",
+      "ympäristö",
+      "asuminen",
+      "kulttuuri",
+      "talous",
+      "turvallisuus",
+      "sosiaalipalvelut",
+      "infrastruktuuri"
+    ]
   },
   "institutionalBox": {
     "documents": "Asiakirjat",

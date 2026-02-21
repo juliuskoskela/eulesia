@@ -1,39 +1,41 @@
-import nodemailer from 'nodemailer'
-import type { Transporter } from 'nodemailer'
-import { env } from '../utils/env.js'
+import nodemailer from "nodemailer";
+import type { Transporter } from "nodemailer";
+import { env } from "../utils/env.js";
 
 interface EmailOptions {
-  to: string
-  subject: string
-  html: string
-  text?: string
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
 }
 
 class EmailService {
-  private transporter: Transporter | null = null
+  private transporter: Transporter | null = null;
 
   constructor() {
-    if (env.EMAIL_PROVIDER === 'smtp' && env.SMTP_HOST) {
+    if (env.EMAIL_PROVIDER === "smtp" && env.SMTP_HOST) {
       this.transporter = nodemailer.createTransport({
         host: env.SMTP_HOST,
         port: env.SMTP_PORT,
         secure: env.SMTP_SECURE, // true for 465, false for other ports
-        auth: env.SMTP_USER ? {
-          user: env.SMTP_USER,
-          pass: env.SMTP_PASS
-        } : undefined
-      })
+        auth: env.SMTP_USER
+          ? {
+              user: env.SMTP_USER,
+              pass: env.SMTP_PASS,
+            }
+          : undefined,
+      });
     }
   }
 
   async send(options: EmailOptions): Promise<boolean> {
-    if (env.EMAIL_PROVIDER === 'console' || !this.transporter) {
+    if (env.EMAIL_PROVIDER === "console" || !this.transporter) {
       // Development: log to console
-      console.log('\n📧 Email (console mode):')
-      console.log(`To: ${options.to}`)
-      console.log(`Subject: ${options.subject}`)
-      console.log(`Content:\n${options.text || options.html}\n`)
-      return true
+      console.log("\n📧 Email (console mode):");
+      console.log(`To: ${options.to}`);
+      console.log(`Subject: ${options.subject}`);
+      console.log(`Content:\n${options.text || options.html}\n`);
+      return true;
     }
 
     try {
@@ -42,17 +44,17 @@ class EmailService {
         to: options.to,
         subject: options.subject,
         html: options.html,
-        text: options.text
-      })
-      return true
+        text: options.text,
+      });
+      return true;
     } catch (error) {
-      console.error('Failed to send email:', error)
-      return false
+      console.error("Failed to send email:", error);
+      return false;
     }
   }
 
   async sendMagicLink(email: string, token: string): Promise<boolean> {
-    const loginUrl = `${env.API_URL}/api/v1/auth/verify/${token}`
+    const loginUrl = `${env.API_URL}/api/v1/auth/verify/${token}`;
 
     const html = `
       <!DOCTYPE html>
@@ -91,7 +93,7 @@ class EmailService {
           </p>
         </body>
       </html>
-    `
+    `;
 
     const text = `
 Sign in to Eulesia
@@ -102,23 +104,27 @@ ${loginUrl}
 If you didn't request this email, you can safely ignore it.
 
 Eulesia — European Civic Digital Infrastructure
-    `.trim()
+    `.trim();
 
     return this.send({
       to: email,
-      subject: 'Sign in to Eulesia',
+      subject: "Sign in to Eulesia",
       html,
-      text
-    })
+      text,
+    });
   }
 
-  async sendWaitlistApproval(email: string, inviteCode: string, locale: string = 'en'): Promise<boolean> {
-    const appUrl = env.APP_URL || 'https://eulesia.eu'
-    const isFinnish = locale === 'fi'
+  async sendWaitlistApproval(
+    email: string,
+    inviteCode: string,
+    locale: string = "en",
+  ): Promise<boolean> {
+    const appUrl = env.APP_URL || "https://eulesia.eu";
+    const isFinnish = locale === "fi";
 
     const subject = isFinnish
-      ? 'Tervetuloa Eulesiaan – kutsukoodisi'
-      : 'Welcome to Eulesia – Your Invite Code'
+      ? "Tervetuloa Eulesiaan – kutsukoodisi"
+      : "Welcome to Eulesia – Your Invite Code";
 
     const html = `
       <!DOCTYPE html>
@@ -135,16 +141,18 @@ Eulesia — European Civic Digital Infrastructure
           </div>
 
           <h2 style="font-size: 20px; margin-bottom: 16px;">
-            ${isFinnish ? 'Paikkasi on valmis!' : 'Your spot is ready!'}
+            ${isFinnish ? "Paikkasi on valmis!" : "Your spot is ready!"}
           </h2>
 
-          <p>${isFinnish
-            ? 'Olet saanut kutsun Eulesiaan. Käytä alla olevaa kutsukoodia rekisteröityäksesi.'
-            : 'You have been approved to join Eulesia. Use the invite code below to register.'}</p>
+          <p>${
+            isFinnish
+              ? "Olet saanut kutsun Eulesiaan. Käytä alla olevaa kutsukoodia rekisteröityäksesi."
+              : "You have been approved to join Eulesia. Use the invite code below to register."
+          }</p>
 
           <div style="text-align: center; margin: 32px 0; padding: 20px; background: #f0fdf4; border-radius: 12px; border: 1px solid #bbf7d0;">
             <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">
-              ${isFinnish ? 'Kutsukoodisi' : 'Your invite code'}
+              ${isFinnish ? "Kutsukoodisi" : "Your invite code"}
             </p>
             <p style="margin: 0; font-family: monospace; font-size: 28px; font-weight: bold; color: #166534; letter-spacing: 2px;">
               ${inviteCode}
@@ -153,14 +161,16 @@ Eulesia — European Civic Digital Infrastructure
 
           <div style="text-align: center; margin: 24px 0;">
             <a href="${appUrl}" style="display: inline-block; background: #1e40af; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 500;">
-              ${isFinnish ? 'Siirry Eulesiaan' : 'Go to Eulesia'}
+              ${isFinnish ? "Siirry Eulesiaan" : "Go to Eulesia"}
             </a>
           </div>
 
           <p style="color: #6b7280; font-size: 14px;">
-            ${isFinnish
-              ? 'Tämä kutsukoodi on voimassa 30 päivää.'
-              : 'This invite code is valid for 30 days.'}
+            ${
+              isFinnish
+                ? "Tämä kutsukoodi on voimassa 30 päivää."
+                : "This invite code is valid for 30 days."
+            }
           </p>
 
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
@@ -169,14 +179,14 @@ Eulesia — European Civic Digital Infrastructure
           </p>
         </body>
       </html>
-    `
+    `;
 
     const text = isFinnish
       ? `Tervetuloa Eulesiaan!\n\nKutsukoodisi: ${inviteCode}\n\nSiirry: ${appUrl}\n\nKoodi on voimassa 30 päivää.`
-      : `Welcome to Eulesia!\n\nYour invite code: ${inviteCode}\n\nGo to: ${appUrl}\n\nThis code is valid for 30 days.`
+      : `Welcome to Eulesia!\n\nYour invite code: ${inviteCode}\n\nGo to: ${appUrl}\n\nThis code is valid for 30 days.`;
 
-    return this.send({ to: email, subject, html, text })
+    return this.send({ to: email, subject, html, text });
   }
 }
 
-export const emailService = new EmailService()
+export const emailService = new EmailService();

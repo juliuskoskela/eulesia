@@ -1,92 +1,109 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { MapPin, Hash, Building2, CheckCircle2, Loader2, ChevronRight } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { useSubscribe, useMunicipalities, useTags } from '../../hooks/useApi'
-import type { Municipality, TagWithCategory } from '../../lib/api'
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  MapPin,
+  Hash,
+  Building2,
+  CheckCircle2,
+  Loader2,
+  ChevronRight,
+} from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { useSubscribe, useMunicipalities, useTags } from "../../hooks/useApi";
+import type { Municipality, TagWithCategory } from "../../lib/api";
 
 interface FeedOnboardingProps {
-  onComplete: () => void
-  compact?: boolean
+  onComplete: () => void;
+  compact?: boolean;
 }
 
-function groupTagsByCategory(tags: TagWithCategory[]): Record<string, TagWithCategory[]> {
-  const groups: Record<string, TagWithCategory[]> = {}
+function groupTagsByCategory(
+  tags: TagWithCategory[],
+): Record<string, TagWithCategory[]> {
+  const groups: Record<string, TagWithCategory[]> = {};
   for (const tag of tags) {
-    const category = tag.category || 'muut'
-    if (!groups[category]) groups[category] = []
-    groups[category].push(tag)
+    const category = tag.category || "muut";
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(tag);
   }
-  return groups
+  return groups;
 }
 
-export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingProps) {
-  const { t } = useTranslation(['agora', 'common'])
-  const [selectedMunicipalities, setSelectedMunicipalities] = useState<string[]>([])
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export function FeedOnboarding({
+  onComplete,
+  compact = false,
+}: FeedOnboardingProps) {
+  const { t } = useTranslation(["agora", "common"]);
+  const [selectedMunicipalities, setSelectedMunicipalities] = useState<
+    string[]
+  >([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: municipalitiesData } = useMunicipalities()
-  const { data: tagsData } = useTags()
-  const subscribeMutation = useSubscribe()
+  const { data: municipalitiesData } = useMunicipalities();
+  const { data: tagsData } = useTags();
+  const subscribeMutation = useSubscribe();
 
-  const topMunicipalities = (municipalitiesData || []).slice(0, 8)
+  const topMunicipalities = (municipalitiesData || []).slice(0, 8);
 
   // Group tags by category, show top tags from each category
-  const allTags = tagsData || []
-  const grouped = groupTagsByCategory(allTags)
-  const categories = Object.keys(grouped).filter(c => c !== 'muut')
+  const allTags = tagsData || [];
+  const grouped = groupTagsByCategory(allTags);
+  const categories = Object.keys(grouped).filter((c) => c !== "muut");
 
   // Show top 2-3 tags per category for compact onboarding
-  const featuredTags: TagWithCategory[] = []
+  const featuredTags: TagWithCategory[] = [];
   for (const category of categories) {
-    const categoryTags = grouped[category] || []
+    const categoryTags = grouped[category] || [];
     // Take tags with highest count or first by sort order
-    const sorted = [...categoryTags].sort((a, b) => (b.count || 0) - (a.count || 0))
-    featuredTags.push(...sorted.slice(0, 2))
+    const sorted = [...categoryTags].sort(
+      (a, b) => (b.count || 0) - (a.count || 0),
+    );
+    featuredTags.push(...sorted.slice(0, 2));
   }
 
   const toggleMunicipality = (id: string) => {
-    setSelectedMunicipalities(prev =>
-      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
-    )
-  }
+    setSelectedMunicipalities((prev) =>
+      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
+    );
+  };
 
   const toggleTag = (tag: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-    )
-  }
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  };
 
   const handleSubmit = async () => {
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
     try {
       // Subscribe to selected municipalities
       for (const municipalityId of selectedMunicipalities) {
         await subscribeMutation.mutateAsync({
-          entityType: 'municipality',
-          entityId: municipalityId
-        })
+          entityType: "municipality",
+          entityId: municipalityId,
+        });
       }
 
       // Subscribe to selected tags
       for (const tag of selectedTags) {
         await subscribeMutation.mutateAsync({
-          entityType: 'tag',
-          entityId: tag
-        })
+          entityType: "tag",
+          entityId: tag,
+        });
       }
 
-      onComplete()
+      onComplete();
     } catch (error) {
-      console.error('Failed to save subscriptions:', error)
+      console.error("Failed to save subscriptions:", error);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
-  const hasSelections = selectedMunicipalities.length > 0 || selectedTags.length > 0
+  const hasSelections =
+    selectedMunicipalities.length > 0 || selectedTags.length > 0;
 
   // Compact inline banner mode for Tutustu tab
   if (compact) {
@@ -98,7 +115,9 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-              {t('agora:onboarding.compactTitle', { defaultValue: 'Seuraa aiheita saadaksesi oman syötteen' })}
+              {t("agora:onboarding.compactTitle", {
+                defaultValue: "Seuraa aiheita saadaksesi oman syötteen",
+              })}
             </h3>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {topMunicipalities.slice(0, 4).map((m: Municipality) => (
@@ -107,24 +126,26 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
                   onClick={() => toggleMunicipality(m.id)}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                     selectedMunicipalities.includes(m.id)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100'
+                      ? "bg-blue-600 text-white"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100"
                   }`}
                 >
-                  {selectedMunicipalities.includes(m.id) && '✓ '}{m.name}
+                  {selectedMunicipalities.includes(m.id) && "✓ "}
+                  {m.name}
                 </button>
               ))}
-              {featuredTags.slice(0, 4).map(tag => (
+              {featuredTags.slice(0, 4).map((tag) => (
                 <button
                   key={tag.tag}
                   onClick={() => toggleTag(tag.tag)}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                     selectedTags.includes(tag.tag)
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100'
+                      ? "bg-teal-600 text-white"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100"
                   }`}
                 >
-                  {selectedTags.includes(tag.tag) && '✓ '}{tag.displayName || tag.tag.replace(/-/g, ' ')}
+                  {selectedTags.includes(tag.tag) && "✓ "}
+                  {tag.displayName || tag.tag.replace(/-/g, " ")}
                 </button>
               ))}
             </div>
@@ -135,21 +156,23 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
                   disabled={isSubmitting}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  {t('agora:onboarding.ready', { defaultValue: 'Valmis' })}
+                  {isSubmitting ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : null}
+                  {t("agora:onboarding.ready", { defaultValue: "Valmis" })}
                 </button>
               )}
               <button
                 onClick={onComplete}
                 className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               >
-                {t('common:actions.dismiss', { defaultValue: 'Piilota' })}
+                {t("common:actions.dismiss", { defaultValue: "Piilota" })}
               </button>
             </div>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -171,10 +194,10 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
           </svg>
         </div>
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          {t('agora:onboarding.welcome')}
+          {t("agora:onboarding.welcome")}
         </h2>
         <p className="text-gray-600 dark:text-gray-400">
-          {t('agora:onboarding.emptyFeed')}
+          {t("agora:onboarding.emptyFeed")}
         </p>
       </div>
 
@@ -182,7 +205,9 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-3">
           <MapPin className="w-5 h-5 text-blue-600" />
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('agora:onboarding.municipalities')}</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+            {t("agora:onboarding.municipalities")}
+          </h3>
         </div>
         <div className="flex flex-wrap gap-2">
           {topMunicipalities.map((m: Municipality) => (
@@ -191,8 +216,8 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
               onClick={() => toggleMunicipality(m.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 selectedMunicipalities.includes(m.id)
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
               {selectedMunicipalities.includes(m.id) && (
@@ -209,33 +234,35 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Hash className="w-5 h-5 text-teal-600" />
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('agora:onboarding.topics')}</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+              {t("agora:onboarding.topics")}
+            </h3>
           </div>
           <Link
             to="/aiheet"
             className="text-xs text-teal-600 hover:underline flex items-center gap-0.5"
           >
-            {t('agora:onboarding.allTopics')}
+            {t("agora:onboarding.allTopics")}
             <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
 
         {/* Featured tags from each category */}
         <div className="flex flex-wrap gap-2">
-          {featuredTags.map(tag => (
+          {featuredTags.map((tag) => (
             <button
               key={tag.tag}
               onClick={() => toggleTag(tag.tag)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 selectedTags.includes(tag.tag)
-                  ? 'bg-teal-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  ? "bg-teal-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
               {selectedTags.includes(tag.tag) && (
                 <CheckCircle2 className="w-4 h-4" />
               )}
-              {tag.displayName || tag.tag.replace(/-/g, ' ')}
+              {tag.displayName || tag.tag.replace(/-/g, " ")}
             </button>
           ))}
         </div>
@@ -246,7 +273,7 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
         <div className="flex items-start gap-2">
           <Building2 className="w-5 h-5 text-violet-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-violet-700">
-            {t('agora:onboarding.institutionHint')}
+            {t("agora:onboarding.institutionHint")}
           </p>
         </div>
       </div>
@@ -257,7 +284,7 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
           onClick={onComplete}
           className="flex-1 px-4 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg font-medium transition-colors"
         >
-          {t('common:actions.skip')}
+          {t("common:actions.skip")}
         </button>
         <button
           onClick={handleSubmit}
@@ -267,13 +294,13 @@ export function FeedOnboarding({ onComplete, compact = false }: FeedOnboardingPr
           {isSubmitting ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {t('common:actions.saving')}
+              {t("common:actions.saving")}
             </>
           ) : (
-            t('agora:onboarding.ready')
+            t("agora:onboarding.ready")
           )}
         </button>
       </div>
     </div>
-  )
+  );
 }

@@ -1,53 +1,53 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
-import { Search, MapPin, Loader2, Check, X } from 'lucide-react'
-import { useLocationSearch } from '../../hooks/useApi'
-import type { LocationResult } from '../../lib/api'
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Search, MapPin, Loader2, Check, X } from "lucide-react";
+import { useLocationSearch } from "../../hooks/useApi";
+import type { LocationResult } from "../../lib/api";
 
 interface LocationSearchProps {
-  value: LocationResult | null
-  onChange: (location: LocationResult | null) => void
-  country?: string          // ISO 3166-1 alpha-2 (default: FI)
-  types?: string[]          // Filter by type: 'municipality', 'village', 'city', etc.
-  placeholder?: string
-  disabled?: boolean
-  className?: string
+  value: LocationResult | null;
+  onChange: (location: LocationResult | null) => void;
+  country?: string; // ISO 3166-1 alpha-2 (default: FI)
+  types?: string[]; // Filter by type: 'municipality', 'village', 'city', etc.
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
 }
 
 export function LocationSearch({
   value,
   onChange,
-  country = 'FI',
+  country = "FI",
   types,
   placeholder,
   disabled = false,
-  className = ''
+  className = "",
 }: LocationSearchProps) {
-  const { t } = useTranslation()
-  const [query, setQuery] = useState('')
-  const [isOpen, setIsOpen] = useState(false)
-  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  const inputRef = useRef<HTMLInputElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Debounce search query
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedQuery(query)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [query])
+      setDebouncedQuery(query);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   // Search locations
   const { data, isLoading } = useLocationSearch(debouncedQuery, {
     country,
     types,
     limit: 10,
-    includeNominatim: true
-  })
+    includeNominatim: true,
+  });
 
-  const results = data?.results || []
+  const results = data?.results || [];
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -58,45 +58,48 @@ export function LocationSearch({
         inputRef.current &&
         !inputRef.current.contains(e.target as Node)
       ) {
-        setIsOpen(false)
+        setIsOpen(false);
       }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-  const handleSelect = useCallback((location: LocationResult) => {
-    onChange(location)
-    setQuery('')
-    setIsOpen(false)
-  }, [onChange])
+  const handleSelect = useCallback(
+    (location: LocationResult) => {
+      onChange(location);
+      setQuery("");
+      setIsOpen(false);
+    },
+    [onChange],
+  );
 
   const handleClear = useCallback(() => {
-    onChange(null)
-    setQuery('')
-    inputRef.current?.focus()
-  }, [onChange])
+    onChange(null);
+    setQuery("");
+    inputRef.current?.focus();
+  }, [onChange]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setQuery(e.target.value)
+    setQuery(e.target.value);
     if (value) {
-      onChange(null)
+      onChange(null);
     }
-    setIsOpen(true)
-  }
+    setIsOpen(true);
+  };
 
   // Format location type for display
   const formatLocationType = (type: string) => {
     const typeMap: Record<string, string> = {
-      'country': t('location.types.country'),
-      'region': t('location.types.region'),
-      'municipality': t('location.types.municipality'),
-      'village': t('location.types.village'),
-      'city': t('location.types.city'),
-      'district': t('location.types.district')
-    }
-    return typeMap[type] || type
-  }
+      country: t("location.types.country"),
+      region: t("location.types.region"),
+      municipality: t("location.types.municipality"),
+      village: t("location.types.village"),
+      city: t("location.types.city"),
+      district: t("location.types.district"),
+    };
+    return typeMap[type] || type;
+  };
 
   return (
     <div className={`relative ${className}`}>
@@ -109,14 +112,14 @@ export function LocationSearch({
           value={value ? value.name : query}
           onChange={handleInputChange}
           onFocus={() => !value && setIsOpen(true)}
-          placeholder={placeholder ?? t('location.searchPlaceholder')}
+          placeholder={placeholder ?? t("location.searchPlaceholder")}
           disabled={disabled}
           className={`
             w-full pl-9 pr-10 py-2.5 border border-gray-200 dark:border-gray-800 rounded-lg text-sm
             focus:ring-2 focus:ring-blue-500 focus:border-transparent
             disabled:bg-gray-50 disabled:text-gray-500
             dark:bg-gray-900 dark:text-gray-100
-            ${value ? 'bg-blue-50 border-blue-200' : ''}
+            ${value ? "bg-blue-50 border-blue-200" : ""}
           `}
         />
         {/* Loading indicator */}
@@ -142,13 +145,13 @@ export function LocationSearch({
         >
           {results.length === 0 && debouncedQuery.length >= 2 && !isLoading && (
             <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-              {t('location.noResults')}
+              {t("location.noResults")}
             </div>
           )}
 
           {results.length === 0 && debouncedQuery.length < 2 && (
             <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-              {t('location.minChars')}
+              {t("location.minChars")}
             </div>
           )}
 
@@ -165,10 +168,12 @@ export function LocationSearch({
                     {location.name}
                   </span>
                   {/* Status badge */}
-                  {location.status === 'active' && (
+                  {location.status === "active" && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs">
                       <Check className="w-3 h-3" />
-                      {t('search.discussions', { count: location.contentCount })}
+                      {t("search.discussions", {
+                        count: location.contentCount,
+                      })}
                     </span>
                   )}
                 </div>
@@ -188,13 +193,13 @@ export function LocationSearch({
           {/* Source indicator */}
           {results.length > 0 && data?.source && (
             <div className="px-4 py-2 text-xs text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-800">
-              {data.source === 'cache' && t('location.source.cache')}
-              {data.source === 'nominatim' && t('location.source.nominatim')}
-              {data.source === 'mixed' && t('location.source.mixed')}
+              {data.source === "cache" && t("location.source.cache")}
+              {data.source === "nominatim" && t("location.source.nominatim")}
+              {data.source === "mixed" && t("location.source.mixed")}
             </div>
           )}
         </div>
       )}
     </div>
-  )
+  );
 }

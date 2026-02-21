@@ -4,7 +4,7 @@
 # ======================================
 # This script deploys Eulesia to a Hetzner VPS server
 
-set -e  # Exit on error
+set -e # Exit on error
 
 # Colors for output
 RED='\033[0;31m'
@@ -20,9 +20,9 @@ BRANCH="${DEPLOY_BRANCH:-main}"
 
 # Check if remote host is set
 if [ -z "$REMOTE_HOST" ]; then
-    echo -e "${RED}Error: DEPLOY_HOST environment variable is not set${NC}"
-    echo "Usage: DEPLOY_HOST=your-server.com ./scripts/deploy.sh"
-    exit 1
+  echo -e "${RED}Error: DEPLOY_HOST environment variable is not set${NC}"
+  echo "Usage: DEPLOY_HOST=your-server.com ./scripts/deploy.sh"
+  exit 1
 fi
 
 echo -e "${GREEN}=== Eulesia Deployment ===${NC}"
@@ -32,7 +32,7 @@ echo ""
 
 # Step 1: Connect and pull latest code
 echo -e "${YELLOW}Step 1: Updating code on server...${NC}"
-ssh "$REMOTE_USER@$REMOTE_HOST" << EOF
+ssh "$REMOTE_USER@$REMOTE_HOST" <<EOF
     set -e
     cd $REMOTE_DIR || { echo "Directory not found. Running initial setup..."; exit 1; }
     git fetch origin
@@ -42,7 +42,7 @@ EOF
 
 # Step 2: Build and deploy containers
 echo -e "${YELLOW}Step 2: Building and deploying containers...${NC}"
-ssh "$REMOTE_USER@$REMOTE_HOST" << EOF
+ssh "$REMOTE_USER@$REMOTE_HOST" <<EOF
     set -e
     cd $REMOTE_DIR/docker
 
@@ -68,7 +68,7 @@ EOF
 
 # Step 3: Cleanup old images
 echo -e "${YELLOW}Step 3: Cleaning up old Docker images...${NC}"
-ssh "$REMOTE_USER@$REMOTE_HOST" << EOF
+ssh "$REMOTE_USER@$REMOTE_HOST" <<EOF
     docker image prune -f
 EOF
 

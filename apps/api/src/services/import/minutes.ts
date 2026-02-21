@@ -15,37 +15,51 @@
  * Based on work from github.com/Explories/rautalampi-news
  */
 
-import { db, threads, threadTags, municipalities } from '../../db/index.js'
-import { eq, and, gte } from 'drizzle-orm'
-import { editorialGate, writeArticle, verifyArticle } from './mistral.js'
-import { renderMarkdown } from '../../utils/markdown.js'
-import { fetchers, MINUTE_SOURCES, getMinuteSources } from './fetchers/index.js'
-import type { MinuteSource, Meeting } from './fetchers/index.js'
-import { getOrCreateBotUser, getOrCreateInstitution, resolveLocationForEntity } from './institutions.js'
-import { getEntityName, getAdminLevel } from './fetchers/types.js'
-import { recordSuccess, recordFailure } from './adaptive/health-monitor.js'
-import { parseDate as parseMultiDate, getPrompts, getLanguageForCountry } from './language/index.js'
+import { db, threads, threadTags, municipalities } from "../../db/index.js";
+import { eq, and } from "drizzle-orm";
+import { editorialGate, writeArticle, verifyArticle } from "./mistral.js";
+import { renderMarkdown } from "../../utils/markdown.js";
+import { fetchers, MINUTE_SOURCES } from "./fetchers/index.js";
+import type { MinuteSource, Meeting } from "./fetchers/index.js";
+import {
+  getOrCreateBotUser,
+  getOrCreateInstitution,
+  resolveLocationForMunicipality,
+} from "./institutions.js";
 
 // Re-export for backwards compatibility
-export { MINUTE_SOURCES }
-export type { MinuteSource }
+export { MINUTE_SOURCES };
+export type { MinuteSource };
 
 // ============================================
 // IMPORT LOGIC
 // ============================================
 
 export interface ImportOptions {
-  municipalities?: string[]  // Filter by municipality names
-  dryRun?: boolean
-  limit?: number  // Max meetings per municipality
-  maxAgeDays?: number  // Only import meetings newer than this (default: 7)
+  municipalities?: string[]; // Filter by municipality names
+  dryRun?: boolean;
+  limit?: number; // Max meetings per municipality
+  maxAgeDays?: number; // Only import meetings newer than this (default: 7)
 }
 
 export interface ImportResult {
-  imported: number
-  skipped: number
-  errors: string[]
-  threads: { id: string; title: string; municipality: string }[]
+  imported: number;
+  skipped: number;
+  errors: string[];
+  threads: { id: string; title: string; municipality: string }[];
+}
+
+/**
+ * Parse Finnish date string (DD.MM.YYYY) to Date object
+ */
+function parseFinnishDate(dateStr: string): Date | null {
+  const match = dateStr.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (!match) return null;
+  return new Date(
+    parseInt(match[3]),
+    parseInt(match[2]) - 1,
+    parseInt(match[1]),
+  );
 }
 
 /**
@@ -54,53 +68,53 @@ export interface ImportResult {
  * Meetings without a parseable date are EXCLUDED to prevent
  * old (undated) meetings from slipping through.
  */
-function filterRecentMeetings(meetings: Meeting[], maxAgeDays: number, language?: string): Meeting[] {
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - maxAgeDays)
+function filterRecentMeetings(
+  meetings: Meeting[],
+  maxAgeDays: number,
+): Meeting[] {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - maxAgeDays);
 
-  return meetings.filter(m => {
+  return meetings.filter((m) => {
     if (!m.date) {
-      console.log(`   ⏭️  Skipping undated meeting: ${m.title}`)
-      return false
+      console.log(`   ⏭️  Skipping undated meeting: ${m.title}`);
+      return false;
     }
-    const meetingDate = parseMultiDate(m.date, language)
+    const meetingDate = parseFinnishDate(m.date);
     if (!meetingDate) {
-      console.log(`   ⏭️  Skipping unparseable date "${m.date}": ${m.title}`)
-      return false
+      console.log(`   ⏭️  Skipping unparseable date "${m.date}": ${m.title}`);
+      return false;
     }
-    return meetingDate >= cutoff
-  })
+    return meetingDate >= cutoff;
+  });
 }
 
 /**
  * Get municipality ID by name, or create if not exists
  */
-async function getOrCreateMunicipality(name: string, country: string = 'FI'): Promise<string> {
-  const normalized = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+async function getOrCreateMunicipality(name: string): Promise<string> {
+  const normalized = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 
   const existing = await db
     .select({ id: municipalities.id })
     .from(municipalities)
-    .where(and(
-      eq(municipalities.name, normalized),
-      eq(municipalities.country, country)
-    ))
-    .limit(1)
+    .where(eq(municipalities.name, normalized))
+    .limit(1);
 
   if (existing.length > 0) {
-    return existing[0].id
+    return existing[0].id;
   }
 
   const [created] = await db
     .insert(municipalities)
     .values({
       name: normalized,
-      nameFi: country === 'FI' ? normalized : undefined,
-      country,
+      nameFi: normalized,
+      country: "FI",
     })
-    .returning({ id: municipalities.id })
+    .returning({ id: municipalities.id });
 
-  return created.id
+  return created.id;
 }
 
 /**
@@ -110,13 +124,12 @@ async function isAlreadyImported(sourceId: string): Promise<boolean> {
   const existing = await db
     .select({ id: threads.id })
     .from(threads)
-    .where(and(
-      eq(threads.sourceId, sourceId),
-      eq(threads.source, 'minutes_import')
-    ))
-    .limit(1)
+    .where(
+      and(eq(threads.sourceId, sourceId), eq(threads.source, "minutes_import")),
+    )
+    .limit(1);
 
-  return existing.length > 0
+  return existing.length > 0;
 }
 
 /**
@@ -177,32 +190,29 @@ async function processMeeting(
   meeting: Meeting,
   source: MinuteSource,
   botUserId: string,
-  result: ImportResult
+  result: ImportResult,
 ): Promise<void> {
-  const sourceId = `${source.municipality.toLowerCase()}-${meeting.id}`
-  const fetcher = fetchers[source.type]
+  const sourceId = `${source.municipality.toLowerCase()}-${meeting.id}`;
+  const fetcher = fetchers[source.type];
 
   // Extract content via fetcher (handles PDF/HTML per system)
-  const originalText = await fetcher.extractContent(meeting, source)
+  const originalText = await fetcher.extractContent(meeting, source);
   if (!originalText) {
-    result.errors.push(`No content found for ${sourceId}`)
-    return
+    result.errors.push(`No content found for ${sourceId}`);
+    return;
   }
 
-  // Get entity identity, institution placeholder, and geographic location
-  const entityName = getEntityName(source)
-  const adminLevel = getAdminLevel(source)
-  const country = source.country || 'FI'
-  const municipalityId = adminLevel === 'municipality'
-    ? await getOrCreateMunicipality(entityName, country)
-    : undefined  // Higher admin levels don't need a municipality record
-  const normalizedName = entityName.charAt(0).toUpperCase() + entityName.slice(1).toLowerCase()
+  // Get municipality ID, institution placeholder, and geographic location
+  const municipalityId = await getOrCreateMunicipality(source.municipality);
+  const normalizedName =
+    source.municipality.charAt(0).toUpperCase() +
+    source.municipality.slice(1).toLowerCase();
   const sourceInstitutionId = await getOrCreateInstitution(
     normalizedName,
-    adminLevel,  // Uses the actual admin level: 'municipality', 'county', 'region', or 'state'
-    { municipalityName: adminLevel === 'municipality' ? entityName : undefined, country }
-  )
-  const locationId = await resolveLocationForEntity(normalizedName, country)
+    "municipality",
+    { municipalityName: source.municipality },
+  );
+  const locationId = await resolveLocationForMunicipality(normalizedName);
 
   // ============================================
   // 3-STAGE AGENTIC PIPELINE
@@ -213,49 +223,47 @@ async function processMeeting(
   const prompts = getPrompts(language)
 
   // STAGE 1: Editorial Gate — split & filter newsworthy items
-  console.log(`   🔍 Stage 1: Editorial gate... (${language})`)
+  console.log(`   🔍 Stage 1: Editorial gate...`);
   const editorialItems = await editorialGate(
     originalText,
     source.municipality,
     meeting.organ,
-    language
-  )
+  );
 
-  const allNewsworthy = editorialItems.filter(item => item.newsworthy)
-  const skippedItems = editorialItems.filter(item => !item.newsworthy)
+  const newsworthyItems = editorialItems.filter((item) => item.newsworthy);
+  const skippedItems = editorialItems.filter((item) => !item.newsworthy);
 
-  // Cap newsworthy items per meeting to prevent feed flooding
-  const newsworthyItems = allNewsworthy.slice(0, MAX_ITEMS_PER_MEETING)
-  const cappedCount = allNewsworthy.length - newsworthyItems.length
-
-  console.log(`   📊 ${allNewsworthy.length} newsworthy / ${skippedItems.length} filtered out${cappedCount > 0 ? ` (capped ${cappedCount})` : ''}`)
+  console.log(
+    `   📊 ${newsworthyItems.length} newsworthy / ${skippedItems.length} filtered out`,
+  );
 
   if (skippedItems.length > 0) {
-    console.log(`   ⏭️  Filtered: ${skippedItems.map(i => i.title).join(', ')}`)
+    console.log(
+      `   ⏭️  Filtered: ${skippedItems.map((i) => i.title).join(", ")}`,
+    );
   }
 
-  const sourceUrl = meeting.pageUrl
+  const sourceUrl = meeting.pageUrl;
 
   // Process each newsworthy item as a separate thread
   for (const item of newsworthyItems) {
-    const itemSourceId = `${sourceId}-${item.itemNumber.replace(/\s+/g, '')}`
+    const itemSourceId = `${sourceId}-${item.itemNumber.replace(/\s+/g, "")}`;
 
     if (await isAlreadyImported(itemSourceId)) {
-      console.log(`   ⏭️  Already imported: ${item.itemNumber} ${item.title}`)
-      result.skipped++
-      continue
+      console.log(`   ⏭️  Already imported: ${item.itemNumber} ${item.title}`);
+      result.skipped++;
+      continue;
     }
 
     try {
       // STAGE 2: Write article from excerpt only
-      console.log(`   ✍️  Stage 2: Writing ${item.itemNumber}...`)
+      console.log(`   ✍️  Stage 2: Writing ${item.itemNumber}...`);
       const article = await writeArticle(
         item.excerpt,
         source.municipality,
         item.itemNumber,
         meeting.organ,
-        language
-      )
+      );
 
       // DEDUP CHECK: Is there a similar article already?
       const similar = await findSimilarExisting(article.title, municipalityId)
@@ -266,22 +274,25 @@ async function processMeeting(
       }
 
       // STAGE 3: Verify against original excerpt
-      console.log(`   ✓  Stage 3: Verifying ${item.itemNumber}...`)
+      console.log(`   ✓  Stage 3: Verifying ${item.itemNumber}...`);
       const verification = await verifyArticle(
         article,
         item.excerpt,
         source.municipality,
-        language
-      )
+      );
 
-      if (!verification.passed && verification.severity === 'major') {
-        console.log(`   ⚠️  Verification FAILED for ${item.itemNumber}: ${verification.issues.join('; ')}`)
-        result.errors.push(`${itemSourceId}: verification failed — ${verification.issues.join('; ')}`)
-        continue
+      if (!verification.passed && verification.severity === "major") {
+        console.log(
+          `   ⚠️  Verification FAILED for ${item.itemNumber}: ${verification.issues.join("; ")}`,
+        );
+        result.errors.push(
+          `${itemSourceId}: verification failed — ${verification.issues.join("; ")}`,
+        );
+        continue;
       }
 
       if (verification.issues.length > 0) {
-        console.log(`   ℹ️  Minor issues: ${verification.issues.join('; ')}`)
+        console.log(`   ℹ️  Minor issues: ${verification.issues.join("; ")}`);
       }
 
       // Build thread content (language-aware)
@@ -290,18 +301,17 @@ async function processMeeting(
 
 <div class="summary-keypoints">
 
-${prompts.keyPointsHeader}
-${article.keyPoints.map(p => `- ${p}`).join('\n')}
+**Keskeiset kohdat:**
+${article.keyPoints.map((p) => `- ${p}`).join("\n")}
 
 </div>
 
 <div class="summary-footer">
 
-${footerText}
+---
+*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Näytä alkuperäinen →](${sourceUrl})*`;
 
-</div>`
-
-      const contentHtml = renderMarkdown(content)
+      const contentHtml = renderMarkdown(content);
 
       // Create thread
       const [thread] = await db
@@ -311,18 +321,18 @@ ${footerText}
           content,
           contentHtml,
           authorId: botUserId,
-          scope: 'local',
+          scope: "local",
           municipalityId,
           locationId,
           sourceInstitutionId,
-          source: 'minutes_import',
+          source: "minutes_import",
           sourceUrl,
           sourceId: itemSourceId,
           aiGenerated: true,
-          aiModel: process.env.MISTRAL_MODEL || 'mistral-small-latest',
+          aiModel: process.env.MISTRAL_MODEL || "mistral-small-latest",
           originalContent: item.excerpt.slice(0, 50000),
           institutionalContext: {
-            type: 'minutes',
+            type: "minutes",
             meetingId: meeting.id,
             itemNumber: item.itemNumber,
             organ: meeting.organ,
@@ -330,35 +340,37 @@ ${footerText}
             verificationPassed: verification.passed,
             verificationSeverity: verification.severity,
             verificationIssues: verification.issues,
-            importedAt: new Date().toISOString()
-          }
+            importedAt: new Date().toISOString(),
+          },
         })
-        .returning({ id: threads.id })
+        .returning({ id: threads.id });
 
-      // Add tags (language-aware default tag)
-      const allTags = [...article.tags, prompts.defaultTag]
-      const uniqueTags = [...new Set(allTags)].slice(0, 10)
+      // Add tags
+      const allTags = [...article.tags, "pöytäkirja"];
+      const uniqueTags = [...new Set(allTags)].slice(0, 10);
 
       for (const tag of uniqueTags) {
-        await db.insert(threadTags).values({
-          threadId: thread.id,
-          tag: tag.toLowerCase()
-        }).onConflictDoNothing()
+        await db
+          .insert(threadTags)
+          .values({
+            threadId: thread.id,
+            tag: tag.toLowerCase(),
+          })
+          .onConflictDoNothing();
       }
 
-      result.imported++
+      result.imported++;
       result.threads.push({
         id: thread.id,
         title: article.title,
-        municipality: source.municipality
-      })
+        municipality: source.municipality,
+      });
 
-      console.log(`   ✅ Created: ${article.title}`)
-
+      console.log(`   ✅ Created: ${article.title}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      result.errors.push(`${itemSourceId}: ${msg}`)
-      console.log(`   ❌ Item error: ${msg}`)
+      const msg = err instanceof Error ? err.message : String(err);
+      result.errors.push(`${itemSourceId}: ${msg}`);
+      console.log(`   ❌ Item error: ${msg}`);
     }
   }
 }
@@ -374,142 +386,140 @@ ${footerText}
  * Phase 2: Round-robin — pick one new meeting per municipality, process it,
  *          then move to the next municipality. Repeat until done.
  */
-export async function importMinutes(options: ImportOptions = {}): Promise<ImportResult> {
+export async function importMinutes(
+  options: ImportOptions = {},
+): Promise<ImportResult> {
   const {
     municipalities: filterMunicipalities,
     dryRun = false,
     limit = 5,
-    maxAgeDays = 7
-  } = options
+    maxAgeDays = 7,
+  } = options;
 
-  console.log('📋 Starting municipal minutes import...')
-  console.log(`   Dry run: ${dryRun}`)
-  console.log(`   Limit per municipality: ${limit}`)
-  console.log(`   Max age: ${maxAgeDays} days`)
+  console.log("📋 Starting municipal minutes import...");
+  console.log(`   Dry run: ${dryRun}`);
+  console.log(`   Limit per municipality: ${limit}`);
+  console.log(`   Max age: ${maxAgeDays} days`);
 
   const result: ImportResult = {
     imported: 0,
     skipped: 0,
     errors: [],
-    threads: []
-  }
+    threads: [],
+  };
 
-  // Load all sources: static (hand-coded) + adaptive (DB-configured)
-  let sources = await getMinuteSources()
+  // Filter sources if specific municipalities requested
+  let sources = MINUTE_SOURCES;
   if (filterMunicipalities?.length) {
-    const filterLower = filterMunicipalities.map(m => m.toLowerCase())
-    sources = sources.filter(s => filterLower.includes(s.municipality.toLowerCase()))
+    const filterLower = filterMunicipalities.map((m) => m.toLowerCase());
+    sources = sources.filter((s) =>
+      filterLower.includes(s.municipality.toLowerCase()),
+    );
   }
 
-  console.log(`   Processing ${sources.length} municipalities`)
+  console.log(`   Processing ${sources.length} municipalities`);
 
   // Get bot user for authorship
-  const botUserId = dryRun ? 'dry-run-id' : await getOrCreateBotUser()
+  const botUserId = dryRun ? "dry-run-id" : await getOrCreateBotUser();
 
   // ============================================
   // PHASE 1: Fetch meeting lists for ALL municipalities (fast, no AI)
   // ============================================
-  console.log('\n📡 Phase 1: Fetching meeting lists...')
+  console.log("\n📡 Phase 1: Fetching meeting lists...");
 
-  const sourcesWithMeetings: { source: MinuteSource; meetings: Meeting[] }[] = []
+  const sourcesWithMeetings: { source: MinuteSource; meetings: Meeting[] }[] =
+    [];
 
   for (const source of sources) {
-    const fetcher = fetchers[source.type]
+    const fetcher = fetchers[source.type];
     if (!fetcher) {
-      console.log(`   ⚠️  ${source.type} not supported`)
-      continue
+      console.log(`   ⚠️  ${source.type} not supported`);
+      continue;
     }
 
     try {
-      const allMeetings = await fetcher.fetchMeetings(source)
-      const sourceLang = source.language || getLanguageForCountry(source.country || 'FI')
-      const meetings = filterRecentMeetings(allMeetings, maxAgeDays, sourceLang)
-      console.log(`   ${source.municipality}: ${meetings.length} recent / ${allMeetings.length} total`)
-      sourcesWithMeetings.push({ source, meetings: meetings.slice(0, limit) })
-
-      // Record success for adaptive sources
-      if (source.configId) {
-        await recordSuccess(source.configId).catch(() => {})
-      }
+      const allMeetings = await fetcher.fetchMeetings(source);
+      const meetings = filterRecentMeetings(allMeetings, maxAgeDays);
+      console.log(
+        `   ${source.municipality}: ${meetings.length} recent / ${allMeetings.length} total`,
+      );
+      sourcesWithMeetings.push({ source, meetings: meetings.slice(0, limit) });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      result.errors.push(`${source.municipality}: ${msg}`)
-      console.log(`   ❌ ${source.municipality}: ${msg}`)
-
-      // Record failure for adaptive sources
-      if (source.configId) {
-        await recordFailure(source.configId, msg).catch(() => {})
-      }
+      const msg = err instanceof Error ? err.message : String(err);
+      result.errors.push(`${source.municipality}: ${msg}`);
+      console.log(`   ❌ ${source.municipality}: ${msg}`);
     }
   }
 
   // ============================================
   // PHASE 2: Round-robin — one new meeting per municipality per round
   // ============================================
-  console.log(`\n🔄 Phase 2: Round-robin processing across ${sourcesWithMeetings.length} municipalities...`)
+  console.log(
+    `\n🔄 Phase 2: Round-robin processing across ${sourcesWithMeetings.length} municipalities...`,
+  );
 
   // Track which meeting index each municipality is at
-  const meetingIndex: number[] = sourcesWithMeetings.map(() => 0)
+  const meetingIndex: number[] = sourcesWithMeetings.map(() => 0);
 
-  let roundNumber = 0
-  let anyProgress = true
+  let roundNumber = 0;
+  let anyProgress = true;
 
   while (anyProgress) {
-    anyProgress = false
-    roundNumber++
-    console.log(`\n--- Round ${roundNumber} ---`)
+    anyProgress = false;
+    roundNumber++;
+    console.log(`\n--- Round ${roundNumber} ---`);
 
     for (let i = 0; i < sourcesWithMeetings.length; i++) {
-      const { source, meetings } = sourcesWithMeetings[i]
+      const { source, meetings } = sourcesWithMeetings[i];
 
       // Find next un-imported meeting for this municipality
-      let processed = false
+      let processed = false;
       while (!processed && meetingIndex[i] < meetings.length) {
-        const meeting = meetings[meetingIndex[i]]
-        meetingIndex[i]++
+        const meeting = meetings[meetingIndex[i]];
+        meetingIndex[i]++;
 
-        const sourceId = `${source.municipality.toLowerCase()}-${meeting.id}`
+        const sourceId = `${source.municipality.toLowerCase()}-${meeting.id}`;
 
-        if (!dryRun && await isAlreadyImported(sourceId)) {
-          result.skipped++
-          continue
+        if (!dryRun && (await isAlreadyImported(sourceId))) {
+          result.skipped++;
+          continue;
         }
 
         // Found an un-imported meeting — process it
-        console.log(`\n🏛️  ${source.municipality}: ${meeting.title}`)
-        processed = true
-        anyProgress = true
+        console.log(`\n🏛️  ${source.municipality}: ${meeting.title}`);
+        processed = true;
+        anyProgress = true;
 
         if (dryRun) {
-          result.imported++
-          break
+          result.imported++;
+          break;
         }
 
         try {
-          await processMeeting(meeting, source, botUserId, result)
+          await processMeeting(meeting, source, botUserId, result);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          result.errors.push(`${sourceId}: ${msg}`)
-          console.log(`   ❌ Error: ${msg}`)
+          const msg = err instanceof Error ? err.message : String(err);
+          result.errors.push(`${sourceId}: ${msg}`);
+          console.log(`   ❌ Error: ${msg}`);
         }
 
         // Only process one meeting per municipality per round
-        break
+        break;
       }
     }
   }
 
-  console.log('\n✅ Import complete:')
-  console.log(`   Imported: ${result.imported}`)
-  console.log(`   Skipped: ${result.skipped}`)
-  console.log(`   Errors: ${result.errors.length}`)
+  console.log("\n✅ Import complete:");
+  console.log(`   Imported: ${result.imported}`);
+  console.log(`   Skipped: ${result.skipped}`);
+  console.log(`   Errors: ${result.errors.length}`);
 
-  return result
+  return result;
 }
 
 /**
  * List available municipalities for import
  */
 export function getAvailableMunicipalities(): string[] {
-  return MINUTE_SOURCES.map(s => s.municipality)
+  return MINUTE_SOURCES.map((s) => s.municipality);
 }

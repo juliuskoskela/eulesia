@@ -1,63 +1,77 @@
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { X } from 'lucide-react'
-import type { MapFilterState } from './types'
-import { DEFAULT_FILTERS } from './types'
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { X } from "lucide-react";
+import type { MapFilterState } from "./types";
+import { DEFAULT_FILTERS } from "./types";
 
 interface MapAdvancedFiltersProps {
-  filters: MapFilterState
-  onFiltersChange: (filters: MapFilterState) => void
-  onClose: () => void
+  filters: MapFilterState;
+  onFiltersChange: (filters: MapFilterState) => void;
+  onClose: () => void;
 }
 
 const scopeOptions = [
-  { value: 'local' as const, labelKey: 'scopes.local' },
-  { value: 'national' as const, labelKey: 'scopes.national' },
-  { value: 'european' as const, labelKey: 'scopes.european' }
-]
+  { value: "local" as const, labelKey: "scopes.local" },
+  { value: "national" as const, labelKey: "scopes.national" },
+  { value: "european" as const, labelKey: "scopes.european" },
+];
 
 const languageOptions = [
-  { value: 'fi', label: 'Suomi' },
-  { value: 'en', label: 'English' },
-  { value: 'sv', label: 'Svenska' }
-]
+  { value: "fi", label: "Suomi" },
+  { value: "en", label: "English" },
+  { value: "sv", label: "Svenska" },
+];
 
-export function MapAdvancedFilters({ filters, onFiltersChange, onClose }: MapAdvancedFiltersProps) {
-  const { t } = useTranslation('map')
-  const [localFilters, setLocalFilters] = useState<MapFilterState>({ ...filters })
+export function MapAdvancedFilters({
+  filters,
+  onFiltersChange,
+  onClose,
+}: MapAdvancedFiltersProps) {
+  const { t } = useTranslation("map");
+  const [localFilters, setLocalFilters] = useState<MapFilterState>({
+    ...filters,
+  });
 
-  const handleScopeToggle = (scope: 'local' | 'national' | 'european') => {
-    const current = localFilters.scopes || []
+  const handleScopeToggle = (scope: "local" | "national" | "european") => {
+    const current = localFilters.scopes || [];
     const updated = current.includes(scope)
-      ? current.filter(s => s !== scope)
-      : [...current, scope]
-    setLocalFilters({ ...localFilters, scopes: updated.length > 0 ? updated : undefined })
-  }
+      ? current.filter((s) => s !== scope)
+      : [...current, scope];
+    setLocalFilters({
+      ...localFilters,
+      scopes: updated.length > 0 ? updated : undefined,
+    });
+  };
 
   const handleLanguageToggle = (lang: string) => {
-    const current = localFilters.languages || []
+    const current = localFilters.languages || [];
     const updated = current.includes(lang)
-      ? current.filter(l => l !== lang)
-      : [...current, lang]
-    setLocalFilters({ ...localFilters, languages: updated.length > 0 ? updated : undefined })
-  }
+      ? current.filter((l) => l !== lang)
+      : [...current, lang];
+    setLocalFilters({
+      ...localFilters,
+      languages: updated.length > 0 ? updated : undefined,
+    });
+  };
 
   const handleApply = () => {
-    onFiltersChange(localFilters)
-    onClose()
-  }
+    onFiltersChange(localFilters);
+    onClose();
+  };
 
   const handleReset = () => {
-    onFiltersChange(DEFAULT_FILTERS)
-    onClose()
-  }
+    onFiltersChange(DEFAULT_FILTERS);
+    onClose();
+  };
 
   return (
     <div className="absolute inset-0 z-[1001] flex items-center justify-center bg-black/30">
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-sm mx-4 max-h-[80vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('filters.advanced')}</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+            {t("filters.advanced")}
+          </h3>
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
@@ -70,27 +84,31 @@ export function MapAdvancedFilters({ filters, onFiltersChange, onClose }: MapAdv
           {/* Custom date range */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('filters.dateFrom')} / {t('filters.dateTo')}
+              {t("filters.dateFrom")} / {t("filters.dateTo")}
             </label>
             <div className="flex gap-2">
               <input
                 type="date"
-                value={localFilters.dateFrom || ''}
-                onChange={(e) => setLocalFilters({
-                  ...localFilters,
-                  dateFrom: e.target.value || undefined,
-                  timePreset: 'all'
-                })}
+                value={localFilters.dateFrom || ""}
+                onChange={(e) =>
+                  setLocalFilters({
+                    ...localFilters,
+                    dateFrom: e.target.value || undefined,
+                    timePreset: "all",
+                  })
+                }
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
               />
               <input
                 type="date"
-                value={localFilters.dateTo || ''}
-                onChange={(e) => setLocalFilters({
-                  ...localFilters,
-                  dateTo: e.target.value || undefined,
-                  timePreset: 'all'
-                })}
+                value={localFilters.dateTo || ""}
+                onChange={(e) =>
+                  setLocalFilters({
+                    ...localFilters,
+                    dateTo: e.target.value || undefined,
+                    timePreset: "all",
+                  })
+                }
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
               />
             </div>
@@ -99,24 +117,24 @@ export function MapAdvancedFilters({ filters, onFiltersChange, onClose }: MapAdv
           {/* Scope filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('filters.scope')}
+              {t("filters.scope")}
             </label>
             <div className="flex flex-wrap gap-2">
               {scopeOptions.map(({ value, labelKey }) => {
-                const isActive = localFilters.scopes?.includes(value)
+                const isActive = localFilters.scopes?.includes(value);
                 return (
                   <button
                     key={value}
                     onClick={() => handleScopeToggle(value)}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                     }`}
                   >
                     {t(labelKey)}
                   </button>
-                )
+                );
               })}
             </div>
           </div>
@@ -124,24 +142,24 @@ export function MapAdvancedFilters({ filters, onFiltersChange, onClose }: MapAdv
           {/* Language filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('filters.language')}
+              {t("filters.language")}
             </label>
             <div className="flex flex-wrap gap-2">
               {languageOptions.map(({ value, label }) => {
-                const isActive = localFilters.languages?.includes(value)
+                const isActive = localFilters.languages?.includes(value);
                 return (
                   <button
                     key={value}
                     onClick={() => handleLanguageToggle(value)}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                     }`}
                   >
                     {label}
                   </button>
-                )
+                );
               })}
             </div>
           </div>
@@ -149,18 +167,21 @@ export function MapAdvancedFilters({ filters, onFiltersChange, onClose }: MapAdv
           {/* Tags filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('filters.tags')}
+              {t("filters.tags")}
             </label>
             <input
               type="text"
               placeholder="koulutus, liikenne..."
-              value={localFilters.tags?.join(', ') || ''}
+              value={localFilters.tags?.join(", ") || ""}
               onChange={(e) => {
                 const tags = e.target.value
-                  .split(',')
-                  .map(t => t.trim())
-                  .filter(Boolean)
-                setLocalFilters({ ...localFilters, tags: tags.length > 0 ? tags : undefined })
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean);
+                setLocalFilters({
+                  ...localFilters,
+                  tags: tags.length > 0 ? tags : undefined,
+                });
               }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
             />
@@ -173,16 +194,16 @@ export function MapAdvancedFilters({ filters, onFiltersChange, onClose }: MapAdv
             onClick={handleReset}
             className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
-            {t('filters.reset')}
+            {t("filters.reset")}
           </button>
           <button
             onClick={handleApply}
             className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
           >
-            {t('filters.apply')}
+            {t("filters.apply")}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

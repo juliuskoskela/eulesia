@@ -29,57 +29,63 @@ User
 ### Database Tables
 
 #### `rooms`
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| owner_id | uuid | FK to users |
-| name | varchar(255) | Room name |
-| description | text | Optional description |
-| visibility | enum | 'public' or 'private' |
-| is_pinned | boolean | Pin room to top |
-| sort_order | integer | Custom ordering |
-| message_count | integer | Cached message count |
-| created_at | timestamp | Creation time |
-| updated_at | timestamp | Last update |
+
+| Column        | Type         | Description           |
+| ------------- | ------------ | --------------------- |
+| id            | uuid         | Primary key           |
+| owner_id      | uuid         | FK to users           |
+| name          | varchar(255) | Room name             |
+| description   | text         | Optional description  |
+| visibility    | enum         | 'public' or 'private' |
+| is_pinned     | boolean      | Pin room to top       |
+| sort_order    | integer      | Custom ordering       |
+| message_count | integer      | Cached message count  |
+| created_at    | timestamp    | Creation time         |
+| updated_at    | timestamp    | Last update           |
 
 #### `room_members`
+
 For private rooms - tracks who can access.
 
-| Column | Type | Description |
-|--------|------|-------------|
-| room_id | uuid | FK to rooms |
-| user_id | uuid | FK to users |
+| Column    | Type      | Description      |
+| --------- | --------- | ---------------- |
+| room_id   | uuid      | FK to rooms      |
+| user_id   | uuid      | FK to users      |
 | joined_at | timestamp | When they joined |
 
 #### `room_messages`
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| room_id | uuid | FK to rooms |
-| author_id | uuid | FK to users |
-| content | text | Message content (Markdown) |
-| content_html | text | Rendered HTML |
-| created_at | timestamp | Creation time |
-| updated_at | timestamp | Last edit |
+
+| Column       | Type      | Description                |
+| ------------ | --------- | -------------------------- |
+| id           | uuid      | Primary key                |
+| room_id      | uuid      | FK to rooms                |
+| author_id    | uuid      | FK to users                |
+| content      | text      | Message content (Markdown) |
+| content_html | text      | Rendered HTML              |
+| created_at   | timestamp | Creation time              |
+| updated_at   | timestamp | Last edit                  |
 
 #### `room_invitations`
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| room_id | uuid | FK to rooms |
-| inviter_id | uuid | Who sent the invite |
-| invitee_id | uuid | Who received it |
-| status | varchar | 'pending', 'accepted', 'declined' |
-| created_at | timestamp | When sent |
+
+| Column     | Type      | Description                       |
+| ---------- | --------- | --------------------------------- |
+| id         | uuid      | Primary key                       |
+| room_id    | uuid      | FK to rooms                       |
+| inviter_id | uuid      | Who sent the invite               |
+| invitee_id | uuid      | Who received it                   |
+| status     | varchar   | 'pending', 'accepted', 'declined' |
+| created_at | timestamp | When sent                         |
 
 ## API Endpoints
 
 ### Home
 
 #### GET `/api/v1/home/:userId`
+
 Get a user's home page with their rooms.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -105,9 +111,11 @@ Get a user's home page with their rooms.
 ### Rooms
 
 #### POST `/api/v1/home/rooms`
+
 Create a new room.
 
 **Request:**
+
 ```json
 {
   "name": "My New Room",
@@ -117,9 +125,11 @@ Create a new room.
 ```
 
 #### GET `/api/v1/home/rooms/:roomId`
+
 Get room details with messages.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -144,17 +154,21 @@ Get room details with messages.
 ```
 
 #### PATCH `/api/v1/home/rooms/:roomId`
+
 Update room settings (owner only).
 
 #### DELETE `/api/v1/home/rooms/:roomId`
+
 Delete a room (owner only).
 
 ### Messages
 
 #### POST `/api/v1/home/rooms/:roomId/messages`
+
 Post a message to a room.
 
 **Request:**
+
 ```json
 {
   "content": "Hello, everyone!"
@@ -162,15 +176,18 @@ Post a message to a room.
 ```
 
 **Access rules:**
+
 - Public rooms: Any authenticated user can post
 - Private rooms: Only owner and members can post
 
 ### Invitations
 
 #### POST `/api/v1/home/rooms/:roomId/invite`
+
 Invite a user to a private room (owner only).
 
 **Request:**
+
 ```json
 {
   "userId": "..."
@@ -178,28 +195,36 @@ Invite a user to a private room (owner only).
 ```
 
 #### GET `/api/v1/home/invitations`
+
 Get pending invitations for the current user.
 
 #### POST `/api/v1/home/invitations/:id/accept`
+
 Accept an invitation.
 
 #### POST `/api/v1/home/invitations/:id/decline`
+
 Decline an invitation.
 
 #### DELETE `/api/v1/home/rooms/:roomId/members/me`
+
 Leave a room (for members, not owners).
 
 ## Frontend Components
 
 ### HomePage (`/home`)
+
 Displays the current user's home with:
+
 - List of rooms (public and private)
 - Create room form
 - Pending invitations
 - Recent activity (threads and clubs)
 
 ### RoomPage (`/home/room/:roomId`)
+
 Displays a single room with:
+
 - Room header with name and visibility
 - Description (if set)
 - Member count (for private rooms)
@@ -210,12 +235,14 @@ Displays a single room with:
 ## Access Control
 
 ### Public Rooms
+
 - Anyone can view
 - Any authenticated user can post messages
 - Only owner can edit/delete room
 - Only owner can see room settings
 
 ### Private Rooms
+
 - Only owner and members can view
 - Only owner and members can post
 - Owner can invite new members
@@ -229,11 +256,13 @@ The system uses Socket.io for real-time message delivery:
 ### Events
 
 **Client -> Server:**
+
 - `join_room` - Join a room's real-time channel
 - `leave_room` - Leave a room's real-time channel
 - `send_room_message` - Send a new message
 
 **Server -> Client:**
+
 - `new_room_message` - New message in a room
 - `user_typing` - Typing indicator
 
@@ -242,40 +271,41 @@ The system uses Socket.io for real-time message delivery:
 ### Creating a public discussion room
 
 ```typescript
-const { mutateAsync: createRoom } = useCreateRoom()
+const { mutateAsync: createRoom } = useCreateRoom();
 
 await createRoom({
   name: "Town Hall Discussion",
   description: "Open discussion about local issues",
-  visibility: "public"
-})
+  visibility: "public",
+});
 ```
 
 ### Creating a private room and inviting members
 
 ```typescript
-const { mutateAsync: createRoom } = useCreateRoom()
-const { mutateAsync: invite } = useInviteToRoom(roomId)
+const { mutateAsync: createRoom } = useCreateRoom();
+const { mutateAsync: invite } = useInviteToRoom(roomId);
 
 const room = await createRoom({
   name: "Project Planning",
-  visibility: "private"
-})
+  visibility: "private",
+});
 
-await invite(friendUserId)
+await invite(friendUserId);
 ```
 
 ### Sending a message
 
 ```typescript
-const { mutateAsync: sendMessage } = useSendRoomMessage(roomId)
+const { mutateAsync: sendMessage } = useSendRoomMessage(roomId);
 
-await sendMessage("Hello everyone!")
+await sendMessage("Hello everyone!");
 ```
 
 ## Future Enhancements
 
 Potential features for future versions:
+
 - Room member roles (admin, moderator)
 - Room themes/customization
 - Pinned messages

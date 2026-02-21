@@ -66,12 +66,8 @@
           "name": "club_comments_thread_id_club_threads_id_fk",
           "tableFrom": "club_comments",
           "tableTo": "club_threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -79,12 +75,8 @@
           "name": "club_comments_author_id_users_id_fk",
           "tableFrom": "club_comments",
           "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -147,12 +139,8 @@
           "name": "club_members_club_id_clubs_id_fk",
           "tableFrom": "club_members",
           "tableTo": "clubs",
-          "columnsFrom": [
-            "club_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["club_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -160,12 +148,8 @@
           "name": "club_members_user_id_users_id_fk",
           "tableFrom": "club_members",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -173,10 +157,7 @@
       "compositePrimaryKeys": {
         "club_members_club_id_user_id_pk": {
           "name": "club_members_club_id_user_id_pk",
-          "columns": [
-            "club_id",
-            "user_id"
-          ]
+          "columns": ["club_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -281,12 +262,8 @@
           "name": "club_threads_club_id_clubs_id_fk",
           "tableFrom": "club_threads",
           "tableTo": "clubs",
-          "columnsFrom": [
-            "club_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["club_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -294,12 +271,8 @@
           "name": "club_threads_author_id_users_id_fk",
           "tableFrom": "club_threads",
           "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -502,12 +475,8 @@
           "name": "clubs_creator_id_users_id_fk",
           "tableFrom": "clubs",
           "tableTo": "users",
-          "columnsFrom": [
-            "creator_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["creator_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -515,12 +484,8 @@
           "name": "clubs_place_id_places_id_fk",
           "tableFrom": "clubs",
           "tableTo": "places",
-          "columnsFrom": [
-            "place_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["place_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -528,12 +493,8 @@
           "name": "clubs_municipality_id_municipalities_id_fk",
           "tableFrom": "clubs",
           "tableTo": "municipalities",
-          "columnsFrom": [
-            "municipality_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["municipality_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -543,9 +504,7 @@
         "clubs_slug_unique": {
           "name": "clubs_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "checkConstraints": {}
@@ -602,12 +561,8 @@
           "name": "comment_votes_comment_id_comments_id_fk",
           "tableFrom": "comment_votes",
           "tableTo": "comments",
-          "columnsFrom": [
-            "comment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["comment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -615,12 +570,8 @@
           "name": "comment_votes_user_id_users_id_fk",
           "tableFrom": "comment_votes",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -628,10 +579,7 @@
       "compositePrimaryKeys": {
         "comment_votes_comment_id_user_id_pk": {
           "name": "comment_votes_comment_id_user_id_pk",
-          "columns": [
-            "comment_id",
-            "user_id"
-          ]
+          "columns": ["comment_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -759,12 +707,8 @@
           "name": "comments_thread_id_threads_id_fk",
           "tableFrom": "comments",
           "tableTo": "threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -772,12 +716,8 @@
           "name": "comments_author_id_users_id_fk",
           "tableFrom": "comments",
           "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -895,12 +835,8 @@
           "name": "invite_codes_created_by_users_id_fk",
           "tableFrom": "invite_codes",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -908,12 +844,8 @@
           "name": "invite_codes_used_by_users_id_fk",
           "tableFrom": "invite_codes",
           "tableTo": "users",
-          "columnsFrom": [
-            "used_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["used_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -923,9 +855,7 @@
         "invite_codes_code_unique": {
           "name": "invite_codes_code_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraints": {}
@@ -1188,12 +1118,8 @@
           "name": "notifications_user_id_users_id_fk",
           "tableFrom": "notifications",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1533,12 +1459,8 @@
           "name": "places_municipality_id_municipalities_id_fk",
           "tableFrom": "places",
           "tableTo": "municipalities",
-          "columnsFrom": [
-            "municipality_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["municipality_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1546,12 +1468,8 @@
           "name": "places_created_by_users_id_fk",
           "tableFrom": "places",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1632,12 +1550,8 @@
           "name": "room_invitations_room_id_rooms_id_fk",
           "tableFrom": "room_invitations",
           "tableTo": "rooms",
-          "columnsFrom": [
-            "room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1645,12 +1559,8 @@
           "name": "room_invitations_inviter_id_users_id_fk",
           "tableFrom": "room_invitations",
           "tableTo": "users",
-          "columnsFrom": [
-            "inviter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inviter_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1658,12 +1568,8 @@
           "name": "room_invitations_invitee_id_users_id_fk",
           "tableFrom": "room_invitations",
           "tableTo": "users",
-          "columnsFrom": [
-            "invitee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invitee_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1718,12 +1624,8 @@
           "name": "room_members_room_id_rooms_id_fk",
           "tableFrom": "room_members",
           "tableTo": "rooms",
-          "columnsFrom": [
-            "room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1731,12 +1633,8 @@
           "name": "room_members_user_id_users_id_fk",
           "tableFrom": "room_members",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1744,10 +1642,7 @@
       "compositePrimaryKeys": {
         "room_members_room_id_user_id_pk": {
           "name": "room_members_room_id_user_id_pk",
-          "columns": [
-            "room_id",
-            "user_id"
-          ]
+          "columns": ["room_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -1840,12 +1735,8 @@
           "name": "room_messages_room_id_rooms_id_fk",
           "tableFrom": "room_messages",
           "tableTo": "rooms",
-          "columnsFrom": [
-            "room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["room_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1853,12 +1744,8 @@
           "name": "room_messages_author_id_users_id_fk",
           "tableFrom": "room_messages",
           "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1977,12 +1864,8 @@
           "name": "rooms_owner_id_users_id_fk",
           "tableFrom": "rooms",
           "tableTo": "users",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2077,12 +1960,8 @@
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2114,12 +1993,8 @@
           "name": "thread_tags_thread_id_threads_id_fk",
           "tableFrom": "thread_tags",
           "tableTo": "threads",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2127,10 +2002,7 @@
       "compositePrimaryKeys": {
         "thread_tags_thread_id_tag_pk": {
           "name": "thread_tags_thread_id_tag_pk",
-          "columns": [
-            "thread_id",
-            "tag"
-          ]
+          "columns": ["thread_id", "tag"]
         }
       },
       "uniqueConstraints": {},
@@ -2362,12 +2234,8 @@
           "name": "threads_author_id_users_id_fk",
           "tableFrom": "threads",
           "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2375,12 +2243,8 @@
           "name": "threads_municipality_id_municipalities_id_fk",
           "tableFrom": "threads",
           "tableTo": "municipalities",
-          "columnsFrom": [
-            "municipality_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["municipality_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2388,12 +2252,8 @@
           "name": "threads_place_id_places_id_fk",
           "tableFrom": "threads",
           "tableTo": "places",
-          "columnsFrom": [
-            "place_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["place_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2438,12 +2298,8 @@
           "name": "user_subscriptions_user_id_users_id_fk",
           "tableFrom": "user_subscriptions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2451,11 +2307,7 @@
       "compositePrimaryKeys": {
         "user_subscriptions_user_id_entity_type_entity_id_pk": {
           "name": "user_subscriptions_user_id_entity_type_entity_id_pk",
-          "columns": [
-            "user_id",
-            "entity_type",
-            "entity_id"
-          ]
+          "columns": ["user_id", "entity_type", "entity_id"]
         }
       },
       "uniqueConstraints": {},
@@ -2679,12 +2531,8 @@
           "name": "users_municipality_id_municipalities_id_fk",
           "tableFrom": "users",
           "tableTo": "municipalities",
-          "columnsFrom": [
-            "municipality_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["municipality_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2694,16 +2542,12 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         },
         "users_username_unique": {
           "name": "users_username_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "username"
-          ]
+          "columns": ["username"]
         }
       },
       "checkConstraints": {}
@@ -2713,95 +2557,52 @@
     "public.club_member_role": {
       "name": "club_member_role",
       "schema": "public",
-      "values": [
-        "member",
-        "moderator",
-        "admin"
-      ]
+      "values": ["member", "moderator", "admin"]
     },
     "public.identity_level": {
       "name": "identity_level",
       "schema": "public",
-      "values": [
-        "basic",
-        "substantial",
-        "high"
-      ]
+      "values": ["basic", "substantial", "high"]
     },
     "public.institution_type": {
       "name": "institution_type",
       "schema": "public",
-      "values": [
-        "municipality",
-        "agency",
-        "ministry"
-      ]
+      "values": ["municipality", "agency", "ministry"]
     },
     "public.invite_code_status": {
       "name": "invite_code_status",
       "schema": "public",
-      "values": [
-        "available",
-        "used",
-        "revoked"
-      ]
+      "values": ["available", "used", "revoked"]
     },
     "public.place_source": {
       "name": "place_source",
       "schema": "public",
-      "values": [
-        "user",
-        "osm",
-        "lipas",
-        "mml",
-        "municipal"
-      ]
+      "values": ["user", "osm", "lipas", "mml", "municipal"]
     },
     "public.place_type": {
       "name": "place_type",
       "schema": "public",
-      "values": [
-        "poi",
-        "area",
-        "route",
-        "landmark",
-        "building"
-      ]
+      "values": ["poi", "area", "route", "landmark", "building"]
     },
     "public.room_visibility": {
       "name": "room_visibility",
       "schema": "public",
-      "values": [
-        "public",
-        "private"
-      ]
+      "values": ["public", "private"]
     },
     "public.scope": {
       "name": "scope",
       "schema": "public",
-      "values": [
-        "municipal",
-        "regional",
-        "national"
-      ]
+      "values": ["municipal", "regional", "national"]
     },
     "public.sync_status": {
       "name": "sync_status",
       "schema": "public",
-      "values": [
-        "active",
-        "deprecated",
-        "merged"
-      ]
+      "values": ["active", "deprecated", "merged"]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": [
-        "citizen",
-        "institution",
-        "admin"
-      ]
+      "values": ["citizen", "institution", "admin"]
     }
   },
   "schemas": {},

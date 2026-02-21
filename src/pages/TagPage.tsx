@@ -1,12 +1,12 @@
-import { useParams, Link } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Hash, Building2, Tag } from 'lucide-react'
-import { Layout } from '../components/layout'
-import { SEOHead } from '../components/SEOHead'
-import { ThreadCard } from '../components/agora/ThreadCard'
-import { FollowButton } from '../components/common'
-import { useTagPage, useVoteThread } from '../hooks/useApi'
-import type { Thread as ApiThread, UserSummary } from '../lib/api'
+import { useParams, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { ArrowLeft, Hash, Building2, Tag } from "lucide-react";
+import { Layout } from "../components/layout";
+import { SEOHead } from "../components/SEOHead";
+import { ThreadCard } from "../components/agora/ThreadCard";
+import { FollowButton } from "../components/common";
+import { useTagPage, useVoteThread } from "../hooks/useApi";
+import type { Thread as ApiThread, UserSummary } from "../lib/api";
 
 function transformThread(thread: ApiThread) {
   return {
@@ -27,8 +27,8 @@ function transformThread(thread: ApiThread) {
     institutionalContext: thread.institutionalContext,
     source: thread.source,
     sourceUrl: thread.sourceUrl,
-    aiGenerated: thread.aiGenerated
-  }
+    aiGenerated: thread.aiGenerated,
+  };
 }
 
 function transformAuthor(author: UserSummary) {
@@ -38,23 +38,32 @@ function transformAuthor(author: UserSummary) {
     role: author.role,
     verified: author.identityVerified ?? false,
     avatarUrl: author.avatarUrl,
-    avatarInitials: author.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-    institutionType: author.institutionType as 'municipality' | 'agency' | 'ministry' | undefined,
-    institutionName: author.institutionName
-  }
+    avatarInitials: author.name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase(),
+    institutionType: author.institutionType as
+      | "municipality"
+      | "agency"
+      | "ministry"
+      | undefined,
+    institutionName: author.institutionName,
+  };
 }
 
 export function TagPage() {
-  const { t } = useTranslation(['agora', 'common'])
-  const { tagName } = useParams<{ tagName: string }>()
-  const decodedTag = decodeURIComponent(tagName || '')
+  const { t } = useTranslation(["agora", "common"]);
+  const { tagName } = useParams<{ tagName: string }>();
+  const decodedTag = decodeURIComponent(tagName || "");
 
-  const { data, isLoading, error } = useTagPage(decodedTag)
-  const voteMutation = useVoteThread()
+  const { data, isLoading, error } = useTagPage(decodedTag);
+  const voteMutation = useVoteThread();
 
   const handleVote = (threadId: string, value: number) => {
-    voteMutation.mutate({ threadId, value })
-  }
+    voteMutation.mutate({ threadId, value });
+  };
 
   if (isLoading) {
     return (
@@ -63,30 +72,37 @@ export function TagPage() {
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
       </Layout>
-    )
+    );
   }
 
   if (error || !data) {
     return (
       <Layout>
         <div className="p-8 text-center">
-          <p className="text-gray-500">{t('tag.notFound')}</p>
-          <Link to="/agora" className="text-blue-600 hover:underline mt-2 inline-block">
-            {t('thread.returnToAgora')}
+          <p className="text-gray-500">{t("tag.notFound")}</p>
+          <Link
+            to="/agora"
+            className="text-blue-600 hover:underline mt-2 inline-block"
+          >
+            {t("thread.returnToAgora")}
           </Link>
         </div>
       </Layout>
-    )
+    );
   }
 
-  const displayName = data.tagMeta?.displayName || decodedTag.replace(/-/g, ' ')
-  const description = data.institution?.description || data.tagMeta?.description
+  const displayName =
+    data.tagMeta?.displayName || decodedTag.replace(/-/g, " ");
+  const description =
+    data.institution?.description || data.tagMeta?.description;
 
   return (
     <Layout>
       <SEOHead
         title={`${displayName} – Agora`}
-        description={description || `Keskustelut aiheesta ${displayName} Eulesia-alustalla`}
+        description={
+          description || `Keskustelut aiheesta ${displayName} Eulesia-alustalla`
+        }
         path={`/agora/tag/${tagName}`}
       />
       {/* Back navigation */}
@@ -96,7 +112,7 @@ export function TagPage() {
           className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          {t('common:actions.back')}
+          {t("common:actions.back")}
         </button>
       </div>
 
@@ -107,14 +123,20 @@ export function TagPage() {
             <Hash className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{displayName}</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+              {displayName}
+            </h1>
             {description && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{description}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {description}
+              </p>
             )}
             {data.tagMeta?.category && (
               <div className="flex items-center gap-1.5 mt-2">
                 <Tag className="w-3.5 h-3.5 text-gray-400" />
-                <span className="text-xs text-gray-500 capitalize">{data.tagMeta.category}</span>
+                <span className="text-xs text-gray-500 capitalize">
+                  {data.tagMeta.category}
+                </span>
               </div>
             )}
           </div>
@@ -132,19 +154,20 @@ export function TagPage() {
                 {data.institution.institutionName}
               </Link>
             </div>
-            {data.institution.relatedTags && data.institution.relatedTags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {data.institution.relatedTags.map(tag => (
-                  <Link
-                    key={tag}
-                    to={`/agora/tag/${encodeURIComponent(tag)}`}
-                    className="text-xs bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 px-2 py-0.5 rounded-full hover:bg-violet-200 dark:hover:bg-violet-900/50"
-                  >
-                    {tag.replace(/-/g, ' ')}
-                  </Link>
-                ))}
-              </div>
-            )}
+            {data.institution.relatedTags &&
+              data.institution.relatedTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {data.institution.relatedTags.map((tag) => (
+                    <Link
+                      key={tag}
+                      to={`/agora/tag/${encodeURIComponent(tag)}`}
+                      className="text-xs bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 px-2 py-0.5 rounded-full hover:bg-violet-200 dark:hover:bg-violet-900/50"
+                    >
+                      {tag.replace(/-/g, " ")}
+                    </Link>
+                  ))}
+                </div>
+              )}
           </div>
         )}
 
@@ -154,14 +177,14 @@ export function TagPage() {
         </div>
 
         <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          {t('tag.thread', { count: data.total })}
+          {t("tag.thread", { count: data.total })}
         </div>
       </div>
 
       {/* Thread list */}
       <div className="px-4 py-4 space-y-3">
         {data.items.length > 0 ? (
-          data.items.map(thread => (
+          data.items.map((thread) => (
             <ThreadCard
               key={thread.id}
               thread={transformThread(thread)}
@@ -173,7 +196,7 @@ export function TagPage() {
         ) : (
           <div className="text-center py-8 text-gray-500">
             <Hash className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-            <p>{t('tag.noThreads')}</p>
+            <p>{t("tag.noThreads")}</p>
           </div>
         )}
 
@@ -181,11 +204,14 @@ export function TagPage() {
         {data.hasMore && (
           <div className="text-center py-4">
             <p className="text-sm text-gray-500">
-              {t('tag.showing', { shown: data.items.length, total: data.total })}
+              {t("tag.showing", {
+                shown: data.items.length,
+                total: data.total,
+              })}
             </p>
           </div>
         )}
       </div>
     </Layout>
-  )
+  );
 }

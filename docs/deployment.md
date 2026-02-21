@@ -3,6 +3,7 @@
 ## Overview
 
 Eulesia uses a simple CI/CD pipeline:
+
 1. Push to `main` branch
 2. GitHub Actions connects to server via SSH
 3. Server pulls code and rebuilds Docker containers
@@ -63,6 +64,7 @@ cat ~/.ssh/github_deploy_eulesia.pub
 ```
 
 Add to GitHub: Repository → Settings → Deploy keys → Add deploy key
+
 - Title: `Hetzner deploy`
 - Key: (paste public key)
 - Allow write access: No
@@ -98,6 +100,7 @@ nano .env  # Fill in production values
 ```
 
 Required values:
+
 - `DOMAIN=eulesia.eu`
 - `ACME_EMAIL=admin@eulesia.eu`
 - `DB_PASSWORD=<secure-password>`
@@ -105,6 +108,7 @@ Required values:
 - `RESEND_API_KEY=<your-resend-key>` (or leave empty for beta)
 
 Generate secrets:
+
 ```bash
 # Generate session secret
 openssl rand -base64 32
@@ -138,15 +142,16 @@ docker exec eulesia-api npm run create-invites -- 10
 
 Go to GitHub Repository → Settings → Secrets and variables → Actions
 
-| Secret | Value |
-|--------|-------|
-| `SERVER_HOST` | `95.216.206.136` |
-| `SERVER_USER` | `root` |
+| Secret           | Value                          |
+| ---------------- | ------------------------------ |
+| `SERVER_HOST`    | `95.216.206.136`               |
+| `SERVER_USER`    | `root`                         |
 | `SERVER_SSH_KEY` | Base64-encoded SSH private key |
 
 ### Get SSH Key for Actions
 
 On the server, the `github_actions` key should already exist:
+
 ```bash
 ssh palvelin "base64 -w 0 ~/.ssh/github_actions"
 ```
@@ -190,10 +195,10 @@ ssh palvelin "docker exec eulesia-api npm run create-invites -- 10"
 
 Set up these DNS records:
 
-| Type | Name | Value |
-|------|------|-------|
-| A | eulesia.eu | 95.216.206.136 |
-| A | api.eulesia.eu | 95.216.206.136 |
+| Type | Name           | Value          |
+| ---- | -------------- | -------------- |
+| A    | eulesia.eu     | 95.216.206.136 |
+| A    | api.eulesia.eu | 95.216.206.136 |
 
 ## SSL Certificates
 
@@ -202,6 +207,7 @@ Traefik handles SSL automatically via Let's Encrypt. Certificates are stored in 
 ## Troubleshooting
 
 ### Container won't start
+
 ```bash
 docker logs eulesia-api
 docker logs eulesia-web
@@ -209,6 +215,7 @@ docker logs eulesia-traefik
 ```
 
 ### Database connection issues
+
 ```bash
 # Check if DB is running
 docker exec eulesia-db pg_isready -U eulesia
@@ -218,6 +225,7 @@ docker exec eulesia-api node -e "require('postgres')('postgresql://...').query('
 ```
 
 ### SSL certificate issues
+
 ```bash
 # Check Traefik logs
 docker logs eulesia-traefik
@@ -227,6 +235,7 @@ docker exec eulesia-traefik traefik --entrypoints.websecure.http.tls.certresolve
 ```
 
 ### GitHub Actions fails with "Permission denied"
+
 1. Check `SERVER_SSH_KEY` is correct (base64, no whitespace)
 2. Verify key is in `authorized_keys` on server
 3. Test manually: `ssh -i ~/.ssh/github_actions root@95.216.206.136`
@@ -248,16 +257,16 @@ ssh palvelin "cd /root/eulesia/docker && docker compose -f docker-compose.prod.y
 
 ## Environment Variables Reference
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DOMAIN` | Main domain | `eulesia.eu` |
-| `ACME_EMAIL` | Let's Encrypt email | `admin@eulesia.eu` |
-| `DB_USER` | PostgreSQL username | `eulesia` |
-| `DB_PASSWORD` | PostgreSQL password | (generate) |
-| `DB_NAME` | Database name | `eulesia` |
+| Variable         | Description            | Example             |
+| ---------------- | ---------------------- | ------------------- |
+| `DOMAIN`         | Main domain            | `eulesia.eu`        |
+| `ACME_EMAIL`     | Let's Encrypt email    | `admin@eulesia.eu`  |
+| `DB_USER`        | PostgreSQL username    | `eulesia`           |
+| `DB_PASSWORD`    | PostgreSQL password    | (generate)          |
+| `DB_NAME`        | Database name          | `eulesia`           |
 | `SESSION_SECRET` | Session encryption key | (generate 32 chars) |
-| `RESEND_API_KEY` | Resend API key | `re_xxx...` |
+| `RESEND_API_KEY` | Resend API key         | `re_xxx...`         |
 
 ---
 
-*Last updated: 2026-01-27*
+_Last updated: 2026-01-27_

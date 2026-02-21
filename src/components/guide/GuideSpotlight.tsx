@@ -1,14 +1,17 @@
 interface GuideSpotlightProps {
-  targetRect: DOMRect
-  padding?: number
+  targetRect: DOMRect;
+  padding?: number;
 }
 
-export function GuideSpotlight({ targetRect, padding = 8 }: GuideSpotlightProps) {
-  const x = targetRect.left - padding
-  const y = targetRect.top - padding
-  const w = targetRect.width + padding * 2
-  const h = targetRect.height + padding * 2
-  const r = 8
+export function GuideSpotlight({
+  targetRect,
+  padding = 8,
+}: GuideSpotlightProps) {
+  const x = targetRect.left - padding;
+  const y = targetRect.top - padding;
+  const w = targetRect.width + padding * 2;
+  const h = targetRect.height + padding * 2;
+  const r = 8;
 
   return (
     <svg
@@ -19,15 +22,7 @@ export function GuideSpotlight({ targetRect, padding = 8 }: GuideSpotlightProps)
       <defs>
         <mask id="guide-spotlight-mask">
           <rect x="0" y="0" width="100%" height="100%" fill="white" />
-          <rect
-            x={x}
-            y={y}
-            width={w}
-            height={h}
-            rx={r}
-            ry={r}
-            fill="black"
-          />
+          <rect x={x} y={y} width={w} height={h} rx={r} ry={r} fill="black" />
         </mask>
       </defs>
       <rect
@@ -39,5 +34,5 @@ export function GuideSpotlight({ targetRect, padding = 8 }: GuideSpotlightProps)
         mask="url(#guide-spotlight-mask)"
       />
     </svg>
-  )
+  );
 }

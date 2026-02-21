@@ -1,18 +1,51 @@
-import { useState, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Users, Shield, MessageSquare, Pin, ScrollText, X, Send,
-  Settings, Globe, Lock, MapPin, Image as ImageIcon, Loader2, Trash2,
-  MoreVertical, UserMinus, UserPlus, Mail
-} from 'lucide-react'
-import { Layout } from '../components/layout'
-import { SEOHead } from '../components/SEOHead'
-import { ActorBadge, ContentEndMarker, FollowButton, LocationSearch, ReportButton } from '../components/common'
-import { useClub, useClubCategories, useJoinClub, useLeaveClub, useCreateClubThread, useUpdateClub, useDeleteClub, useUpdateMemberRole, useRemoveMember, useClubInvitations, useInviteToClub, useCancelClubInvitation, useSearchUsers } from '../hooks/useApi'
-import { api } from '../lib/api'
-import { formatRelativeTime } from '../lib/formatTime'
-import type { UserSummary, ClubThread, ClubMember, LocationResult } from '../lib/api'
+  ArrowLeft,
+  Users,
+  Shield,
+  MessageSquare,
+  Pin,
+  ScrollText,
+  X,
+  Send,
+  Settings,
+  Globe,
+  Lock,
+  MapPin,
+  Image as ImageIcon,
+  Loader2,
+  Trash2,
+  MoreVertical,
+  UserMinus,
+} from "lucide-react";
+import { Layout } from "../components/layout";
+import { SEOHead } from "../components/SEOHead";
+import {
+  ActorBadge,
+  ContentEndMarker,
+  FollowButton,
+  LocationSearch,
+  ReportButton,
+} from "../components/common";
+import {
+  useClub,
+  useJoinClub,
+  useLeaveClub,
+  useCreateClubThread,
+  useUpdateClub,
+  useUpdateMemberRole,
+  useRemoveMember,
+} from "../hooks/useApi";
+import { api } from "../lib/api";
+import { formatRelativeTime } from "../lib/formatTime";
+import type {
+  UserSummary,
+  ClubThread,
+  ClubMember,
+  LocationResult,
+} from "../lib/api";
 
 // Transform API user to component format
 function transformUser(user: UserSummary) {
@@ -22,91 +55,95 @@ function transformUser(user: UserSummary) {
     role: user.role,
     verified: user.identityVerified ?? false,
     avatarUrl: user.avatarUrl,
-    avatarInitials: user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-    institutionType: user.institutionType as 'municipality' | 'agency' | 'ministry' | undefined,
-    institutionName: user.institutionName
-  }
+    avatarInitials: user.name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase(),
+    institutionType: user.institutionType as
+      | "municipality"
+      | "agency"
+      | "ministry"
+      | undefined,
+    institutionName: user.institutionName,
+  };
 }
 
 export function ClubViewPage() {
-  const { t } = useTranslation('clubs')
-  const navigate = useNavigate()
-  const { clubId } = useParams<{ clubId: string }>()
-  const { data: club, isLoading, error } = useClub(clubId || '')
-  const joinClubMutation = useJoinClub()
-  const leaveClubMutation = useLeaveClub()
-  const createThreadMutation = useCreateClubThread(clubId || '')
-  const updateClubMutation = useUpdateClub(clubId || '')
-  const deleteClubMutation = useDeleteClub()
-  const updateRoleMutation = useUpdateMemberRole(clubId || '')
-  const removeMemberMutation = useRemoveMember(clubId || '')
-  const { data: categoriesData } = useClubCategories()
-  const availableCategories = categoriesData?.map(c => c.category) || []
-  const { data: pendingInvitations } = useClubInvitations(clubId || '')
-  const inviteToClubMutation = useInviteToClub(clubId || '')
-  const cancelInvitationMutation = useCancelClubInvitation(clubId || '')
+  const { t } = useTranslation("clubs");
+  const navigate = useNavigate();
+  const { clubId } = useParams<{ clubId: string }>();
+  const { data: club, isLoading, error } = useClub(clubId || "");
+  const joinClubMutation = useJoinClub();
+  const leaveClubMutation = useLeaveClub();
+  const createThreadMutation = useCreateClubThread(clubId || "");
+  const updateClubMutation = useUpdateClub(clubId || "");
+  const updateRoleMutation = useUpdateMemberRole(clubId || "");
+  const removeMemberMutation = useRemoveMember(clubId || "");
 
-  const [showNewThreadForm, setShowNewThreadForm] = useState(false)
-  const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null)
-  const [confirmRemoveMember, setConfirmRemoveMember] = useState<ClubMember | null>(null)
-  const [confirmDeleteClub, setConfirmDeleteClub] = useState(false)
-  const [inviteSearch, setInviteSearch] = useState('')
-  const { data: searchedUsers } = useSearchUsers(inviteSearch, 5)
-  const [newThreadTitle, setNewThreadTitle] = useState('')
-  const [newThreadContent, setNewThreadContent] = useState('')
+  const [showNewThreadForm, setShowNewThreadForm] = useState(false);
+  const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null);
+  const [confirmRemoveMember, setConfirmRemoveMember] =
+    useState<ClubMember | null>(null);
+  const [newThreadTitle, setNewThreadTitle] = useState("");
+  const [newThreadContent, setNewThreadContent] = useState("");
 
   // Settings modal state
-  const [showSettings, setShowSettings] = useState(false)
-  const [editName, setEditName] = useState('')
-  const [editDescription, setEditDescription] = useState('')
-  const [editCategory, setEditCategory] = useState('')
-  const [editIsPublic, setEditIsPublic] = useState(true)
-  const [editCoverImage, setEditCoverImage] = useState<string | null>(null)
-  const [editLocation, setEditLocation] = useState<LocationResult | null>(null)
-  const [editAddress, setEditAddress] = useState('')
-  const [editRules, setEditRules] = useState<string[]>([])
-  const [editRuleInput, setEditRuleInput] = useState('')
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
-  const settingsImageRef = useRef<HTMLInputElement>(null)
+  const [showSettings, setShowSettings] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editIsPublic, setEditIsPublic] = useState(true);
+  const [editCoverImage, setEditCoverImage] = useState<string | null>(null);
+  const [editLocation, setEditLocation] = useState<LocationResult | null>(null);
+  const [editAddress, setEditAddress] = useState("");
+  const [editRules, setEditRules] = useState<string[]>([]);
+  const [editRuleInput, setEditRuleInput] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const settingsImageRef = useRef<HTMLInputElement>(null);
 
   const openSettings = () => {
-    if (!club) return
-    setEditName(club.name)
-    setEditDescription(club.description || '')
-    setEditCategory(club.category || '')
-    setEditIsPublic(club.isPublic)
-    setEditCoverImage(club.coverImageUrl || null)
-    setEditAddress(club.address || '')
-    setEditRules(club.rules || [])
-    setEditRuleInput('')
-    setEditLocation(null)
-    setShowSettings(true)
-  }
+    if (!club) return;
+    setEditName(club.name);
+    setEditDescription(club.description || "");
+    setEditCategory(club.category || "");
+    setEditIsPublic(club.isPublic);
+    setEditCoverImage(club.coverImageUrl || null);
+    setEditAddress(club.address || "");
+    setEditRules(club.rules || []);
+    setEditRuleInput("");
+    setEditLocation(null);
+    setShowSettings(true);
+  };
 
-  const handleSettingsImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-    if (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024) return
-    setIsUploadingImage(true)
+  const handleSettingsImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024)
+      return;
+    setIsUploadingImage(true);
     try {
-      const result = await api.uploadImage(file)
-      setEditCoverImage(result.url)
+      const result = await api.uploadImage(file);
+      setEditCoverImage(result.url);
     } catch (err) {
-      console.error('Image upload failed:', err)
+      console.error("Image upload failed:", err);
     } finally {
-      setIsUploadingImage(false)
-      if (settingsImageRef.current) settingsImageRef.current.value = ''
+      setIsUploadingImage(false);
+      if (settingsImageRef.current) settingsImageRef.current.value = "";
     }
-  }
+  };
 
   const handleAddEditRule = () => {
-    const rule = editRuleInput.trim()
+    const rule = editRuleInput.trim();
     if (rule && editRules.length < 10) {
-      setEditRules(prev => [...prev, rule])
-      setEditRuleInput('')
+      setEditRules((prev) => [...prev, rule]);
+      setEditRuleInput("");
     }
-  }
+  };
 
   const handleSaveSettings = async () => {
     try {
@@ -118,56 +155,58 @@ export function ClubViewPage() {
         isPublic: editIsPublic,
         latitude: editLocation ? editLocation.latitude : undefined,
         longitude: editLocation ? editLocation.longitude : undefined,
-        address: editLocation ? (editLocation.displayName || editLocation.name) : (editAddress || undefined),
-        rules: editRules.length > 0 ? editRules : undefined
-      })
-      setShowSettings(false)
+        address: editLocation
+          ? editLocation.displayName || editLocation.name
+          : editAddress || undefined,
+        rules: editRules.length > 0 ? editRules : undefined,
+      });
+      setShowSettings(false);
     } catch (err) {
-      console.error('Failed to update club:', err)
+      console.error("Failed to update club:", err);
     }
-  }
+  };
 
   const handleChangeRole = async (userId: string, role: string) => {
     try {
-      await updateRoleMutation.mutateAsync({ userId, role })
-      setMemberMenuOpen(null)
+      await updateRoleMutation.mutateAsync({ userId, role });
+      setMemberMenuOpen(null);
     } catch (err) {
-      console.error('Failed to change role:', err)
+      console.error("Failed to change role:", err);
     }
-  }
+  };
 
   const handleRemoveMember = async (userId: string) => {
     try {
-      await removeMemberMutation.mutateAsync(userId)
-      setConfirmRemoveMember(null)
+      await removeMemberMutation.mutateAsync(userId);
+      setConfirmRemoveMember(null);
     } catch (err) {
-      console.error('Failed to remove member:', err)
+      console.error("Failed to remove member:", err);
     }
-  }
+  };
 
   const handleCreateThread = async () => {
-    if (!newThreadTitle.trim() || !newThreadContent.trim()) return
+    if (!newThreadTitle.trim() || !newThreadContent.trim()) return;
     try {
       await createThreadMutation.mutateAsync({
         title: newThreadTitle.trim(),
-        content: newThreadContent.trim()
-      })
-      setNewThreadTitle('')
-      setNewThreadContent('')
-      setShowNewThreadForm(false)
+        content: newThreadContent.trim(),
+      });
+      setNewThreadTitle("");
+      setNewThreadContent("");
+      setShowNewThreadForm(false);
     } catch (err) {
-      console.error('Failed to create thread:', err)
+      console.error("Failed to create thread:", err);
     }
-  }
+  };
 
   const handleJoin = async () => {
-    if (!clubId) return
+    if (!clubId) return;
     try {
-      await joinClubMutation.mutateAsync(clubId)
+      await joinClubMutation.mutateAsync(clubId);
     } catch (err) {
-      console.error('Failed to join club:', err)
+      console.error("Failed to join club:", err);
     }
-  }
+  };
 
   const handleInviteUser = async (userId: string) => {
     try {
@@ -197,13 +236,13 @@ export function ClubViewPage() {
   }
 
   const handleLeave = async () => {
-    if (!clubId) return
+    if (!clubId) return;
     try {
-      await leaveClubMutation.mutateAsync(clubId)
+      await leaveClubMutation.mutateAsync(clubId);
     } catch (err) {
-      console.error('Failed to leave club:', err)
+      console.error("Failed to leave club:", err);
     }
-  }
+  };
 
   if (isLoading) {
     return (
@@ -212,35 +251,45 @@ export function ClubViewPage() {
           <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
         </div>
       </Layout>
-    )
+    );
   }
 
   if (error || !club) {
     return (
       <Layout>
         <div className="p-8 text-center">
-          <p className="text-gray-500 dark:text-gray-400">{t('clubNotFound')}</p>
-          <Link to="/clubs" className="text-teal-600 hover:underline mt-2 inline-block">
-            {t('returnToClubs')}
+          <p className="text-gray-500 dark:text-gray-400">
+            {t("clubNotFound")}
+          </p>
+          <Link
+            to="/clubs"
+            className="text-teal-600 hover:underline mt-2 inline-block"
+          >
+            {t("returnToClubs")}
           </Link>
         </div>
       </Layout>
-    )
+    );
   }
 
-  const isAdminOrMod = club.memberRole === 'admin' || club.memberRole === 'moderator'
-  const moderators = club.moderators || []
-  const members = club.members || []
-  const threads = club.threads || []
-  const pinnedThread = threads.find((t: ClubThread) => t.isPinned)
-  const regularThreads = threads.filter((t: ClubThread) => !t.isPinned)
+  const isAdminOrMod =
+    club.memberRole === "admin" || club.memberRole === "moderator";
+  const moderators = club.moderators || [];
+  const members = club.members || [];
+  const threads = club.threads || [];
+  const pinnedThread = threads.find((t: ClubThread) => t.isPinned);
+  const regularThreads = threads.filter((t: ClubThread) => !t.isPinned);
 
   return (
     <Layout>
       {club && (
         <SEOHead
           title={club.name}
-          description={club.description ? club.description.substring(0, 160) : `${club.name} – klubi Eulesia-alustalla`}
+          description={
+            club.description
+              ? club.description.substring(0, 160)
+              : `${club.name} – klubi Eulesia-alustalla`
+          }
           path={`/clubs/${clubId}`}
           image={club.coverImageUrl || undefined}
           noIndex={!club.isPublic}
@@ -253,7 +302,7 @@ export function ClubViewPage() {
           className="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          {t('backToClubs')}
+          {t("backToClubs")}
         </button>
       </div>
 
@@ -284,12 +333,12 @@ export function ClubViewPage() {
               {club.isPublic ? (
                 <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Globe className="w-3 h-3" />
-                  {t('openClub')}
+                  {t("openClub")}
                 </span>
               ) : (
                 <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Lock className="w-3 h-3" />
-                  {t('closedClub')}
+                  {t("closedClub")}
                 </span>
               )}
             </div>
@@ -307,11 +356,11 @@ export function ClubViewPage() {
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
               <div className="flex items-center gap-1">
                 <Users className="w-4 h-4" />
-                <span>{t('members', { count: club.memberCount })}</span>
+                <span>{t("members", { count: club.memberCount })}</span>
               </div>
               <div className="flex items-center gap-1">
                 <MessageSquare className="w-4 h-4" />
-                <span>{t('threads', { count: threads.length })}</span>
+                <span>{t("threads", { count: threads.length })}</span>
               </div>
               {club.address && (
                 <div className="flex items-center gap-1">
@@ -327,7 +376,7 @@ export function ClubViewPage() {
             <button
               onClick={openSettings}
               className="p-2 hover:bg-teal-100 rounded-lg transition-colors"
-              title={t('settings')}
+              title={t("settings")}
             >
               <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </button>
@@ -342,7 +391,7 @@ export function ClubViewPage() {
               disabled={leaveClubMutation.isPending}
               className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
             >
-              {leaveClubMutation.isPending ? t('leaving') : t('leave')}
+              {leaveClubMutation.isPending ? t("leaving") : t("leave")}
             </button>
           ) : (
             <button
@@ -350,15 +399,17 @@ export function ClubViewPage() {
               disabled={joinClubMutation.isPending}
               className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
             >
-              {joinClubMutation.isPending ? t('joining') : t('join')}
+              {joinClubMutation.isPending ? t("joining") : t("join")}
             </button>
           )}
           {clubId && (
-            <FollowButton entityType="club" entityId={clubId} variant="outline" />
+            <FollowButton
+              entityType="club"
+              entityId={clubId}
+              variant="outline"
+            />
           )}
-          {clubId && (
-            <ReportButton contentType="club" contentId={clubId} />
-          )}
+          {clubId && <ReportButton contentType="club" contentId={clubId} />}
         </div>
       </div>
 
@@ -367,15 +418,22 @@ export function ClubViewPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 rounded-t-xl z-10">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('editClub')}</h3>
-              <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                {t("editClub")}
+              </h3>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+              >
                 <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
             <div className="p-4 space-y-4">
               {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.name')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t("create.name")}
+                </label>
                 <input
                   type="text"
                   value={editName}
@@ -386,7 +444,9 @@ export function ClubViewPage() {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.description')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t("create.description")}
+                </label>
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
@@ -397,10 +457,14 @@ export function ClubViewPage() {
 
               {/* Category — dropdown */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.category')}</label>
-                <select
-                  value={availableCategories.includes(editCategory) ? editCategory : editCategory ? '__other__' : ''}
-                  onChange={(e) => setEditCategory(e.target.value === '__other__' ? '' : e.target.value)}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t("create.category")}
+                </label>
+                <input
+                  type="text"
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  placeholder={t("create.categoryPlaceholder")}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                 >
                   <option value="">{t('create.selectCategory')}</option>
@@ -422,10 +486,16 @@ export function ClubViewPage() {
 
               {/* Cover Image */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.coverImage')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t("create.coverImage")}
+                </label>
                 {editCoverImage ? (
                   <div className="relative">
-                    <img src={editCoverImage} alt="" className="w-full h-32 object-cover rounded-lg" />
+                    <img
+                      src={editCoverImage}
+                      alt=""
+                      className="w-full h-32 object-cover rounded-lg"
+                    />
                     <button
                       type="button"
                       onClick={() => setEditCoverImage(null)}
@@ -446,7 +516,9 @@ export function ClubViewPage() {
                     ) : (
                       <>
                         <ImageIcon className="w-5 h-5" />
-                        <span className="text-sm">{t('create.coverImage')}</span>
+                        <span className="text-sm">
+                          {t("create.coverImage")}
+                        </span>
                       </>
                     )}
                   </button>
@@ -462,19 +534,25 @@ export function ClubViewPage() {
 
               {/* Location */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.location')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t("create.location")}
+                </label>
                 <LocationSearch
                   value={editLocation}
                   onChange={setEditLocation}
                 />
                 {!editLocation && editAddress && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('location')}: {editAddress}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {t("location")}: {editAddress}
+                  </p>
                 )}
               </div>
 
               {/* Visibility */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('create.visibility')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t("create.visibility")}
+                </label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -485,7 +563,7 @@ export function ClubViewPage() {
                       className="text-teal-600"
                     />
                     <Globe className="w-4 h-4 text-green-600" />
-                    <span className="text-sm">{t('create.open')}</span>
+                    <span className="text-sm">{t("create.open")}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -496,23 +574,36 @@ export function ClubViewPage() {
                       className="text-teal-600"
                     />
                     <Lock className="w-4 h-4 text-amber-600" />
-                    <span className="text-sm">{t('create.closed')}</span>
+                    <span className="text-sm">{t("create.closed")}</span>
                   </label>
                 </div>
               </div>
 
               {/* Rules */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('create.rules')}</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t("create.rules")}
+                </label>
                 {editRules.length > 0 && (
                   <ol className="space-y-1 mb-2">
                     {editRules.map((rule, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 rounded-lg">
-                        <span className="text-gray-400 dark:text-gray-500 font-medium">{i + 1}.</span>
-                        <span className="flex-1 text-gray-700 dark:text-gray-300">{rule}</span>
+                      <li
+                        key={i}
+                        className="flex items-center gap-2 text-sm bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 rounded-lg"
+                      >
+                        <span className="text-gray-400 dark:text-gray-500 font-medium">
+                          {i + 1}.
+                        </span>
+                        <span className="flex-1 text-gray-700 dark:text-gray-300">
+                          {rule}
+                        </span>
                         <button
                           type="button"
-                          onClick={() => setEditRules(prev => prev.filter((_, idx) => idx !== i))}
+                          onClick={() =>
+                            setEditRules((prev) =>
+                              prev.filter((_, idx) => idx !== i),
+                            )
+                          }
                           className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                         >
                           <Trash2 className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
@@ -528,12 +619,12 @@ export function ClubViewPage() {
                       value={editRuleInput}
                       onChange={(e) => setEditRuleInput(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          handleAddEditRule()
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddEditRule();
                         }
                       }}
-                      placeholder={t('create.rulePlaceholder')}
+                      placeholder={t("create.rulePlaceholder")}
                       className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                     />
                     <button
@@ -542,7 +633,7 @@ export function ClubViewPage() {
                       disabled={!editRuleInput.trim()}
                       className="px-3 py-1.5 text-sm text-teal-600 hover:bg-teal-50 rounded-lg disabled:opacity-50"
                     >
-                      {t('create.addRule')}
+                      {t("create.addRule")}
                     </button>
                   </div>
                 )}
@@ -632,14 +723,14 @@ export function ClubViewPage() {
                   onClick={() => setShowSettings(false)}
                   className="flex-1 px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
-                  {t('common:actions.cancel')}
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   onClick={handleSaveSettings}
                   disabled={updateClubMutation.isPending || !editName.trim()}
                   className="flex-1 bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {updateClubMutation.isPending ? t('saving') : t('save')}
+                  {updateClubMutation.isPending ? t("saving") : t("save")}
                 </button>
               </div>
 
@@ -689,13 +780,20 @@ export function ClubViewPage() {
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
               <ScrollText className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('rules')}</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                {t("rules")}
+              </h2>
             </div>
             <div className="p-4">
               <ol className="space-y-2">
                 {club.rules.map((rule, i) => (
-                  <li key={i} className="flex gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <span className="text-gray-400 dark:text-gray-500 font-medium">{i + 1}.</span>
+                  <li
+                    key={i}
+                    className="flex gap-2 text-sm text-gray-700 dark:text-gray-300"
+                  >
+                    <span className="text-gray-400 dark:text-gray-500 font-medium">
+                      {i + 1}.
+                    </span>
                     <span>{rule}</span>
                   </li>
                 ))}
@@ -709,10 +807,10 @@ export function ClubViewPage() {
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
               <Shield className="w-4 h-4 text-teal-600" />
-              {t('moderators')}
+              {t("moderators")}
             </h3>
             <div className="space-y-2">
-              {moderators.map(mod => (
+              {moderators.map((mod) => (
                 <ActorBadge key={mod.id} user={transformUser(mod)} size="sm" />
               ))}
             </div>
@@ -724,35 +822,53 @@ export function ClubViewPage() {
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
               <Users className="w-4 h-4 text-teal-600" />
-              {t('memberList')} ({members.length})
+              {t("memberList")} ({members.length})
             </h3>
             <div className="flex flex-wrap gap-2">
-              {members.slice(0, 20).map(member => (
-                <div key={member.id} className="relative flex items-center gap-1.5 px-2 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-full text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group">
+              {members.slice(0, 20).map((member) => (
+                <div
+                  key={member.id}
+                  className="relative flex items-center gap-1.5 px-2 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-full text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                >
                   <Link
                     to={`/home/${member.id}`}
                     className="flex items-center gap-1.5"
                   >
                     {member.avatarUrl ? (
-                      <img src={member.avatarUrl} alt="" className="w-5 h-5 rounded-full" />
+                      <img
+                        src={member.avatarUrl}
+                        alt=""
+                        className="w-5 h-5 rounded-full"
+                      />
                     ) : (
                       <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-medium text-teal-700">
                         {member.name.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="text-gray-700 dark:text-gray-300">{member.name}</span>
-                    {member.role === 'admin' && (
-                      <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">{t('moderation.admin')}</span>
+                    <span className="text-gray-700 dark:text-gray-300">
+                      {member.name}
+                    </span>
+                    {member.role === "admin" && (
+                      <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">
+                        {t("moderation.admin")}
+                      </span>
                     )}
-                    {member.role === 'moderator' && (
-                      <span className="text-[10px] text-blue-700 bg-blue-100 px-1 rounded">{t('moderation.moderator')}</span>
+                    {member.role === "moderator" && (
+                      <span className="text-[10px] text-blue-700 bg-blue-100 px-1 rounded">
+                        {t("moderation.moderator")}
+                      </span>
                     )}
                   </Link>
 
                   {/* Moderation menu button */}
                   {isAdminOrMod && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setMemberMenuOpen(memberMenuOpen === member.id ? null : member.id) }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMemberMenuOpen(
+                          memberMenuOpen === member.id ? null : member.id,
+                        );
+                      }}
                       className="ml-1 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <MoreVertical className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
@@ -762,36 +878,57 @@ export function ClubViewPage() {
                   {/* Moderation dropdown */}
                   {memberMenuOpen === member.id && (
                     <>
-                      <div className="fixed inset-0 z-10" onClick={() => setMemberMenuOpen(null)} />
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setMemberMenuOpen(null)}
+                      />
                       <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 py-1 z-20">
                         {/* Role change - admin only */}
-                        {club.memberRole === 'admin' && (
+                        {club.memberRole === "admin" && (
                           <>
-                            <div className="px-3 py-1.5 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase">{t('moderation.changeRole')}</div>
-                            {(['member', 'moderator', 'admin'] as const).map(role => (
-                              <button
-                                key={role}
-                                onClick={() => handleChangeRole(member.id, role)}
-                                disabled={member.role === role || updateRoleMutation.isPending}
-                                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 ${
-                                  member.role === role ? 'text-teal-600 font-medium' : 'text-gray-700 dark:text-gray-300'
-                                }`}
-                              >
-                                {t(`moderation.${role}`)}
-                                {member.role === role && ' ✓'}
-                              </button>
-                            ))}
+                            <div className="px-3 py-1.5 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase">
+                              {t("moderation.changeRole")}
+                            </div>
+                            {(["member", "moderator", "admin"] as const).map(
+                              (role) => (
+                                <button
+                                  key={role}
+                                  onClick={() =>
+                                    handleChangeRole(member.id, role)
+                                  }
+                                  disabled={
+                                    member.role === role ||
+                                    updateRoleMutation.isPending
+                                  }
+                                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 ${
+                                    member.role === role
+                                      ? "text-teal-600 font-medium"
+                                      : "text-gray-700 dark:text-gray-300"
+                                  }`}
+                                >
+                                  {t(`moderation.${role}`)}
+                                  {member.role === role && " ✓"}
+                                </button>
+                              ),
+                            )}
                             <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
                           </>
                         )}
                         {/* Remove member - admin + mod (mod can't remove admin/mod) */}
-                        {!(club.memberRole === 'moderator' && (member.role === 'admin' || member.role === 'moderator')) && (
+                        {!(
+                          club.memberRole === "moderator" &&
+                          (member.role === "admin" ||
+                            member.role === "moderator")
+                        ) && (
                           <button
-                            onClick={() => { setMemberMenuOpen(null); setConfirmRemoveMember(member) }}
+                            onClick={() => {
+                              setMemberMenuOpen(null);
+                              setConfirmRemoveMember(member);
+                            }}
                             className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                           >
                             <UserMinus className="w-3.5 h-3.5" />
-                            {t('moderation.removeFromClub')}
+                            {t("moderation.removeFromClub")}
                           </button>
                         )}
                       </div>
@@ -812,21 +949,27 @@ export function ClubViewPage() {
         {confirmRemoveMember && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-sm p-6">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('moderation.confirmRemove')}</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{confirmRemoveMember.name}</p>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {t("moderation.confirmRemove")}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                {confirmRemoveMember.name}
+              </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setConfirmRemoveMember(null)}
                   className="flex-1 px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
-                  {t('common:actions.cancel')}
+                  {t("common:actions.cancel")}
                 </button>
                 <button
                   onClick={() => handleRemoveMember(confirmRemoveMember.id)}
                   disabled={removeMemberMutation.isPending}
                   className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
-                  {removeMemberMutation.isPending ? '...' : t('moderation.removeFromClub')}
+                  {removeMemberMutation.isPending
+                    ? "..."
+                    : t("moderation.removeFromClub")}
                 </button>
               </div>
             </div>
@@ -838,13 +981,20 @@ export function ClubViewPage() {
           <div className="bg-amber-50 rounded-xl border border-amber-200 overflow-hidden">
             <div className="px-4 py-2 bg-amber-100 border-b border-amber-200 flex items-center gap-2 text-amber-800">
               <Pin className="w-4 h-4" />
-              <span className="text-sm font-medium">{t('pinnedThread')}</span>
+              <span className="text-sm font-medium">{t("pinnedThread")}</span>
             </div>
-            <Link to={`/clubs/${club.id}/thread/${pinnedThread.id}`} className="block p-4 hover:bg-amber-100/50 transition-colors">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{pinnedThread.title}</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{pinnedThread.content.substring(0, 150)}...</p>
+            <Link
+              to={`/clubs/${club.id}/thread/${pinnedThread.id}`}
+              className="block p-4 hover:bg-amber-100/50 transition-colors"
+            >
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                {pinnedThread.title}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                {pinnedThread.content.substring(0, 150)}...
+              </p>
               <div className="mt-2 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                <span>{t('replies', { count: pinnedThread.replyCount })}</span>
+                <span>{t("replies", { count: pinnedThread.replyCount })}</span>
                 <span>·</span>
                 <span>{formatRelativeTime(pinnedThread.updatedAt)}</span>
               </div>
@@ -854,7 +1004,9 @@ export function ClubViewPage() {
 
         {/* Threads */}
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('discussions')}</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            {t("discussions")}
+          </h2>
 
           {regularThreads.length > 0 ? (
             <div className="space-y-3">
@@ -864,7 +1016,9 @@ export function ClubViewPage() {
                   to={`/clubs/${club.id}/thread/${thread.id}`}
                   className="block bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 hover:shadow-md transition-shadow"
                 >
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{thread.title}</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                    {thread.title}
+                  </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
                     {thread.content.substring(0, 150)}...
                   </p>
@@ -872,8 +1026,11 @@ export function ClubViewPage() {
                     <ActorBadge user={transformUser(thread.author)} size="sm" />
                     <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                       {(thread.score ?? 0) !== 0 && (
-                        <span className={`font-medium ${(thread.score ?? 0) > 0 ? 'text-orange-600' : 'text-blue-600'}`}>
-                          {(thread.score ?? 0) > 0 ? '+' : ''}{thread.score}
+                        <span
+                          className={`font-medium ${(thread.score ?? 0) > 0 ? "text-orange-600" : "text-blue-600"}`}
+                        >
+                          {(thread.score ?? 0) > 0 ? "+" : ""}
+                          {thread.score}
                         </span>
                       )}
                       <span className="flex items-center gap-1">
@@ -888,7 +1045,7 @@ export function ClubViewPage() {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <p>{t('noThreads')}</p>
+              <p>{t("noThreads")}</p>
             </div>
           )}
 
@@ -898,7 +1055,9 @@ export function ClubViewPage() {
               {showNewThreadForm ? (
                 <div className="mt-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('newDiscussion')}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {t("newDiscussion")}
+                    </h3>
                     <button
                       onClick={() => setShowNewThreadForm(false)}
                       className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
@@ -908,13 +1067,13 @@ export function ClubViewPage() {
                   </div>
                   <input
                     type="text"
-                    placeholder={t('discussionTitle')}
+                    placeholder={t("discussionTitle")}
                     value={newThreadTitle}
                     onChange={(e) => setNewThreadTitle(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-800 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-800 dark:text-gray-100"
                   />
                   <textarea
-                    placeholder={t('discussionContent')}
+                    placeholder={t("discussionContent")}
                     value={newThreadContent}
                     onChange={(e) => setNewThreadContent(e.target.value)}
                     rows={4}
@@ -925,15 +1084,21 @@ export function ClubViewPage() {
                       onClick={() => setShowNewThreadForm(false)}
                       className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                     >
-                      {t('common:actions.cancel')}
+                      {t("common:actions.cancel")}
                     </button>
                     <button
                       onClick={handleCreateThread}
-                      disabled={!newThreadTitle.trim() || !newThreadContent.trim() || createThreadMutation.isPending}
+                      disabled={
+                        !newThreadTitle.trim() ||
+                        !newThreadContent.trim() ||
+                        createThreadMutation.isPending
+                      }
                       className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Send className="w-4 h-4" />
-                      {createThreadMutation.isPending ? t('posting') : t('postDiscussion')}
+                      {createThreadMutation.isPending
+                        ? t("posting")
+                        : t("postDiscussion")}
                     </button>
                   </div>
                 </div>
@@ -942,15 +1107,15 @@ export function ClubViewPage() {
                   onClick={() => setShowNewThreadForm(true)}
                   className="mt-4 w-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 >
-                  {t('startDiscussion')}
+                  {t("startDiscussion")}
                 </button>
               )}
             </>
           )}
 
-          <ContentEndMarker message={t('allDiscussionsShown')} />
+          <ContentEndMarker message={t("allDiscussionsShown")} />
         </div>
       </div>
     </Layout>
-  )
+  );
 }

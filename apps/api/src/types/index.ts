@@ -1,44 +1,44 @@
-import type { Request } from 'express'
-import type { User } from '../db/schema.js'
+import type { Request } from "express";
+import type { User } from "../db/schema.js";
 
 export interface AuthenticatedRequest extends Request {
-  user?: User
-  sessionId?: string
+  user?: User;
+  sessionId?: string;
 }
 
 export interface ApiResponse<T = unknown> {
-  success: boolean
-  data?: T
-  error?: string
-  message?: string
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
 }
 
 export interface PaginationParams {
-  page: number
-  limit: number
-  offset: number
+  page: number;
+  limit: number;
+  offset: number;
 }
 
 export interface PaginatedResponse<T> {
-  items: T[]
-  total: number
-  page: number
-  limit: number
-  hasMore: boolean
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 // Thread filters
 export interface ThreadFilters {
-  scope?: 'local' | 'national' | 'european'
-  municipalityId?: string
-  tags?: string[]
-  authorId?: string
+  scope?: "local" | "national" | "european";
+  municipalityId?: string;
+  tags?: string[];
+  authorId?: string;
 }
 
 // Institutional context structure
 export interface InstitutionalContext {
-  docs?: { title: string; url: string }[]
-  timeline?: { date: string; event: string }[]
-  faq?: { q: string; a: string }[]
-  contact?: string
+  docs?: { title: string; url: string }[];
+  timeline?: { date: string; event: string }[];
+  faq?: { q: string; a: string }[];
+  contact?: string;
 }

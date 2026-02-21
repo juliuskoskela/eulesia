@@ -1,26 +1,34 @@
-import { Building2, ShieldCheck, ShieldOff } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import type { User } from '../../types'
+import { Building2, ShieldCheck, ShieldOff } from "lucide-react";
+import { Link } from "react-router-dom";
+import type { User } from "../../types";
 
 interface ActorBadgeProps {
-  user: User
-  showName?: boolean
-  size?: 'sm' | 'md' | 'lg'
+  user: User;
+  showName?: boolean;
+  size?: "sm" | "md" | "lg";
 }
 
-export function ActorBadge({ user, showName = true, size = 'md' }: ActorBadgeProps) {
-  const isInstitution = user.role === 'institution'
+export function ActorBadge({
+  user,
+  showName = true,
+  size = "md",
+}: ActorBadgeProps) {
+  const isInstitution = user.role === "institution";
 
   const sizeClasses = {
-    sm: 'w-6 h-6 text-xs',
-    md: 'w-8 h-8 text-sm',
-    lg: 'w-10 h-10 text-base'
-  }
+    sm: "w-6 h-6 text-xs",
+    md: "w-8 h-8 text-sm",
+    lg: "w-10 h-10 text-base",
+  };
 
-  const avatarColor = isInstitution ? 'bg-violet-600' : 'bg-teal-600'
+  const avatarColor = isInstitution ? "bg-violet-600" : "bg-teal-600";
 
   return (
-    <Link to={`/user/${user.id}`} className="flex items-center gap-2 hover:opacity-80 transition-opacity" onClick={(e) => e.stopPropagation()}>
+    <Link
+      to={`/user/${user.id}`}
+      className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+      onClick={(e) => e.stopPropagation()}
+    >
       {user.avatarUrl ? (
         <img
           src={user.avatarUrl}
@@ -38,7 +46,9 @@ export function ActorBadge({ user, showName = true, size = 'md' }: ActorBadgePro
       {showName && (
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
-            <span className={`font-medium text-gray-900 dark:text-gray-100 hover:underline ${size === 'sm' ? 'text-sm' : ''}`}>
+            <span
+              className={`font-medium text-gray-900 hover:underline ${size === "sm" ? "text-sm" : ""}`}
+            >
               {user.name}
             </span>
 
@@ -68,5 +78,5 @@ export function ActorBadge({ user, showName = true, size = 'md' }: ActorBadgePro
         </div>
       )}
     </Link>
-  )
+  );
 }

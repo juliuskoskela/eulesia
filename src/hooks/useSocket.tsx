@@ -1,355 +1,459 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
-import { io, Socket } from 'socket.io-client'
-import { useQueryClient } from '@tanstack/react-query'
-import { Capacitor } from '@capacitor/core'
-import { App as CapApp } from '@capacitor/app'
-import { useAuth } from './useAuth'
-import { queryKeys } from './useApi'
-import type { RoomMessage, RoomWithMessages, DirectMessage, ConversationWithMessages } from '../lib/api'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  type ReactNode,
+} from "react";
+import { io, Socket } from "socket.io-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
+import { useAuth } from "./useAuth";
+import { queryKeys } from "./useApi";
+import type {
+  RoomMessage,
+  RoomWithMessages,
+  DirectMessage,
+  ConversationWithMessages,
+} from "../lib/api";
 
-const TYPING_TIMEOUT_MS = 3000
-const TYPING_THROTTLE_MS = 2000
+const TYPING_TIMEOUT_MS = 3000;
+const TYPING_THROTTLE_MS = 2000;
 
 interface SocketContextType {
-  socket: Socket | null
-  isConnected: boolean
-  sendRoomMessage: (roomId: string, content: string) => void
-  joinRoom: (roomId: string) => void
-  leaveRoom: (roomId: string) => void
-  joinDm: (conversationId: string) => void
-  leaveDm: (conversationId: string) => void
-  emitTypingRoom: (roomId: string) => void
-  emitTypingDm: (conversationId: string) => void
-  typingInRoom: Record<string, string[]>
-  typingInDm: Record<string, string[]>
+  socket: Socket | null;
+  isConnected: boolean;
+  sendRoomMessage: (roomId: string, content: string) => void;
+  joinRoom: (roomId: string) => void;
+  leaveRoom: (roomId: string) => void;
+  joinDm: (conversationId: string) => void;
+  leaveDm: (conversationId: string) => void;
+  emitTypingRoom: (roomId: string) => void;
+  emitTypingDm: (conversationId: string) => void;
+  typingInRoom: Record<string, string[]>;
+  typingInDm: Record<string, string[]>;
 }
 
-const SocketContext = createContext<SocketContextType | undefined>(undefined)
+const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const [socket, setSocket] = useState<Socket | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
-  const [typingInRoom, setTypingInRoom] = useState<Record<string, string[]>>({})
-  const [typingInDm, setTypingInDm] = useState<Record<string, string[]>>({})
-  const { isAuthenticated, currentUser } = useAuth()
-  const queryClient = useQueryClient()
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [typingInRoom, setTypingInRoom] = useState<Record<string, string[]>>(
+    {},
+  );
+  const [typingInDm, setTypingInDm] = useState<Record<string, string[]>>({});
+  const { isAuthenticated, currentUser } = useAuth();
+  const queryClient = useQueryClient();
 
   // Track typing timeouts so we can clear them
-  const roomTypingTimeouts = useRef<Record<string, Record<string, ReturnType<typeof setTimeout>>>>({})
-  const dmTypingTimeouts = useRef<Record<string, Record<string, ReturnType<typeof setTimeout>>>>({})
+  const roomTypingTimeouts = useRef<
+    Record<string, Record<string, ReturnType<typeof setTimeout>>>
+  >({});
+  const dmTypingTimeouts = useRef<
+    Record<string, Record<string, ReturnType<typeof setTimeout>>>
+  >({});
   // Throttle outgoing typing events
-  const lastTypingEmit = useRef<Record<string, number>>({})
+  const lastTypingEmit = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!isAuthenticated || !currentUser) {
       if (socket) {
-        socket.disconnect()
-        setSocket(null)
-        setIsConnected(false)
+        socket.disconnect();
+        setSocket(null);
+        setIsConnected(false);
       }
-      return
+      return;
     }
 
     const newSocket = io(SOCKET_URL, {
       withCredentials: true,
       autoConnect: true,
-      transports: ['websocket', 'polling']
-    })
+      transports: ["websocket", "polling"],
+    });
 
-    newSocket.on('connect', () => {
-      setIsConnected(true)
+    newSocket.on("connect", () => {
+      setIsConnected(true);
       // Join user-specific room for notifications
-      newSocket.emit('join:user', currentUser.id)
-    })
+      newSocket.emit("join:user", currentUser.id);
+    });
 
-    newSocket.on('disconnect', () => {
-      setIsConnected(false)
-    })
+    newSocket.on("disconnect", () => {
+      setIsConnected(false);
+    });
 
-    newSocket.on('error', (error) => {
-      console.error('Socket error:', error)
-    })
+    newSocket.on("error", (error) => {
+      console.error("Socket error:", error);
+    });
 
     // Handle new room message events
-    newSocket.on('new_room_message', (data: { roomId: string; message: RoomMessage }) => {
-      // Update the room messages in the cache
-      queryClient.setQueryData(
-        queryKeys.room(data.roomId),
-        (old: RoomWithMessages | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            messages: [...old.messages, data.message]
-          }
-        }
-      )
-      // Clear typing for the user who sent the message
-      clearTypingUser('room', data.roomId, data.message.author?.id)
-    })
+    newSocket.on(
+      "new_room_message",
+      (data: { roomId: string; message: RoomMessage }) => {
+        // Update the room messages in the cache
+        queryClient.setQueryData(
+          queryKeys.room(data.roomId),
+          (old: RoomWithMessages | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              messages: [...old.messages, data.message],
+            };
+          },
+        );
+        // Clear typing for the user who sent the message
+        clearTypingUser("room", data.roomId, data.message.author?.id);
+      },
+    );
 
     // Handle room typing indicators
-    newSocket.on('user_typing', (data: { roomId: string; userId: string }) => {
-      if (data.userId === currentUser.id) return
-      addTypingUser('room', data.roomId, data.userId)
-    })
+    newSocket.on("user_typing", (data: { roomId: string; userId: string }) => {
+      if (data.userId === currentUser.id) return;
+      addTypingUser("room", data.roomId, data.userId);
+    });
 
     // Handle DM typing indicators
-    newSocket.on('user_typing_dm', (data: { conversationId: string; userId: string }) => {
-      if (data.userId === currentUser.id) return
-      addTypingUser('dm', data.conversationId, data.userId)
-    })
+    newSocket.on(
+      "user_typing_dm",
+      (data: { conversationId: string; userId: string }) => {
+        if (data.userId === currentUser.id) return;
+        addTypingUser("dm", data.conversationId, data.userId);
+      },
+    );
 
     // Handle new notification events
-    newSocket.on('new_notification', () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
-      queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount })
-    })
+    newSocket.on("new_notification", () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.notificationUnreadCount,
+      });
+    });
 
     // Handle room message edits
-    newSocket.on('room_message_edited', (data: { roomId: string; messageId: string; content: string; contentHtml: string; editedAt: string }) => {
-      queryClient.setQueryData(
-        queryKeys.room(data.roomId),
-        (old: RoomWithMessages | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            messages: old.messages.map((m: RoomMessage) =>
-              m.id === data.messageId
-                ? { ...m, content: data.content, contentHtml: data.contentHtml, editedAt: data.editedAt }
-                : m
-            )
-          }
-        }
-      )
-    })
+    newSocket.on(
+      "room_message_edited",
+      (data: {
+        roomId: string;
+        messageId: string;
+        content: string;
+        contentHtml: string;
+        editedAt: string;
+      }) => {
+        queryClient.setQueryData(
+          queryKeys.room(data.roomId),
+          (old: RoomWithMessages | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              messages: old.messages.map((m: RoomMessage) =>
+                m.id === data.messageId
+                  ? {
+                      ...m,
+                      content: data.content,
+                      contentHtml: data.contentHtml,
+                      editedAt: data.editedAt,
+                    }
+                  : m,
+              ),
+            };
+          },
+        );
+      },
+    );
 
     // Handle room message deletes
-    newSocket.on('room_message_deleted', (data: { roomId: string; messageId: string }) => {
-      queryClient.setQueryData(
-        queryKeys.room(data.roomId),
-        (old: RoomWithMessages | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            messages: old.messages.filter((m: RoomMessage) => m.id !== data.messageId)
-          }
-        }
-      )
-    })
+    newSocket.on(
+      "room_message_deleted",
+      (data: { roomId: string; messageId: string }) => {
+        queryClient.setQueryData(
+          queryKeys.room(data.roomId),
+          (old: RoomWithMessages | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              messages: old.messages.filter(
+                (m: RoomMessage) => m.id !== data.messageId,
+              ),
+            };
+          },
+        );
+      },
+    );
 
     // Handle thread/comment edits & deletes via invalidation
-    newSocket.on('thread_edited', () => {
-      queryClient.invalidateQueries({ queryKey: ['thread'] })
-    })
+    newSocket.on("thread_edited", () => {
+      queryClient.invalidateQueries({ queryKey: ["thread"] });
+    });
 
-    newSocket.on('thread_deleted', () => {
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-    })
+    newSocket.on("thread_deleted", () => {
+      queryClient.invalidateQueries({ queryKey: ["threads"] });
+    });
 
-    newSocket.on('comment_edited', (data: { threadId: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['thread', data.threadId] })
-    })
+    newSocket.on("comment_edited", (data: { threadId: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["thread", data.threadId] });
+    });
 
-    newSocket.on('comment_deleted', (data: { threadId: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['thread', data.threadId] })
-    })
+    newSocket.on("comment_deleted", (data: { threadId: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["thread", data.threadId] });
+    });
 
     // Handle DM message edits
-    newSocket.on('dm_message_edited', (data: { conversationId: string; messageId: string; content: string; contentHtml: string; editedAt: string }) => {
-      queryClient.setQueryData(
-        queryKeys.conversation(data.conversationId),
-        (old: ConversationWithMessages | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            messages: old.messages.map((m: DirectMessage) =>
-              m.id === data.messageId
-                ? { ...m, content: data.content, contentHtml: data.contentHtml, editedAt: data.editedAt }
-                : m
-            )
-          }
-        }
-      )
-    })
+    newSocket.on(
+      "dm_message_edited",
+      (data: {
+        conversationId: string;
+        messageId: string;
+        content: string;
+        contentHtml: string;
+        editedAt: string;
+      }) => {
+        queryClient.setQueryData(
+          queryKeys.conversation(data.conversationId),
+          (old: ConversationWithMessages | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              messages: old.messages.map((m: DirectMessage) =>
+                m.id === data.messageId
+                  ? {
+                      ...m,
+                      content: data.content,
+                      contentHtml: data.contentHtml,
+                      editedAt: data.editedAt,
+                    }
+                  : m,
+              ),
+            };
+          },
+        );
+      },
+    );
 
     // Handle DM message deletes
-    newSocket.on('dm_message_deleted', (data: { conversationId: string; messageId: string }) => {
-      queryClient.setQueryData(
-        queryKeys.conversation(data.conversationId),
-        (old: ConversationWithMessages | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            messages: old.messages.filter((m: DirectMessage) => m.id !== data.messageId)
-          }
-        }
-      )
-    })
+    newSocket.on(
+      "dm_message_deleted",
+      (data: { conversationId: string; messageId: string }) => {
+        queryClient.setQueryData(
+          queryKeys.conversation(data.conversationId),
+          (old: ConversationWithMessages | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              messages: old.messages.filter(
+                (m: DirectMessage) => m.id !== data.messageId,
+              ),
+            };
+          },
+        );
+      },
+    );
 
     // Handle new DM message events
-    newSocket.on('new_dm_message', (data: { conversationId: string; message: DirectMessage }) => {
-      // Update the conversation messages in the cache
-      queryClient.setQueryData(
-        queryKeys.conversation(data.conversationId),
-        (old: ConversationWithMessages | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            messages: [...old.messages, data.message]
-          }
-        }
-      )
-      // Invalidate conversations list to update last message & unread count
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations })
-      // Update unread DM badge
-      queryClient.invalidateQueries({ queryKey: queryKeys.dmUnreadCount })
-      // Clear typing for the user who sent the message
-      clearTypingUser('dm', data.conversationId, data.message.author?.id)
-    })
+    newSocket.on(
+      "new_dm_message",
+      (data: { conversationId: string; message: DirectMessage }) => {
+        // Update the conversation messages in the cache
+        queryClient.setQueryData(
+          queryKeys.conversation(data.conversationId),
+          (old: ConversationWithMessages | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              messages: [...old.messages, data.message],
+            };
+          },
+        );
+        // Invalidate conversations list to update last message & unread count
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+        // Update unread DM badge
+        queryClient.invalidateQueries({ queryKey: queryKeys.dmUnreadCount });
+        // Clear typing for the user who sent the message
+        clearTypingUser("dm", data.conversationId, data.message.author?.id);
+      },
+    );
 
-    setSocket(newSocket)
+    setSocket(newSocket);
 
     // Native app lifecycle: reconnect socket on resume
-    let resumeListener: Awaited<ReturnType<typeof CapApp.addListener>> | null = null
+    let resumeListener: Awaited<ReturnType<typeof CapApp.addListener>> | null =
+      null;
     if (Capacitor.isNativePlatform()) {
-      CapApp.addListener('resume', () => {
+      CapApp.addListener("resume", () => {
         if (!newSocket.connected) {
-          newSocket.connect()
+          newSocket.connect();
         }
-        queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
-        queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount })
-        queryClient.invalidateQueries({ queryKey: queryKeys.dmUnreadCount })
-      }).then(l => { resumeListener = l })
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.notificationUnreadCount,
+        });
+        queryClient.invalidateQueries({ queryKey: queryKeys.dmUnreadCount });
+      }).then((l) => {
+        resumeListener = l;
+      });
     }
 
     return () => {
-      newSocket.emit('leave:user', currentUser.id)
-      newSocket.disconnect()
-      resumeListener?.remove()
-    }
-  }, [isAuthenticated, currentUser, queryClient])
+      newSocket.emit("leave:user", currentUser.id);
+      newSocket.disconnect();
+      resumeListener?.remove();
+    };
+  }, [isAuthenticated, currentUser, queryClient]);
 
-  function addTypingUser(type: 'room' | 'dm', channelId: string, userId: string) {
-    const timeouts = type === 'room' ? roomTypingTimeouts : dmTypingTimeouts
-    const setter = type === 'room' ? setTypingInRoom : setTypingInDm
+  function addTypingUser(
+    type: "room" | "dm",
+    channelId: string,
+    userId: string,
+  ) {
+    const timeouts = type === "room" ? roomTypingTimeouts : dmTypingTimeouts;
+    const setter = type === "room" ? setTypingInRoom : setTypingInDm;
 
     // Clear existing timeout for this user
     if (timeouts.current[channelId]?.[userId]) {
-      clearTimeout(timeouts.current[channelId][userId])
+      clearTimeout(timeouts.current[channelId][userId]);
     }
 
     // Add user to typing list
-    setter(prev => {
-      const current = prev[channelId] || []
+    setter((prev) => {
+      const current = prev[channelId] || [];
       if (!current.includes(userId)) {
-        return { ...prev, [channelId]: [...current, userId] }
+        return { ...prev, [channelId]: [...current, userId] };
       }
-      return prev
-    })
+      return prev;
+    });
 
     // Set timeout to remove user after TYPING_TIMEOUT_MS
     if (!timeouts.current[channelId]) {
-      timeouts.current[channelId] = {}
+      timeouts.current[channelId] = {};
     }
     timeouts.current[channelId][userId] = setTimeout(() => {
-      clearTypingUser(type, channelId, userId)
-    }, TYPING_TIMEOUT_MS)
+      clearTypingUser(type, channelId, userId);
+    }, TYPING_TIMEOUT_MS);
   }
 
-  function clearTypingUser(type: 'room' | 'dm', channelId: string, userId?: string) {
-    if (!userId) return
-    const timeouts = type === 'room' ? roomTypingTimeouts : dmTypingTimeouts
-    const setter = type === 'room' ? setTypingInRoom : setTypingInDm
+  function clearTypingUser(
+    type: "room" | "dm",
+    channelId: string,
+    userId?: string,
+  ) {
+    if (!userId) return;
+    const timeouts = type === "room" ? roomTypingTimeouts : dmTypingTimeouts;
+    const setter = type === "room" ? setTypingInRoom : setTypingInDm;
 
     if (timeouts.current[channelId]?.[userId]) {
-      clearTimeout(timeouts.current[channelId][userId])
-      delete timeouts.current[channelId][userId]
+      clearTimeout(timeouts.current[channelId][userId]);
+      delete timeouts.current[channelId][userId];
     }
 
-    setter(prev => {
-      const current = prev[channelId]
-      if (!current) return prev
-      const filtered = current.filter(id => id !== userId)
+    setter((prev) => {
+      const current = prev[channelId];
+      if (!current) return prev;
+      const filtered = current.filter((id) => id !== userId);
       if (filtered.length === 0) {
-        const { [channelId]: _, ...rest } = prev
-        return rest
+        const { [channelId]: _, ...rest } = prev;
+        return rest;
       }
-      return { ...prev, [channelId]: filtered }
-    })
+      return { ...prev, [channelId]: filtered };
+    });
   }
 
-  const sendRoomMessage = useCallback((roomId: string, content: string) => {
-    if (!socket || !isConnected) return
+  const sendRoomMessage = useCallback(
+    (roomId: string, content: string) => {
+      if (!socket || !isConnected) return;
 
-    socket.emit('send_room_message', {
-      roomId,
-      content
-    })
-  }, [socket, isConnected])
+      socket.emit("send_room_message", {
+        roomId,
+        content,
+      });
+    },
+    [socket, isConnected],
+  );
 
-  const joinRoom = useCallback((roomId: string) => {
-    if (!socket || !isConnected) return
-    socket.emit('join:room', roomId)
-  }, [socket, isConnected])
+  const joinRoom = useCallback(
+    (roomId: string) => {
+      if (!socket || !isConnected) return;
+      socket.emit("join:room", roomId);
+    },
+    [socket, isConnected],
+  );
 
-  const leaveRoom = useCallback((roomId: string) => {
-    if (!socket || !isConnected) return
-    socket.emit('leave:room', roomId)
-  }, [socket, isConnected])
+  const leaveRoom = useCallback(
+    (roomId: string) => {
+      if (!socket || !isConnected) return;
+      socket.emit("leave:room", roomId);
+    },
+    [socket, isConnected],
+  );
 
-  const joinDm = useCallback((conversationId: string) => {
-    if (!socket || !isConnected) return
-    socket.emit('join:dm', conversationId)
-  }, [socket, isConnected])
+  const joinDm = useCallback(
+    (conversationId: string) => {
+      if (!socket || !isConnected) return;
+      socket.emit("join:dm", conversationId);
+    },
+    [socket, isConnected],
+  );
 
-  const leaveDm = useCallback((conversationId: string) => {
-    if (!socket || !isConnected) return
-    socket.emit('leave:dm', conversationId)
-  }, [socket, isConnected])
+  const leaveDm = useCallback(
+    (conversationId: string) => {
+      if (!socket || !isConnected) return;
+      socket.emit("leave:dm", conversationId);
+    },
+    [socket, isConnected],
+  );
 
-  const emitTypingRoom = useCallback((roomId: string) => {
-    if (!socket || !isConnected) return
-    const key = `room:${roomId}`
-    const now = Date.now()
-    if (now - (lastTypingEmit.current[key] || 0) < TYPING_THROTTLE_MS) return
-    lastTypingEmit.current[key] = now
-    socket.emit('typing:room', roomId)
-  }, [socket, isConnected])
+  const emitTypingRoom = useCallback(
+    (roomId: string) => {
+      if (!socket || !isConnected) return;
+      const key = `room:${roomId}`;
+      const now = Date.now();
+      if (now - (lastTypingEmit.current[key] || 0) < TYPING_THROTTLE_MS) return;
+      lastTypingEmit.current[key] = now;
+      socket.emit("typing:room", roomId);
+    },
+    [socket, isConnected],
+  );
 
-  const emitTypingDm = useCallback((conversationId: string) => {
-    if (!socket || !isConnected) return
-    const key = `dm:${conversationId}`
-    const now = Date.now()
-    if (now - (lastTypingEmit.current[key] || 0) < TYPING_THROTTLE_MS) return
-    lastTypingEmit.current[key] = now
-    socket.emit('typing:dm', conversationId)
-  }, [socket, isConnected])
+  const emitTypingDm = useCallback(
+    (conversationId: string) => {
+      if (!socket || !isConnected) return;
+      const key = `dm:${conversationId}`;
+      const now = Date.now();
+      if (now - (lastTypingEmit.current[key] || 0) < TYPING_THROTTLE_MS) return;
+      lastTypingEmit.current[key] = now;
+      socket.emit("typing:dm", conversationId);
+    },
+    [socket, isConnected],
+  );
 
   return (
-    <SocketContext.Provider value={{
-      socket,
-      isConnected,
-      sendRoomMessage,
-      joinRoom,
-      leaveRoom,
-      joinDm,
-      leaveDm,
-      emitTypingRoom,
-      emitTypingDm,
-      typingInRoom,
-      typingInDm
-    }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        isConnected,
+        sendRoomMessage,
+        joinRoom,
+        leaveRoom,
+        joinDm,
+        leaveDm,
+        emitTypingRoom,
+        emitTypingDm,
+        typingInRoom,
+        typingInDm,
+      }}
+    >
       {children}
     </SocketContext.Provider>
-  )
+  );
 }
 
 export function useSocket() {
-  const context = useContext(SocketContext)
+  const context = useContext(SocketContext);
   if (context === undefined) {
-    throw new Error('useSocket must be used within a SocketProvider')
+    throw new Error("useSocket must be used within a SocketProvider");
   }
-  return context
+  return context;
 }

@@ -2,10 +2,12 @@
  * Reusable skeleton loading components for content placeholders
  */
 
-function SkeletonBox({ className = '' }: { className?: string }) {
+function SkeletonBox({ className = "" }: { className?: string }) {
   return (
-    <div className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${className}`} />
-  )
+    <div
+      className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${className}`}
+    />
+  );
 }
 
 export function ThreadCardSkeleton() {
@@ -25,7 +27,7 @@ export function ThreadCardSkeleton() {
         <SkeletonBox className="h-5 w-14 rounded-full" />
       </div>
     </div>
-  )
+  );
 }
 
 export function ThreadListSkeleton({ count = 3 }: { count?: number }) {
@@ -35,7 +37,7 @@ export function ThreadListSkeleton({ count = 3 }: { count?: number }) {
         <ThreadCardSkeleton key={i} />
       ))}
     </div>
-  )
+  );
 }
 
 export function CommentSkeleton() {
@@ -49,7 +51,7 @@ export function CommentSkeleton() {
       <SkeletonBox className="h-4 w-full ml-9" />
       <SkeletonBox className="h-4 w-4/5 ml-9" />
     </div>
-  )
+  );
 }
 
 export function CommentListSkeleton({ count = 3 }: { count?: number }) {
@@ -59,7 +61,7 @@ export function CommentListSkeleton({ count = 3 }: { count?: number }) {
         <CommentSkeleton key={i} />
       ))}
     </div>
-  )
+  );
 }
 
 export function PageSkeleton() {
@@ -70,5 +72,5 @@ export function PageSkeleton() {
       <SkeletonBox className="h-4 w-4/5" />
       <SkeletonBox className="h-4 w-3/5" />
     </div>
-  )
+  );
 }

@@ -1,13 +1,13 @@
-import { type ReactNode } from 'react'
-import { useAuth } from '../../hooks/useAuth'
-import { AdminSidebar } from './AdminSidebar'
+import { type ReactNode } from "react";
+import { useAuth } from "../../hooks/useAuth";
+import { AdminSidebar } from "./AdminSidebar";
 
 interface AdminLayoutProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export function AdminLayout({ children }: AdminLayoutProps) {
-  const { currentUser } = useAuth()
+  const { currentUser } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-800/50 flex">
@@ -18,10 +18,16 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center justify-between">
           <div />
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 dark:text-gray-400">{currentUser?.name}</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {currentUser?.name}
+            </span>
             <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
               {currentUser?.avatarUrl ? (
-                <img src={currentUser.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                <img
+                  src={currentUser.avatarUrl}
+                  alt=""
+                  className="w-full h-full rounded-full object-cover"
+                />
               ) : (
                 <span className="text-white text-xs font-bold">
                   {currentUser?.name?.charAt(0).toUpperCase()}
@@ -32,10 +38,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 p-6">
-          {children}
-        </main>
+        <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
-  )
+  );
 }

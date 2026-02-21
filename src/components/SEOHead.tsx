@@ -1,35 +1,40 @@
-import { Helmet } from 'react-helmet-async'
+import { Helmet } from "react-helmet-async";
 
-const SITE_NAME = 'Eulesia'
-const SITE_URL = 'https://eulesia.eu'
-const DEFAULT_DESCRIPTION = 'Eurooppalainen kansalaisdemokratia-alusta'
-const DEFAULT_IMAGE = `${SITE_URL}/og-default.png`
+const SITE_NAME = "Eulesia";
+const SITE_URL = "https://eulesia.eu";
+const DEFAULT_DESCRIPTION = "Eurooppalainen kansalaisdemokratia-alusta";
+const DEFAULT_IMAGE = `${SITE_URL}/og-default.png`;
 
 interface SEOHeadProps {
-  title: string
-  description?: string
-  path: string
-  type?: string
-  image?: string
-  jsonLd?: Record<string, unknown>
-  noIndex?: boolean
+  title: string;
+  description?: string;
+  path: string;
+  type?: string;
+  image?: string;
+  jsonLd?: Record<string, unknown>;
+  noIndex?: boolean;
 }
 
 export function SEOHead({
   title,
   description = DEFAULT_DESCRIPTION,
   path,
-  type = 'website',
+  type = "website",
   image,
   jsonLd,
-  noIndex = false
+  noIndex = false,
 }: SEOHeadProps) {
-  const fullTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`
-  const canonicalUrl = `${SITE_URL}${path}`
-  const desc = description.length > 160 ? description.substring(0, 157) + '...' : description
+  const fullTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
+  const canonicalUrl = `${SITE_URL}${path}`;
+  const desc =
+    description.length > 160
+      ? description.substring(0, 157) + "..."
+      : description;
   const imageUrl = image
-    ? (image.startsWith('http') ? image : `${SITE_URL}${image}`)
-    : DEFAULT_IMAGE
+    ? image.startsWith("http")
+      ? image
+      : `${SITE_URL}${image}`
+    : DEFAULT_IMAGE;
 
   return (
     <Helmet>
@@ -56,10 +61,8 @@ export function SEOHead({
       {noIndex && <meta name="robots" content="noindex, nofollow" />}
 
       {jsonLd && (
-        <script type="application/ld+json">
-          {JSON.stringify(jsonLd)}
-        </script>
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       )}
     </Helmet>
-  )
+  );
 }

@@ -3,6 +3,7 @@
 Base URL: `http://localhost:3001/api/v1` (development)
 
 All endpoints return JSON with the structure:
+
 ```json
 {
   "success": true,
@@ -11,6 +12,7 @@ All endpoints return JSON with the structure:
 ```
 
 Or on error:
+
 ```json
 {
   "success": false,
@@ -23,9 +25,11 @@ Or on error:
 Authentication uses magic links (passwordless email login) and session cookies.
 
 ### POST `/auth/magic-link`
+
 Request a magic link for login.
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com"
@@ -33,6 +37,7 @@ Request a magic link for login.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -43,12 +48,15 @@ Request a magic link for login.
 ```
 
 ### GET `/auth/verify/:token`
+
 Verify a magic link token. Sets session cookie on success.
 
 ### GET `/auth/me`
+
 Get current authenticated user.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -71,6 +79,7 @@ Get current authenticated user.
 ```
 
 ### POST `/auth/logout`
+
 End the current session.
 
 ---
@@ -78,12 +87,15 @@ End the current session.
 ## Users
 
 ### GET `/users/:id`
+
 Get user profile by ID.
 
 ### PATCH `/users/me`
+
 Update current user's profile.
 
 **Request:**
+
 ```json
 {
   "name": "New Name",
@@ -92,6 +104,7 @@ Update current user's profile.
 ```
 
 ### GET `/users/me/data`
+
 Export all user data (GDPR compliance).
 
 ---
@@ -99,6 +112,7 @@ Export all user data (GDPR compliance).
 ## Agora (Threads)
 
 ### GET `/agora/threads`
+
 List threads with optional filters.
 
 **Query Parameters:**
@@ -111,6 +125,7 @@ List threads with optional filters.
 | limit | number | Items per page (default: 20) |
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -136,12 +151,15 @@ List threads with optional filters.
 ```
 
 ### GET `/agora/threads/:id`
+
 Get thread with comments.
 
 ### POST `/agora/threads`
+
 Create a new thread.
 
 **Request:**
+
 ```json
 {
   "title": "Discussion Title",
@@ -153,9 +171,11 @@ Create a new thread.
 ```
 
 ### POST `/agora/threads/:id/comments`
+
 Add a comment to a thread.
 
 **Request:**
+
 ```json
 {
   "content": "Comment text",
@@ -164,6 +184,7 @@ Add a comment to a thread.
 ```
 
 ### GET `/agora/tags`
+
 Get popular tags with usage counts.
 
 ---
@@ -171,6 +192,7 @@ Get popular tags with usage counts.
 ## Clubs
 
 ### GET `/clubs`
+
 List clubs with optional filters.
 
 **Query Parameters:**
@@ -182,12 +204,15 @@ List clubs with optional filters.
 | limit | number | Items per page |
 
 ### GET `/clubs/:id`
+
 Get club details with threads.
 
 ### POST `/clubs`
+
 Create a new club.
 
 **Request:**
+
 ```json
 {
   "name": "Club Name",
@@ -199,15 +224,19 @@ Create a new club.
 ```
 
 ### POST `/clubs/:id/join`
+
 Join a club.
 
 ### POST `/clubs/:id/leave`
+
 Leave a club.
 
 ### POST `/clubs/:id/threads`
+
 Create a thread in a club.
 
 **Request:**
+
 ```json
 {
   "title": "Thread title",
@@ -216,12 +245,15 @@ Create a thread in a club.
 ```
 
 ### GET `/clubs/:id/threads/:threadId`
+
 Get club thread with comments.
 
 ### POST `/clubs/:id/threads/:threadId/comments`
+
 Add comment to club thread.
 
 ### GET `/clubs/meta/categories`
+
 Get club categories with counts.
 
 ---
@@ -229,12 +261,15 @@ Get club categories with counts.
 ## Home
 
 ### GET `/home/:userId`
+
 Get user's home page with rooms.
 
 ### POST `/home/rooms`
+
 Create a new room.
 
 **Request:**
+
 ```json
 {
   "name": "Room Name",
@@ -244,18 +279,23 @@ Create a new room.
 ```
 
 ### GET `/home/rooms/:roomId`
+
 Get room with messages.
 
 ### PATCH `/home/rooms/:roomId`
+
 Update room settings.
 
 ### DELETE `/home/rooms/:roomId`
+
 Delete a room.
 
 ### POST `/home/rooms/:roomId/messages`
+
 Post a message to a room.
 
 **Request:**
+
 ```json
 {
   "content": "Message text"
@@ -263,9 +303,11 @@ Post a message to a room.
 ```
 
 ### POST `/home/rooms/:roomId/invite`
+
 Invite user to private room.
 
 **Request:**
+
 ```json
 {
   "userId": "uuid"
@@ -273,28 +315,32 @@ Invite user to private room.
 ```
 
 ### GET `/home/invitations`
+
 Get pending invitations for current user.
 
 ### POST `/home/invitations/:id/accept`
+
 Accept an invitation.
 
 ### POST `/home/invitations/:id/decline`
+
 Decline an invitation.
 
 ### DELETE `/home/rooms/:roomId/members/me`
+
 Leave a room.
 
 ---
 
 ## Error Codes
 
-| Code | Description |
-|------|-------------|
-| 400 | Bad Request - Invalid input |
-| 401 | Unauthorized - Not logged in |
-| 403 | Forbidden - No permission |
-| 404 | Not Found - Resource doesn't exist |
-| 500 | Server Error |
+| Code | Description                        |
+| ---- | ---------------------------------- |
+| 400  | Bad Request - Invalid input        |
+| 401  | Unauthorized - Not logged in       |
+| 403  | Forbidden - No permission          |
+| 404  | Not Found - Resource doesn't exist |
+| 500  | Server Error                       |
 
 ## Rate Limiting
 
@@ -303,6 +349,7 @@ API requests are rate-limited to prevent abuse. Limits are applied per user/IP.
 ## Pagination
 
 Paginated endpoints return:
+
 - `items`: Array of results
 - `total`: Total count
 - `page`: Current page

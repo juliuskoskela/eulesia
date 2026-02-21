@@ -15,64 +15,64 @@
  * 6. User is logged in with high identity assurance
  */
 
-import crypto from 'crypto'
-import { env } from '../../utils/env.js'
+import crypto from "crypto";
+import { env } from "../../utils/env.js";
 
 // Types
 export interface EudiSession {
-  id: string
-  state: string
-  nonce: string
-  status: 'pending' | 'completed' | 'failed' | 'expired'
-  userId?: string
-  verifiedClaims?: VerifiedClaims
-  createdAt: Date
-  expiresAt: Date
+  id: string;
+  state: string;
+  nonce: string;
+  status: "pending" | "completed" | "failed" | "expired";
+  userId?: string;
+  verifiedClaims?: VerifiedClaims;
+  createdAt: Date;
+  expiresAt: Date;
 }
 
 export interface VerifiedClaims {
-  givenName: string
-  familyName: string
-  issuerCountry: string
-  verifiedAt: Date
+  givenName: string;
+  familyName: string;
+  issuerCountry: string;
+  verifiedAt: Date;
 }
 
 export interface PresentationRequest {
-  client_id: string
-  response_uri: string
-  response_type: 'vp_token'
-  response_mode: 'direct_post'
-  nonce: string
-  state: string
-  presentation_definition: PresentationDefinition
+  client_id: string;
+  response_uri: string;
+  response_type: "vp_token";
+  response_mode: "direct_post";
+  nonce: string;
+  state: string;
+  presentation_definition: PresentationDefinition;
 }
 
 export interface PresentationDefinition {
-  id: string
-  input_descriptors: InputDescriptor[]
+  id: string;
+  input_descriptors: InputDescriptor[];
 }
 
 export interface InputDescriptor {
-  id: string
-  format: Record<string, unknown>
+  id: string;
+  format: Record<string, unknown>;
   constraints: {
     fields: Array<{
-      path: string[]
-      filter?: Record<string, unknown>
-    }>
-  }
+      path: string[];
+      filter?: Record<string, unknown>;
+    }>;
+  };
 }
 
 // In-memory session store (use Redis in production)
-const sessions = new Map<string, EudiSession>()
+const sessions = new Map<string, EudiSession>();
 
 class EudiService {
-  private readonly clientId: string
-  private readonly callbackUrl: string
+  private readonly clientId: string;
+  private readonly callbackUrl: string;
 
   constructor() {
-    this.clientId = env.API_URL
-    this.callbackUrl = `${env.API_URL}/api/v1/auth/eudi/callback`
+    this.clientId = env.API_URL;
+    this.callbackUrl = `${env.API_URL}/api/v1/auth/eudi/callback`;
   }
 
   /**
@@ -80,63 +80,65 @@ class EudiService {
    * Returns the presentation request URI for the wallet
    */
   async createAuthSession(): Promise<{
-    sessionId: string
-    requestUri: string
-    presentationRequest: PresentationRequest
+    sessionId: string;
+    requestUri: string;
+    presentationRequest: PresentationRequest;
   }> {
-    const sessionId = crypto.randomUUID()
-    const state = crypto.randomUUID()
-    const nonce = crypto.randomUUID()
+    const sessionId = crypto.randomUUID();
+    const state = crypto.randomUUID();
+    const nonce = crypto.randomUUID();
 
     // Create presentation definition requesting PID claims
     const presentationDefinition: PresentationDefinition = {
       id: `eulesia-pid-${sessionId}`,
-      input_descriptors: [{
-        id: 'eu.europa.ec.eudi.pid.1',
-        format: {
-          'mso_mdoc': {
-            alg: ['ES256', 'ES384', 'ES512']
-          },
-          'vc+sd-jwt': {
-            alg: ['ES256', 'ES384', 'ES512']
-          }
-        },
-        constraints: {
-          fields: [
-            // Request only minimal claims for identity verification
-            {
-              path: ['$.given_name'],
-              filter: { type: 'string' }
+      input_descriptors: [
+        {
+          id: "eu.europa.ec.eudi.pid.1",
+          format: {
+            mso_mdoc: {
+              alg: ["ES256", "ES384", "ES512"],
             },
-            {
-              path: ['$.family_name'],
-              filter: { type: 'string' }
-            }
-          ]
-        }
-      }]
-    }
+            "vc+sd-jwt": {
+              alg: ["ES256", "ES384", "ES512"],
+            },
+          },
+          constraints: {
+            fields: [
+              // Request only minimal claims for identity verification
+              {
+                path: ["$.given_name"],
+                filter: { type: "string" },
+              },
+              {
+                path: ["$.family_name"],
+                filter: { type: "string" },
+              },
+            ],
+          },
+        },
+      ],
+    };
 
     const presentationRequest: PresentationRequest = {
       client_id: this.clientId,
       response_uri: this.callbackUrl,
-      response_type: 'vp_token',
-      response_mode: 'direct_post',
+      response_type: "vp_token",
+      response_mode: "direct_post",
       nonce,
       state,
-      presentation_definition: presentationDefinition
-    }
+      presentation_definition: presentationDefinition,
+    };
 
     // Store session
     const session: EudiSession = {
       id: sessionId,
       state,
       nonce,
-      status: 'pending',
+      status: "pending",
       createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-    }
-    sessions.set(sessionId, session)
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+    };
+    sessions.set(sessionId, session);
 
     // Build request URI
     // In production, this would be a proper OpenID4VP request URI
@@ -147,27 +149,29 @@ class EudiService {
       response_mode: presentationRequest.response_mode,
       nonce: presentationRequest.nonce,
       state: presentationRequest.state,
-      presentation_definition: JSON.stringify(presentationRequest.presentation_definition)
-    })
+      presentation_definition: JSON.stringify(
+        presentationRequest.presentation_definition,
+      ),
+    });
 
-    const requestUri = `openid4vp://authorize?${requestParams.toString()}`
+    const requestUri = `openid4vp://authorize?${requestParams.toString()}`;
 
     return {
       sessionId,
       requestUri,
-      presentationRequest
-    }
+      presentationRequest,
+    };
   }
 
   /**
    * Get session status
    */
   getSession(sessionId: string): EudiSession | undefined {
-    const session = sessions.get(sessionId)
+    const session = sessions.get(sessionId);
     if (session && session.expiresAt < new Date()) {
-      session.status = 'expired'
+      session.status = "expired";
     }
-    return session
+    return session;
   }
 
   /**
@@ -177,19 +181,19 @@ class EudiService {
   async processCallback(
     state: string,
     vpToken: string,
-    presentationSubmission: string
+    presentationSubmission: string,
   ): Promise<EudiSession | null> {
     // Find session by state
-    let session: EudiSession | undefined
+    let session: EudiSession | undefined;
     for (const [, s] of sessions) {
       if (s.state === state) {
-        session = s
-        break
+        session = s;
+        break;
       }
     }
 
-    if (!session || session.status !== 'pending') {
-      return null
+    if (!session || session.status !== "pending") {
+      return null;
     }
 
     try {
@@ -203,22 +207,22 @@ class EudiService {
 
       // For now, this is a placeholder that will be implemented
       // when we connect to Launchpad testing
-      console.log('EUDI callback received:', {
+      console.log("EUDI callback received:", {
         state,
         vpTokenLength: vpToken.length,
-        presentationSubmission: presentationSubmission.substring(0, 100)
-      })
+        presentationSubmission: presentationSubmission.substring(0, 100),
+      });
 
       // Mark as failed until proper verification is implemented
-      session.status = 'failed'
-      sessions.set(session.id, session)
+      session.status = "failed";
+      sessions.set(session.id, session);
 
-      return session
+      return session;
     } catch (error) {
-      console.error('EUDI verification failed:', error)
-      session.status = 'failed'
-      sessions.set(session.id, session)
-      return session
+      console.error("EUDI verification failed:", error);
+      session.status = "failed";
+      sessions.set(session.id, session);
+      return session;
     }
   }
 
@@ -226,18 +230,18 @@ class EudiService {
    * Clean up expired sessions
    */
   cleanupExpiredSessions(): void {
-    const now = new Date()
+    const now = new Date();
     for (const [id, session] of sessions) {
       if (session.expiresAt < now) {
-        sessions.delete(id)
+        sessions.delete(id);
       }
     }
   }
 }
 
-export const eudiService = new EudiService()
+export const eudiService = new EudiService();
 
 // Cleanup expired sessions every minute
 setInterval(() => {
-  eudiService.cleanupExpiredSessions()
-}, 60 * 1000)
+  eudiService.cleanupExpiredSessions();
+}, 60 * 1000);

@@ -1,5 +1,7 @@
-{ pkgs, src }:
-
+{
+  pkgs,
+  src,
+}:
 pkgs.buildNpmPackage {
   pname = "eulesia-frontend";
   version = "0.0.0";
@@ -8,7 +10,7 @@ pkgs.buildNpmPackage {
   nodejs = pkgs.nodejs_20;
   npmDepsHash = "sha256-mIwet1hnMOylUAfYZjJRRfT5UBr57VmqWetyB+sv1w0=";
   makeCacheWritable = true;
-  npmRebuildFlags = [ "--ignore-scripts" ];
+  npmRebuildFlags = ["--ignore-scripts"];
 
   npmBuildScript = "build";
 

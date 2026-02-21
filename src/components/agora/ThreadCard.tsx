@@ -1,40 +1,56 @@
-import { MessageSquare, Building2, Bot, Share2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import type { Thread, User } from '../../types'
-import type { CvsBreakdown } from '../../lib/api'
-import { ScopeBadge } from '../common/ScopeBadge'
-import { ThreadVoteButtons } from './ThreadVoteButtons'
-import { ThreadCardMedia } from './ThreadCardMedia'
-import { BookmarkButton } from '../discover/BookmarkButton'
-import { ScoreBreakdown } from '../discover/ScoreBreakdown'
-import { formatRelativeTime } from '../../lib/formatTime'
+import { MessageSquare, Building2, Bot, Share2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import type { Thread, User } from "../../types";
+import type { CvsBreakdown } from "../../lib/api";
+import { ScopeBadge } from "../common/ScopeBadge";
+import { ThreadVoteButtons } from "./ThreadVoteButtons";
+import { ThreadCardMedia } from "./ThreadCardMedia";
+import { BookmarkButton } from "../discover/BookmarkButton";
+import { ScoreBreakdown } from "../discover/ScoreBreakdown";
+import { formatRelativeTime } from "../../lib/formatTime";
 
 interface ThreadCardProps {
-  thread: Thread & { score?: number; userVote?: number; cvsScore?: number; scoreBreakdown?: CvsBreakdown; isBookmarked?: boolean }
-  author: User
-  onVote?: (threadId: string, value: number) => void
-  isVoting?: boolean
+  thread: Thread & {
+    score?: number;
+    userVote?: number;
+    cvsScore?: number;
+    scoreBreakdown?: CvsBreakdown;
+    isBookmarked?: boolean;
+  };
+  author: User;
+  onVote?: (threadId: string, value: number) => void;
+  isVoting?: boolean;
 }
 
-export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadCardProps) {
-  const { t } = useTranslation('agora')
-  const isInstitutional = author.role === 'institution'
-  const isAiGenerated = thread.aiGenerated || thread.source === 'minutes_import'
-  const isBotSummary = isAiGenerated && thread.source === 'rss_import'
-  const isMinutesSummary = isAiGenerated && thread.source === 'minutes_import'
-  const showVoting = typeof thread.score === 'number'
+export function ThreadCard({
+  thread,
+  author,
+  onVote,
+  isVoting = false,
+}: ThreadCardProps) {
+  const { t } = useTranslation("agora");
+  const isInstitutional = author.role === "institution";
+  const isAiGenerated =
+    thread.aiGenerated || thread.source === "minutes_import";
+  const isBotSummary = isAiGenerated && thread.source === "rss_import";
+  const isMinutesSummary = isAiGenerated && thread.source === "minutes_import";
+  const showVoting = typeof thread.score === "number";
 
   const handleVote = (value: number) => {
     if (onVote) {
-      onVote(thread.id, value)
+      onVote(thread.id, value);
     }
-  }
+  };
 
   return (
     <div
       className={`bg-white dark:bg-gray-900 rounded-xl hover:shadow-md transition-shadow border ${
-        isAiGenerated ? 'border-purple-200 dark:border-purple-800' : isInstitutional ? 'border-violet-200 dark:border-violet-800' : 'border-gray-200 dark:border-gray-800'
+        isAiGenerated
+          ? "border-purple-200 dark:border-purple-800"
+          : isInstitutional
+            ? "border-violet-200 dark:border-violet-800"
+            : "border-gray-200 dark:border-gray-800"
       }`}
     >
       <div className="flex">
@@ -55,14 +71,20 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
         {/* Content column */}
         <Link
           to={`/agora/thread/${thread.id}`}
-          className={`flex-grow p-3 ${showVoting ? 'pl-2' : ''} min-w-0`}
+          className={`flex-grow p-3 ${showVoting ? "pl-2" : ""} min-w-0`}
         >
           {/* Top row: avatar + name + indicators + time */}
           <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
             {author.avatarUrl ? (
-              <img src={author.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+              <img
+                src={author.avatarUrl}
+                alt=""
+                className="w-5 h-5 rounded-full object-cover flex-shrink-0"
+              />
             ) : (
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 ${isInstitutional ? 'bg-violet-600' : 'bg-teal-600'}`}>
+              <div
+                className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 ${isInstitutional ? "bg-violet-600" : "bg-teal-600"}`}
+              >
                 {author.avatarInitials}
               </div>
             )}
@@ -91,7 +113,7 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
 
           {/* Preview content */}
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
-            {thread.content.split('\n')[0].replace(/[*#]/g, '')}
+            {thread.content.split("\n")[0].replace(/[*#]/g, "")}
           </p>
 
           {/* Embedded media preview */}
@@ -111,31 +133,37 @@ export function ThreadCard({ thread, author, onVote, isVoting = false }: ThreadC
                 <MessageSquare className="w-3.5 h-3.5" />
                 {thread.replyCount}
               </span>
-              <BookmarkButton threadId={thread.id} isBookmarked={thread.isBookmarked} size="sm" />
+              <BookmarkButton
+                threadId={thread.id}
+                isBookmarked={thread.isBookmarked}
+                size="sm"
+              />
               <button
                 onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  const url = `${window.location.origin}/agora/thread/${thread.id}`
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const url = `${window.location.origin}/agora/thread/${thread.id}`;
                   if (navigator.share) {
-                    navigator.share({ title: thread.title, url })
+                    navigator.share({ title: thread.title, url });
                   } else {
-                    navigator.clipboard.writeText(url)
+                    navigator.clipboard.writeText(url);
                   }
                 }}
                 className="flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                title={t('common:share.share')}
+                title={t("common:share.share")}
               >
                 <Share2 className="w-3.5 h-3.5" />
               </button>
               {thread.cvsScore != null && thread.scoreBreakdown && (
-                <ScoreBreakdown score={thread.cvsScore} breakdown={thread.scoreBreakdown} />
+                <ScoreBreakdown
+                  score={thread.cvsScore}
+                  breakdown={thread.scoreBreakdown}
+                />
               )}
             </div>
           </div>
-
         </Link>
       </div>
     </div>
-  )
+  );
 }

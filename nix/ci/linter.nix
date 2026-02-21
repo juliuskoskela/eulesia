@@ -1,68 +1,78 @@
-{ ... }:
-{
-  perSystem = { config, pkgs, ... }:
-    let
-      lintNix = pkgs.writeShellApplication {
-        name = "lint-nix";
-        runtimeInputs = with pkgs; [ statix deadnix ];
-        text = ''
-          set -euo pipefail
+{...}: {
+  perSystem = {
+    config,
+    pkgs,
+    ...
+  }: let
+    lintNix = pkgs.writeShellApplication {
+      name = "lint-nix";
+      runtimeInputs = with pkgs; [statix deadnix];
+      text = ''
+        set -euo pipefail
 
-          statix check flake.nix nix
-          deadnix --fail flake.nix nix
-        '';
-      };
+        statix check flake.nix nix
+        deadnix --fail flake.nix nix
+      '';
+    };
 
-      lintWeb = pkgs.writeShellApplication {
-        name = "lint-web";
-        runtimeInputs = [ pkgs.nodejs_20 ];
-        text = ''
-          set -euo pipefail
+    lintWeb = pkgs.writeShellApplication {
+      name = "lint-web";
+      runtimeInputs = [pkgs.nodejs_20];
+      text = ''
+        set -euo pipefail
 
-          npm ci --silent
-          npm run lint
-        '';
-      };
-    in
-    {
-      pre-commit = {
-        check.enable = true;
-        settings = {
-          hooks = {
-            flake-check = {
-              enable = true;
-              name = "flake-check";
-              language = "system";
-              pass_filenames = false;
-              entry = "${pkgs.writeShellScript "flake-check" ''
-                nix flake check --no-build 2>&1 | grep -v "warning: Git tree"
-              ''}";
-            };
+        npm ci --silent
+        npm run lint
+      '';
+    };
+  in {
+    pre-commit = {
+      check.enable = true;
+      settings = {
+        hooks = {
+          treefmt = {
+            enable = true;
+            name = "treefmt";
+            description = "Run treefmt format checks";
+            entry = "${config.treefmt.build.wrapper}/bin/treefmt --fail-on-change";
+            language = "system";
+            pass_filenames = false;
+          };
 
-            lint-nix = {
-              enable = true;
-              name = "lint-nix";
-              language = "system";
-              pass_filenames = false;
-              entry = "${lintNix}/bin/lint-nix";
-            };
+          flake-check = {
+            enable = true;
+            name = "flake-check";
+            language = "system";
+            pass_filenames = false;
+            entry = "${pkgs.writeShellScript "flake-check" ''
+              nix flake check --no-build 2>&1 | grep -v "warning: Git tree"
+            ''}";
+          };
+
+          lint-nix = {
+            enable = true;
+            name = "lint-nix";
+            language = "system";
+            pass_filenames = false;
+            entry = "${lintNix}/bin/lint-nix";
           };
         };
       };
+    };
 
-      packages = {
-        lint-nix = lintNix;
-        lint-web = lintWeb;
-        lint = pkgs.writeShellApplication {
-          name = "lint";
-          runtimeInputs = [ lintNix lintWeb ];
-          text = ''
-            set -euo pipefail
+    packages = {
+      lint-nix = lintNix;
+      lint-web = lintWeb;
+      lint = pkgs.writeShellApplication {
+        name = "lint";
+        runtimeInputs = [lintNix lintWeb];
+        text = ''
+          set -euo pipefail
 
-            lint-nix
-            lint-web
-          '';
-        };
+          lint-nix
+          lint-web
+        '';
       };
     };
+  };
 }

@@ -1,9 +1,9 @@
-import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
-import { Shield, ArrowLeft } from 'lucide-react'
-import { Layout } from '../components/layout'
-import { SEOHead } from '../components/SEOHead'
-import { useAuth } from '../hooks/useAuth'
+import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+import { Shield, ArrowLeft } from "lucide-react";
+import { Layout } from "../components/layout";
+import { SEOHead } from "../components/SEOHead";
+import { useAuth } from "../hooks/useAuth";
 
 function PublicHeader() {
   return (
@@ -17,34 +17,46 @@ function PublicHeader() {
         </Link>
       </div>
     </div>
-  )
+  );
 }
 
 function PrivacyContent() {
-  const { t } = useTranslation('legal')
+  const { t } = useTranslation("legal");
 
   const sectionKeys = [
-    'intro', 'data_collected', 'purpose', 'legal_basis', 'sharing',
-    'retention', 'rights', 'security', 'cookies', 'changes', 'contact'
-  ]
+    "intro",
+    "data_collected",
+    "purpose",
+    "legal_basis",
+    "sharing",
+    "retention",
+    "rights",
+    "security",
+    "cookies",
+    "changes",
+    "contact",
+  ];
 
-  const listSections = ['data_collected', 'purpose', 'rights']
+  const listSections = ["data_collected", "purpose", "rights"];
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      <Link to="/about" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-4">
+      <Link
+        to="/about"
+        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-4"
+      >
         <ArrowLeft className="w-4 h-4" />
-        {t('common:actions.back')}
+        {t("common:actions.back")}
       </Link>
 
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
         <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600" />
-            {t('privacy.title')}
+            {t("privacy.title")}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {t('privacy.lastUpdated', { date: '12.2.2026' })}
+          <p className="text-sm text-gray-500 mt-1">
+            {t("privacy.lastUpdated", { date: "12.2.2026" })}
           </p>
         </div>
 
@@ -59,8 +71,15 @@ function PrivacyContent() {
               </p>
               {listSections.includes(key) && (
                 <ul className="mt-2 space-y-1">
-                  {(t(`privacy.sections.${key}.items`, { returnObjects: true }) as string[]).map((item, i) => (
-                    <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                  {(
+                    t(`privacy.sections.${key}.items`, {
+                      returnObjects: true,
+                    }) as string[]
+                  ).map((item, i) => (
+                    <li
+                      key={i}
+                      className="text-sm text-gray-700 flex items-start gap-2"
+                    >
                       <span className="text-blue-500 mt-0.5">•</span>
                       {item}
                     </li>
@@ -74,15 +93,15 @@ function PrivacyContent() {
 
       <div className="mt-6 text-center">
         <Link to="/terms" className="text-sm text-blue-600 hover:underline">
-          ← {t('terms.title')}
+          ← {t("terms.title")}
         </Link>
       </div>
     </div>
-  )
+  );
 }
 
 export function PrivacyPage() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
     return (
@@ -90,7 +109,7 @@ export function PrivacyPage() {
         <PublicHeader />
         <PrivacyContent />
       </div>
-    )
+    );
   }
 
   return (
@@ -102,5 +121,5 @@ export function PrivacyPage() {
       />
       <PrivacyContent />
     </Layout>
-  )
+  );
 }

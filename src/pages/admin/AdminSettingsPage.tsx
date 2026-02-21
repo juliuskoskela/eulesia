@@ -1,78 +1,107 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { AdminLayout } from '../../components/admin'
-import { useAdminSettings, useUpdateAdminSettings, useGenerateAdminInvites, useAdminInvites, useAdminAnnouncements, useCreateAnnouncement, useToggleAnnouncement, useDeleteAnnouncement } from '../../hooks/useAdminApi'
-import { TicketCheck, Users, ShieldCheck, Loader2, Save, Info, Plus, Copy, Check, Gift, Megaphone, Trash2, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { AdminLayout } from "../../components/admin";
+import {
+  useAdminSettings,
+  useUpdateAdminSettings,
+  useGenerateAdminInvites,
+  useAdminInvites,
+  useAdminAnnouncements,
+  useCreateAnnouncement,
+  useToggleAnnouncement,
+  useDeleteAnnouncement,
+} from "../../hooks/useAdminApi";
+import {
+  TicketCheck,
+  Users,
+  ShieldCheck,
+  Loader2,
+  Save,
+  Info,
+  Plus,
+  Copy,
+  Check,
+  Gift,
+  Megaphone,
+  Trash2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 function ToggleSwitch({
   enabled,
   onChange,
-  disabled
+  disabled,
 }: {
-  enabled: boolean
-  onChange: (val: boolean) => void
-  disabled?: boolean
+  enabled: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={() => !disabled && onChange(!enabled)}
       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-        enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        enabled ? "bg-blue-600" : "bg-gray-200 dark:bg-gray-700"
+      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
     >
       <span
         className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-          enabled ? 'translate-x-5' : 'translate-x-0'
+          enabled ? "translate-x-5" : "translate-x-0"
         }`}
       />
     </button>
-  )
+  );
 }
 
 export function AdminSettingsPage() {
-  const { t } = useTranslation('admin')
-  const { data: settings, isLoading } = useAdminSettings()
-  const updateSettings = useUpdateAdminSettings()
-  const generateInvites = useGenerateAdminInvites()
-  const { data: adminInvites, isLoading: invitesLoading } = useAdminInvites()
+  const { t } = useTranslation("admin");
+  const { data: settings, isLoading } = useAdminSettings();
+  const updateSettings = useUpdateAdminSettings();
+  const generateInvites = useGenerateAdminInvites();
+  const { data: adminInvites, isLoading: invitesLoading } = useAdminInvites();
 
-  const [invitesEnabled, setInvitesEnabled] = useState(true)
-  const [defaultInviteCount, setDefaultInviteCount] = useState(5)
-  const [registrationOpen, setRegistrationOpen] = useState(true)
-  const [hasChanges, setHasChanges] = useState(false)
-  const [generateCount, setGenerateCount] = useState(5)
-  const [copiedCode, setCopiedCode] = useState<string | null>(null)
-  const [copiedAll, setCopiedAll] = useState(false)
+  const [invitesEnabled, setInvitesEnabled] = useState(true);
+  const [defaultInviteCount, setDefaultInviteCount] = useState(5);
+  const [registrationOpen, setRegistrationOpen] = useState(true);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [generateCount, setGenerateCount] = useState(5);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   // Announcement state
-  const { data: adminAnnouncements } = useAdminAnnouncements()
-  const createAnnouncement = useCreateAnnouncement()
-  const toggleAnnouncement = useToggleAnnouncement()
-  const deleteAnnouncement = useDeleteAnnouncement()
-  const [announcementTitle, setAnnouncementTitle] = useState('')
-  const [announcementMessage, setAnnouncementMessage] = useState('')
-  const [announcementType, setAnnouncementType] = useState<'info' | 'warning' | 'critical'>('info')
+  const { data: adminAnnouncements } = useAdminAnnouncements();
+  const createAnnouncement = useCreateAnnouncement();
+  const toggleAnnouncement = useToggleAnnouncement();
+  const deleteAnnouncement = useDeleteAnnouncement();
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementMessage, setAnnouncementMessage] = useState("");
+  const [announcementType, setAnnouncementType] = useState<
+    "info" | "warning" | "critical"
+  >("info");
 
   // Sync from server
   useEffect(() => {
     if (settings) {
-      setInvitesEnabled(settings.invitesEnabled)
-      setDefaultInviteCount(settings.defaultInviteCount)
-      setRegistrationOpen(settings.registrationOpen)
-      setHasChanges(false)
+      setInvitesEnabled(settings.invitesEnabled);
+      setDefaultInviteCount(settings.defaultInviteCount);
+      setRegistrationOpen(settings.registrationOpen);
+      setHasChanges(false);
     }
-  }, [settings])
+  }, [settings]);
 
   const handleSave = () => {
-    updateSettings.mutate({
-      invitesEnabled,
-      defaultInviteCount,
-      registrationOpen
-    }, {
-      onSuccess: () => setHasChanges(false)
-    })
-  }
+    updateSettings.mutate(
+      {
+        invitesEnabled,
+        defaultInviteCount,
+        registrationOpen,
+      },
+      {
+        onSuccess: () => setHasChanges(false),
+      },
+    );
+  };
 
   if (isLoading) {
     return (
@@ -81,13 +110,15 @@ export function AdminSettingsPage() {
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
         </div>
       </AdminLayout>
-    )
+    );
   }
 
   return (
     <AdminLayout>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('settings.title')}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {t("settings.title")}
+        </h1>
         {hasChanges && (
           <button
             onClick={handleSave}
@@ -99,7 +130,7 @@ export function AdminSettingsPage() {
             ) : (
               <Save className="w-4 h-4" />
             )}
-            {t('settings.save')}
+            {t("settings.save")}
           </button>
         )}
       </div>
@@ -112,8 +143,12 @@ export function AdminSettingsPage() {
               <TicketCheck className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('settings.inviteSystem')}</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t('settings.inviteSystemDesc')}</p>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                {t("settings.inviteSystem")}
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t("settings.inviteSystemDesc")}
+              </p>
             </div>
           </div>
 
@@ -121,14 +156,18 @@ export function AdminSettingsPage() {
             {/* Invite toggle */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('settings.invitesEnabled')}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.invitesEnabledDesc')}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t("settings.invitesEnabled")}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {t("settings.invitesEnabledDesc")}
+                </p>
               </div>
               <ToggleSwitch
                 enabled={invitesEnabled}
                 onChange={(val) => {
-                  setInvitesEnabled(val)
-                  setHasChanges(true)
+                  setInvitesEnabled(val);
+                  setHasChanges(true);
                 }}
               />
             </div>
@@ -136,27 +175,33 @@ export function AdminSettingsPage() {
             {/* Default invite count */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('settings.defaultInviteCount')}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.defaultInviteCountDesc')}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t("settings.defaultInviteCount")}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {t("settings.defaultInviteCountDesc")}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
                     if (defaultInviteCount > 0) {
-                      setDefaultInviteCount(defaultInviteCount - 1)
-                      setHasChanges(true)
+                      setDefaultInviteCount(defaultInviteCount - 1);
+                      setHasChanges(true);
                     }
                   }}
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   −
                 </button>
-                <span className="w-10 text-center font-semibold text-gray-900 dark:text-gray-100 dark:text-gray-100">{defaultInviteCount}</span>
+                <span className="w-10 text-center font-semibold text-gray-900 dark:text-gray-100 dark:text-gray-100">
+                  {defaultInviteCount}
+                </span>
                 <button
                   onClick={() => {
                     if (defaultInviteCount < 50) {
-                      setDefaultInviteCount(defaultInviteCount + 1)
-                      setHasChanges(true)
+                      setDefaultInviteCount(defaultInviteCount + 1);
+                      setHasChanges(true);
                     }
                   }}
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -175,8 +220,12 @@ export function AdminSettingsPage() {
               <Gift className="w-4 h-4 text-amber-600" />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('settings.generateInvites')}</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t('settings.generateInvitesDesc')}</p>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                {t("settings.generateInvites")}
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t("settings.generateInvitesDesc")}
+              </p>
             </div>
           </div>
 
@@ -185,14 +234,20 @@ export function AdminSettingsPage() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setGenerateCount(Math.max(1, generateCount - 1))}
+                  onClick={() =>
+                    setGenerateCount(Math.max(1, generateCount - 1))
+                  }
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   −
                 </button>
-                <span className="w-10 text-center font-semibold text-gray-900 dark:text-gray-100 dark:text-gray-100">{generateCount}</span>
+                <span className="w-10 text-center font-semibold text-gray-900 dark:text-gray-100 dark:text-gray-100">
+                  {generateCount}
+                </span>
                 <button
-                  onClick={() => setGenerateCount(Math.min(50, generateCount + 1))}
+                  onClick={() =>
+                    setGenerateCount(Math.min(50, generateCount + 1))
+                  }
                   className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   +
@@ -208,7 +263,7 @@ export function AdminSettingsPage() {
                 ) : (
                   <Plus className="w-4 h-4" />
                 )}
-                {t('settings.generate')}
+                {t("settings.generate")}
               </button>
             </div>
 
@@ -221,46 +276,66 @@ export function AdminSettingsPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    {t('settings.generatedCodes')}
+                    {t("settings.generatedCodes")}
                   </p>
-                  {adminInvites.filter(c => c.status === 'available').length > 0 && (
+                  {adminInvites.filter((c) => c.status === "available").length >
+                    0 && (
                     <button
                       onClick={() => {
-                        const available = adminInvites.filter(c => c.status === 'available').map(c => c.code)
-                        navigator.clipboard.writeText(available.join('\n'))
-                        setCopiedAll(true)
-                        setTimeout(() => setCopiedAll(false), 2000)
+                        const available = adminInvites
+                          .filter((c) => c.status === "available")
+                          .map((c) => c.code);
+                        navigator.clipboard.writeText(available.join("\n"));
+                        setCopiedAll(true);
+                        setTimeout(() => setCopiedAll(false), 2000);
                       }}
                       className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 transition-colors"
                     >
-                      {copiedAll ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                      {copiedAll ? t('settings.copied') : t('settings.copyAll')}
+                      {copiedAll ? (
+                        <Check className="w-3 h-3 text-green-500" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                      {copiedAll ? t("settings.copied") : t("settings.copyAll")}
                     </button>
                   )}
                 </div>
                 <div className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-100 dark:border-gray-800 rounded-lg overflow-hidden">
-                  {adminInvites.map(code => (
-                    <div key={code.id} className="flex items-center justify-between px-4 py-2.5 bg-gray-50/50">
+                  {adminInvites.map((code) => (
+                    <div
+                      key={code.id}
+                      className="flex items-center justify-between px-4 py-2.5 bg-gray-50/50"
+                    >
                       <div className="flex items-center gap-3">
-                        <code className={`text-sm font-mono ${code.status === 'available' ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500 line-through'}`}>
+                        <code
+                          className={`text-sm font-mono ${code.status === "available" ? "text-gray-900 dark:text-gray-100" : "text-gray-400 dark:text-gray-500 line-through"}`}
+                        >
                           {code.code}
                         </code>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          code.status === 'available' ? 'bg-green-100 text-green-700' :
-                          code.status === 'used' ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400' :
-                          'bg-red-100 text-red-600'
-                        }`}>
-                          {code.status === 'available' ? t('settings.inviteAvailable') :
-                           code.status === 'used' ? (code.usedBy ? code.usedBy.name : t('settings.inviteUsed')) :
-                           t('settings.inviteRevoked')}
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            code.status === "available"
+                              ? "bg-green-100 text-green-700"
+                              : code.status === "used"
+                                ? "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                                : "bg-red-100 text-red-600"
+                          }`}
+                        >
+                          {code.status === "available"
+                            ? t("settings.inviteAvailable")
+                            : code.status === "used"
+                              ? code.usedBy
+                                ? code.usedBy.name
+                                : t("settings.inviteUsed")
+                              : t("settings.inviteRevoked")}
                         </span>
                       </div>
-                      {code.status === 'available' && (
+                      {code.status === "available" && (
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(code.code)
-                            setCopiedCode(code.id)
-                            setTimeout(() => setCopiedCode(null), 2000)
+                            navigator.clipboard.writeText(code.code);
+                            setCopiedCode(code.id);
+                            setTimeout(() => setCopiedCode(null), 2000);
                           }}
                           className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
                         >
@@ -276,7 +351,9 @@ export function AdminSettingsPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400 italic">{t('settings.noInviteCodes')}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                {t("settings.noInviteCodes")}
+              </p>
             )}
           </div>
         </div>
@@ -288,22 +365,30 @@ export function AdminSettingsPage() {
               <Users className="w-4 h-4 text-green-600" />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('settings.registration')}</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t('settings.registrationDesc')}</p>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                {t("settings.registration")}
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t("settings.registrationDesc")}
+              </p>
             </div>
           </div>
 
           <div className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('settings.registrationOpen')}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.registrationOpenDesc')}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t("settings.registrationOpen")}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {t("settings.registrationOpenDesc")}
+                </p>
               </div>
               <ToggleSwitch
                 enabled={registrationOpen}
                 onChange={(val) => {
-                  setRegistrationOpen(val)
-                  setHasChanges(true)
+                  setRegistrationOpen(val);
+                  setHasChanges(true);
                 }}
               />
             </div>
@@ -317,8 +402,12 @@ export function AdminSettingsPage() {
               <Megaphone className="w-4 h-4 text-red-600" />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('settings.announcements')}</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t('settings.announcementsDesc')}</p>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                {t("settings.announcements")}
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {t("settings.announcementsDesc")}
+              </p>
             </div>
           </div>
 
@@ -329,30 +418,32 @@ export function AdminSettingsPage() {
                 type="text"
                 value={announcementTitle}
                 onChange={(e) => setAnnouncementTitle(e.target.value)}
-                placeholder={t('settings.announcementTitle')}
+                placeholder={t("settings.announcementTitle")}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-100"
                 maxLength={200}
               />
               <textarea
                 value={announcementMessage}
                 onChange={(e) => setAnnouncementMessage(e.target.value)}
-                placeholder={t('settings.announcementMessage')}
+                placeholder={t("settings.announcementMessage")}
                 rows={2}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-gray-100 resize-none"
                 maxLength={2000}
               />
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
-                  {(['info', 'warning', 'critical'] as const).map((type) => (
+                  {(["info", "warning", "critical"] as const).map((type) => (
                     <button
                       key={type}
                       onClick={() => setAnnouncementType(type)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                         announcementType === type
-                          ? type === 'info' ? 'bg-blue-600 text-white' :
-                            type === 'warning' ? 'bg-amber-500 text-white' :
-                            'bg-red-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                          ? type === "info"
+                            ? "bg-blue-600 text-white"
+                            : type === "warning"
+                              ? "bg-amber-500 text-white"
+                              : "bg-red-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                       }`}
                     >
                       {t(`settings.announcementType.${type}`)}
@@ -362,20 +453,27 @@ export function AdminSettingsPage() {
                 <div className="flex-1" />
                 <button
                   onClick={() => {
-                    if (!announcementTitle.trim()) return
-                    createAnnouncement.mutate({
-                      title: announcementTitle.trim(),
-                      message: announcementMessage.trim() || announcementTitle.trim(),
-                      type: announcementType
-                    }, {
-                      onSuccess: () => {
-                        setAnnouncementTitle('')
-                        setAnnouncementMessage('')
-                        setAnnouncementType('info')
-                      }
-                    })
+                    if (!announcementTitle.trim()) return;
+                    createAnnouncement.mutate(
+                      {
+                        title: announcementTitle.trim(),
+                        message:
+                          announcementMessage.trim() ||
+                          announcementTitle.trim(),
+                        type: announcementType,
+                      },
+                      {
+                        onSuccess: () => {
+                          setAnnouncementTitle("");
+                          setAnnouncementMessage("");
+                          setAnnouncementType("info");
+                        },
+                      },
+                    );
                   }}
-                  disabled={!announcementTitle.trim() || createAnnouncement.isPending}
+                  disabled={
+                    !announcementTitle.trim() || createAnnouncement.isPending
+                  }
                   className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
                   {createAnnouncement.isPending ? (
@@ -383,7 +481,7 @@ export function AdminSettingsPage() {
                   ) : (
                     <Megaphone className="w-4 h-4" />
                   )}
-                  {t('settings.publishAnnouncement')}
+                  {t("settings.publishAnnouncement")}
                 </button>
               </div>
             </div>
@@ -392,37 +490,61 @@ export function AdminSettingsPage() {
             {adminAnnouncements && adminAnnouncements.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  {t('settings.existingAnnouncements')}
+                  {t("settings.existingAnnouncements")}
                 </p>
                 <div className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-100 dark:border-gray-800 rounded-lg overflow-hidden">
-                  {adminAnnouncements.map(a => (
-                    <div key={a.id} className={`flex items-center justify-between px-4 py-3 ${a.active ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50'}`}>
+                  {adminAnnouncements.map((a) => (
+                    <div
+                      key={a.id}
+                      className={`flex items-center justify-between px-4 py-3 ${a.active ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800/50"}`}
+                    >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          a.type === 'info' ? 'bg-blue-500' :
-                          a.type === 'warning' ? 'bg-amber-500' : 'bg-red-500'
-                        }`} />
+                        <span
+                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            a.type === "info"
+                              ? "bg-blue-500"
+                              : a.type === "warning"
+                                ? "bg-amber-500"
+                                : "bg-red-500"
+                          }`}
+                        />
                         <div className="min-w-0">
-                          <p className={`text-sm font-medium truncate ${a.active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                          <p
+                            className={`text-sm font-medium truncate ${a.active ? "text-gray-900 dark:text-gray-100" : "text-gray-400 dark:text-gray-500"}`}
+                          >
                             {a.title}
                           </p>
                           <p className="text-xs text-gray-400 dark:text-gray-500">
-                            {a.createdByName} — {new Date(a.createdAt).toLocaleDateString('fi')}
+                            {a.createdByName} —{" "}
+                            {new Date(a.createdAt).toLocaleDateString("fi")}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button
-                          onClick={() => toggleAnnouncement.mutate({ id: a.id, active: !a.active })}
+                          onClick={() =>
+                            toggleAnnouncement.mutate({
+                              id: a.id,
+                              active: !a.active,
+                            })
+                          }
                           className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
-                          title={a.active ? t('settings.hideAnnouncement') : t('settings.showAnnouncement')}
+                          title={
+                            a.active
+                              ? t("settings.hideAnnouncement")
+                              : t("settings.showAnnouncement")
+                          }
                         >
-                          {a.active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          {a.active ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
                         </button>
                         <button
                           onClick={() => deleteAnnouncement.mutate(a.id)}
                           className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
-                          title={t('settings.deleteAnnouncement')}
+                          title={t("settings.deleteAnnouncement")}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -442,7 +564,9 @@ export function AdminSettingsPage() {
               <ShieldCheck className="w-4 h-4 text-purple-600" />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('settings.platformSettings')}</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                {t("settings.platformSettings")}
+              </h2>
             </div>
           </div>
 
@@ -450,29 +574,41 @@ export function AdminSettingsPage() {
             <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg flex items-start gap-3">
               <Info className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('settings.dsaCompliance')}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('settings.dsaDescription')}</p>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t("settings.dsaCompliance")}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t("settings.dsaDescription")}
+                </p>
               </div>
             </div>
 
             <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg flex items-start gap-3">
               <Info className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('settings.moderationPolicy')}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('settings.moderationDescription')}</p>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t("settings.moderationPolicy")}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t("settings.moderationDescription")}
+                </p>
               </div>
             </div>
 
             <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg flex items-start gap-3">
               <Info className="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('settings.autoModeration')}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('settings.autoModerationDescription')}</p>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t("settings.autoModeration")}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t("settings.autoModerationDescription")}
+                </p>
               </div>
             </div>
           </div>
         </div>
       </div>
     </AdminLayout>
-  )
+  );
 }

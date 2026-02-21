@@ -6,56 +6,64 @@
  *   npx tsx apps/api/src/scripts/rerender-content.ts
  */
 
-import { db, threads, comments, clubThreads, clubComments, roomMessages, directMessages } from '../db/index.js'
-import { renderMarkdown } from '../utils/markdown.js'
-import { eq } from 'drizzle-orm'
+import {
+  db,
+  threads,
+  comments,
+  clubThreads,
+  clubComments,
+  roomMessages,
+  directMessages,
+} from "../db/index.js";
+import { renderMarkdown } from "../utils/markdown.js";
+import { eq } from "drizzle-orm";
 
 interface ContentRow {
-  id: string
-  content: string
+  id: string;
+  content: string;
 }
 
 async function rerenderTable(tableName: string, table: any) {
-  console.log(`\n📝 Re-rendering ${tableName}...`)
+  console.log(`\n📝 Re-rendering ${tableName}...`);
 
   const rows: ContentRow[] = await db
     .select({ id: table.id, content: table.content })
-    .from(table)
+    .from(table);
 
-  let updated = 0
+  let updated = 0;
   for (const row of rows) {
-    const newHtml = renderMarkdown(row.content)
+    const newHtml = renderMarkdown(row.content);
     await db
       .update(table)
       .set({ contentHtml: newHtml })
-      .where(eq(table.id, row.id))
-    updated++
+      .where(eq(table.id, row.id));
+    updated++;
   }
 
-  console.log(`   ✅ ${updated}/${rows.length} rows updated`)
+  console.log(`   ✅ ${updated}/${rows.length} rows updated`);
 }
 
 async function main() {
-  console.log('🔄 Re-rendering all contentHtml fields...\n')
+  console.log("🔄 Re-rendering all contentHtml fields...\n");
 
   const tables = [
-    ['threads', threads],
-    ['comments', comments],
-    ['clubThreads', clubThreads],
-    ['clubComments', clubComments],
-    ['roomMessages', roomMessages],
-    ['directMessages', directMessages]
-  ] as const
+    ["threads", threads],
+    ["comments", comments],
+    ["clubThreads", clubThreads],
+    ["clubComments", clubComments],
+    ["roomMessages", roomMessages],
+    ["directMessages", directMessages],
+  ] as const;
 
   for (const [name, table] of tables) {
-    await rerenderTable(name, table)
+    await rerenderTable(name, table);
   }
 
-  console.log('\n✅ All done!')
-  process.exit(0)
+  console.log("\n✅ All done!");
+  process.exit(0);
 }
 
 main().catch((err) => {
-  console.error('❌ Error:', err)
-  process.exit(1)
-})
+  console.error("❌ Error:", err);
+  process.exit(1);
+});

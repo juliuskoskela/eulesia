@@ -5,6 +5,7 @@ This document describes Eulesia's planned integration with the European Digital 
 ## Overview
 
 Eulesia will support two authentication methods:
+
 1. **Email Magic Link** (current) - Basic identity verification
 2. **EUDI Wallet PID** (planned) - Strong identity verification via European Digital Identity
 
@@ -34,11 +35,11 @@ EUDI Wallet provides a standardized way for European citizens to prove their ide
 
 ### Identity Levels
 
-| Level | Method | Verification |
-|-------|--------|--------------|
-| `basic` | Email magic link | Email address verified |
-| `substantial` | Bank ID (legacy) | Government ID via bank |
-| `high` | EUDI Wallet PID | eIDAS LoA High, cryptographic proof |
+| Level         | Method           | Verification                        |
+| ------------- | ---------------- | ----------------------------------- |
+| `basic`       | Email magic link | Email address verified              |
+| `substantial` | Bank ID (legacy) | Government ID via bank              |
+| `high`        | EUDI Wallet PID  | eIDAS LoA High, cryptographic proof |
 
 ## Technical Implementation
 
@@ -70,39 +71,43 @@ interface PresentationRequest {
 #### 2. Verification Process
 
 ```typescript
-async function verifyEudiPresentation(presentation: Presentation): Promise<VerifiedIdentity> {
+async function verifyEudiPresentation(
+  presentation: Presentation,
+): Promise<VerifiedIdentity> {
   // 1. Verify presentation signature
-  const isSignatureValid = await verifyPresentationSignature(presentation)
+  const isSignatureValid = await verifyPresentationSignature(presentation);
 
   // 2. Verify PID issuer is trusted (via EU Trust List)
-  const issuer = extractIssuer(presentation)
-  const isTrustedIssuer = await verifyIssuerTrust(issuer)
+  const issuer = extractIssuer(presentation);
+  const isTrustedIssuer = await verifyIssuerTrust(issuer);
 
   // 3. Check credential not revoked
-  const isNotRevoked = await checkRevocationStatus(presentation)
+  const isNotRevoked = await checkRevocationStatus(presentation);
 
   // 4. Extract verified claims
   if (isSignatureValid && isTrustedIssuer && isNotRevoked) {
     return {
       givenName: presentation.claims.given_name,
       familyName: presentation.claims.family_name,
-      identityLevel: 'high',
+      identityLevel: "high",
       verifiedAt: new Date(),
-      issuerCountry: issuer.country
-    }
+      issuerCountry: issuer.country,
+    };
   }
 
-  throw new Error('Verification failed')
+  throw new Error("Verification failed");
 }
 ```
 
 ### Data Minimization
 
 Following GDPR and ARF principles, Eulesia requests only:
+
 - `given_name` (etunimi)
 - `family_name` (sukunimi)
 
 We do NOT request:
+
 - Birth date (unless required for specific services)
 - National ID number
 - Address
@@ -111,6 +116,7 @@ We do NOT request:
 ### Trust Framework
 
 Eulesia verifies PID credentials against the EU Trust List:
+
 - Each member state registers its PID issuers
 - Issuers have certificates signed by national root
 - National roots are in the EU-wide trust list
@@ -138,9 +144,11 @@ CREATE TABLE eudi_verifications (
 ## API Endpoints
 
 ### POST `/api/v1/auth/eudi/start`
+
 Initiate EUDI Wallet authentication.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -153,42 +161,52 @@ Initiate EUDI Wallet authentication.
 ```
 
 ### POST `/api/v1/auth/eudi/callback`
+
 Handle wallet response.
 
 ### GET `/api/v1/auth/eudi/status/:sessionId`
+
 Poll for authentication status (while waiting for wallet).
 
 ## Testing Strategy
 
 ### Phase 1: Reference Implementation Testing
+
 Use EU Commission's Launchpad testing tools:
+
 - Test against reference wallet implementations
 - Verify conformance to OpenID4VP spec
 
 ### Phase 2: Peer-to-Peer Testing
+
 - Connect with other Launchpad participants
 - Test cross-border scenarios (FI wallet → Eulesia)
 
 ### Phase 3: Pilot Wallets
+
 - Finnish national wallet pilot
 - Other LSP consortium wallets
 
 ## Implementation Timeline
 
 ### Now (2024-2025)
+
 - [x] Email magic link authentication
 - [ ] EUDI integration architecture design
 - [ ] Launchpad registration
 
 ### Q1 2025
+
 - [ ] OpenID4VP RP implementation
 - [ ] Reference implementation testing
 
 ### Q2 2025
+
 - [ ] Peer-to-peer interoperability testing
 - [ ] UI/UX for wallet login flow
 
 ### 2026+
+
 - [ ] Integration with production PID issuers
 - [ ] RP access certificate from national registry
 
@@ -215,7 +233,7 @@ apps/api/src/
 ```json
 {
   "@sphereon/oid4vci-client": "^0.x",
-  "@sphereon/ssi-types": "^0.x",
+  "@sphereon/ssi-types": "^0.x"
   // Or use direct OpenID4VP implementation
 }
 ```
@@ -237,12 +255,12 @@ apps/api/src/
 
 ## Glossary
 
-| Term | Description |
-|------|-------------|
-| ARF | Architecture and Reference Framework |
-| eIDAS | Electronic Identification and Trust Services |
-| LoA | Level of Assurance |
-| PID | Personal Identification Data |
-| RP | Relying Party (service requesting verification) |
-| VP | Verifiable Presentation |
-| VCI | Verifiable Credential Issuance |
+| Term  | Description                                     |
+| ----- | ----------------------------------------------- |
+| ARF   | Architecture and Reference Framework            |
+| eIDAS | Electronic Identification and Trust Services    |
+| LoA   | Level of Assurance                              |
+| PID   | Personal Identification Data                    |
+| RP    | Relying Party (service requesting verification) |
+| VP    | Verifiable Presentation                         |
+| VCI   | Verifiable Credential Issuance                  |

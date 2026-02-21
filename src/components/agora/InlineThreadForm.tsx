@@ -1,229 +1,267 @@
-import { useState, useRef, useEffect } from 'react'
-import { MapPin, Building2, Globe, Hash, Plus, X, Loader2, ChevronUp, Image as ImageIcon } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { useCreateThread } from '../../hooks/useApi'
-import { LocationSearch } from '../common/LocationSearch'
-import { api } from '../../lib/api'
-import type { Scope } from '../../types'
-import type { LocationResult } from '../../lib/api'
+import { useState, useRef, useEffect } from "react";
+import {
+  MapPin,
+  Building2,
+  Globe,
+  Hash,
+  Plus,
+  X,
+  Loader2,
+  ChevronUp,
+  Image as ImageIcon,
+} from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { useCreateThread } from "../../hooks/useApi";
+import { LocationSearch } from "../common/LocationSearch";
+import { api } from "../../lib/api";
+import type { Scope } from "../../types";
+import type { LocationResult } from "../../lib/api";
 
 interface InlineThreadFormProps {
   // For municipality pages - prefilled municipality
-  municipalityId?: string
-  municipalityName?: string
+  municipalityId?: string;
+  municipalityName?: string;
   // Callback when thread is created
-  onSuccess: (threadId: string) => void
+  onSuccess: (threadId: string) => void;
 }
 
 // Common tags for quick selection
 const suggestedTags = [
-  'liikenne', 'koulutus', 'terveys', 'ympäristö', 'asuminen',
-  'kulttuuri', 'talous', 'turvallisuus', 'sosiaalipalvelut', 'infrastruktuuri'
-]
+  "liikenne",
+  "koulutus",
+  "terveys",
+  "ympäristö",
+  "asuminen",
+  "kulttuuri",
+  "talous",
+  "turvallisuus",
+  "sosiaalipalvelut",
+  "infrastruktuuri",
+];
 
 interface UploadedImage {
-  url: string
-  thumbnailUrl: string
-  width: number
-  height: number
+  url: string;
+  thumbnailUrl: string;
+  width: number;
+  height: number;
 }
 
-export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }: InlineThreadFormProps) {
-  const { t } = useTranslation('agora')
-  const createThreadMutation = useCreateThread()
-  const formRef = useRef<HTMLDivElement>(null)
-  const titleInputRef = useRef<HTMLInputElement>(null)
-  const imageInputRef = useRef<HTMLInputElement>(null)
+export function InlineThreadForm({
+  municipalityId,
+  municipalityName,
+  onSuccess,
+}: InlineThreadFormProps) {
+  const { t } = useTranslation("agora");
+  const createThreadMutation = useCreateThread();
+  const formRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const scopeOptions: { value: Scope; icon: React.ElementType; label: string }[] = [
-    { value: 'local', icon: MapPin, label: t('threadForm.scopeLocal') },
-    { value: 'national', icon: Building2, label: t('threadForm.scopeNational') },
-    { value: 'european', icon: Globe, label: t('threadForm.scopeEuropean') }
-  ]
+  const scopeOptions: {
+    value: Scope;
+    icon: React.ElementType;
+    label: string;
+  }[] = [
+    { value: "local", icon: MapPin, label: t("threadForm.scopeLocal") },
+    {
+      value: "national",
+      icon: Building2,
+      label: t("threadForm.scopeNational"),
+    },
+    { value: "european", icon: Globe, label: t("threadForm.scopeEuropean") },
+  ];
 
   // Is this a prefilled municipality context (municipality page)?
-  const isPrefilled = !!(municipalityId && municipalityName)
+  const isPrefilled = !!(municipalityId && municipalityName);
 
   // Form state
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [scope, setScope] = useState<Scope>(isPrefilled ? 'local' : 'national')
-  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null)
-  const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [customTag, setCustomTag] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [scope, setScope] = useState<Scope>(isPrefilled ? "local" : "national");
+  const [selectedLocation, setSelectedLocation] =
+    useState<LocationResult | null>(null);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [customTag, setCustomTag] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Image upload state
-  const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null)
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(
+    null,
+  );
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Focus title input when expanded
   useEffect(() => {
     if (isExpanded && titleInputRef.current) {
       // Small delay to ensure DOM is ready
-      setTimeout(() => titleInputRef.current?.focus(), 50)
+      setTimeout(() => titleInputRef.current?.focus(), 50);
     }
-  }, [isExpanded])
+  }, [isExpanded]);
 
   // Clear location when switching away from local scope
   useEffect(() => {
-    if (scope !== 'local') {
-      setSelectedLocation(null)
+    if (scope !== "local") {
+      setSelectedLocation(null);
     }
-  }, [scope])
+  }, [scope]);
 
   const handleTagToggle = (tag: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    )
-  }
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  };
 
   const handleAddCustomTag = () => {
-    const tag = customTag.trim().toLowerCase()
+    const tag = customTag.trim().toLowerCase();
     if (tag && !selectedTags.includes(tag)) {
-      setSelectedTags(prev => [...prev, tag])
-      setCustomTag('')
+      setSelectedTags((prev) => [...prev, tag]);
+      setCustomTag("");
     }
-  }
+  };
 
   const handleImageClick = () => {
-    imageInputRef.current?.click()
-  }
+    imageInputRef.current?.click();
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     if (!allowedTypes.includes(file.type)) {
-      setError(t('threadForm.imageError'))
-      return
+      setError(t("threadForm.imageError"));
+      return;
     }
 
     // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
-      setError(t('threadForm.imageError'))
-      return
+      setError(t("threadForm.imageError"));
+      return;
     }
 
-    setIsUploadingImage(true)
-    setError(null)
+    setIsUploadingImage(true);
+    setError(null);
 
     try {
-      const result = await api.uploadImage(file)
+      const result = await api.uploadImage(file);
       setUploadedImage({
         url: result.url,
         thumbnailUrl: result.thumbnailUrl,
         width: result.width,
-        height: result.height
-      })
+        height: result.height,
+      });
     } catch (err) {
-      setError(t('threadForm.imageError'))
-      console.error('Image upload failed:', err)
+      setError(t("threadForm.imageError"));
+      console.error("Image upload failed:", err);
     } finally {
-      setIsUploadingImage(false)
+      setIsUploadingImage(false);
       // Reset file input
       if (imageInputRef.current) {
-        imageInputRef.current.value = ''
+        imageInputRef.current.value = "";
       }
     }
-  }
+  };
 
   const handleRemoveImage = () => {
-    setUploadedImage(null)
-  }
+    setUploadedImage(null);
+  };
 
   const handleSubmit = async () => {
-    const trimmedTitle = title.trim()
-    const trimmedContent = content.trim()
+    const trimmedTitle = title.trim();
+    const trimmedContent = content.trim();
 
     if (!trimmedTitle || !trimmedContent) {
-      setError(t('threadForm.validationRequired'))
-      return
+      setError(t("threadForm.validationRequired"));
+      return;
     }
 
     if (trimmedTitle.length < 5) {
-      setError(t('threadForm.validationTitleMin'))
-      return
+      setError(t("threadForm.validationTitleMin"));
+      return;
     }
 
     if (trimmedContent.length < 10) {
-      setError(t('threadForm.validationContentMin'))
-      return
+      setError(t("threadForm.validationContentMin"));
+      return;
     }
 
-    if (scope === 'local' && !isPrefilled && !selectedLocation) {
-      setError(t('threadForm.validationLocation'))
-      return
+    if (scope === "local" && !isPrefilled && !selectedLocation) {
+      setError(t("threadForm.validationLocation"));
+      return;
     }
 
-    setIsSubmitting(true)
-    setError(null)
+    setIsSubmitting(true);
+    setError(null);
 
     try {
       // Build location data
-      let locationData = {}
+      let locationData = {};
       if (isPrefilled && municipalityId) {
         // From municipality page - use municipalityId
-        locationData = { municipalityId }
-      } else if (scope === 'local' && selectedLocation) {
+        locationData = { municipalityId };
+      } else if (scope === "local" && selectedLocation) {
         // From location search - use locationId or activate new location
-        locationData = selectedLocation.status === 'active' && selectedLocation.id
-          ? { locationId: selectedLocation.id }
-          : { locationOsmId: selectedLocation.osmId, locationOsmType: selectedLocation.osmType }
+        locationData =
+          selectedLocation.status === "active" && selectedLocation.id
+            ? { locationId: selectedLocation.id }
+            : {
+                locationOsmId: selectedLocation.osmId,
+                locationOsmType: selectedLocation.osmType,
+              };
       }
 
       // Build content with image if uploaded
-      let finalContent = content.trim()
+      let finalContent = content.trim();
       if (uploadedImage) {
-        finalContent += `\n\n![Kuva](${uploadedImage.url})`
+        finalContent += `\n\n![Kuva](${uploadedImage.url})`;
       }
 
       const result = await createThreadMutation.mutateAsync({
         title: title.trim(),
         content: finalContent,
         scope,
-        country: 'FI',
+        country: "FI",
         ...locationData,
-        tags: selectedTags.length > 0 ? selectedTags : undefined
-      })
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
+      });
 
       // Reset form
-      setTitle('')
-      setContent('')
-      setSelectedTags([])
-      setSelectedLocation(null)
-      setUploadedImage(null)
-      setScope(isPrefilled ? 'local' : 'national')
-      setIsExpanded(false)
+      setTitle("");
+      setContent("");
+      setSelectedTags([]);
+      setSelectedLocation(null);
+      setUploadedImage(null);
+      setScope(isPrefilled ? "local" : "national");
+      setIsExpanded(false);
 
-      onSuccess(result.id)
+      onSuccess(result.id);
     } catch (err) {
-      setError(t('threadForm.createError'))
-      console.error('Failed to create thread:', err)
+      setError(t("threadForm.createError"));
+      console.error("Failed to create thread:", err);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleCancel = () => {
-    setTitle('')
-    setContent('')
-    setSelectedTags([])
-    setSelectedLocation(null)
-    setUploadedImage(null)
-    setScope(isPrefilled ? 'local' : 'national')
-    setError(null)
-    setIsExpanded(false)
-  }
+    setTitle("");
+    setContent("");
+    setSelectedTags([]);
+    setSelectedLocation(null);
+    setUploadedImage(null);
+    setScope(isPrefilled ? "local" : "national");
+    setError(null);
+    setIsExpanded(false);
+  };
 
   return (
-    <div ref={formRef} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden transition-all">
+    <div
+      ref={formRef}
+      className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden transition-all"
+    >
       {/* Collapsed state */}
       {!isExpanded ? (
         <button
@@ -233,7 +271,9 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
           <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
             <Plus className="w-4 h-4 text-blue-600" />
           </div>
-          <span className="flex-1 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">{t('threadForm.collapsed')}</span>
+          <span className="flex-1 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
+            {t("threadForm.collapsed")}
+          </span>
         </button>
       ) : (
         /* Expanded state */
@@ -244,7 +284,9 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
               // Show municipality badge when prefilled
               <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full">
                 <MapPin className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-700">{municipalityName}</span>
+                <span className="text-sm font-medium text-blue-700">
+                  {municipalityName}
+                </span>
               </div>
             ) : (
               // Show scope tabs when not prefilled
@@ -255,8 +297,8 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
                     onClick={() => setScope(value)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       scope === value
-                        ? 'bg-blue-800 text-white'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        ? "bg-blue-800 text-white"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -274,27 +316,27 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
           </div>
 
           {/* Location search for local scope (when not prefilled) */}
-          {!isPrefilled && scope === 'local' && (
+          {!isPrefilled && scope === "local" && (
             <LocationSearch
               value={selectedLocation}
               onChange={setSelectedLocation}
               country="FI"
-              types={['municipality', 'village', 'city']}
-              placeholder={t('threadForm.locationPlaceholder')}
+              types={["municipality", "village", "city"]}
+              placeholder={t("threadForm.locationPlaceholder")}
             />
           )}
 
           {/* National/EU indicator - subtle, informational */}
-          {!isPrefilled && scope === 'national' && (
+          {!isPrefilled && scope === "national" && (
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <span>🇫🇮</span>
-              <span>{t('threadForm.nationalInfo')}</span>
+              <span>{t("threadForm.nationalInfo")}</span>
             </div>
           )}
-          {!isPrefilled && scope === 'european' && (
+          {!isPrefilled && scope === "european" && (
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <span>🇪🇺</span>
-              <span>{t('threadForm.europeanInfo')}</span>
+              <span>{t("threadForm.europeanInfo")}</span>
             </div>
           )}
 
@@ -304,7 +346,7 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={t('threadForm.title')}
+            placeholder={t("threadForm.title")}
             className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 rounded-lg text-base font-medium placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white dark:focus:bg-gray-900 dark:text-gray-100 transition-colors"
             maxLength={500}
           />
@@ -313,7 +355,7 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder={t('threadForm.contentPlaceholder')}
+            placeholder={t("threadForm.contentPlaceholder")}
             rows={4}
             className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white dark:focus:bg-gray-900 resize-none transition-colors"
           />
@@ -333,7 +375,7 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
               <div className="relative inline-block">
                 <img
                   src={uploadedImage.thumbnailUrl}
-                  alt={t('threadForm.preview')}
+                  alt={t("threadForm.preview")}
                   className="h-24 rounded-lg border border-gray-200 dark:border-gray-800 object-cover"
                 />
                 <button
@@ -356,7 +398,9 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
                 ) : (
                   <ImageIcon className="w-4 h-4" />
                 )}
-                {isUploadingImage ? t('threadForm.loading') : t('threadForm.imageUpload')}
+                {isUploadingImage
+                  ? t("threadForm.loading")
+                  : t("threadForm.imageUpload")}
               </button>
             )}
           </div>
@@ -364,14 +408,14 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
           {/* Tags */}
           <div className="space-y-2">
             <div className="flex flex-wrap gap-1.5">
-              {suggestedTags.slice(0, 6).map(tag => (
+              {suggestedTags.slice(0, 6).map((tag) => (
                 <button
                   key={tag}
                   onClick={() => handleTagToggle(tag)}
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                     selectedTags.includes(tag)
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      ? "bg-teal-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                   }`}
                 >
                   <Hash className="w-3 h-3" />
@@ -385,30 +429,36 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
                   type="text"
                   value={customTag}
                   onChange={(e) => setCustomTag(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCustomTag())}
-                  placeholder={t('threadForm.customTag')}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" &&
+                    (e.preventDefault(), handleAddCustomTag())
+                  }
+                  placeholder={t("threadForm.customTag")}
                   className="w-16 bg-transparent border-0 p-0 text-xs focus:ring-0 focus:outline-none"
                 />
               </div>
             </div>
             {/* Selected custom tags */}
-            {selectedTags.filter(t => !suggestedTags.includes(t)).length > 0 && (
+            {selectedTags.filter((t) => !suggestedTags.includes(t)).length >
+              0 && (
               <div className="flex flex-wrap gap-1.5">
-                {selectedTags.filter(t => !suggestedTags.includes(t)).map(tag => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-600 text-white rounded-full text-xs"
-                  >
-                    <Hash className="w-3 h-3" />
-                    {tag}
-                    <button
-                      onClick={() => handleTagToggle(tag)}
-                      className="hover:bg-teal-700 rounded-full"
+                {selectedTags
+                  .filter((t) => !suggestedTags.includes(t))
+                  .map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-600 text-white rounded-full text-xs"
                     >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
+                      <Hash className="w-3 h-3" />
+                      {tag}
+                      <button
+                        onClick={() => handleTagToggle(tag)}
+                        className="hover:bg-teal-700 rounded-full"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
               </div>
             )}
           </div>
@@ -426,7 +476,7 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
               onClick={handleCancel}
               className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium transition-colors"
             >
-              {t('threadForm.cancel')}
+              {t("threadForm.cancel")}
             </button>
             <button
               onClick={handleSubmit}
@@ -434,11 +484,13 @@ export function InlineThreadForm({ municipalityId, municipalityName, onSuccess }
               className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-full text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isSubmitting ? t('threadForm.publishing') : t('threadForm.publish')}
+              {isSubmitting
+                ? t("threadForm.publishing")
+                : t("threadForm.publish")}
             </button>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }

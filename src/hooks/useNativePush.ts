@@ -1,90 +1,103 @@
-import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Capacitor } from '@capacitor/core'
-import { useQueryClient } from '@tanstack/react-query'
-import { useAuth } from './useAuth'
-import { queryKeys } from './useApi'
-import { api } from '../lib/api'
+import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "./useAuth";
+import { queryKeys } from "./useApi";
+import { api } from "../lib/api";
 
 export function useNativePush() {
-  const { isAuthenticated, currentUser } = useAuth()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const registeredRef = useRef(false)
+  const { isAuthenticated, currentUser } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const registeredRef = useRef(false);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform() || !isAuthenticated || !currentUser) return
-    if (registeredRef.current) return
+    if (!Capacitor.isNativePlatform() || !isAuthenticated || !currentUser)
+      return;
+    if (registeredRef.current) return;
 
-    let cleanupFns: (() => void)[] = []
+    let cleanupFns: (() => void)[] = [];
 
     async function setupPush() {
-      const { PushNotifications } = await import('@capacitor/push-notifications')
+      const { PushNotifications } = await import(
+        "@capacitor/push-notifications"
+      );
 
       // Check and request permission
-      let permission = await PushNotifications.checkPermissions()
-      if (permission.receive === 'prompt') {
-        permission = await PushNotifications.requestPermissions()
+      let permission = await PushNotifications.checkPermissions();
+      if (permission.receive === "prompt") {
+        permission = await PushNotifications.requestPermissions();
       }
 
-      if (permission.receive !== 'granted') {
-        console.log('Push notification permission not granted')
-        return
+      if (permission.receive !== "granted") {
+        console.log("Push notification permission not granted");
+        return;
       }
 
       // Listen for registration success
-      const regListener = await PushNotifications.addListener('registration', async (token) => {
-        console.log('Push registration token:', token.value)
-        const platform = Capacitor.getPlatform() as 'android' | 'ios'
-        try {
-          await api.registerDeviceToken(token.value, platform)
-          registeredRef.current = true
-          // Store token for logout cleanup
-          localStorage.setItem('fcm_token', token.value)
-        } catch (err) {
-          console.error('Failed to register device token:', err)
-        }
-      })
-      cleanupFns.push(() => regListener.remove())
+      const regListener = await PushNotifications.addListener(
+        "registration",
+        async (token) => {
+          console.log("Push registration token:", token.value);
+          const platform = Capacitor.getPlatform() as "android" | "ios";
+          try {
+            await api.registerDeviceToken(token.value, platform);
+            registeredRef.current = true;
+            // Store token for logout cleanup
+            localStorage.setItem("fcm_token", token.value);
+          } catch (err) {
+            console.error("Failed to register device token:", err);
+          }
+        },
+      );
+      cleanupFns.push(() => regListener.remove());
 
       // Listen for registration errors
-      const errListener = await PushNotifications.addListener('registrationError', (err) => {
-        console.error('Push registration error:', err)
-      })
-      cleanupFns.push(() => errListener.remove())
+      const errListener = await PushNotifications.addListener(
+        "registrationError",
+        (err) => {
+          console.error("Push registration error:", err);
+        },
+      );
+      cleanupFns.push(() => errListener.remove());
 
       // Handle notification received while app is in foreground
       const receivedListener = await PushNotifications.addListener(
-        'pushNotificationReceived',
+        "pushNotificationReceived",
         () => {
-          queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
-          queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount })
-        }
-      )
-      cleanupFns.push(() => receivedListener.remove())
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.notificationUnreadCount,
+          });
+        },
+      );
+      cleanupFns.push(() => receivedListener.remove());
 
       // Handle notification tap (app opened from notification)
       const actionListener = await PushNotifications.addListener(
-        'pushNotificationActionPerformed',
+        "pushNotificationActionPerformed",
         (action) => {
-          const data = action.notification.data
+          const data = action.notification.data;
           if (data?.link) {
-            navigate(data.link)
+            navigate(data.link);
           }
-          queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
-          queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount })
-        }
-      )
-      cleanupFns.push(() => actionListener.remove())
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.notificationUnreadCount,
+          });
+        },
+      );
+      cleanupFns.push(() => actionListener.remove());
 
       // Register with FCM/APNs
-      await PushNotifications.register()
+      await PushNotifications.register();
     }
 
-    setupPush()
+    setupPush();
 
     return () => {
-      cleanupFns.forEach(fn => fn())
-    }
-  }, [isAuthenticated, currentUser, navigate, queryClient])
+      cleanupFns.forEach((fn) => fn());
+    };
+  }, [isAuthenticated, currentUser, navigate, queryClient]);
 }

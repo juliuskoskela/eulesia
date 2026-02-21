@@ -1,30 +1,41 @@
-import { NavLink } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
+import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
-  LayoutDashboard, Users, Flag, ScrollText, FileText,
-  BarChart3, Settings, ArrowLeft, Scale, Building2, ClipboardList
-} from 'lucide-react'
+  LayoutDashboard,
+  Users,
+  Flag,
+  ScrollText,
+  FileText,
+  BarChart3,
+  Settings,
+  ArrowLeft,
+  Scale,
+  Building2,
+  ClipboardList,
+} from "lucide-react";
 
 const navItems = [
-  { to: '/admin', icon: LayoutDashboard, labelKey: 'nav.dashboard', end: true },
-  { to: '/admin/users', icon: Users, labelKey: 'nav.users' },
-  { to: '/admin/waitlist', icon: ClipboardList, labelKey: 'nav.waitlist' },
-  { to: '/admin/reports', icon: Flag, labelKey: 'nav.reports' },
-  { to: '/admin/modlog', icon: ScrollText, labelKey: 'nav.modlog' },
-  { to: '/admin/content', icon: FileText, labelKey: 'nav.content' },
-  { to: '/admin/appeals', icon: Scale, labelKey: 'nav.appeals' },
-  { to: '/admin/institutions', icon: Building2, labelKey: 'nav.institutions' },
-  { to: '/admin/transparency', icon: BarChart3, labelKey: 'nav.transparency' },
-  { to: '/admin/settings', icon: Settings, labelKey: 'nav.settings' },
-]
+  { to: "/admin", icon: LayoutDashboard, labelKey: "nav.dashboard", end: true },
+  { to: "/admin/users", icon: Users, labelKey: "nav.users" },
+  { to: "/admin/waitlist", icon: ClipboardList, labelKey: "nav.waitlist" },
+  { to: "/admin/reports", icon: Flag, labelKey: "nav.reports" },
+  { to: "/admin/modlog", icon: ScrollText, labelKey: "nav.modlog" },
+  { to: "/admin/content", icon: FileText, labelKey: "nav.content" },
+  { to: "/admin/appeals", icon: Scale, labelKey: "nav.appeals" },
+  { to: "/admin/institutions", icon: Building2, labelKey: "nav.institutions" },
+  { to: "/admin/transparency", icon: BarChart3, labelKey: "nav.transparency" },
+  { to: "/admin/settings", icon: Settings, labelKey: "nav.settings" },
+];
 
 export function AdminSidebar() {
-  const { t } = useTranslation('admin')
+  const { t } = useTranslation("admin");
 
   return (
     <aside className="w-56 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 min-h-screen flex flex-col">
       <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Eulesia Admin</h2>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+          Eulesia Admin
+        </h2>
       </div>
 
       <nav className="flex-1 p-2 space-y-0.5">
@@ -36,8 +47,8 @@ export function AdminSidebar() {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
+                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100"
               }`
             }
           >
@@ -53,9 +64,9 @@ export function AdminSidebar() {
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
         >
           <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-          {t('nav.backToApp')}
+          {t("nav.backToApp")}
         </NavLink>
       </div>
     </aside>
-  )
+  );
 }

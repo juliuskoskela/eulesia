@@ -13,40 +13,39 @@
  * The pipeline accepts an optional language parameter (default: 'fi').
  */
 
-import { getPrompts, fillTemplate, getDefaultOrganLabel } from './language/index.js'
-
-const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
+const MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions";
 
 interface MistralMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string
+  role: "system" | "user" | "assistant";
+  content: string;
 }
 
 interface MistralResponse {
-  id: string
-  object: string
-  created: number
-  model: string
+  id: string;
+  object: string;
+  created: number;
+  model: string;
   choices: {
-    index: number
+    index: number;
     message: {
-      role: string
-      content: string
-    }
-    finish_reason: string
-  }[]
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }[];
   usage: {
-    prompt_tokens: number
-    completion_tokens: number
-    total_tokens: number
-  }
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 export interface SummaryResult {
-  title: string
-  summary: string
-  tags: string[]
-  keyPoints: string[]
+  title: string;
+  summary: string;
+  tags: string[];
+  keyPoints: string[];
+  discussionPrompt: string;
 }
 
 /**
@@ -55,12 +54,12 @@ export interface SummaryResult {
  * Configurable via MISTRAL_RATE_LIMIT_MS env var.
  * Default: 500ms (paid tier). Set to 2000 for free tier.
  */
-const API_CALL_DELAY_MS = parseInt(process.env.MISTRAL_RATE_LIMIT_MS || '500', 10)
-const MAX_RETRIES = 5
-let lastCallTime = 0
+const API_CALL_DELAY_MS = 2_000; // 2s between calls → safe under 1 req/s (free tier)
+const MAX_RETRIES = 5;
+let lastCallTime = 0;
 
 async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -68,12 +67,12 @@ async function sleep(ms: number): Promise<void> {
  * Enforces a global rate limit across all Mistral calls.
  */
 async function waitForRateLimit(): Promise<void> {
-  const now = Date.now()
-  const elapsed = now - lastCallTime
+  const now = Date.now();
+  const elapsed = now - lastCallTime;
   if (elapsed < API_CALL_DELAY_MS) {
-    const waitMs = API_CALL_DELAY_MS - elapsed
-    console.log(`   ⏳ Rate limit: waiting ${Math.ceil(waitMs / 1000)}s...`)
-    await sleep(waitMs)
+    const waitMs = API_CALL_DELAY_MS - elapsed;
+    console.log(`   ⏳ Rate limit: waiting ${Math.ceil(waitMs / 1000)}s...`);
+    await sleep(waitMs);
   }
 }
 
@@ -81,76 +80,85 @@ async function waitForRateLimit(): Promise<void> {
  * Helper: call Mistral API with retry and rate limiting.
  * Handles 429 (rate limited) and 5xx errors with exponential backoff.
  */
-async function callMistral(messages: MistralMessage[], options?: {
-  temperature?: number
-  maxTokens?: number
-}): Promise<string> {
-  const apiKey = process.env.MISTRAL_API_KEY
+async function callMistral(
+  messages: MistralMessage[],
+  options?: {
+    temperature?: number;
+    maxTokens?: number;
+  },
+): Promise<string> {
+  const apiKey = process.env.MISTRAL_API_KEY;
   if (!apiKey) {
-    throw new Error('MISTRAL_API_KEY not configured')
+    throw new Error("MISTRAL_API_KEY not configured");
   }
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     // Respect global rate limit
-    await waitForRateLimit()
+    await waitForRateLimit();
 
-    lastCallTime = Date.now()
+    lastCallTime = Date.now();
 
-    let response: Response
+    let response: Response;
     try {
       response = await fetch(MISTRAL_API_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: process.env.MISTRAL_MODEL || 'mistral-small-latest',
+          model: process.env.MISTRAL_MODEL || "mistral-small-latest",
           messages,
           temperature: options?.temperature ?? 0.3,
           max_tokens: options?.maxTokens ?? 2000,
-          response_format: { type: 'json_object' }
-        })
-      })
+          response_format: { type: "json_object" },
+        }),
+      });
     } catch (networkErr) {
       // Network-level error (DNS, connection reset, timeout)
       if (attempt < MAX_RETRIES) {
-        const backoffMs = Math.min(5_000 * Math.pow(2, attempt), 60_000)
-        console.log(`   ⏳ Network error — retry ${attempt + 1}/${MAX_RETRIES} in ${Math.ceil(backoffMs / 1000)}s: ${networkErr instanceof Error ? networkErr.message : networkErr}`)
-        await sleep(backoffMs)
-        continue
+        const backoffMs = Math.min(5_000 * Math.pow(2, attempt), 60_000);
+        console.log(
+          `   ⏳ Network error — retry ${attempt + 1}/${MAX_RETRIES} in ${Math.ceil(backoffMs / 1000)}s: ${networkErr instanceof Error ? networkErr.message : networkErr}`,
+        );
+        await sleep(backoffMs);
+        continue;
       }
-      throw new Error(`Mistral network error after ${MAX_RETRIES} retries: ${networkErr instanceof Error ? networkErr.message : networkErr}`)
+      throw new Error(
+        `Mistral network error after ${MAX_RETRIES} retries: ${networkErr instanceof Error ? networkErr.message : networkErr}`,
+      );
     }
 
     if (response.ok) {
-      const data = await response.json() as MistralResponse
-      const content = data.choices[0]?.message?.content
+      const data = (await response.json()) as MistralResponse;
+      const content = data.choices[0]?.message?.content;
 
       if (!content) {
-        throw new Error('Empty response from Mistral')
+        throw new Error("Empty response from Mistral");
       }
 
-      return content
+      return content;
     }
 
     // Retry on rate limit (429) or server errors (5xx)
-    const status = response.status
+    const status = response.status;
     if ((status === 429 || status >= 500) && attempt < MAX_RETRIES) {
-      const retryAfter = response.headers.get('retry-after')
+      const retryAfter = response.headers.get("retry-after");
       const backoffMs = retryAfter
         ? parseInt(retryAfter, 10) * 1000
-        : Math.min(10_000 * Math.pow(2, attempt), 120_000) // 10s, 20s, 40s, 80s, 120s
-      console.log(`   ⏳ Mistral ${status} — retry ${attempt + 1}/${MAX_RETRIES} in ${Math.ceil(backoffMs / 1000)}s`)
-      await sleep(backoffMs)
-      continue
+        : Math.min(10_000 * Math.pow(2, attempt), 120_000); // 10s, 20s, 40s, 80s, 120s
+      console.log(
+        `   ⏳ Mistral ${status} — retry ${attempt + 1}/${MAX_RETRIES} in ${Math.ceil(backoffMs / 1000)}s`,
+      );
+      await sleep(backoffMs);
+      continue;
     }
 
-    const errorText = await response.text()
-    throw new Error(`Mistral API error: ${status} - ${errorText}`)
+    const errorText = await response.text();
+    throw new Error(`Mistral API error: ${status} - ${errorText}`);
   }
 
-  throw new Error(`Mistral API: max retries (${MAX_RETRIES}) exceeded`)
+  throw new Error(`Mistral API: max retries (${MAX_RETRIES}) exceeded`);
 }
 
 // ============================================
@@ -158,11 +166,11 @@ async function callMistral(messages: MistralMessage[], options?: {
 // ============================================
 
 export interface EditorialItem {
-  itemNumber: string     // e.g. "§ 5"
-  title: string          // Original title from minutes
-  excerpt: string        // Verbatim excerpt from the source
-  newsworthy: boolean    // Does this pass the editorial gate?
-  reason: string         // Why newsworthy or not
+  itemNumber: string; // e.g. "§ 5"
+  title: string; // Original title from minutes
+  excerpt: string; // Verbatim excerpt from the source
+  newsworthy: boolean; // Does this pass the editorial gate?
+  reason: string; // Why newsworthy or not
 }
 
 /**
@@ -210,44 +218,71 @@ export async function editorialGate(
   fullText: string,
   municipalityName: string,
   organ?: string,
-  language: string = 'fi'
 ): Promise<EditorialItem[]> {
   const prompts = getPrompts(language)
   const organLabel = organ || getDefaultOrganLabel(language)
 
   const truncatedText = fullText.slice(0, 30000) + (fullText.length > 30000 ? '\n\n[...]' : '')
 
-  const systemPrompt = prompts.editorialGateSystem
-  const userPrompt = fillTemplate(prompts.editorialGateUser, {
-    municipality: municipalityName,
-    organ: organLabel,
-    text: truncatedText,
-  })
+HYVÄKSY (newsworthy: true) asiat joilla on merkitystä kuntalaisille:
+- Kaavoitus, rakentaminen, infrastruktuuri
+- Palvelut (koulut, päiväkodit, terveys, liikunta)
+- Talous, verotus, budjetti
+- Ympäristö, luonto
+- Tapahtumat, kulttuuri
+- Henkilöstö- ja organisaatiopäätökset jotka vaikuttavat palveluihin
+- Äänestykset tai erimielisyydet
+- Mikä tahansa muu asia joka vaikuttaa asukkaiden arkeen
 
-  const content = await callMistral([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
-  ], { temperature: 0.1, maxTokens: 16000 })
+TÄRKEÄÄ "excerpt"-kenttään:
+- Kopioi alkuperäisestä tekstistä kyseisen pykälän KOKO sisältö sanatarkasti
+- Älä tiivistä tai muokkaa — kopioi sellaisenaan
+- Ota mukaan kaikki yksityiskohdat, numerot, rahamäärät, päivämäärät
+
+Vastaa JSON-muodossa:
+{
+  "items": [
+    {
+      "itemNumber": "§ 1",
+      "title": "Asian otsikko pöytäkirjasta",
+      "excerpt": "Koko pykälän alkuperäinen teksti sanatarkasti kopioituna...",
+      "newsworthy": true,
+      "reason": "Lyhyt perustelu miksi tämä on/ei ole uutisarvoinen"
+    }
+  ]
+}`;
+
+  const userPrompt = `Jäsennä ja arvioi ${municipalityName}n ${organ || "kunnan"} pöytäkirja:
+
+---
+${fullText.slice(0, 30000)}
+${fullText.length > 30000 ? "\n\n[Teksti katkaistu pituuden vuoksi...]" : ""}
+---`;
+
+  const content = await callMistral(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    { temperature: 0.1, maxTokens: 8000 },
+  );
 
   try {
-    const parsed = JSON.parse(content)
-    const items = Array.isArray(parsed) ? parsed : (parsed.items || [])
+    const parsed = JSON.parse(content);
+    const items = Array.isArray(parsed) ? parsed : parsed.items || [];
     return items.map((item: EditorialItem) => ({
-      itemNumber: item.itemNumber || '§ ?',
-      title: item.title || 'Nimetön asia',
-      excerpt: item.excerpt || '',
+      itemNumber: item.itemNumber || "§ ?",
+      title: item.title || "Nimetön asia",
+      excerpt: item.excerpt || "",
       newsworthy: item.newsworthy ?? false,
-      reason: item.reason || ''
-    }))
+      reason: item.reason || "",
+    }));
   } catch {
-    // Try to recover truncated JSON (Mistral may hit token limit mid-response)
-    const recovered = recoverTruncatedJson(content)
-    if (recovered && recovered.length > 0) {
-      console.log(`   [editorial] Recovered ${recovered.length} items from truncated JSON`)
-      return recovered
-    }
-    console.error('Failed to parse editorial gate response:', content.slice(0, 200))
-    return []
+    console.error(
+      "Failed to parse editorial gate response:",
+      content.slice(0, 200),
+    );
+    return [];
   }
 }
 
@@ -266,35 +301,58 @@ export async function writeArticle(
   municipalityName: string,
   itemNumber: string,
   organ?: string,
-  language: string = 'fi'
 ): Promise<SummaryResult> {
   const prompts = getPrompts(language)
   const organLabel = organ || getDefaultOrganLabel(language)
 
-  const systemPrompt = prompts.writeArticleSystem
-  const userPrompt = fillTemplate(prompts.writeArticleUser, {
-    municipality: municipalityName,
-    organ: organLabel,
-    itemNumber,
-    excerpt: excerpt.slice(0, 15000),
-  })
+Käytettävissäsi on VAIN alla oleva pöytäkirjan ote. ÄLÄ keksi mitään mikä ei ole tekstissä.
 
-  const content = await callMistral([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
-  ], { temperature: 0.3, maxTokens: 2000 })
+Ohjeet:
+- Kirjoita selkeästi, vältä kapulakieltä ja byrokratiakieltä
+- Kerro mitä päätettiin ja miksi se vaikuttaa kunnan asukkaisiin
+- Nosta esiin rahamäärät, päivämäärät ja konkreettiset vaikutukset
+- Jos asiasta äänestettiin tai jätettiin eriävä mielipide, mainitse se
+- Ole neutraali — älä ota kantaa
+- Otsikon tulee olla informatiivinen, ei klikkiotsikko
+
+Vastaa JSON-muodossa:
+{
+  "title": "Selkeä otsikko (max 100 merkkiä)",
+  "summary": "2-4 kappaleen uutisteksti selkokielellä.",
+  "tags": ["aihetunniste1", "aihetunniste2"],
+  "keyPoints": ["Keskeisin asia", "Toinen tärkeä asia"],
+  "discussionPrompt": "Keskustelukysymys asukkaille"
+}`;
+
+  const userPrompt = `Kirjoita uutinen seuraavasta ${municipalityName}n ${organ || "kunnan"} päätöksestä (${itemNumber}):
+
+---
+${excerpt.slice(0, 15000)}
+---
+
+Vastaa vain JSON-muodossa, ei muuta tekstiä.`;
+
+  const content = await callMistral(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    { temperature: 0.3, maxTokens: 2000 },
+  );
 
   try {
-    const parsed = JSON.parse(content) as SummaryResult
+    const parsed = JSON.parse(content) as SummaryResult;
     return {
-      title: parsed.title || 'Kunnan päätös',
-      summary: parsed.summary || '',
+      title: parsed.title || "Kunnan päätös",
+      summary: parsed.summary || "",
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : []
-    }
+      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
+      discussionPrompt:
+        parsed.discussionPrompt || "Mitä mieltä olet tästä päätöksestä?",
+    };
   } catch (err) {
-    console.error('Failed to parse article response:', content.slice(0, 200))
-    throw new Error('Invalid JSON response from Mistral (article)')
+    console.error("Failed to parse article response:", content.slice(0, 200));
+    throw new Error("Invalid JSON response from Mistral (article)");
   }
 }
 
@@ -303,9 +361,9 @@ export async function writeArticle(
 // ============================================
 
 export interface VerificationResult {
-  passed: boolean
-  issues: string[]       // List of factual issues found
-  severity: 'none' | 'minor' | 'major'  // Overall severity
+  passed: boolean;
+  issues: string[]; // List of factual issues found
+  severity: "none" | "minor" | "major"; // Overall severity
 }
 
 /**
@@ -318,35 +376,73 @@ export async function verifyArticle(
   article: SummaryResult,
   originalExcerpt: string,
   municipalityName: string,
-  language: string = 'fi'
 ): Promise<VerificationResult> {
   const prompts = getPrompts(language)
 
-  const systemPrompt = prompts.verifyArticleSystem
-  const userPrompt = fillTemplate(prompts.verifyArticleUser, {
-    title: article.title,
-    summary: article.summary,
-    keyPoints: article.keyPoints.map(p => `- ${p}`).join('\n'),
-    municipality: municipalityName,
-    excerpt: originalExcerpt.slice(0, 15000),
-  })
+Tarkista:
+1. Ovatko kaikki uutisessa mainitut faktat (päivämäärät, rahamäärät, henkilöt, päätökset) alkuperäisessä tekstissä?
+2. Onko jotain keksitty tai lisätty mitä alkuperäisessä EI ole?
+3. Onko jokin fakta vääristelty tai väärin tulkittu?
+4. Onko äänestystulos tai muu yksityiskohta raportoitu oikein?
 
-  const content = await callMistral([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
-  ], { temperature: 0.1, maxTokens: 1000 })
+ÄLÄ arvioi kirjoitustyyliä tai otsikkoa — tarkista VAIN faktuaalinen oikeellisuus.
+
+Vastaa JSON-muodossa:
+{
+  "passed": true/false,
+  "issues": ["Ongelma 1", "Ongelma 2"],
+  "severity": "none" | "minor" | "major"
+}
+
+- "none": Ei ongelmia, kaikki faktat vastaavat
+- "minor": Pieni epätarkkuus, mutta ei harhaanjohtava
+- "major": Fakta väärin, keksitty tieto, tai harhaanjohtava`;
+
+  const userPrompt = `UUTINEN:
+
+Otsikko: ${article.title}
+
+${article.summary}
+
+Keskeiset kohdat:
+${article.keyPoints.map((p) => `- ${p}`).join("\n")}
+
+---
+
+ALKUPERÄINEN PÖYTÄKIRJAOTE (${municipalityName}):
+
+${originalExcerpt.slice(0, 15000)}
+
+---
+
+Vertaa uutista alkuperäiseen. Vastaa vain JSON-muodossa.`;
+
+  const content = await callMistral(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    { temperature: 0.1, maxTokens: 1000 },
+  );
 
   try {
-    const parsed = JSON.parse(content)
+    const parsed = JSON.parse(content);
     return {
       passed: parsed.passed ?? true,
       issues: Array.isArray(parsed.issues) ? parsed.issues : [],
-      severity: parsed.severity || 'none'
-    }
+      severity: parsed.severity || "none",
+    };
   } catch {
     // If verification itself fails, pass with warning
-    console.error('Failed to parse verification response:', content.slice(0, 200))
-    return { passed: true, issues: ['Verification parsing failed'], severity: 'minor' }
+    console.error(
+      "Failed to parse verification response:",
+      content.slice(0, 200),
+    );
+    return {
+      passed: true,
+      issues: ["Verification parsing failed"],
+      severity: "minor",
+    };
   }
 }
 
@@ -361,7 +457,7 @@ export async function verifyArticle(
 export async function generateMinutesSummary(
   originalText: string,
   municipalityName: string,
-  meetingType?: string
+  meetingType?: string,
 ): Promise<SummaryResult> {
   const systemPrompt = `Olet kansalaisfoorumin avustaja. Tehtäväsi on muuttaa kunnan pöytäkirja ymmärrettävään muotoon keskustelun pohjaksi.
 
@@ -377,25 +473,31 @@ Vastaa JSON-muodossa:
   "title": "Selkeä otsikko päätökselle (max 100 merkkiä)",
   "summary": "2-4 kappaleen yhteenveto selkokielellä.",
   "tags": ["aihetunniste1", "aihetunniste2"],
-  "keyPoints": ["Keskeisin päätös", "Toinen tärkeä asia"]
-}`
+  "keyPoints": ["Keskeisin päätös", "Toinen tärkeä asia"],
+  "discussionPrompt": "Keskustelukysymys asukkaille"
+}`;
 
   const content = await callMistral([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: `Tee yhteenveto ${municipalityName}n kunnan ${meetingType || 'kokouksen'} pöytäkirjasta:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nVastaa vain JSON-muodossa.` }
-  ])
+    { role: "system", content: systemPrompt },
+    {
+      role: "user",
+      content: `Tee yhteenveto ${municipalityName}n kunnan ${meetingType || "kokouksen"} pöytäkirjasta:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nVastaa vain JSON-muodossa.`,
+    },
+  ]);
 
   try {
-    const parsed = JSON.parse(content) as SummaryResult
+    const parsed = JSON.parse(content) as SummaryResult;
     return {
-      title: parsed.title || 'Kunnan päätös',
-      summary: parsed.summary || '',
+      title: parsed.title || "Kunnan päätös",
+      summary: parsed.summary || "",
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : []
-    }
+      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
+      discussionPrompt:
+        parsed.discussionPrompt || "Mitä mieltä olet tästä päätöksestä?",
+    };
   } catch (err) {
-    console.error('Failed to parse Mistral response:', content.slice(0, 200))
-    throw new Error('Invalid JSON response from Mistral')
+    console.error("Failed to parse Mistral response:", content.slice(0, 200));
+    throw new Error("Invalid JSON response from Mistral");
   }
 }
 
@@ -403,9 +505,9 @@ Vastaa JSON-muodossa:
  * Extended result for ministry summaries — includes scope classification.
  */
 export interface MinistrySummaryResult extends SummaryResult {
-  scope: 'national' | 'local'
+  scope: "national" | "local";
   /** Region/municipality name if scope is 'local' (e.g. "Kanta-Häme") */
-  region?: string
+  region?: string;
 }
 
 /**
@@ -415,12 +517,19 @@ export interface MinistrySummaryResult extends SummaryResult {
 export async function generateMinistrySummary(
   originalText: string,
   institutionName: string,
-  contentType: string
+  contentType: string,
 ): Promise<MinistrySummaryResult> {
-  const contentTypeLabel = contentType === 'press' ? 'tiedotteen' : contentType === 'law' ? 'lakiuutisen' : 'päätöksen'
+  const contentTypeLabel =
+    contentType === "press"
+      ? "tiedotteen"
+      : contentType === "law"
+        ? "lakiuutisen"
+        : "päätöksen";
 
   const content = await callMistral([
-    { role: 'system', content: `Olet kansalaisfoorumin avustaja. Tehtäväsi on tiivistää ${institutionName}n ${contentTypeLabel} ymmärrettävään muotoon keskustelun pohjaksi.
+    {
+      role: "system",
+      content: `Olet kansalaisfoorumin avustaja. Tehtäväsi on tiivistää ${institutionName}n ${contentTypeLabel} ymmärrettävään muotoon keskustelun pohjaksi.
 
 Ohjeet:
 - Kerro mitä päätettiin/tiedotetaan ja miksi se vaikuttaa kansalaisiin
@@ -441,23 +550,28 @@ Vastaa JSON-muodossa:
   "keyPoints": ["Keskeisin asia", "Toinen tärkeä asia"],
   "scope": "national tai local",
   "region": "Alueen nimi jos local, muuten null"
-}` },
-    { role: 'user', content: `Tee yhteenveto seuraavasta ${institutionName}n ${contentTypeLabel}sta:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nVastaa vain JSON-muodossa.` }
-  ])
+}`,
+    },
+    {
+      role: "user",
+      content: `Tee yhteenveto seuraavasta ${institutionName}n ${contentTypeLabel}sta:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nVastaa vain JSON-muodossa.`,
+    },
+  ]);
 
   try {
-    const parsed = JSON.parse(content)
+    const parsed = JSON.parse(content);
     return {
       title: parsed.title || `${institutionName}: päätös`,
-      summary: parsed.summary || '',
+      summary: parsed.summary || "",
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
       keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
-      scope: parsed.scope === 'local' ? 'local' : 'national',
-      region: parsed.region || undefined
-    }
+      discussionPrompt: parsed.discussionPrompt || "Mitä mieltä olet tästä?",
+      scope: parsed.scope === "local" ? "local" : "national",
+      region: parsed.region || undefined,
+    };
   } catch {
-    console.error('Failed to parse Mistral response:', content.slice(0, 200))
-    throw new Error('Invalid JSON response from Mistral')
+    console.error("Failed to parse Mistral response:", content.slice(0, 200));
+    throw new Error("Invalid JSON response from Mistral");
   }
 }
 
@@ -467,10 +581,12 @@ Vastaa JSON-muodossa:
 export async function generateEuSummary(
   originalText: string,
   institutionName: string,
-  contentType: string
+  contentType: string,
 ): Promise<SummaryResult> {
   const content = await callMistral([
-    { role: 'system', content: `You are a civic forum assistant. Your task is to summarize content from ${institutionName} for Finnish citizens.
+    {
+      role: "system",
+      content: `You are a civic forum assistant. Your task is to summarize content from ${institutionName} for Finnish citizens.
 
 Instructions:
 - Explain what was decided or announced and how it affects EU citizens, particularly in Finland
@@ -488,21 +604,28 @@ Respond in JSON format:
   "title": "Clear, specific title in Finnish (max 100 characters)",
   "summary": "2-4 paragraph summary in plain Finnish. Be specific about this topic.",
   "tags": ["tag1", "tag2"],
-  "keyPoints": ["Specific key point 1 in Finnish", "Specific key point 2 in Finnish"]
-}` },
-    { role: 'user', content: `Summarize this ${institutionName} ${contentType} for Finnish citizens:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nIMPORTANT: Be specific about this particular topic. Do NOT write generic EU descriptions. Respond ONLY in JSON format. All fields must be in Finnish.` }
-  ])
+  "keyPoints": ["Specific key point 1 in Finnish", "Specific key point 2 in Finnish"],
+  "discussionPrompt": "Specific discussion question about this topic for citizens in Finnish"
+}`,
+    },
+    {
+      role: "user",
+      content: `Summarize this ${institutionName} ${contentType} for Finnish citizens:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nIMPORTANT: Be specific about this particular topic. Do NOT write generic EU descriptions. Respond ONLY in JSON format. All fields must be in Finnish.`,
+    },
+  ]);
 
   try {
-    const parsed = JSON.parse(content) as SummaryResult
+    const parsed = JSON.parse(content) as SummaryResult;
     return {
       title: parsed.title || `${institutionName}: päätös`,
-      summary: parsed.summary || '',
+      summary: parsed.summary || "",
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : []
-    }
+      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
+      discussionPrompt:
+        parsed.discussionPrompt || "Mitä mieltä olet tästä EU-päätöksestä?",
+    };
   } catch {
-    console.error('Failed to parse Mistral response:', content.slice(0, 200))
-    throw new Error('Invalid JSON response from Mistral')
+    console.error("Failed to parse Mistral response:", content.slice(0, 200));
+    throw new Error("Invalid JSON response from Mistral");
   }
 }

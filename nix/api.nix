@@ -1,5 +1,7 @@
-{ pkgs, src }:
-
+{
+  pkgs,
+  src,
+}:
 pkgs.buildNpmPackage {
   pname = "eulesia-api";
   version = "1.0.0";
@@ -9,7 +11,7 @@ pkgs.buildNpmPackage {
   npmDepsHash = "sha256-mIwet1hnMOylUAfYZjJRRfT5UBr57VmqWetyB+sv1w0=";
   npmWorkspace = "apps/api";
   makeCacheWritable = true;
-  npmRebuildFlags = [ "--ignore-scripts" ];
+  npmRebuildFlags = ["--ignore-scripts"];
 
   nativeBuildInputs = with pkgs; [
     python3

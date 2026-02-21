@@ -16,8 +16,8 @@ echo -e "${GREEN}=== Eulesia Server Setup ===${NC}"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}Please run as root${NC}"
-    exit 1
+  echo -e "${RED}Please run as root${NC}"
+  exit 1
 fi
 
 # Configuration
@@ -30,22 +30,22 @@ apt update && apt upgrade -y
 
 # Step 2: Install Docker
 echo -e "${YELLOW}Step 2: Installing Docker...${NC}"
-if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
-    rm get-docker.sh
-    systemctl enable docker
-    systemctl start docker
+if ! command -v docker &>/dev/null; then
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sh get-docker.sh
+  rm get-docker.sh
+  systemctl enable docker
+  systemctl start docker
 else
-    echo "Docker already installed"
+  echo "Docker already installed"
 fi
 
 # Step 3: Install Docker Compose plugin
 echo -e "${YELLOW}Step 3: Installing Docker Compose...${NC}"
-if ! docker compose version &> /dev/null; then
-    apt install -y docker-compose-plugin
+if ! docker compose version &>/dev/null; then
+  apt install -y docker-compose-plugin
 else
-    echo "Docker Compose already installed"
+  echo "Docker Compose already installed"
 fi
 
 # Step 4: Install Git
@@ -55,37 +55,37 @@ apt install -y git
 # Step 5: Clone repository
 echo -e "${YELLOW}Step 5: Cloning Eulesia repository...${NC}"
 if [ -d "$INSTALL_DIR" ]; then
-    echo "Directory already exists. Pulling latest..."
-    cd "$INSTALL_DIR"
-    git pull
+  echo "Directory already exists. Pulling latest..."
+  cd "$INSTALL_DIR"
+  git pull
 else
-    git clone "$REPO_URL" "$INSTALL_DIR"
+  git clone "$REPO_URL" "$INSTALL_DIR"
 fi
 
 # Step 6: Setup environment file
 echo -e "${YELLOW}Step 6: Setting up environment...${NC}"
 cd "$INSTALL_DIR/docker"
 if [ ! -f .env ]; then
-    cp .env.example .env
-    echo -e "${RED}IMPORTANT: Edit $INSTALL_DIR/docker/.env with your configuration!${NC}"
+  cp .env.example .env
+  echo -e "${RED}IMPORTANT: Edit $INSTALL_DIR/docker/.env with your configuration!${NC}"
 else
-    echo ".env already exists"
+  echo ".env already exists"
 fi
 
 # Step 7: Configure firewall
 echo -e "${YELLOW}Step 7: Configuring firewall...${NC}"
-if command -v ufw &> /dev/null; then
-    ufw allow 22/tcp    # SSH
-    ufw allow 80/tcp    # HTTP
-    ufw allow 443/tcp   # HTTPS
-    ufw --force enable
+if command -v ufw &>/dev/null; then
+  ufw allow 22/tcp  # SSH
+  ufw allow 80/tcp  # HTTP
+  ufw allow 443/tcp # HTTPS
+  ufw --force enable
 else
-    echo "UFW not installed, skipping firewall setup"
+  echo "UFW not installed, skipping firewall setup"
 fi
 
 # Step 8: Create systemd service
 echo -e "${YELLOW}Step 8: Creating systemd service...${NC}"
-cat > /etc/systemd/system/eulesia.service << EOF
+cat >/etc/systemd/system/eulesia.service <<EOF
 [Unit]
 Description=Eulesia Application
 Requires=docker.service

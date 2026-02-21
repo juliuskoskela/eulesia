@@ -17,6 +17,7 @@ The revised eIDAS Regulation (eIDAS 2.0) mandates that all EU member states prov
 ### EUDI Wallet Capabilities
 
 The EUDI Wallet will support:
+
 - **Personal Identification Data (PID)**: Name, date of birth, nationality
 - **Electronic Attestation of Attributes (EAA)**: Additional verified claims
 - **Qualified Electronic Signatures**: Legally binding digital signatures
@@ -61,21 +62,21 @@ Eulesia's user model already supports eIDAS identity levels:
 
 ```typescript
 interface User {
-  id: string
-  identityVerified: boolean
-  identityProvider: 'magic_link' | 'eudi' | 'institutional'
-  identityLevel: 'basic' | 'substantial' | 'high'
+  id: string;
+  identityVerified: boolean;
+  identityProvider: "magic_link" | "eudi" | "institutional";
+  identityLevel: "basic" | "substantial" | "high";
 
   // EUDI-specific fields (when available)
-  eudiSubjectId?: string        // Unique, stable identifier
-  eudiVerifiedAt?: Date         // When identity was last verified
+  eudiSubjectId?: string; // Unique, stable identifier
+  eudiVerifiedAt?: Date; // When identity was last verified
   eudiClaims?: {
-    givenName?: string
-    familyName?: string
-    dateOfBirth?: string        // ISO 8601
-    nationality?: string[]      // ISO 3166-1 alpha-2
-    ageOver18?: boolean         // Age attestation
-  }
+    givenName?: string;
+    familyName?: string;
+    dateOfBirth?: string; // ISO 8601
+    nationality?: string[]; // ISO 3166-1 alpha-2
+    ageOver18?: boolean; // Age attestation
+  };
 }
 ```
 
@@ -91,18 +92,21 @@ Eulesia will implement a trust framework that:
 ## Implementation Phases
 
 ### Phase 1: Preparation (Current)
+
 - [x] Design user model with eIDAS identity levels
 - [x] Implement magic link as transitional authentication
 - [x] Build UI that communicates verified identity concept
 - [ ] Register as a Relying Party in pilot programs
 
 ### Phase 2: Pilot Integration (2025)
+
 - [ ] Join EU EUDI Wallet pilot program
 - [ ] Implement OpenID4VP (Verifiable Presentations)
 - [ ] Integrate with test wallets
 - [ ] Conduct security audit
 
 ### Phase 3: Production Rollout (2026)
+
 - [ ] Connect to production EUDI infrastructure
 - [ ] Implement credential refresh flows
 - [ ] Add support for additional attestations
@@ -151,13 +155,14 @@ Eulesia will implement a trust framework that:
 }
 ```
 
-*Note: Package names are placeholders - actual packages will be determined as EUDI ecosystem matures.*
+_Note: Package names are placeholders - actual packages will be determined as EUDI ecosystem matures._
 
 ## Privacy Considerations
 
 ### Data Minimization
 
 Eulesia will only request the minimum necessary attributes:
+
 - **For registration**: Given name, family name (for display)
 - **For age-restricted content**: Age over 18 attestation only
 - **For municipal features**: Residence claim (if available)
@@ -165,6 +170,7 @@ Eulesia will only request the minimum necessary attributes:
 ### Pseudonymous Options
 
 Where possible, Eulesia will:
+
 - Use opaque subject identifiers rather than PII
 - Support pseudonymous participation in discussions
 - Allow users to control what identity information is displayed
@@ -180,6 +186,7 @@ Where possible, Eulesia will:
 ### eIDAS 2.0 Compliance
 
 As a relying party, Eulesia must:
+
 - Only request attributes with user consent
 - Display clear purpose statements
 - Support credential revocation
@@ -206,37 +213,40 @@ As a relying party, Eulesia must:
 ### Integration Tests
 
 ```typescript
-describe('EUDI Authentication', () => {
-  it('should accept valid EUDI presentation')
-  it('should reject expired credentials')
-  it('should handle revoked credentials')
-  it('should support cross-border authentication')
-})
+describe("EUDI Authentication", () => {
+  it("should accept valid EUDI presentation");
+  it("should reject expired credentials");
+  it("should handle revoked credentials");
+  it("should support cross-border authentication");
+});
 ```
 
 ## Resources
 
 ### Official Documentation
+
 - [EU Digital Identity Wallet Architecture](https://eu-digital-identity-wallet.github.io/)
 - [eIDAS 2.0 Regulation](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1183)
 - [OpenID for Verifiable Presentations](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html)
 
 ### Technical Resources
+
 - [SD-JWT Specification](https://datatracker.ietf.org/doc/draft-ietf-oauth-selective-disclosure-jwt/)
 - [EU Trust List Browser](https://eidas.ec.europa.eu/efda/tl-browser/)
 
 ### Community
+
 - [EU Digital Identity Wallet GitHub](https://github.com/eu-digital-identity-wallet)
 - [OpenID Foundation](https://openid.net/)
 
 ## Timeline
 
-| Phase | Timeline | Milestones |
-|-------|----------|------------|
+| Phase       | Timeline   | Milestones                             |
+| ----------- | ---------- | -------------------------------------- |
 | Preparation | Q1-Q2 2025 | Register as RP, complete documentation |
-| Pilot | Q3-Q4 2025 | Join pilot, implement integration |
-| Testing | Q1 2026 | Security audit, performance testing |
-| Production | Q2 2026 | Go-live with EUDI support |
+| Pilot       | Q3-Q4 2025 | Join pilot, implement integration      |
+| Testing     | Q1 2026    | Security audit, performance testing    |
+| Production  | Q2 2026    | Go-live with EUDI support              |
 
 ## Conclusion
 

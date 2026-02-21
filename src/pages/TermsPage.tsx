@@ -1,9 +1,9 @@
-import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
-import { FileText, ArrowLeft } from 'lucide-react'
-import { Layout } from '../components/layout'
-import { SEOHead } from '../components/SEOHead'
-import { useAuth } from '../hooks/useAuth'
+import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
+import { FileText, ArrowLeft } from "lucide-react";
+import { Layout } from "../components/layout";
+import { SEOHead } from "../components/SEOHead";
+import { useAuth } from "../hooks/useAuth";
 
 function PublicHeader() {
   return (
@@ -17,32 +17,45 @@ function PublicHeader() {
         </Link>
       </div>
     </div>
-  )
+  );
 }
 
 function TermsContent() {
-  const { t } = useTranslation('legal')
+  const { t } = useTranslation("legal");
 
   const sectionKeys = [
-    'intro', 'service', 'account', 'conduct', 'content',
-    'moderation', 'privacy', 'liability', 'changes', 'termination', 'law', 'contact'
-  ]
+    "intro",
+    "service",
+    "account",
+    "conduct",
+    "content",
+    "moderation",
+    "privacy",
+    "liability",
+    "changes",
+    "termination",
+    "law",
+    "contact",
+  ];
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      <Link to="/about" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-4">
+      <Link
+        to="/about"
+        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mb-4"
+      >
         <ArrowLeft className="w-4 h-4" />
-        {t('common:actions.back')}
+        {t("common:actions.back")}
       </Link>
 
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
         <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <FileText className="w-5 h-5 text-blue-600" />
-            {t('terms.title')}
+            {t("terms.title")}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {t('terms.lastUpdated', { date: '12.2.2026' })}
+          <p className="text-sm text-gray-500 mt-1">
+            {t("terms.lastUpdated", { date: "12.2.2026" })}
           </p>
         </div>
 
@@ -55,10 +68,17 @@ function TermsContent() {
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">
                 {t(`terms.sections.${key}.content`)}
               </p>
-              {key === 'conduct' && (
+              {key === "conduct" && (
                 <ul className="mt-2 space-y-1">
-                  {(t(`terms.sections.conduct.rules`, { returnObjects: true }) as string[]).map((rule, i) => (
-                    <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                  {(
+                    t(`terms.sections.conduct.rules`, {
+                      returnObjects: true,
+                    }) as string[]
+                  ).map((rule, i) => (
+                    <li
+                      key={i}
+                      className="text-sm text-gray-700 flex items-start gap-2"
+                    >
                       <span className="text-red-500 mt-0.5">•</span>
                       {rule}
                     </li>
@@ -72,15 +92,15 @@ function TermsContent() {
 
       <div className="mt-6 text-center">
         <Link to="/privacy" className="text-sm text-blue-600 hover:underline">
-          {t('privacy.title')} →
+          {t("privacy.title")} →
         </Link>
       </div>
     </div>
-  )
+  );
 }
 
 export function TermsPage() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
     return (
@@ -88,7 +108,7 @@ export function TermsPage() {
         <PublicHeader />
         <TermsContent />
       </div>
-    )
+    );
   }
 
   return (
@@ -100,5 +120,5 @@ export function TermsPage() {
       />
       <TermsContent />
     </Layout>
-  )
+  );
 }

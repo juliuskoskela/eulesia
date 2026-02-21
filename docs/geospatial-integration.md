@@ -79,6 +79,7 @@ Every piece of content in Eulesia connects to place - discussions about local de
 ### Phase 1: Finland (MVP)
 
 #### OpenStreetMap (OSM)
+
 - **Coverage**: Global, community-maintained
 - **API**: Overpass API (free, rate-limited)
 - **Data types**: POIs, buildings, parks, routes, administrative boundaries
@@ -97,6 +98,7 @@ out center;
 ```
 
 #### Lipas (Finnish Sports Facilities)
+
 - **Coverage**: Finland only
 - **API**: REST API at lipas.fi
 - **Data types**: Sports facilities, outdoor routes, swimming halls, gyms
@@ -109,6 +111,7 @@ Returns: ~40,000 sports facilities across Finland
 ```
 
 #### Maanmittauslaitos (MML - National Land Survey)
+
 - **Coverage**: Finland only
 - **API**: WFS/WMS services
 - **Data types**: Buildings, addresses, terrain, administrative boundaries
@@ -116,6 +119,7 @@ Returns: ~40,000 sports facilities across Finland
 - **License**: CC BY 4.0
 
 #### Municipal Open Data
+
 - **Coverage**: Varies by municipality
 - **Sources**:
   - Helsinki: dev.hel.fi
@@ -126,12 +130,12 @@ Returns: ~40,000 sports facilities across Finland
 
 ### Phase 2: Nordic Countries
 
-| Country | Primary Sources |
-|---------|----------------|
-| Sweden | Lantmäteriet, OSM, municipal APIs |
-| Norway | Kartverket, OSM, municipal APIs |
-| Denmark | SDFE, OSM, municipal APIs |
-| Estonia | Maa-amet, OSM |
+| Country | Primary Sources                   |
+| ------- | --------------------------------- |
+| Sweden  | Lantmäteriet, OSM, municipal APIs |
+| Norway  | Kartverket, OSM, municipal APIs   |
+| Denmark | SDFE, OSM, municipal APIs         |
+| Estonia | Maa-amet, OSM                     |
 
 ### Phase 3: European Union
 
@@ -221,12 +225,12 @@ npm run import:places -- --dry-run
 
 ### Sync Strategy
 
-| Source | Frequency | Method |
-|--------|-----------|--------|
-| OSM | Weekly | Full region sync |
-| Lipas | Daily | Incremental (modified since) |
-| MML | Monthly | Full sync |
-| Municipal | Varies | Webhook or polling |
+| Source    | Frequency | Method                       |
+| --------- | --------- | ---------------------------- |
+| OSM       | Weekly    | Full region sync             |
+| Lipas     | Daily     | Incremental (modified since) |
+| MML       | Monthly   | Full sync                    |
+| Municipal | Varies    | Webhook or polling           |
 
 ## Database Schema Extensions
 
@@ -257,6 +261,7 @@ CREATE UNIQUE INDEX places_source_idx ON places(source, source_id)
 ## API Endpoints
 
 ### Search with filters
+
 ```
 GET /api/v1/places/search
   ?q=library
@@ -267,6 +272,7 @@ GET /api/v1/places/search
 ```
 
 ### Autocomplete
+
 ```
 GET /api/v1/places/autocomplete
   ?q=tampe
@@ -275,6 +281,7 @@ GET /api/v1/places/autocomplete
 ```
 
 ### Reverse geocode
+
 ```
 GET /api/v1/places/reverse
   ?lat=61.4978
@@ -301,16 +308,19 @@ Attribution displayed in map footer and place detail views.
 ## Performance Considerations
 
 ### Caching
+
 - Redis cache for frequently accessed places
 - Tile-based caching for map clusters
 - CDN for static map tiles
 
 ### Database Optimization
+
 - Spatial indexes on coordinates
 - Materialized views for common aggregations
 - Partition by country for large datasets
 
 ### API Rate Limits
+
 - OSM Overpass: Max 2 requests/second
 - Lipas: No strict limit, be respectful
 - Implement exponential backoff
@@ -318,17 +328,20 @@ Attribution displayed in map footer and place detail views.
 ## Monitoring & Maintenance
 
 ### Metrics
+
 - Import success/failure rates
 - Data freshness by source
 - API response times
 - Storage growth
 
 ### Alerts
+
 - Import job failures
 - Source API unavailability
 - Data quality anomalies
 
 ### Data Quality
+
 - Automated validation rules
 - User feedback mechanism
 - Periodic manual review
@@ -336,6 +349,7 @@ Attribution displayed in map footer and place detail views.
 ## Roadmap
 
 ### Q1 2025 - Finland MVP
+
 - [x] Basic places schema
 - [x] Map component with markers
 - [ ] OSM import pipeline
@@ -343,6 +357,7 @@ Attribution displayed in map footer and place detail views.
 - [ ] Basic search/filter
 
 ### Q2 2025 - Finland Complete
+
 - [ ] MML integration
 - [ ] Municipal data (Helsinki, Tampere, Turku)
 - [ ] Advanced search with categories
@@ -350,12 +365,14 @@ Attribution displayed in map footer and place detail views.
 - [ ] User place suggestions
 
 ### Q3 2025 - Nordic Expansion
+
 - [ ] Sweden (Stockholm, Göteborg, Malmö)
 - [ ] Norway (Oslo, Bergen)
 - [ ] Estonia (Tallinn)
 - [ ] Multi-language support
 
 ### Q4 2025 - European Foundation
+
 - [ ] INSPIRE data integration
 - [ ] Major EU capitals
 - [ ] Federated architecture for scaling

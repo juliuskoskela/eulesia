@@ -1,12 +1,12 @@
-import { useLinkPreview } from '../../hooks/useApi'
-import { ExternalLink } from 'lucide-react'
+import { useLinkPreview } from "../../hooks/useApi";
+import { ExternalLink } from "lucide-react";
 
 interface LinkPreviewProps {
-  url: string
+  url: string;
 }
 
 export function LinkPreview({ url }: LinkPreviewProps) {
-  const { data, isLoading, isError } = useLinkPreview(url)
+  const { data, isLoading, isError } = useLinkPreview(url);
 
   if (isLoading) {
     return (
@@ -20,10 +20,10 @@ export function LinkPreview({ url }: LinkPreviewProps) {
           <div className="w-24 h-20 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
         </div>
       </div>
-    )
+    );
   }
 
-  if (isError || !data) return null
+  if (isError || !data) return null;
 
   return (
     <a
@@ -41,7 +41,9 @@ export function LinkPreview({ url }: LinkPreviewProps) {
                 src={data.faviconUrl}
                 alt=""
                 className="w-4 h-4 rounded-sm flex-shrink-0"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
               />
             )}
             <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
@@ -71,11 +73,14 @@ export function LinkPreview({ url }: LinkPreviewProps) {
               className="w-full h-full object-cover"
               loading="lazy"
               referrerPolicy="no-referrer"
-              onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).parentElement!.style.display =
+                  "none";
+              }}
             />
           </div>
         )}
       </div>
     </a>
-  )
+  );
 }
