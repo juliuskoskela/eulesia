@@ -1055,9 +1055,7 @@ class ApiClient {
     });
   }
 
-  async getAdminInvites(
-    status?: string,
-  ): Promise<
+  async getAdminInvites(status?: string): Promise<
     {
       id: string;
       code: string;
@@ -1293,9 +1291,7 @@ class ApiClient {
     });
   }
 
-  async bulkApproveWaitlist(
-    ids: string[],
-  ): Promise<{
+  async bulkApproveWaitlist(ids: string[]): Promise<{
     processed: number;
     results: { id: string; code: string; emailSent: boolean }[];
   }> {

@@ -102,12 +102,10 @@ if (
       // Query params: ?inviteCode=EULESIA-XXXXXX
       router.get("/ftn/start", (req, res, next) => {
         if (!iduraRedirect) {
-          return res
-            .status(503)
-            .json({
-              success: false,
-              error: "FTN authentication not configured",
-            });
+          return res.status(503).json({
+            success: false,
+            error: "FTN authentication not configured",
+          });
         }
 
         // Store invite code in session for use after callback
@@ -127,12 +125,10 @@ if (
         "/ftn/callback",
         (req, res, next) => {
           if (!iduraRedirect) {
-            return res
-              .status(503)
-              .json({
-                success: false,
-                error: "FTN authentication not configured",
-              });
+            return res.status(503).json({
+              success: false,
+              error: "FTN authentication not configured",
+            });
           }
           iduraRedirect.middleware({
             failureRedirect: "/api/v1/auth/ftn/error",

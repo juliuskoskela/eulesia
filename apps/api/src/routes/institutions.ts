@@ -250,12 +250,10 @@ router.post(
       .limit(1);
 
     if (existing) {
-      res
-        .status(400)
-        .json({
-          success: false,
-          error: "You already have a claim for this institution",
-        });
+      res.status(400).json({
+        success: false,
+        error: "You already have a claim for this institution",
+      });
       return;
     }
 

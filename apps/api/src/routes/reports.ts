@@ -66,12 +66,10 @@ router.post(
     const data = createAppealSchema.parse(req.body);
 
     if (!data.sanctionId && !data.reportId && !data.actionId) {
-      res
-        .status(400)
-        .json({
-          success: false,
-          error: "Must specify sanctionId, reportId, or actionId",
-        });
+      res.status(400).json({
+        success: false,
+        error: "Must specify sanctionId, reportId, or actionId",
+      });
       return;
     }
 
