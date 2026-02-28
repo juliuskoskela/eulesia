@@ -8,7 +8,12 @@
  *  1. Editorial Gate — split minutes into items, decide newsworthiness
  *  2. Article Writing — write focused article from a single item excerpt
  *  3. Verification — cross-check article against original source text
+ *
+ * Supports multilingual content via language/prompts.ts.
+ * The pipeline accepts an optional language parameter (default: 'fi').
  */
+
+import { getPrompts, fillTemplate, getDefaultOrganLabel } from './language/index.js'
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
 
@@ -48,14 +53,10 @@ export interface SummaryResult {
 /**
  * Rate limiting configuration.
  *
- * Currently using Mistral free tier which allows max 1 request/second.
- * Using 2s delay to stay safely under the limit.
- *
- * When upgrading to a paid Mistral plan:
- *  1. Reduce API_CALL_DELAY_MS to 500 or remove entirely
- *  2. The retry logic will still handle any occasional 429s
+ * Configurable via MISTRAL_RATE_LIMIT_MS env var.
+ * Default: 500ms (paid tier). Set to 2000 for free tier.
  */
-const API_CALL_DELAY_MS = 2_000 // 2s between calls → safe under 1 req/s (free tier)
+const API_CALL_DELAY_MS = parseInt(process.env.MISTRAL_RATE_LIMIT_MS || '500', 10)
 const MAX_RETRIES = 5
 let lastCallTime = 0
 
@@ -170,57 +171,26 @@ export interface EditorialItem {
  *
  * Splits meeting minutes into individual agenda items and decides
  * which ones are newsworthy. Filters out procedural/technical items.
+ *
+ * Supports multilingual content via the language parameter.
  */
 export async function editorialGate(
   fullText: string,
   municipalityName: string,
-  organ?: string
+  organ?: string,
+  language: string = 'fi'
 ): Promise<EditorialItem[]> {
-  const systemPrompt = `Olet uutistoimituksen portinvartija. Tehtäväsi on jäsentää kunnan pöytäkirja erillisiin päätöskohtiin ja arvioida jokaisen uutisarvo.
+  const prompts = getPrompts(language)
+  const organLabel = organ || getDefaultOrganLabel(language)
 
-HYLKÄÄ (newsworthy: false) kokoustekniset asiat:
-- Kokouksen avaus ja järjestäytyminen
-- Kokouksen laillisuus ja päätösvaltaisuus
-- Pöytäkirjantarkastajien valinta
-- Kokouksen päättäminen
-- Esityslistan hyväksyminen
-- Edellisen kokouksen pöytäkirjan hyväksyminen
-- Muut puhtaasti hallinnolliset menettelyt joilla ei ole vaikutusta kuntalaisiin
+  const truncatedText = fullText.slice(0, 30000) + (fullText.length > 30000 ? '\n\n[...]' : '')
 
-HYVÄKSY (newsworthy: true) asiat joilla on merkitystä kuntalaisille:
-- Kaavoitus, rakentaminen, infrastruktuuri
-- Palvelut (koulut, päiväkodit, terveys, liikunta)
-- Talous, verotus, budjetti
-- Ympäristö, luonto
-- Tapahtumat, kulttuuri
-- Henkilöstö- ja organisaatiopäätökset jotka vaikuttavat palveluihin
-- Äänestykset tai erimielisyydet
-- Mikä tahansa muu asia joka vaikuttaa asukkaiden arkeen
-
-TÄRKEÄÄ "excerpt"-kenttään:
-- Kopioi alkuperäisestä tekstistä kyseisen pykälän KOKO sisältö sanatarkasti
-- Älä tiivistä tai muokkaa — kopioi sellaisenaan
-- Ota mukaan kaikki yksityiskohdat, numerot, rahamäärät, päivämäärät
-
-Vastaa JSON-muodossa:
-{
-  "items": [
-    {
-      "itemNumber": "§ 1",
-      "title": "Asian otsikko pöytäkirjasta",
-      "excerpt": "Koko pykälän alkuperäinen teksti sanatarkasti kopioituna...",
-      "newsworthy": true,
-      "reason": "Lyhyt perustelu miksi tämä on/ei ole uutisarvoinen"
-    }
-  ]
-}`
-
-  const userPrompt = `Jäsennä ja arvioi ${municipalityName}n ${organ || 'kunnan'} pöytäkirja:
-
----
-${fullText.slice(0, 30000)}
-${fullText.length > 30000 ? '\n\n[Teksti katkaistu pituuden vuoksi...]' : ''}
----`
+  const systemPrompt = prompts.editorialGateSystem
+  const userPrompt = fillTemplate(prompts.editorialGateUser, {
+    municipality: municipalityName,
+    organ: organLabel,
+    text: truncatedText,
+  })
 
   const content = await callMistral([
     { role: 'system', content: systemPrompt },
@@ -257,36 +227,19 @@ export async function writeArticle(
   excerpt: string,
   municipalityName: string,
   itemNumber: string,
-  organ?: string
+  organ?: string,
+  language: string = 'fi'
 ): Promise<SummaryResult> {
-  const systemPrompt = `Olet kansalaisfoorumin toimittaja. Kirjoita selkeä uutinen yhdestä kunnan päätöksestä.
+  const prompts = getPrompts(language)
+  const organLabel = organ || getDefaultOrganLabel(language)
 
-Käytettävissäsi on VAIN alla oleva pöytäkirjan ote. ÄLÄ keksi mitään mikä ei ole tekstissä.
-
-Ohjeet:
-- Kirjoita selkeästi, vältä kapulakieltä ja byrokratiakieltä
-- Kerro mitä päätettiin ja miksi se vaikuttaa kunnan asukkaisiin
-- Nosta esiin rahamäärät, päivämäärät ja konkreettiset vaikutukset
-- Jos asiasta äänestettiin tai jätettiin eriävä mielipide, mainitse se
-- Ole neutraali — älä ota kantaa
-- Otsikon tulee olla informatiivinen, ei klikkiotsikko
-
-Vastaa JSON-muodossa:
-{
-  "title": "Selkeä otsikko (max 100 merkkiä)",
-  "summary": "2-4 kappaleen uutisteksti selkokielellä.",
-  "tags": ["aihetunniste1", "aihetunniste2"],
-  "keyPoints": ["Keskeisin asia", "Toinen tärkeä asia"],
-  "discussionPrompt": "Keskustelukysymys asukkaille"
-}`
-
-  const userPrompt = `Kirjoita uutinen seuraavasta ${municipalityName}n ${organ || 'kunnan'} päätöksestä (${itemNumber}):
-
----
-${excerpt.slice(0, 15000)}
----
-
-Vastaa vain JSON-muodossa, ei muuta tekstiä.`
+  const systemPrompt = prompts.writeArticleSystem
+  const userPrompt = fillTemplate(prompts.writeArticleUser, {
+    municipality: municipalityName,
+    organ: organLabel,
+    itemNumber,
+    excerpt: excerpt.slice(0, 15000),
+  })
 
   const content = await callMistral([
     { role: 'system', content: systemPrompt },
@@ -327,47 +280,19 @@ export interface VerificationResult {
 export async function verifyArticle(
   article: SummaryResult,
   originalExcerpt: string,
-  municipalityName: string
+  municipalityName: string,
+  language: string = 'fi'
 ): Promise<VerificationResult> {
-  const systemPrompt = `Olet faktantarkistaja. Vertaa kirjoitettua uutista alkuperäiseen pöytäkirjaotteeseen.
+  const prompts = getPrompts(language)
 
-Tarkista:
-1. Ovatko kaikki uutisessa mainitut faktat (päivämäärät, rahamäärät, henkilöt, päätökset) alkuperäisessä tekstissä?
-2. Onko jotain keksitty tai lisätty mitä alkuperäisessä EI ole?
-3. Onko jokin fakta vääristelty tai väärin tulkittu?
-4. Onko äänestystulos tai muu yksityiskohta raportoitu oikein?
-
-ÄLÄ arvioi kirjoitustyyliä tai otsikkoa — tarkista VAIN faktuaalinen oikeellisuus.
-
-Vastaa JSON-muodossa:
-{
-  "passed": true/false,
-  "issues": ["Ongelma 1", "Ongelma 2"],
-  "severity": "none" | "minor" | "major"
-}
-
-- "none": Ei ongelmia, kaikki faktat vastaavat
-- "minor": Pieni epätarkkuus, mutta ei harhaanjohtava
-- "major": Fakta väärin, keksitty tieto, tai harhaanjohtava`
-
-  const userPrompt = `UUTINEN:
-
-Otsikko: ${article.title}
-
-${article.summary}
-
-Keskeiset kohdat:
-${article.keyPoints.map(p => `- ${p}`).join('\n')}
-
----
-
-ALKUPERÄINEN PÖYTÄKIRJAOTE (${municipalityName}):
-
-${originalExcerpt.slice(0, 15000)}
-
----
-
-Vertaa uutista alkuperäiseen. Vastaa vain JSON-muodossa.`
+  const systemPrompt = prompts.verifyArticleSystem
+  const userPrompt = fillTemplate(prompts.verifyArticleUser, {
+    title: article.title,
+    summary: article.summary,
+    keyPoints: article.keyPoints.map(p => `- ${p}`).join('\n'),
+    municipality: municipalityName,
+    excerpt: originalExcerpt.slice(0, 15000),
+  })
 
   const content = await callMistral([
     { role: 'system', content: systemPrompt },

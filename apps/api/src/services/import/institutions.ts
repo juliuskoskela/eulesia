@@ -56,13 +56,15 @@ export async function getOrCreateBotUser(): Promise<string> {
 // INSTITUTION PLACEHOLDER ACCOUNTS
 // ============================================
 
-type InstitutionType = 'municipality' | 'ministry' | 'agency'
+type InstitutionType = 'municipality' | 'ministry' | 'agency' | 'county' | 'region' | 'state'
 
 interface InstitutionOptions {
   /** Municipality ID to link to (for municipal institutions) */
   municipalityId?: string
   /** Municipality name — auto-creates municipality record if municipalityId not provided */
   municipalityName?: string
+  /** Country code — used for location resolution. Default: 'FI' */
+  country?: string
 }
 
 /**
@@ -119,7 +121,7 @@ export async function getOrCreateInstitution(
   // Resolve municipality ID if municipality name is provided
   let municipalityId = options.municipalityId
   if (!municipalityId && options.municipalityName && type === 'municipality') {
-    municipalityId = await getOrCreateMunicipalityRecord(options.municipalityName)
+    municipalityId = await getOrCreateMunicipalityRecord(options.municipalityName, options.country)
   }
 
   // Generate a unique username
@@ -158,14 +160,18 @@ export async function getOrCreateInstitution(
 
 /**
  * Get or create a municipality record by name.
+ * Now accepts country parameter for multi-country support.
  */
-async function getOrCreateMunicipalityRecord(name: string): Promise<string> {
+async function getOrCreateMunicipalityRecord(name: string, country: string = 'FI'): Promise<string> {
   const normalized = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
 
   const existing = await db
     .select({ id: municipalities.id })
     .from(municipalities)
-    .where(eq(municipalities.name, normalized))
+    .where(and(
+      eq(municipalities.name, normalized),
+      eq(municipalities.country, country)
+    ))
     .limit(1)
 
   if (existing.length > 0) {
@@ -176,8 +182,8 @@ async function getOrCreateMunicipalityRecord(name: string): Promise<string> {
     .insert(municipalities)
     .values({
       name: normalized,
-      nameFi: normalized,
-      country: 'FI'
+      nameFi: country === 'FI' ? normalized : undefined,
+      country,
     })
     .returning({ id: municipalities.id })
 
@@ -189,15 +195,18 @@ async function getOrCreateMunicipalityRecord(name: string): Promise<string> {
 // ============================================
 
 /**
- * Resolve a location (with coordinates) for a municipality.
+ * Resolve a location (with coordinates) for an entity.
  * Looks up in locations table first, then tries Nominatim.
  * Returns locationId or null if not found.
  *
- * This links municipal content to the map — threads with locationId
+ * This links content to the map — threads with locationId
  * appear as geographic points.
+ *
+ * @param entityName - Name of the municipality, county, region, or state
+ * @param country - ISO 3166-1 alpha-2 country code. Default: 'FI'
  */
-export async function resolveLocationForMunicipality(municipalityName: string): Promise<string | null> {
-  const normalized = municipalityName.charAt(0).toUpperCase() + municipalityName.slice(1).toLowerCase()
+export async function resolveLocationForEntity(entityName: string, country: string = 'FI'): Promise<string | null> {
+  const normalized = entityName.charAt(0).toUpperCase() + entityName.slice(1).toLowerCase()
 
   // Check if location already exists in DB
   const [existing] = await db
@@ -205,7 +214,7 @@ export async function resolveLocationForMunicipality(municipalityName: string): 
     .from(locations)
     .where(and(
       ilike(locations.name, normalized),
-      eq(locations.country, 'FI')
+      eq(locations.country, country)
     ))
     .limit(1)
 
@@ -217,7 +226,7 @@ export async function resolveLocationForMunicipality(municipalityName: string): 
   try {
     const { searchNominatim } = await import('../nominatim.js')
     const results = await searchNominatim(normalized, {
-      country: 'FI',
+      country,
       featuretype: 'city',
       limit: 1
     })
@@ -226,16 +235,19 @@ export async function resolveLocationForMunicipality(municipalityName: string): 
       const { activateLocation } = await import('../locations.js')
       const osmType = results[0].osm_type === 'relation' ? 'relation' : results[0].osm_type === 'way' ? 'way' : 'node'
       const location = await activateLocation(osmType as 'node' | 'way' | 'relation', results[0].osm_id)
-      console.log(`  Resolved location for ${normalized}: ${location.name} (${location.latitude}, ${location.longitude})`)
+      console.log(`  Resolved location for ${normalized} (${country}): ${location.name} (${location.latitude}, ${location.longitude})`)
       return location.id
     }
   } catch (err) {
     // Nominatim unavailable — not critical, location can be resolved later
-    console.log(`  Could not resolve location for ${normalized}: ${err instanceof Error ? err.message : err}`)
+    console.log(`  Could not resolve location for ${normalized} (${country}): ${err instanceof Error ? err.message : err}`)
   }
 
   return null
 }
+
+/** @deprecated Use resolveLocationForEntity instead */
+export const resolveLocationForMunicipality = resolveLocationForEntity
 
 // ============================================
 // TOPIC TAG HELPERS

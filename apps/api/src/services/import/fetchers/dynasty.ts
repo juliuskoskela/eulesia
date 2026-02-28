@@ -166,8 +166,15 @@ export const dynastyFetcher: MinuteFetcher = {
       const protocolMatch = row.match(/page=meeting&(?:amp;)?id=(\d+)/)
       if (!protocolMatch) continue
 
-      // Check for protocol indicator: icon_protocol (older) or 'protocol' CSS class (newer)
-      const isProtocol = row.includes('icon_protocol') || /class=['"][^'"]*\bprotocol\b/.test(row)
+      // Check for protocol indicator: multiple Dynasty variants exist:
+      // - icon_protocol.png (e.g., Ylivieska)
+      // - icon_doc1.png with "Pöytäkirja" text (e.g., Hartola, Rautavaara)
+      // - Plain "Pöytäkirja" text link without icons (e.g., Suonenjoki, Joensuu)
+      // - 'protocol' CSS class (newer Dynasty versions)
+      // Exclude rows that only have "Esityslista" (agenda) without "Pöytäkirja"
+      const isProtocol = row.includes('icon_protocol')
+        || /class=['"][^'"]*\bprotocol\b/.test(row)
+        || />\s*P\u00f6yt\u00e4kirja\s*</i.test(row)
       if (!isProtocol) continue
 
       const meetingId = protocolMatch[1]

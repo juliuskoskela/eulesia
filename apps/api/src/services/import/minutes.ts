@@ -1,19 +1,16 @@
 /**
  * Municipal Meeting Minutes Import Service
  *
- * Imports meeting minutes from Finnish municipalities and creates
+ * Imports meeting minutes from European municipalities and creates
  * AI-summarized Agora threads for civic discussion.
  *
- * Supported systems:
- * - CloudNC (~24 municipalities + welfare regions)
- * - Dynasty (~40-50 municipalities)
- * - Tweb (~15-20 municipalities)
+ * Supports multilingual content (FI, SE, NO, DK, EE, DE).
  *
  * Each system has its own fetcher in ./fetchers/ implementing the
  * MinuteFetcher interface. This module orchestrates the import pipeline.
  *
  * Uses round-robin scheduling so all municipalities get content
- * even with slow Mistral free-tier rate limits (~2 req/min).
+ * even with rate limits.
  *
  * Based on work from github.com/Explories/rautalampi-news
  */
@@ -22,9 +19,12 @@ import { db, threads, threadTags, municipalities } from '../../db/index.js'
 import { eq, and } from 'drizzle-orm'
 import { editorialGate, writeArticle, verifyArticle } from './mistral.js'
 import { renderMarkdown } from '../../utils/markdown.js'
-import { fetchers, MINUTE_SOURCES } from './fetchers/index.js'
+import { fetchers, MINUTE_SOURCES, getMinuteSources } from './fetchers/index.js'
 import type { MinuteSource, Meeting } from './fetchers/index.js'
-import { getOrCreateBotUser, getOrCreateInstitution, resolveLocationForMunicipality } from './institutions.js'
+import { getOrCreateBotUser, getOrCreateInstitution, resolveLocationForEntity } from './institutions.js'
+import { getEntityName, getAdminLevel } from './fetchers/types.js'
+import { recordSuccess, recordFailure } from './adaptive/health-monitor.js'
+import { parseDate as parseMultiDate, getPrompts, getLanguageForCountry } from './language/index.js'
 
 // Re-export for backwards compatibility
 export { MINUTE_SOURCES }
@@ -49,20 +49,12 @@ export interface ImportResult {
 }
 
 /**
- * Parse Finnish date string (DD.MM.YYYY) to Date object
- */
-function parseFinnishDate(dateStr: string): Date | null {
-  const match = dateStr.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/)
-  if (!match) return null
-  return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]))
-}
-
-/**
  * Filter meetings to only include recent ones.
+ * Uses the multilingual date parser for all European formats.
  * Meetings without a parseable date are EXCLUDED to prevent
  * old (undated) meetings from slipping through.
  */
-function filterRecentMeetings(meetings: Meeting[], maxAgeDays: number): Meeting[] {
+function filterRecentMeetings(meetings: Meeting[], maxAgeDays: number, language?: string): Meeting[] {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - maxAgeDays)
 
@@ -71,7 +63,7 @@ function filterRecentMeetings(meetings: Meeting[], maxAgeDays: number): Meeting[
       console.log(`   ⏭️  Skipping undated meeting: ${m.title}`)
       return false
     }
-    const meetingDate = parseFinnishDate(m.date)
+    const meetingDate = parseMultiDate(m.date, language)
     if (!meetingDate) {
       console.log(`   ⏭️  Skipping unparseable date "${m.date}": ${m.title}`)
       return false
@@ -83,13 +75,16 @@ function filterRecentMeetings(meetings: Meeting[], maxAgeDays: number): Meeting[
 /**
  * Get municipality ID by name, or create if not exists
  */
-async function getOrCreateMunicipality(name: string): Promise<string> {
+async function getOrCreateMunicipality(name: string, country: string = 'FI'): Promise<string> {
   const normalized = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
 
   const existing = await db
     .select({ id: municipalities.id })
     .from(municipalities)
-    .where(eq(municipalities.name, normalized))
+    .where(and(
+      eq(municipalities.name, normalized),
+      eq(municipalities.country, country)
+    ))
     .limit(1)
 
   if (existing.length > 0) {
@@ -100,8 +95,8 @@ async function getOrCreateMunicipality(name: string): Promise<string> {
     .insert(municipalities)
     .values({
       name: normalized,
-      nameFi: normalized,
-      country: 'FI'
+      nameFi: country === 'FI' ? normalized : undefined,
+      country,
     })
     .returning({ id: municipalities.id })
 
@@ -143,26 +138,36 @@ async function processMeeting(
     return
   }
 
-  // Get municipality ID, institution placeholder, and geographic location
-  const municipalityId = await getOrCreateMunicipality(source.municipality)
-  const normalizedName = source.municipality.charAt(0).toUpperCase() + source.municipality.slice(1).toLowerCase()
+  // Get entity identity, institution placeholder, and geographic location
+  const entityName = getEntityName(source)
+  const adminLevel = getAdminLevel(source)
+  const country = source.country || 'FI'
+  const municipalityId = adminLevel === 'municipality'
+    ? await getOrCreateMunicipality(entityName, country)
+    : undefined  // Higher admin levels don't need a municipality record
+  const normalizedName = entityName.charAt(0).toUpperCase() + entityName.slice(1).toLowerCase()
   const sourceInstitutionId = await getOrCreateInstitution(
     normalizedName,
-    'municipality',
-    { municipalityName: source.municipality }
+    adminLevel,  // Uses the actual admin level: 'municipality', 'county', 'region', or 'state'
+    { municipalityName: adminLevel === 'municipality' ? entityName : undefined, country }
   )
-  const locationId = await resolveLocationForMunicipality(normalizedName)
+  const locationId = await resolveLocationForEntity(normalizedName, country)
 
   // ============================================
   // 3-STAGE AGENTIC PIPELINE
   // ============================================
 
+  // Determine content language for multilingual pipeline
+  const language = source.language || getLanguageForCountry(source.country || 'FI')
+  const prompts = getPrompts(language)
+
   // STAGE 1: Editorial Gate — split & filter newsworthy items
-  console.log(`   🔍 Stage 1: Editorial gate...`)
+  console.log(`   🔍 Stage 1: Editorial gate... (${language})`)
   const editorialItems = await editorialGate(
     originalText,
     source.municipality,
-    meeting.organ
+    meeting.organ,
+    language
   )
 
   const newsworthyItems = editorialItems.filter(item => item.newsworthy)
@@ -193,7 +198,8 @@ async function processMeeting(
         item.excerpt,
         source.municipality,
         item.itemNumber,
-        meeting.organ
+        meeting.organ,
+        language
       )
 
       // STAGE 3: Verify against original excerpt
@@ -201,7 +207,8 @@ async function processMeeting(
       const verification = await verifyArticle(
         article,
         item.excerpt,
-        source.municipality
+        source.municipality,
+        language
       )
 
       if (!verification.passed && verification.severity === 'major') {
@@ -214,12 +221,13 @@ async function processMeeting(
         console.log(`   ℹ️  Minor issues: ${verification.issues.join('; ')}`)
       }
 
-      // Build thread content
+      // Build thread content (language-aware)
+      const footer = prompts.footerTemplate.replace('{sourceUrl}', sourceUrl)
       const content = `${article.summary}
 
 ---
 
-**Keskeiset kohdat:**
+${prompts.keyPointsHeader}
 ${article.keyPoints.map(p => `- ${p}`).join('\n')}
 
 ---
@@ -227,7 +235,7 @@ ${article.keyPoints.map(p => `- ${p}`).join('\n')}
 *${article.discussionPrompt}*
 
 ---
-*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Näytä alkuperäinen →](${sourceUrl})*`
+*${footer}*`
 
       const contentHtml = renderMarkdown(content)
 
@@ -263,8 +271,8 @@ ${article.keyPoints.map(p => `- ${p}`).join('\n')}
         })
         .returning({ id: threads.id })
 
-      // Add tags
-      const allTags = [...article.tags, 'pöytäkirja']
+      // Add tags (language-aware default tag)
+      const allTags = [...article.tags, prompts.defaultTag]
       const uniqueTags = [...new Set(allTags)].slice(0, 10)
 
       for (const tag of uniqueTags) {
@@ -322,8 +330,8 @@ export async function importMinutes(options: ImportOptions = {}): Promise<Import
     threads: []
   }
 
-  // Filter sources if specific municipalities requested
-  let sources = MINUTE_SOURCES
+  // Load all sources: static (hand-coded) + adaptive (DB-configured)
+  let sources = await getMinuteSources()
   if (filterMunicipalities?.length) {
     const filterLower = filterMunicipalities.map(m => m.toLowerCase())
     sources = sources.filter(s => filterLower.includes(s.municipality.toLowerCase()))
@@ -350,13 +358,24 @@ export async function importMinutes(options: ImportOptions = {}): Promise<Import
 
     try {
       const allMeetings = await fetcher.fetchMeetings(source)
-      const meetings = filterRecentMeetings(allMeetings, maxAgeDays)
+      const sourceLang = source.language || getLanguageForCountry(source.country || 'FI')
+      const meetings = filterRecentMeetings(allMeetings, maxAgeDays, sourceLang)
       console.log(`   ${source.municipality}: ${meetings.length} recent / ${allMeetings.length} total`)
       sourcesWithMeetings.push({ source, meetings: meetings.slice(0, limit) })
+
+      // Record success for adaptive sources
+      if (source.configId) {
+        await recordSuccess(source.configId).catch(() => {})
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       result.errors.push(`${source.municipality}: ${msg}`)
       console.log(`   ❌ ${source.municipality}: ${msg}`)
+
+      // Record failure for adaptive sources
+      if (source.configId) {
+        await recordFailure(source.configId, msg).catch(() => {})
+      }
     }
   }
 

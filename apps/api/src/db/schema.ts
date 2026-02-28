@@ -3,7 +3,7 @@ import { relations } from 'drizzle-orm'
 
 // Enums
 export const userRoleEnum = pgEnum('user_role', ['citizen', 'institution', 'admin'])
-export const institutionTypeEnum = pgEnum('institution_type', ['municipality', 'agency', 'ministry', 'organization'])
+export const institutionTypeEnum = pgEnum('institution_type', ['municipality', 'agency', 'ministry', 'organization', 'county', 'region', 'state'])
 export const identityLevelEnum = pgEnum('identity_level', ['basic', 'substantial', 'high'])
 export const scopeEnum = pgEnum('scope', ['local', 'national', 'european'])
 export const clubMemberRoleEnum = pgEnum('club_member_role', ['member', 'moderator', 'admin'])
