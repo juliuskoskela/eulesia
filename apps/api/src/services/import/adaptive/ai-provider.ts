@@ -81,8 +81,8 @@ async function callMistralDirect(messages: AiMessage[], options: AiCallOptions =
     throw new Error(`Mistral API ${response.status}: ${err}`)
   }
 
-  const data: Record<string, unknown> = await response.json()
-  return (data as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content || ''
+  const data = await response.json() as { choices?: { message?: { content?: string } }[] }
+  return data.choices?.[0]?.message?.content || ''
 }
 
 async function callOpenAI(messages: AiMessage[], options: AiCallOptions = {}): Promise<string> {
@@ -111,8 +111,8 @@ async function callOpenAI(messages: AiMessage[], options: AiCallOptions = {}): P
     throw new Error(`OpenAI API ${response.status}: ${err}`)
   }
 
-  const data: Record<string, unknown> = await response.json()
-  return (data as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content || ''
+  const data = await response.json() as { choices?: { message?: { content?: string } }[] }
+  return data.choices?.[0]?.message?.content || ''
 }
 
 async function callAnthropic(messages: AiMessage[], options: AiCallOptions = {}): Promise<string> {
@@ -149,8 +149,8 @@ async function callAnthropic(messages: AiMessage[], options: AiCallOptions = {})
     throw new Error(`Anthropic API ${response.status}: ${err}`)
   }
 
-  const data: Record<string, unknown> = await response.json()
-  const textBlock = (data as { content?: { type: string; text?: string }[] }).content?.find((b: { type: string }) => b.type === 'text')
+  const data = await response.json() as { content?: { type: string; text?: string }[] }
+  const textBlock = data.content?.find((b: { type: string }) => b.type === 'text')
   return textBlock?.text || ''
 }
 
