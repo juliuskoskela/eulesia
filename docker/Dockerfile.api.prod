@@ -22,12 +22,16 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files and install production deps
+# Copy package files and install production deps + admin tools
 COPY apps/api/package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev && npm install --no-save drizzle-kit tsx
 
 # Copy built files
 COPY --from=builder /app/apps/api/dist ./dist
+
+# Copy drizzle configs and source for admin scripts (db:push, scraper:seed)
+COPY apps/api/drizzle.config.ts apps/api/drizzle-scraper.config.ts ./
+COPY apps/api/src/db ./src/db
 
 # Security: run as non-root
 RUN addgroup -g 1001 -S nodejs && \

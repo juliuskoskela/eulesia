@@ -55,6 +55,7 @@ services:
       NODE_ENV: development
       PORT: 3001
       DATABASE_URL: postgresql://eulesia:eulesia_dev_password@db:5432/eulesia
+      SCRAPER_DATABASE_URL: postgresql://eulesia:eulesia_dev_password@db:5432/eulesia_scraper
       SESSION_SECRET: development-secret-key-change-in-production-32chars
       APP_URL: http://localhost:5173
       API_URL: http://localhost:3001
