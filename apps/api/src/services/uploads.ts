@@ -78,8 +78,9 @@ export async function processAvatar(
   const filename = generateFilename(userId)
   const outputPath = path.join(UPLOAD_DIR, 'avatars', filename)
 
-  // Process image: resize, convert to WebP
+  // Process image: auto-rotate based on EXIF orientation, resize, convert to WebP
   await sharp(buffer)
+    .rotate() // Auto-rotate based on EXIF orientation metadata (mobile photos)
     .resize(preset.width, preset.height, {
       fit: preset.fit,
       position: 'center'
@@ -110,8 +111,9 @@ export async function processContentImage(
   const outputPath = path.join(UPLOAD_DIR, 'images', filename)
   const thumbPath = path.join(UPLOAD_DIR, 'thumbnails', thumbFilename)
 
-  // Process main image
+  // Process main image: auto-rotate based on EXIF orientation, resize, convert to WebP
   const processedImage = await sharp(buffer)
+    .rotate() // Auto-rotate based on EXIF orientation metadata (mobile photos)
     .resize(contentPreset.width, contentPreset.height, {
       fit: contentPreset.fit,
       withoutEnlargement: true // Don't upscale small images
@@ -121,6 +123,7 @@ export async function processContentImage(
 
   // Process thumbnail
   await sharp(buffer)
+    .rotate() // Auto-rotate based on EXIF orientation metadata (mobile photos)
     .resize(thumbPreset.width, thumbPreset.height, {
       fit: thumbPreset.fit,
       position: 'center'

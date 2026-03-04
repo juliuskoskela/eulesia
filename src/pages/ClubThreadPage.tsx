@@ -303,10 +303,10 @@ export function ClubThreadPage() {
           {thread.contentHtml ? (
             <ContentWithPreviews
               html={thread.contentHtml}
-              className="prose prose-gray max-w-none"
+              className="prose prose-gray dark:prose-invert max-w-none"
             />
           ) : (
-            <div className="prose prose-gray max-w-none whitespace-pre-wrap">
+            <div className="prose prose-gray dark:prose-invert max-w-none whitespace-pre-wrap">
               {thread.content}
             </div>
           )}

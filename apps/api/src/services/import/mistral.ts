@@ -47,7 +47,6 @@ export interface SummaryResult {
   summary: string
   tags: string[]
   keyPoints: string[]
-  discussionPrompt: string
 }
 
 /**
@@ -252,8 +251,7 @@ export async function writeArticle(
       title: parsed.title || 'Kunnan päätös',
       summary: parsed.summary || '',
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
-      discussionPrompt: parsed.discussionPrompt || 'Mitä mieltä olet tästä päätöksestä?'
+      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : []
     }
   } catch (err) {
     console.error('Failed to parse article response:', content.slice(0, 200))
@@ -340,8 +338,7 @@ Vastaa JSON-muodossa:
   "title": "Selkeä otsikko päätökselle (max 100 merkkiä)",
   "summary": "2-4 kappaleen yhteenveto selkokielellä.",
   "tags": ["aihetunniste1", "aihetunniste2"],
-  "keyPoints": ["Keskeisin päätös", "Toinen tärkeä asia"],
-  "discussionPrompt": "Keskustelukysymys asukkaille"
+  "keyPoints": ["Keskeisin päätös", "Toinen tärkeä asia"]
 }`
 
   const content = await callMistral([
@@ -355,8 +352,7 @@ Vastaa JSON-muodossa:
       title: parsed.title || 'Kunnan päätös',
       summary: parsed.summary || '',
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
-      discussionPrompt: parsed.discussionPrompt || 'Mitä mieltä olet tästä päätöksestä?'
+      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : []
     }
   } catch (err) {
     console.error('Failed to parse Mistral response:', content.slice(0, 200))
@@ -404,7 +400,6 @@ Vastaa JSON-muodossa:
   "summary": "2-4 kappaleen yhteenveto selkokielellä.",
   "tags": ["aihetunniste1", "aihetunniste2"],
   "keyPoints": ["Keskeisin asia", "Toinen tärkeä asia"],
-  "discussionPrompt": "Keskustelukysymys kansalaisille",
   "scope": "national tai local",
   "region": "Alueen nimi jos local, muuten null"
 }` },
@@ -418,7 +413,6 @@ Vastaa JSON-muodossa:
       summary: parsed.summary || '',
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
       keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
-      discussionPrompt: parsed.discussionPrompt || 'Mitä mieltä olet tästä?',
       scope: parsed.scope === 'local' ? 'local' : 'national',
       region: parsed.region || undefined
     }
@@ -455,8 +449,7 @@ Respond in JSON format:
   "title": "Clear, specific title in Finnish (max 100 characters)",
   "summary": "2-4 paragraph summary in plain Finnish. Be specific about this topic.",
   "tags": ["tag1", "tag2"],
-  "keyPoints": ["Specific key point 1 in Finnish", "Specific key point 2 in Finnish"],
-  "discussionPrompt": "Specific discussion question about this topic for citizens in Finnish"
+  "keyPoints": ["Specific key point 1 in Finnish", "Specific key point 2 in Finnish"]
 }` },
     { role: 'user', content: `Summarize this ${institutionName} ${contentType} for Finnish citizens:\n\n---\n${originalText.slice(0, 12000)}\n---\n\nIMPORTANT: Be specific about this particular topic. Do NOT write generic EU descriptions. Respond ONLY in JSON format. All fields must be in Finnish.` }
   ])
@@ -467,8 +460,7 @@ Respond in JSON format:
       title: parsed.title || `${institutionName}: päätös`,
       summary: parsed.summary || '',
       tags: Array.isArray(parsed.tags) ? parsed.tags : [],
-      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
-      discussionPrompt: parsed.discussionPrompt || 'Mitä mieltä olet tästä EU-päätöksestä?'
+      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : []
     }
   } catch {
     console.error('Failed to parse Mistral response:', content.slice(0, 200))

@@ -231,10 +231,6 @@ ${prompts.keyPointsHeader}
 ${article.keyPoints.map(p => `- ${p}`).join('\n')}
 
 ---
-
-*${article.discussionPrompt}*
-
----
 *${footer}*`
 
       const contentHtml = renderMarkdown(content)

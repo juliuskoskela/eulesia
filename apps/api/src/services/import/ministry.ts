@@ -241,7 +241,7 @@ async function importVnDecisions(
 }
 
 function buildVnThreadContent(
-  summary: { summary: string; keyPoints: string[]; discussionPrompt: string },
+  summary: { summary: string; keyPoints: string[] },
   decision: VnDecision
 ): string {
   const meta = [
@@ -259,10 +259,6 @@ ${meta}
 
 **Keskeiset kohdat:**
 ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
-
----
-
-*${summary.discussionPrompt}*
 
 ---
 *Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen päätös →](${decision.sourceUrl})*`
@@ -425,7 +421,7 @@ async function importRssFeeds(
 }
 
 function buildRssThreadContent(
-  summary: { summary: string; keyPoints: string[]; discussionPrompt: string },
+  summary: { summary: string; keyPoints: string[] },
   item: FeedItem,
   _source: MinistrySource
 ): string {
@@ -435,10 +431,6 @@ function buildRssThreadContent(
 
 **Keskeiset kohdat:**
 ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
-
----
-
-*${summary.discussionPrompt}*
 
 ---
 *Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen lähde →](${item.link})*`

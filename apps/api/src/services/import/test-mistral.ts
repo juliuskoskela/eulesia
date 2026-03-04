@@ -60,9 +60,6 @@ async function main() {
     console.log('Key Points:')
     result.keyPoints.forEach(p => console.log(`  - ${p}`))
     console.log()
-    console.log('Discussion Prompt:')
-    console.log(`  "${result.discussionPrompt}"`)
-    console.log()
     console.log('✅ Mistral integration working!')
 
   } catch (err) {

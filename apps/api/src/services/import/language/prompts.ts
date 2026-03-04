@@ -100,8 +100,7 @@ Vastaa JSON-muodossa:
   "title": "Selkeä otsikko (max 100 merkkiä)",
   "summary": "2-4 kappaleen uutisteksti selkokielellä.",
   "tags": ["aihetunniste1", "aihetunniste2"],
-  "keyPoints": ["Keskeisin asia", "Toinen tärkeä asia"],
-  "discussionPrompt": "Keskustelukysymys asukkaille"
+  "keyPoints": ["Keskeisin asia", "Toinen tärkeä asia"]
 }`,
 
   writeArticleUser: `Kirjoita uutinen seuraavasta {municipality}n {organ} päätöksestä ({itemNumber}):
@@ -223,8 +222,7 @@ Svara i JSON-format:
   "title": "Tydlig rubrik (max 100 tecken)",
   "summary": "2-4 stycken nyhetstext på klarspråk.",
   "tags": ["ämne1", "ämne2"],
-  "keyPoints": ["Viktigaste punkten", "Näst viktigaste"],
-  "discussionPrompt": "Diskussionsfråga till invånarna"
+  "keyPoints": ["Viktigaste punkten", "Näst viktigaste"]
 }`,
 
   writeArticleUser: `Skriv en nyhetsartikel om följande beslut av {municipality} kommuns {organ} ({itemNumber}):
@@ -342,8 +340,7 @@ Svar i JSON-format:
   "title": "Tydelig tittel (maks 100 tegn)",
   "summary": "2-4 avsnitt nyhetstekst på klart språk.",
   "tags": ["emne1", "emne2"],
-  "keyPoints": ["Viktigste punkt", "Nest viktigste"],
-  "discussionPrompt": "Diskusjonsspørsmål til innbyggerne"
+  "keyPoints": ["Viktigste punkt", "Nest viktigste"]
 }`,
 
   writeArticleUser: `Skriv en nyhetsartikkel om følgende beslutning av {municipality} kommunes {organ} ({itemNumber}):
@@ -461,8 +458,7 @@ Svar i JSON-format:
   "title": "Tydelig titel (maks 100 tegn)",
   "summary": "2-4 afsnit nyhedstekst på klart sprog.",
   "tags": ["emne1", "emne2"],
-  "keyPoints": ["Vigtigste punkt", "Næstvigtigste"],
-  "discussionPrompt": "Diskussionsspørgsmål til borgerne"
+  "keyPoints": ["Vigtigste punkt", "Næstvigtigste"]
 }`,
 
   writeArticleUser: `Skriv en nyhedsartikel om følgende beslutning af {municipality} kommunes {organ} ({itemNumber}):
@@ -580,8 +576,7 @@ Vasta JSON-formaadis:
   "title": "Selge pealkiri (max 100 tähemärki)",
   "summary": "2-4 lõiku uudisteksti selges keeles.",
   "tags": ["teema1", "teema2"],
-  "keyPoints": ["Kõige olulisem", "Teine oluline asi"],
-  "discussionPrompt": "Aruteluküsimus elanikele"
+  "keyPoints": ["Kõige olulisem", "Teine oluline asi"]
 }`,
 
   writeArticleUser: `Kirjuta uudis järgmisest {municipality} omavalitsuse {organ} otsusest ({itemNumber}):
@@ -699,8 +694,7 @@ Antworte im JSON-Format:
   "title": "Klare Überschrift (max 100 Zeichen)",
   "summary": "2-4 Absätze Nachrichtentext in klarer Sprache.",
   "tags": ["thema1", "thema2"],
-  "keyPoints": ["Wichtigster Punkt", "Zweitwichtigster"],
-  "discussionPrompt": "Diskussionsfrage an die Bürger"
+  "keyPoints": ["Wichtigster Punkt", "Zweitwichtigster"]
 }`,
 
   writeArticleUser: `Schreibe einen Nachrichtenartikel über folgenden Beschluss von {municipality} {organ} ({itemNumber}):

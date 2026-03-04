@@ -255,7 +255,7 @@ export async function importEuContent(options: ImportOptions = {}): Promise<Impo
 }
 
 function buildThreadContent(
-  summary: { summary: string; keyPoints: string[]; discussionPrompt: string },
+  summary: { summary: string; keyPoints: string[] },
   item: FeedItem,
   _source: EuSource
 ): string {
@@ -265,10 +265,6 @@ function buildThreadContent(
 
 **Keskeiset kohdat:**
 ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
-
----
-
-*${summary.discussionPrompt}*
 
 ---
 *Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen lähde →](${item.link})*`

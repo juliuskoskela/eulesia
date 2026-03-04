@@ -373,10 +373,10 @@ export function ThreadPage() {
             ) : contentHtml ? (
               <ContentWithPreviews
                 html={contentHtml}
-                className="prose prose-gray max-w-none"
+                className="prose prose-gray dark:prose-invert max-w-none"
               />
             ) : (
-              <div className="prose prose-gray max-w-none">
+              <div className="prose prose-gray dark:prose-invert max-w-none">
                 {thread.content.split('\n').map((paragraph, i) => {
                   if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
                     return (
