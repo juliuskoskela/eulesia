@@ -253,15 +253,20 @@ function buildVnThreadContent(
 
   return `${summary.summary}
 
----
+<div class="summary-keypoints">
 
 ${meta}
 
 **Keskeiset kohdat:**
 ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
 
----
-*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen päätös →](${decision.sourceUrl})*`
+</div>
+
+<div class="summary-footer">
+
+*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen päätös →](${decision.sourceUrl})*
+
+</div>`
 }
 
 /** Parse Finnish date format "5.2.2026" to Date */
@@ -427,13 +432,18 @@ function buildRssThreadContent(
 ): string {
   return `${summary.summary}
 
----
+<div class="summary-keypoints">
 
 **Keskeiset kohdat:**
 ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
 
----
-*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen lähde →](${item.link})*`
+</div>
+
+<div class="summary-footer">
+
+*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen lähde →](${item.link})*
+
+</div>`
 }
 
 // ============================================

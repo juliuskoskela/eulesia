@@ -119,7 +119,7 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   },
   allowedIframeHostnames: ['www.youtube-nocookie.com', 'www.youtube.com'],
   allowedClasses: {
-    div: ['youtube-embed', 'link-preview'],
+    div: ['youtube-embed', 'link-preview', 'summary-keypoints', 'summary-footer'],
     img: ['uploaded-image', 'embedded-image']
   },
   transformTags: {

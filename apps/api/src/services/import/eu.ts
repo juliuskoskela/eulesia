@@ -261,13 +261,18 @@ function buildThreadContent(
 ): string {
   return `${summary.summary}
 
----
+<div class="summary-keypoints">
 
 **Keskeiset kohdat:**
 ${summary.keyPoints.map(p => `- ${p}`).join('\n')}
 
----
-*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen lähde →](${item.link})*`
+</div>
+
+<div class="summary-footer">
+
+*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Alkuperäinen lähde →](${item.link})*
+
+</div>`
 }
 
 /**

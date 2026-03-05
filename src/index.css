@@ -106,6 +106,57 @@ body {
   content-visibility: auto;
 }
 
+/* Eulesia summary: key points infobox */
+.summary-keypoints {
+  background: #f3f0ff;
+  border: 1px solid #e0d8f5;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0 1rem;
+}
+.dark .summary-keypoints {
+  background: rgba(109, 40, 217, 0.08);
+  border-color: rgba(109, 40, 217, 0.2);
+}
+.summary-keypoints p {
+  margin-top: 0;
+}
+.summary-keypoints ul {
+  margin-bottom: 0;
+}
+
+/* Eulesia summary: footer attribution */
+.summary-footer {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f9fafb;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+}
+.dark .summary-footer {
+  background: rgba(255, 255, 255, 0.04);
+}
+.summary-footer em,
+.summary-footer p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.dark .summary-footer em,
+.dark .summary-footer p {
+  color: #9ca3af;
+}
+
+/* Legacy summary threads: soften <hr> dividers */
+.prose hr {
+  border-color: #e5e7eb;
+  margin: 1.5rem 0;
+}
+.dark .prose hr {
+  border-color: #374151;
+}
+
 /* Keyboard navigation: visible focus indicator */
 *:focus-visible {
   outline: 2px solid var(--color-civic-blue);

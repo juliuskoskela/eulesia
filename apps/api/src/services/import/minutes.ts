@@ -222,16 +222,22 @@ async function processMeeting(
       }
 
       // Build thread content (language-aware)
-      const footer = prompts.footerTemplate.replace('{sourceUrl}', sourceUrl)
+      const footerText = prompts.footerTemplate.replace('{sourceUrl}', sourceUrl)
+      const keyPointsHtml = article.keyPoints.map(p => `<li>${p}</li>`).join('\n')
       const content = `${article.summary}
 
----
+<div class="summary-keypoints">
 
 ${prompts.keyPointsHeader}
 ${article.keyPoints.map(p => `- ${p}`).join('\n')}
 
----
-*${footer}*`
+</div>
+
+<div class="summary-footer">
+
+${footerText}
+
+</div>`
 
       const contentHtml = renderMarkdown(content)
 
