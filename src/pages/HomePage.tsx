@@ -44,6 +44,19 @@ export function HomePage() {
     "public" | "private"
   >("public");
 
+  // Auto-trigger home guide on first visit
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const timer = setTimeout(() => {
+      if (!hasCompletedGuide("home") && !isGuideActive) {
+        startGuide("home");
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [currentUser, hasCompletedGuide, isGuideActive, startGuide]);
+
   if (!currentUser) {
     return (
       <Layout>
@@ -83,16 +96,6 @@ export function HomePage() {
       console.error("Failed to create room:", err);
     }
   };
-
-  // Auto-trigger home guide on first visit
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!hasCompletedGuide("home") && !isGuideActive) {
-        startGuide("home");
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const publicRooms =
     homeData?.rooms.filter((r: Room) => r.visibility === "public") || [];

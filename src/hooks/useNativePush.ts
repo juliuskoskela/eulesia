@@ -17,7 +17,7 @@ export function useNativePush() {
       return;
     if (registeredRef.current) return;
 
-    let cleanupFns: (() => void)[] = [];
+    const cleanupFns: (() => void)[] = [];
 
     async function setupPush() {
       const { PushNotifications } = await import(

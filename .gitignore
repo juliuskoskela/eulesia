@@ -26,6 +26,8 @@
 !nix/**
 !public/
 !public/**
+!secrets/
+!secrets/**
 !scripts/
 !scripts/**
 !src/
@@ -43,6 +45,7 @@
 !/flake.lock
 !/flake.nix
 !/index.html
+!/justfile
 !/package-lock.json
 !/package.json
 !/tsconfig.app.json
@@ -79,6 +82,7 @@ apps/*/dist
 .env.local
 .env.*.local
 docker/.env
+.eulesia/
 
 # Editor directories and files
 .vscode/*

@@ -2,271 +2,147 @@
 
 ## Overview
 
-Eulesia uses a simple CI/CD pipeline:
+Eulesia now treats Nix as the canonical path for:
 
-1. Push to `main` branch
-2. GitHub Actions connects to server via SSH
-3. Server pulls code and rebuilds Docker containers
+- local development
+- build outputs
+- deployment configuration
+- CI entrypoints
 
-## Server Details
+The flake exposes:
 
-- **Provider:** Hetzner
-- **IP:** 95.216.206.136
-- **SSH alias:** `palvelin`
-- **Path:** `/root/eulesia`
-- **OS:** Ubuntu + Docker
+- `nix develop` and `just` for developer workflow
+- `nix run .#ci-check` for runner-agnostic CI checks
+- `nixosModules.eulesia` for reusable service configuration
+- `nixosConfigurations.eulesia-vm` for VM validation
+- `nixosConfigurations.eulesia-prod` and `nix run .#deploy` for production deployment
 
-## Architecture
+The old Docker Compose setup is deprecated and should only be treated as a temporary fallback while the production host is migrated.
 
-```
-Internet
-    │
-    ▼
-┌─────────────────────────────────────────┐
-│  Traefik (reverse proxy + SSL)          │
-│  - Port 80 → redirect to 443            │
-│  - Port 443 → TLS termination           │
-│  - Auto SSL via Let's Encrypt           │
-└─────────────────────────────────────────┘
-    │                    │
-    ▼                    ▼
-┌──────────────┐  ┌──────────────────────┐
-│  Web (nginx) │  │  API (Node.js)       │
-│  eulesia.eu  │  │  api.eulesia.eu      │
-│  Port 80     │  │  Port 3001           │
-└──────────────┘  └──────────────────────┘
-                         │
-                         ▼
-                  ┌──────────────┐
-                  │  PostgreSQL  │
-                  │  Port 5432   │
-                  └──────────────┘
-```
-
-## First-Time Server Setup
-
-### 1. SSH to Server
+## Local Validation
 
 ```bash
-ssh palvelin
-# or
-ssh root@95.216.206.136
+nix develop
+just dev
 ```
 
-### 2. Create SSH Keys for GitHub
+This starts:
+
+- PostgreSQL
+- Meilisearch
+- API on `http://localhost:3001`
+- frontend on `http://localhost:5173`
+
+Useful validation commands:
 
 ```bash
-# Deploy key (server → GitHub for git pull)
-ssh-keygen -t ed25519 -f ~/.ssh/github_deploy_eulesia -N '' -C 'eulesia-deploy'
-
-# Show public key to add to GitHub
-cat ~/.ssh/github_deploy_eulesia.pub
+just lint
+just test
+just build
+just vm-build
+nix run .#ci-check
 ```
 
-Add to GitHub: Repository → Settings → Deploy keys → Add deploy key
+## NixOS Module
 
-- Title: `Hetzner deploy`
-- Key: (paste public key)
-- Allow write access: No
+The reusable deployment surface lives in `nixosModules.eulesia`.
 
-### 3. Configure SSH for GitHub
+It configures:
+
+- the packaged API service
+- the packaged frontend served by nginx
+- local PostgreSQL and Meilisearch when enabled
+- uploads storage
+- TLS termination through nginx + ACME
+- environment and secret injection for the API
+
+The module interface is centered on `services.eulesia.*`, including:
+
+- `package` and `frontendPackage`
+- `appDomain` and `apiDomain`
+- `database.{createLocally,name,user,url}`
+- `meilisearch.{createLocally,listenAddress,listenPort,url,masterKeyFile}`
+- `auth.sessionSecretFile`
+- `email.smtp.{host,port,secure,userFile,passFile}`
+- `push.{vapidPublicKeyFile,vapidPrivateKeyFile,vapidSubject,firebaseServiceAccountKeyFile}`
+- `ai.{mistralApiKeyFile,mistralModel}`
+- `extraEnvironment`
+- `extraSecretEnvironmentFiles`
+
+## Production Configuration
+
+`nixosConfigurations.eulesia-prod` is the production-oriented host definition currently wired into the deploy target.
+
+Current assumptions in the repo:
+
+- deploy target host: `95.216.206.136`
+- SSH user: `root`
+- domains: `eulesia.eu` and `api.eulesia.eu`
+- managed runtime secrets should live under `secrets/prod/` and `secrets/test/`
+- one encrypted file per secret, using names such as `session-secret.enc` and `firebase-service-account.json.enc`
+- `sops-nix` materializes runtime secret files under `/run/secrets/eulesia/`
+
+Before the first real NixOS deployment, verify and adjust:
+
+- disk layout in the production host config
+- SSH access
+- all secret file paths
+- Idura/OAuth values in `extraEnvironment`
+
+## Required Secrets
+
+The canonical inventory, purpose, and generation guidance lives in [Secrets](./secrets.md).
+
+Production runtime still expects these decrypted files under `/run/secrets/eulesia/`:
+
+- `/run/secrets/eulesia/session-secret`
+- `/run/secrets/eulesia/meili-master-key`
+- `/run/secrets/eulesia/mistral-api-key`
+- `/run/secrets/eulesia/smtp-user`
+- `/run/secrets/eulesia/smtp-pass`
+- `/run/secrets/eulesia/vapid-public-key`
+- `/run/secrets/eulesia/vapid-private-key`
+- `/run/secrets/eulesia/firebase-service-account.json`
+- `/run/secrets/eulesia/idura-client-secret`
+
+## Deploy
+
+Build and deploy through the flake:
 
 ```bash
-cat >> ~/.ssh/config << 'EOF'
-
-Host github.com-eulesia
-    HostName github.com
-    User git
-    IdentityFile ~/.ssh/github_deploy_eulesia
-    IdentitiesOnly yes
-EOF
+nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
+nix run .#deploy
 ```
 
-### 4. Clone Repository
+`nix run .#deploy` uses `deploy-rs` and activates the `eulesia-prod` node from the flake.
+
+If `$HOME/.config/sops/age/keys.txt` exists locally, the deploy app copies it to `/var/lib/sops-nix/key.txt` on the target before running `deploy-rs`.
+
+The API service runs database migration as a pre-start step, so configuration switches restart the app against the current schema automatically.
+
+## VM Target
+
+Use the VM configuration to validate the service stack without touching production:
 
 ```bash
-cd /root
-git clone git@github.com-eulesia:markussjoberg/eulesia.git
-cd eulesia
-git config --global --add safe.directory /root/eulesia
+nix build .#nixosConfigurations.eulesia-vm.config.system.build.vm
 ```
 
-### 5. Create Production Environment
+The VM config uses:
 
-```bash
-cd docker
-cp .env.example .env
-nano .env  # Fill in production values
-```
+- plain HTTP
+- local PostgreSQL
+- local Meilisearch
+- packaged frontend + API from this flake
 
-Required values:
+## Legacy Docker Assets
 
-- `DOMAIN=eulesia.eu`
-- `ACME_EMAIL=admin@eulesia.eu`
-- `DB_PASSWORD=<secure-password>`
-- `SESSION_SECRET=<32-char-random-string>`
-- `RESEND_API_KEY=<your-resend-key>` (or leave empty for beta)
+The following remain in the repo during the migration period:
 
-Generate secrets:
+- `docker/docker-compose.yml`
+- `docker/docker-compose.prod.yml`
+- `docker/Dockerfile.*`
+- `scripts/deploy.sh`
+- `scripts/setup-server.sh`
 
-```bash
-# Generate session secret
-openssl rand -base64 32
-
-# Generate database password
-openssl rand -base64 24
-```
-
-### 6. Start Services
-
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-### 7. Initialize Database
-
-```bash
-# Run migrations
-docker exec eulesia-api npm run db:push
-
-# Seed initial data (optional)
-docker exec eulesia-api npm run seed
-
-# Create admin invite codes
-docker exec eulesia-api npm run create-invites -- 10
-```
-
-## GitHub Actions Setup
-
-### Required Secrets
-
-Go to GitHub Repository → Settings → Secrets and variables → Actions
-
-| Secret           | Value                          |
-| ---------------- | ------------------------------ |
-| `SERVER_HOST`    | `95.216.206.136`               |
-| `SERVER_USER`    | `root`                         |
-| `SERVER_SSH_KEY` | Base64-encoded SSH private key |
-
-### Get SSH Key for Actions
-
-On the server, the `github_actions` key should already exist:
-
-```bash
-ssh palvelin "base64 -w 0 ~/.ssh/github_actions"
-```
-
-Copy the output to GitHub as `SERVER_SSH_KEY`.
-
-## Manual Deployment
-
-If you need to deploy manually:
-
-```bash
-ssh palvelin "cd /root/eulesia && git fetch origin && git reset --hard origin/main && cd docker && docker compose -f docker-compose.prod.yml up -d --build"
-```
-
-## Useful Commands
-
-```bash
-# View running containers
-ssh palvelin "docker ps"
-
-# View API logs
-ssh palvelin "docker logs eulesia-api --tail 50 -f"
-
-# View all logs
-ssh palvelin "cd /root/eulesia/docker && docker compose -f docker-compose.prod.yml logs -f"
-
-# Restart services
-ssh palvelin "cd /root/eulesia/docker && docker compose -f docker-compose.prod.yml restart"
-
-# Database backup
-ssh palvelin "docker exec eulesia-db pg_dump -U eulesia eulesia > /root/backups/eulesia-$(date +%Y%m%d).sql"
-
-# Run database migrations
-ssh palvelin "docker exec eulesia-api npm run db:push"
-
-# Create invite codes
-ssh palvelin "docker exec eulesia-api npm run create-invites -- 10"
-```
-
-## DNS Configuration
-
-Set up these DNS records:
-
-| Type | Name           | Value          |
-| ---- | -------------- | -------------- |
-| A    | eulesia.eu     | 95.216.206.136 |
-| A    | api.eulesia.eu | 95.216.206.136 |
-
-## SSL Certificates
-
-Traefik handles SSL automatically via Let's Encrypt. Certificates are stored in the `letsencrypt` Docker volume.
-
-## Troubleshooting
-
-### Container won't start
-
-```bash
-docker logs eulesia-api
-docker logs eulesia-web
-docker logs eulesia-traefik
-```
-
-### Database connection issues
-
-```bash
-# Check if DB is running
-docker exec eulesia-db pg_isready -U eulesia
-
-# Check connection from API
-docker exec eulesia-api node -e "require('postgres')('postgresql://...').query('SELECT 1')"
-```
-
-### SSL certificate issues
-
-```bash
-# Check Traefik logs
-docker logs eulesia-traefik
-
-# Force certificate renewal
-docker exec eulesia-traefik traefik --entrypoints.websecure.http.tls.certresolver=letsencrypt
-```
-
-### GitHub Actions fails with "Permission denied"
-
-1. Check `SERVER_SSH_KEY` is correct (base64, no whitespace)
-2. Verify key is in `authorized_keys` on server
-3. Test manually: `ssh -i ~/.ssh/github_actions root@95.216.206.136`
-
-## Rollback
-
-If a deployment breaks something:
-
-```bash
-# Tag current working version before deploying
-ssh palvelin "docker tag eulesia-api eulesia-api:backup-$(date +%Y%m%d)"
-ssh palvelin "docker tag eulesia-web eulesia-web:backup-$(date +%Y%m%d)"
-
-# Rollback
-ssh palvelin "docker tag eulesia-api:backup-20260127 eulesia-api:latest"
-ssh palvelin "docker tag eulesia-web:backup-20260127 eulesia-web:latest"
-ssh palvelin "cd /root/eulesia/docker && docker compose -f docker-compose.prod.yml up -d"
-```
-
-## Environment Variables Reference
-
-| Variable         | Description            | Example             |
-| ---------------- | ---------------------- | ------------------- |
-| `DOMAIN`         | Main domain            | `eulesia.eu`        |
-| `ACME_EMAIL`     | Let's Encrypt email    | `admin@eulesia.eu`  |
-| `DB_USER`        | PostgreSQL username    | `eulesia`           |
-| `DB_PASSWORD`    | PostgreSQL password    | (generate)          |
-| `DB_NAME`        | Database name          | `eulesia`           |
-| `SESSION_SECRET` | Session encryption key | (generate 32 chars) |
-| `RESEND_API_KEY` | Resend API key         | `re_xxx...`         |
-
----
-
-_Last updated: 2026-01-27_
+They are no longer the primary deployment path and should not be extended further unless the Nix migration is blocked.

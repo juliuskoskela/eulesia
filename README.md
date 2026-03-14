@@ -48,7 +48,7 @@ AI-powered import of municipal meeting minutes, ministry press releases, and EU 
 | Search     | Meilisearch (typo-tolerant, federated)    |
 | Real-time  | Socket.io (session-authenticated)         |
 | AI         | Mistral Large (EU-hosted, GDPR-compliant) |
-| Deployment | Docker Compose, Traefik reverse proxy     |
+| Deployment | NixOS module, nginx, deploy-rs            |
 
 ## Automated Content Import
 
@@ -66,35 +66,55 @@ AI-generated summaries are transparent (marked as "Eulesia summary — Generated
 
 ### Prerequisites
 
-- Node.js 20+
-- PostgreSQL 15+
-- Meilisearch (optional, for search)
+- Nix with flakes enabled
 
 ### Setup
 
 ```bash
-# Install dependencies
-npm install
-cd apps/api && npm install
+# Enter the development environment
+nix develop
 
-# Configure environment
-cp apps/api/.env.example apps/api/.env
-# Edit .env with your database and API settings
+# See the primary commands
+just
 
-# Run database migrations
-cd apps/api && npm run db:push
-
-# Start development servers
-cd apps/api && npm run dev   # API (port 3001)
-npm run dev                  # Frontend (port 5173)
+# Start PostgreSQL, Meilisearch, API, and frontend together
+just dev
 ```
 
-### Building
+Optional local secrets can be sourced from untracked files:
+
+- `.env.local`
+- `.env.development.local`
+- `apps/api/.env.local`
+- `apps/api/.env.development.local`
+
+Managed runtime secrets should live as per-secret encrypted files under:
+
+- `secrets/test/`
+- `secrets/prod/`
+
+The target convention is one `*.enc` file per secret, with structured payloads kept as typed files such as `firebase-service-account.json.enc`. See [Secrets](./docs/secrets.md).
+
+### Common Commands
 
 ```bash
-npm run build                   # Frontend
-cd apps/api && npm run build    # API
+just lint        # Nix lint + frontend lint/typecheck + API lint/typecheck
+just test        # Frontend and API test suites
+just build       # Build frontend + API bundle outputs
+just db-migrate  # Apply schema changes locally
+just db-reset    # Recreate the local PostgreSQL cluster and reapply schema
 ```
+
+### Nix Outputs
+
+```bash
+nix build .#frontend
+nix build .#api
+nix build .#nixosConfigurations.eulesia-vm.config.system.build.vm
+nix run .#ci-check
+```
+
+The Docker Compose files remain in the repo as a legacy fallback during migration, but Nix is the primary development and deployment path.
 
 ## Authentication
 
@@ -111,6 +131,7 @@ cd apps/api && npm run build    # API
 - [API Reference](./docs/api-reference.md) — API endpoints
 - [Database Schema](./docs/database-schema.md) — Data models
 - [Deployment](./docs/deployment.md) — Production deployment
+- [Secrets](./docs/secrets.md) — Runtime secret inventory and generation
 
 ## Academic Reference
 

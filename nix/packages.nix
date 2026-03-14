@@ -27,14 +27,17 @@ _: {
       api = {
         type = "app";
         program = "${api}/bin/eulesia-api";
+        meta.description = "Run the packaged Eulesia API server";
       };
       generate-idura-jwks = {
         type = "app";
         program = "${generateIduraJwks}/bin/generate-idura-jwks";
+        meta.description = "Generate local Idura JWKS material";
       };
       default = {
         type = "app";
         program = "${api}/bin/eulesia-api";
+        meta.description = "Run the packaged Eulesia API server";
       };
     };
   };

@@ -22,36 +22,6 @@ export function GuideTour() {
   >("bottom");
   const prevActiveElementRef = useRef<HTMLElement | null>(null);
 
-  const calculatePosition = useCallback(() => {
-    if (!activeGuideId) return;
-
-    const guide = guides[activeGuideId];
-    if (!guide) return;
-
-    const step = guide.steps[activeStepIndex];
-    if (!step) return;
-
-    const el = document.querySelector(
-      step.targetSelector,
-    ) as HTMLElement | null;
-    if (!el) return;
-
-    // Scroll element into view if needed
-    const rect = el.getBoundingClientRect();
-    const isInView = rect.top >= 0 && rect.bottom <= window.innerHeight;
-    if (!isInView) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      // Recalculate after scroll
-      requestAnimationFrame(() => {
-        const newRect = el.getBoundingClientRect();
-        updatePositions(newRect, step.placement || "bottom");
-      });
-      return;
-    }
-
-    updatePositions(rect, step.placement || "bottom");
-  }, [activeGuideId, activeStepIndex]);
-
   const updatePositions = useCallback(
     (
       rect: DOMRect,
@@ -139,6 +109,36 @@ export function GuideTour() {
     },
     [activeGuideId, activeStepIndex],
   );
+
+  const calculatePosition = useCallback(() => {
+    if (!activeGuideId) return;
+
+    const guide = guides[activeGuideId];
+    if (!guide) return;
+
+    const step = guide.steps[activeStepIndex];
+    if (!step) return;
+
+    const el = document.querySelector(
+      step.targetSelector,
+    ) as HTMLElement | null;
+    if (!el) return;
+
+    // Scroll element into view if needed
+    const rect = el.getBoundingClientRect();
+    const isInView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+    if (!isInView) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Recalculate after scroll
+      requestAnimationFrame(() => {
+        const newRect = el.getBoundingClientRect();
+        updatePositions(newRect, step.placement || "bottom");
+      });
+      return;
+    }
+
+    updatePositions(rect, step.placement || "bottom");
+  }, [activeGuideId, activeStepIndex, updatePositions]);
 
   // Recalculate on step change
   useEffect(() => {
