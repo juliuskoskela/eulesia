@@ -123,12 +123,13 @@ nix run .#ci-check
 
 - `http://localhost:18080` for the app and proxied API
 - `ssh root@localhost -p 2223`
-- `psql -h localhost -p 15433 -U eulesia -d eulesia`
 - `http://localhost:17701/health` for Meilisearch
 
-Those four localhost ports must be free before the VM can start.
+PostgreSQL is not exposed on the host by default.
 
-`just vm-deploy` pushes the current NixOS system into the running VM over SSH and bootstraps `/var/lib/sops-nix/key.txt` from `$HOME/.config/sops/age/keys.txt` when available.
+Those three localhost ports must be free before the VM can start.
+
+`just vm-deploy` pushes the current NixOS system into the running VM over SSH and bootstraps `/var/lib/sops-nix/key.txt` from `$HOME/.local/share/eulesia/vm-sops-age.key`.
 
 The Docker Compose files remain in the repo as a legacy fallback during migration, but Nix is the primary development and deployment path.
 

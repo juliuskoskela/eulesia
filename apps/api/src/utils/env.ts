@@ -8,10 +8,7 @@ const envSchema = z.object({
   DATABASE_URL: z
     .string()
     .default("postgresql://postgres:postgres@localhost:5432/eulesia"),
-  SESSION_SECRET: z
-    .string()
-    .min(32)
-    .default("development-secret-key-change-in-production-32chars"),
+  SESSION_SECRET: z.string().min(32),
   COOKIE_DOMAIN: z.string().optional(),
   APP_URL: z.string().url().default("http://localhost:5173"),
   API_URL: z.string().url().default("http://localhost:3001"),

@@ -31,10 +31,28 @@ with lib; let
     mapAttrsToList fileEnv cfg.extraSecretEnvironmentFiles
   );
 
+  apiSecretFiles =
+    unique
+    (map toString (filter (path: path != null) (
+      [
+        cfg.auth.sessionSecretFile
+        cfg.meilisearch.masterKeyFile
+        cfg.email.smtp.userFile
+        cfg.email.smtp.passFile
+        cfg.ai.mistralApiKeyFile
+        cfg.push.vapidPublicKeyFile
+        cfg.push.vapidPrivateKeyFile
+        cfg.push.firebaseServiceAccountKeyFile
+      ]
+      ++ attrValues cfg.extraSecretEnvironmentFiles
+    )));
+
   apiEnvironment = ''
     ${stringEnv "NODE_ENV" "production"}
     ${stringEnv "PORT" (toString cfg.api.port)}
     ${stringEnv "DATABASE_URL" cfg.database.url}
+    ${optionalString cfg.database.createLocally (stringEnv "PGHOST" "/run/postgresql")}
+    ${optionalString cfg.database.createLocally (stringEnv "PGUSER" cfg.database.user)}
     ${stringEnv "APP_URL" appUrl}
     ${stringEnv "API_URL" apiUrl}
     ${stringEnv "EMAIL_PROVIDER" cfg.email.provider}
@@ -150,7 +168,7 @@ in {
 
       url = mkOption {
         type = types.str;
-        default = "postgresql://eulesia@/eulesia?host=/run/postgresql";
+        default = "postgresql:///${cfg.database.name}";
         description = "Database connection string passed to the API.";
       };
     };
@@ -359,11 +377,6 @@ in {
       };
     };
 
-    systemd.tmpfiles.rules = [
-      "d ${cfg.stateDir} 0750 ${cfg.user} ${cfg.group} -"
-      "d ${cfg.uploadsDir} 0750 ${cfg.user} ${cfg.group} -"
-    ];
-
     services = {
       postgresql = mkIf cfg.database.createLocally {
         enable = true;
@@ -445,40 +458,60 @@ in {
       };
     };
 
-    systemd.services.eulesia-api = {
-      description = "Eulesia API";
-      wantedBy = ["multi-user.target"];
-      wants =
-        ["network-online.target"]
-        ++ optional cfg.database.createLocally "postgresql.service"
-        ++ optional cfg.meilisearch.createLocally "meilisearch.service";
-      after =
-        ["network-online.target"]
-        ++ optional cfg.database.createLocally "postgresql.service"
-        ++ optional cfg.meilisearch.createLocally "meilisearch.service";
-      preStart = ''
-        set -euo pipefail
-        ${apiEnvironment}
-        ${cfg.package}/bin/eulesia-api-migrate
-      '';
-      serviceConfig = {
-        Type = "simple";
-        User = cfg.user;
-        Group = cfg.group;
-        WorkingDirectory = cfg.stateDir;
-        Restart = "on-failure";
-        RestartSec = 5;
-        UMask = "0077";
-        ReadWritePaths = [
-          cfg.stateDir
-          cfg.uploadsDir
-        ];
+    systemd = {
+      tmpfiles.rules = [
+        "d ${cfg.stateDir} 0750 ${cfg.user} ${cfg.group} -"
+        "d ${cfg.uploadsDir} 0750 ${cfg.user} ${cfg.group} -"
+      ];
+
+      services.eulesia-api = {
+        description = "Eulesia API";
+        wantedBy = ["multi-user.target"];
+        wants =
+          ["network-online.target"]
+          ++ optional (apiSecretFiles != []) "sops-install-secrets.service"
+          ++ optional cfg.database.createLocally "postgresql.service"
+          ++ optional cfg.meilisearch.createLocally "meilisearch.service";
+        after =
+          ["network-online.target"]
+          ++ optional (apiSecretFiles != []) "sops-install-secrets.service"
+          ++ optional cfg.database.createLocally "postgresql.service"
+          ++ optional cfg.meilisearch.createLocally "meilisearch.service";
+        unitConfig = optionalAttrs (apiSecretFiles != []) {
+          ConditionPathExists = apiSecretFiles;
+        };
+        preStart = ''
+          set -euo pipefail
+          ${apiEnvironment}
+          ${cfg.package}/bin/eulesia-api-migrate
+        '';
+        serviceConfig = {
+          Type = "simple";
+          User = cfg.user;
+          Group = cfg.group;
+          WorkingDirectory = cfg.stateDir;
+          Restart = "on-failure";
+          RestartSec = 5;
+          UMask = "0077";
+          ReadWritePaths = [
+            cfg.stateDir
+            cfg.uploadsDir
+          ];
+        };
+        script = ''
+          set -euo pipefail
+          ${apiEnvironment}
+          exec ${cfg.package}/bin/eulesia-api
+        '';
       };
-      script = ''
-        set -euo pipefail
-        ${apiEnvironment}
-        exec ${cfg.package}/bin/eulesia-api
-      '';
+
+      services.meilisearch = mkIf cfg.meilisearch.createLocally {
+        wants = optional (cfg.meilisearch.masterKeyFile != null) "sops-install-secrets.service";
+        after = optional (cfg.meilisearch.masterKeyFile != null) "sops-install-secrets.service";
+        unitConfig = optionalAttrs (cfg.meilisearch.masterKeyFile != null) {
+          ConditionPathExists = toString cfg.meilisearch.masterKeyFile;
+        };
+      };
     };
 
     security.acme = mkIf cfg.tls.enable {

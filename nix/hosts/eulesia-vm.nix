@@ -1,7 +1,6 @@
 {
   config,
   eulesiaPackages,
-  lib,
   pkgs,
   ...
 }: {
@@ -9,13 +8,16 @@
     ../modules/eulesia.nix
   ];
 
-  networking.hostName = "eulesia-vm";
-  networking.firewall.enable = true;
-  networking.firewall.allowedTCPPorts = [
-    22
-    5432
-    7700
-  ];
+  networking = {
+    hostName = "eulesia-vm";
+    firewall = {
+      enable = true;
+      allowedTCPPorts = [
+        22
+        7700
+      ];
+    };
+  };
 
   microvm = {
     hypervisor = "qemu";
@@ -57,11 +59,6 @@
       }
       {
         from = "host";
-        host.port = 15433;
-        guest.port = 5432;
-      }
-      {
-        from = "host";
         host.port = 17701;
         guest.port = 7700;
       }
@@ -69,10 +66,7 @@
   };
 
   sops = {
-    age = {
-      keyFile = "/var/lib/sops-nix/key.txt";
-      generateKey = true;
-    };
+    age.keyFile = "/var/lib/sops-nix/key.txt";
     secrets = import ./lib/eulesia-secrets.nix {
       inherit config;
       secretDir = ../../secrets/test;
@@ -89,20 +83,9 @@
   };
 
   users.users.root = {
-    initialPassword = "test";
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIP1USfplYAtcR/hCxKmnypsJpqbU51DezXQgKFZ/lCax"
     ];
-  };
-
-  services.postgresql = {
-    authentication = lib.mkForce ''
-      local all all trust
-      host all all 127.0.0.1/32 trust
-      host all all ::1/128 trust
-      host all all 10.0.2.0/24 trust
-    '';
-    settings.listen_addresses = lib.mkForce "*";
   };
 
   services.eulesia = {

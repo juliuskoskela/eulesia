@@ -71,7 +71,7 @@ if (
 ) {
   // express-session middleware for FTN routes only (SDK needs it for OIDC state/nonce)
   const ftnSession = expressSession({
-    secret: process.env.SESSION_SECRET || "ftn-session-secret",
+    secret: env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 5 * 60 * 1000 }, // 5 min – only needed during OIDC flow

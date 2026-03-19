@@ -56,8 +56,9 @@ This exposes:
 
 - app and API on `http://localhost:18080`
 - SSH on `root@localhost:2223`
-- PostgreSQL on `localhost:15433`
 - Meilisearch on `http://localhost:17701/health`
+
+PostgreSQL is guest-only by default.
 
 Those localhost ports must be free before `just vm-run` starts the VM.
 
@@ -156,7 +157,7 @@ The VM is a persistent local MicroVM with:
 - shared host `/nix/store` over `virtiofs`
 - a writable Nix store overlay for hot deployment
 - a persistent `/var` volume for PostgreSQL, Meilisearch, uploads, and guest state
-- localhost port forwards for the web surface, SSH, PostgreSQL, and Meilisearch
+- localhost port forwards for the web surface, SSH, and Meilisearch
 
 The VM config uses:
 
@@ -165,7 +166,7 @@ The VM config uses:
 - local Meilisearch
 - packaged frontend + API from this flake
 
-`just vm-run` tries to install `$HOME/.config/sops/age/keys.txt` into `/var/lib/sops-nix/key.txt` automatically and then activates the current configuration inside the guest. `just vm-deploy` repeats that step explicitly and hot-switches the running guest to the current `nixosConfigurations.eulesia-vm` closure over SSH.
+`just vm-run` and `just vm-deploy` use the dedicated local VM key at `$HOME/.local/share/eulesia/vm-sops-age.key`, not the workstation `sops` keyring. They also refuse to run while plaintext runtime secret files like `secrets.env` or `idura-oauth2-client-secret` are present in the repo root.
 
 ## Hetzner Bootstrap
 

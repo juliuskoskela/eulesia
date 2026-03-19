@@ -49,7 +49,7 @@ pkgs.buildNpmPackage {
     #!${pkgs.runtimeShell}
     set -euo pipefail
     cd $out/share/eulesia-api
-    exec ${pkgs.nodejs_22}/bin/node $out/share/eulesia-api/node_modules/drizzle-kit/bin.cjs push --config $out/share/eulesia-api/drizzle.config.ts "\$@"
+    exec ${pkgs.nodejs_22}/bin/node $out/share/eulesia-api/node_modules/drizzle-kit/bin.cjs push --force --config $out/share/eulesia-api/drizzle.config.ts "\$@"
     EOF
     chmod +x $out/bin/eulesia-api-migrate
 

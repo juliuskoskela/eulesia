@@ -1,6 +1,6 @@
 keys:
   - &local_dev age1xy93kan6jxmp8wwayarejuvkxh99cfjyxdfwdryv0axr8dds5dhqws809e
-  - &local_vm age14aml9ljscx5g4g4cj24nycdzvxd43nfypxz4dcjp59pret3etpwsx04se8
+  - &local_vm age1r0y06ntxaku4ugt536mpz6e8tz08jkq6w84uxl4yhstgmmejlsxqdy9knp
 
 creation_rules:
   # Local and test deployment secrets.
