@@ -164,7 +164,7 @@ _: {
         check-format
         lint
         eulesia-test
-        nix build .#frontend .#api .#nixosConfigurations.eulesia-vm.config.system.build.vm
+        nix build .#frontend .#api .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
       '';
     };
   in {

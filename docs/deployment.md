@@ -14,7 +14,7 @@ The flake exposes:
 - `nix develop` and `just` for developer workflow
 - `nix run .#ci-check` for runner-agnostic CI checks
 - `nixosModules.eulesia` for reusable service configuration
-- `nixosConfigurations.eulesia-vm` for VM validation
+- `nixosConfigurations.eulesia-vm` plus `just vm-run` and `just vm-deploy` for local MicroVM validation
 - `nixosConfigurations.eulesia-test` and `nix run .#deploy-test` for a public test host
 - `nixosConfigurations.eulesia-prod` and `nix run .#deploy` for production deployment
 
@@ -44,6 +44,22 @@ just vm-build
 just test-host-build
 nix run .#ci-check
 ```
+
+For a production-like local deployment target, use:
+
+```bash
+just vm-run
+just vm-deploy
+```
+
+This exposes:
+
+- app and API on `http://localhost:18080`
+- SSH on `root@localhost:2223`
+- PostgreSQL on `localhost:15433`
+- Meilisearch on `http://localhost:17701/health`
+
+Those localhost ports must be free before `just vm-run` starts the VM.
 
 ## NixOS Module
 
@@ -130,10 +146,17 @@ The API service runs database migration as a pre-start step, so configuration sw
 Use the VM configuration to validate the service stack without touching production:
 
 ```bash
-nix build .#nixosConfigurations.eulesia-vm.config.system.build.vm
+just vm-build
+just vm-run
+just vm-deploy
 ```
 
-When you run the resulting VM, it mounts the host's `$HOME/.config/sops/age` directory into the guest and decrypts `secrets/test/*.enc` through that shared keyring.
+The VM is a persistent local MicroVM with:
+
+- shared host `/nix/store` over `virtiofs`
+- a writable Nix store overlay for hot deployment
+- a persistent `/var` volume for PostgreSQL, Meilisearch, uploads, and guest state
+- localhost port forwards for the web surface, SSH, PostgreSQL, and Meilisearch
 
 The VM config uses:
 
@@ -141,6 +164,8 @@ The VM config uses:
 - local PostgreSQL
 - local Meilisearch
 - packaged frontend + API from this flake
+
+`just vm-run` tries to install `$HOME/.config/sops/age/keys.txt` into `/var/lib/sops-nix/key.txt` automatically and then activates the current configuration inside the guest. `just vm-deploy` repeats that step explicitly and hot-switches the running guest to the current `nixosConfigurations.eulesia-vm` closure over SSH.
 
 ## Hetzner Bootstrap
 

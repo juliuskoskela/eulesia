@@ -61,7 +61,9 @@ _: {
           Useful commands:
             nix run .#db-migrate
             nix run .#db-reset
-            nix build .#nixosConfigurations.eulesia-vm.config.system.build.toplevel
+            just vm-run
+            just vm-deploy
+            nix build .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
             nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
           EOF
         '';

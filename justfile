@@ -43,7 +43,13 @@ ci-check:
     nix run .#ci-check
 
 vm-build:
-    nix build .#nixosConfigurations.eulesia-vm.config.system.build.vm
+    nix build .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
+
+vm-run:
+    nix run .#microvm
+
+vm-deploy:
+    nix run .#deploy-vm
 
 test-host-build:
     nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel

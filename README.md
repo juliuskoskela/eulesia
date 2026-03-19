@@ -103,6 +103,8 @@ just test        # Frontend and API test suites
 just build       # Build frontend + API bundle outputs
 just db-migrate  # Apply schema changes locally
 just db-reset    # Recreate the local PostgreSQL cluster and reapply schema
+just vm-run      # Start the local MicroVM on localhost
+just vm-deploy   # Hot-deploy the current system into the running VM
 ```
 
 ### Nix Outputs
@@ -110,10 +112,23 @@ just db-reset    # Recreate the local PostgreSQL cluster and reapply schema
 ```bash
 nix build .#frontend
 nix build .#api
-nix build .#nixosConfigurations.eulesia-vm.config.system.build.vm
+nix build .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
 nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
 nix run .#ci-check
 ```
+
+### Local VM
+
+`just vm-run` starts the NixOS MicroVM used for local deployment validation and exposes the full service surface on `localhost`:
+
+- `http://localhost:18080` for the app and proxied API
+- `ssh root@localhost -p 2223`
+- `psql -h localhost -p 15433 -U eulesia -d eulesia`
+- `http://localhost:17701/health` for Meilisearch
+
+Those four localhost ports must be free before the VM can start.
+
+`just vm-deploy` pushes the current NixOS system into the running VM over SSH and bootstraps `/var/lib/sops-nix/key.txt` from `$HOME/.config/sops/age/keys.txt` when available.
 
 The Docker Compose files remain in the repo as a legacy fallback during migration, but Nix is the primary development and deployment path.
 
