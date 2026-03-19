@@ -10,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import i18n from "../lib/i18n";
 import { api } from "../lib/api";
 import { buildApiUrl } from "../lib/runtimeConfig";
-import type { User } from "../lib/api";
+import type { RegisterRequest, User } from "../lib/api";
 
 interface SanctionInfo {
   sanctionType: "suspension" | "ban";
@@ -24,13 +24,7 @@ interface AuthContextType {
   currentUser: User | null;
   sanction: SanctionInfo | null;
   login: (username: string, password: string) => Promise<void>;
-  register: (data: {
-    inviteCode: string;
-    username: string;
-    password: string;
-    name: string;
-    ftnToken?: string;
-  }) => Promise<void>;
+  register: (data: RegisterRequest) => Promise<void>;
   requestMagicLink: (email: string) => Promise<{ message: string }>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
@@ -100,13 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (data: {
-    inviteCode: string;
-    username: string;
-    password: string;
-    name: string;
-    ftnToken?: string;
-  }) => {
+  const register = async (data: RegisterRequest) => {
     const user = await api.register(data);
     setCurrentUser(user);
     setIsAuthenticated(true);

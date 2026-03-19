@@ -106,6 +106,7 @@
       };
     };
     auth.sessionSecretFile = config.sops.secrets."session-secret".path;
+    auth.registrationMode = "ftn-open";
     meilisearch = {
       listenAddress = "0.0.0.0";
       masterKeyFile = config.sops.secrets."meili-master-key".path;

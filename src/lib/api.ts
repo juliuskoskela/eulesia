@@ -17,6 +17,22 @@ interface PaginatedResponse<T> {
   hasMore: boolean;
 }
 
+export type RegistrationMode = "invite-only" | "ftn-open";
+
+export interface AuthConfig {
+  registrationMode: RegistrationMode;
+  registrationOpen: boolean;
+  ftnEnabled: boolean;
+}
+
+export interface RegisterRequest {
+  inviteCode?: string;
+  username: string;
+  password: string;
+  name: string;
+  ftnToken?: string;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -63,13 +79,11 @@ class ApiClient {
     });
   }
 
-  async register(data: {
-    inviteCode: string;
-    username: string;
-    password: string;
-    name: string;
-    ftnToken?: string;
-  }): Promise<User> {
+  async getAuthConfig(): Promise<AuthConfig> {
+    return this.request("/auth/config");
+  }
+
+  async register(data: RegisterRequest): Promise<User> {
     return this.request("/auth/register", {
       method: "POST",
       body: JSON.stringify(data),

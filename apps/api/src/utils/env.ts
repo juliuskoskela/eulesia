@@ -12,6 +12,9 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   APP_URL: z.string().url().default("http://localhost:5173"),
   API_URL: z.string().url().default("http://localhost:3001"),
+  AUTH_REGISTRATION_MODE: z
+    .enum(["invite-only", "ftn-open"])
+    .default("invite-only"),
 
   // Email - SMTP is recommended for EU sovereignty
   EMAIL_PROVIDER: z.enum(["smtp", "console"]).default("console"),

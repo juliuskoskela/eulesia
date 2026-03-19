@@ -79,6 +79,7 @@ with lib; let
     ${stringEnv "VAPID_SUBJECT" cfg.push.vapidSubject}
     ${fileEnv "FIREBASE_SERVICE_ACCOUNT_KEY" cfg.push.firebaseServiceAccountKeyFile}
     ${extraEnvironment}
+    ${stringEnv "AUTH_REGISTRATION_MODE" cfg.auth.registrationMode}
     ${extraSecretEnvironment}
   '';
 in {
@@ -256,6 +257,15 @@ in {
         type = types.nullOr types.path;
         default = null;
         description = "File containing the session signing secret.";
+      };
+
+      registrationMode = mkOption {
+        type = types.enum [
+          "invite-only"
+          "ftn-open"
+        ];
+        default = "invite-only";
+        description = "Controls whether registration requires an invite or is temporarily open only through FTN/Idura.";
       };
 
       cookieDomain = mkOption {

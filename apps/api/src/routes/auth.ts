@@ -28,6 +28,21 @@ import { indexUser } from "../services/search/meilisearch.js";
 import type { AuthenticatedRequest } from "../types/index.js";
 
 const router = Router();
+const ftnEnabled = Boolean(
+  process.env.IDURA_DOMAIN &&
+    process.env.IDURA_CLIENT_ID &&
+    process.env.IDURA_CLIENT_SECRET,
+);
+
+async function isRegistrationOpen() {
+  const [regSetting] = await db
+    .select()
+    .from(siteSettings)
+    .where(eq(siteSettings.key, "registration_open"))
+    .limit(1);
+
+  return regSetting?.value !== "false";
+}
 
 // Validation schemas
 const magicLinkSchema = z.object({
@@ -39,7 +54,7 @@ const verifySchema = z.object({
 });
 
 const registerSchema = z.object({
-  inviteCode: z.string().min(1, "Invite code is required"),
+  inviteCode: z.string().trim().min(1, "Invite code is required").optional(),
   username: z
     .string()
     .min(3)
@@ -64,11 +79,7 @@ const loginSchema = z.object({
 
 // Only initialize Idura if credentials are configured
 let iduraRedirect: any = null;
-if (
-  process.env.IDURA_DOMAIN &&
-  process.env.IDURA_CLIENT_ID &&
-  process.env.IDURA_CLIENT_SECRET
-) {
+if (ftnEnabled) {
   // express-session middleware for FTN routes only (SDK needs it for OIDC state/nonce)
   const ftnSession = expressSession({
     secret: env.SESSION_SECRET,
@@ -205,6 +216,20 @@ router.get("/ftn/error", (req, res) => {
   );
 });
 
+router.get(
+  "/config",
+  asyncHandler(async (_req, res: Response) => {
+    res.json({
+      success: true,
+      data: {
+        registrationMode: env.AUTH_REGISTRATION_MODE,
+        registrationOpen: await isRegistrationOpen(),
+        ftnEnabled,
+      },
+    });
+  }),
+);
+
 // POST /auth/magic-link - Request a magic link
 router.post(
   "/magic-link",
@@ -252,16 +277,12 @@ router.post(
 router.post(
   "/register",
   asyncHandler(async (req, res: Response) => {
+    const registrationMode = env.AUTH_REGISTRATION_MODE;
+    const inviteRequired = registrationMode === "invite-only";
     const { inviteCode, username, password, name, ftnToken } =
       registerSchema.parse(req.body);
 
-    // Check if registration is open
-    const [regSetting] = await db
-      .select()
-      .from(siteSettings)
-      .where(eq(siteSettings.key, "registration_open"))
-      .limit(1);
-    if (regSetting && regSetting.value === "false") {
+    if (!(await isRegistrationOpen())) {
       throw new AppError(403, "Registration is currently closed");
     }
 
@@ -272,13 +293,15 @@ router.post(
       sub: string;
       country: string | null;
     } | null = null;
+    let pendingRegistrationTokenHash: string | null = null;
     if (ftnToken) {
+      pendingRegistrationTokenHash = hashToken(ftnToken);
       const [pending] = await db
         .select()
         .from(ftnPendingRegistrations)
         .where(
           and(
-            eq(ftnPendingRegistrations.token, hashToken(ftnToken)),
+            eq(ftnPendingRegistrations.token, pendingRegistrationTokenHash),
             gt(ftnPendingRegistrations.expiresAt, new Date()),
           ),
         )
@@ -311,11 +334,13 @@ router.post(
         sub: pending.sub,
         country: pending.country,
       };
+    }
 
-      // Clean up used FTN pending registration
-      await db
-        .delete(ftnPendingRegistrations)
-        .where(eq(ftnPendingRegistrations.token, hashToken(ftnToken)));
+    if (!inviteRequired && !ftnClaims) {
+      throw new AppError(
+        403,
+        "Registration on this deployment requires FTN authentication",
+      );
     }
 
     // Hash password before transaction (CPU-intensive work outside tx)
@@ -323,23 +348,35 @@ router.post(
 
     // Use transaction to prevent race conditions on invite code + username
     const newUser = await db.transaction(async (tx) => {
-      // Validate invite code (inside tx for atomicity)
-      const [invite] = await tx
-        .select()
-        .from(inviteCodes)
-        .where(eq(inviteCodes.code, inviteCode.toUpperCase()))
-        .limit(1);
+      let inviteId: string | null = null;
+      let invitedByUserId: string | null = null;
 
-      if (!invite) {
-        throw new AppError(400, "Invalid invite code");
-      }
+      if (inviteRequired) {
+        if (!inviteCode) {
+          throw new AppError(400, "Invite code is required");
+        }
 
-      if (invite.status !== "available") {
-        throw new AppError(400, "Invite code has already been used");
-      }
+        // Validate invite code (inside tx for atomicity)
+        const [invite] = await tx
+          .select()
+          .from(inviteCodes)
+          .where(eq(inviteCodes.code, inviteCode.toUpperCase()))
+          .limit(1);
 
-      if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-        throw new AppError(400, "Invite code has expired");
+        if (!invite) {
+          throw new AppError(400, "Invalid invite code");
+        }
+
+        if (invite.status !== "available") {
+          throw new AppError(400, "Invite code has already been used");
+        }
+
+        if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
+          throw new AppError(400, "Invite code has expired");
+        }
+
+        inviteId = invite.id;
+        invitedByUserId = invite.createdBy;
       }
 
       // Check if username already exists
@@ -362,7 +399,7 @@ router.post(
           name: ftnClaims
             ? `${ftnClaims.givenName} ${ftnClaims.familyName}`
             : name,
-          invitedBy: invite.createdBy,
+          invitedBy: invitedByUserId,
           inviteCodesRemaining: 5,
           identityProvider: ftnClaims ? "ftn" : "invite",
           identityVerified: !!ftnClaims,
@@ -378,18 +415,26 @@ router.post(
         })
         .returning();
 
-      // Mark invite code as used (atomic with user creation)
-      await tx
-        .update(inviteCodes)
-        .set({
-          usedBy: created.id,
-          status: "used",
-          usedAt: new Date(),
-        })
-        .where(eq(inviteCodes.id, invite.id));
+      if (inviteId) {
+        // Mark invite code as used (atomic with user creation)
+        await tx
+          .update(inviteCodes)
+          .set({
+            usedBy: created.id,
+            status: "used",
+            usedAt: new Date(),
+          })
+          .where(eq(inviteCodes.id, inviteId));
+      }
 
       return created;
     });
+
+    if (pendingRegistrationTokenHash) {
+      await db
+        .delete(ftnPendingRegistrations)
+        .where(eq(ftnPendingRegistrations.token, pendingRegistrationTokenHash));
+    }
 
     // Index new user in Meilisearch (outside tx — not critical)
     try {
