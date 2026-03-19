@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { SEOHead } from "../components/SEOHead";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
+import { buildApiUrl } from "../lib/runtimeConfig";
 
 type LoginStep = "initial" | "login" | "register" | "invite-check";
 
@@ -569,7 +570,9 @@ export function LoginPage() {
 
                     {/* FTN strong authentication button */}
                     <a
-                      href={`${import.meta.env.VITE_API_URL || "http://localhost:3001"}/api/v1/auth/ftn/start?invite=${encodeURIComponent(inviteCode)}`}
+                      href={buildApiUrl(
+                        `/api/v1/auth/ftn/start?invite=${encodeURIComponent(inviteCode)}`,
+                      )}
                       className="w-full mb-4 bg-blue-700 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 no-underline block"
                     >
                       <Fingerprint className="w-5 h-5" />

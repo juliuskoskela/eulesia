@@ -45,8 +45,14 @@ ci-check:
 vm-build:
     nix build .#nixosConfigurations.eulesia-vm.config.system.build.vm
 
+test-host-build:
+    nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
+
 deploy:
     nix run .#deploy
+
+deploy-test:
+    nix run .#deploy-test
 
 shell:
     nix develop

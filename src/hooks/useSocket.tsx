@@ -13,6 +13,7 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { useAuth } from "./useAuth";
 import { queryKeys } from "./useApi";
+import { API_BASE_URL } from "../lib/runtimeConfig";
 import type {
   RoomMessage,
   RoomWithMessages,
@@ -38,8 +39,6 @@ interface SocketContextType {
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
-
-const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -71,7 +70,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const newSocket = io(SOCKET_URL, {
+    const newSocket = io(API_BASE_URL || undefined, {
       withCredentials: true,
       autoConnect: true,
       transports: ["websocket", "polling"],

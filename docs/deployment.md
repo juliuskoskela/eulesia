@@ -15,6 +15,7 @@ The flake exposes:
 - `nix run .#ci-check` for runner-agnostic CI checks
 - `nixosModules.eulesia` for reusable service configuration
 - `nixosConfigurations.eulesia-vm` for VM validation
+- `nixosConfigurations.eulesia-test` and `nix run .#deploy-test` for a public test host
 - `nixosConfigurations.eulesia-prod` and `nix run .#deploy` for production deployment
 
 The old Docker Compose setup is deprecated and should only be treated as a temporary fallback while the production host is migrated.
@@ -40,6 +41,7 @@ just lint
 just test
 just build
 just vm-build
+just test-host-build
 nix run .#ci-check
 ```
 
@@ -78,15 +80,17 @@ Current assumptions in the repo:
 - deploy target host: `95.216.206.136`
 - SSH user: `root`
 - domains: `eulesia.eu` and `api.eulesia.eu`
+- test domains: `test.eulesia.eu` and `api.test.eulesia.eu`
 - managed runtime secrets should live under `secrets/prod/` and `secrets/test/`
 - one encrypted file per secret, using names such as `session-secret.enc` and `firebase-service-account.json.enc`
 - `sops-nix` materializes runtime secret files under `/run/secrets/eulesia/`
+- the packaged frontend uses a same-origin `/api` base, so the same static build works for VM, test, and production hosts
 
 Before the first real NixOS deployment, verify and adjust:
 
 - disk layout in the production host config
 - SSH access
-- all secret file paths
+- server age recipients in `.sops.yaml`
 - Idura/OAuth values in `extraEnvironment`
 
 ## Required Secrets
@@ -110,13 +114,14 @@ Production runtime still expects these decrypted files under `/run/secrets/eules
 Build and deploy through the flake:
 
 ```bash
+nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
+nix run .#deploy-test
+
 nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
 nix run .#deploy
 ```
 
-`nix run .#deploy` uses `deploy-rs` and activates the `eulesia-prod` node from the flake.
-
-If `$HOME/.config/sops/age/keys.txt` exists locally, the deploy app copies it to `/var/lib/sops-nix/key.txt` on the target before running `deploy-rs`.
+`nix run .#deploy-test` and `nix run .#deploy` both use `deploy-rs` and activate the corresponding flake node. They assume the target host already has its own `/var/lib/sops-nix/key.txt` in place.
 
 The API service runs database migration as a pre-start step, so configuration switches restart the app against the current schema automatically.
 
@@ -128,12 +133,24 @@ Use the VM configuration to validate the service stack without touching producti
 nix build .#nixosConfigurations.eulesia-vm.config.system.build.vm
 ```
 
+When you run the resulting VM, it mounts the host's `$HOME/.config/sops/age` directory into the guest and decrypts `secrets/test/*.enc` through that shared keyring.
+
 The VM config uses:
 
 - plain HTTP
 - local PostgreSQL
 - local Meilisearch
 - packaged frontend + API from this flake
+
+## Hetzner Bootstrap
+
+For a real Hetzner VPS, follow the same high-level flow used in `~/Repos/infra`:
+
+1. Provision or bootstrap the target machine.
+2. Generate the server age key on the target at `/var/lib/sops-nix/key.txt`.
+3. Add the server public key to `.sops.yaml`.
+4. Re-encrypt the relevant `secrets/test/*.enc` or `secrets/prod/*.enc` files.
+5. Deploy the matching NixOS configuration with `deploy-rs`.
 
 ## Legacy Docker Assets
 

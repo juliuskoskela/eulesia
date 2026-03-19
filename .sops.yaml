@@ -1,13 +1,16 @@
-creation_rules:
-  # Local test VM secrets
-  - path_regex: secrets/test/secrets\.yaml$
-    age:
-      - age1xy93kan6jxmp8wwayarejuvkxh99cfjyxdfwdryv0axr8dds5dhqws809e
-      # Local MicroVM sops-nix key (generated at /var/lib/sops-nix/key.txt)
-      - age14aml9ljscx5g4g4cj24nycdzvxd43nfypxz4dcjp59pret3etpwsx04se8
+keys:
+  - &local_dev age1xy93kan6jxmp8wwayarejuvkxh99cfjyxdfwdryv0axr8dds5dhqws809e
+  - &local_vm age14aml9ljscx5g4g4cj24nycdzvxd43nfypxz4dcjp59pret3etpwsx04se8
 
-  # Production deployment secrets
-  - path_regex: secrets/prod/secrets\.yaml$
+creation_rules:
+  # Local and test deployment secrets.
+  - path_regex: secrets/test/[^/]+\.enc$
     age:
-      - age1xy93kan6jxmp8wwayarejuvkxh99cfjyxdfwdryv0axr8dds5dhqws809e
+      - *local_dev
+      - *local_vm
+
+  # Production deployment secrets.
+  - path_regex: secrets/prod/[^/]+\.enc$
+    age:
+      - *local_dev
       # Add the production host age recipient here after bootstrapping it.

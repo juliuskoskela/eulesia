@@ -93,7 +93,7 @@ Managed runtime secrets should live as per-secret encrypted files under:
 - `secrets/test/`
 - `secrets/prod/`
 
-The target convention is one `*.enc` file per secret, with structured payloads kept as typed files such as `firebase-service-account.json.enc`. See [Secrets](./docs/secrets.md).
+The repo now uses one `*.enc` file per secret, with structured payloads kept as typed files such as `firebase-service-account.json.enc`. See [Secrets](./docs/secrets.md).
 
 ### Common Commands
 
@@ -111,6 +111,7 @@ just db-reset    # Recreate the local PostgreSQL cluster and reapply schema
 nix build .#frontend
 nix build .#api
 nix build .#nixosConfigurations.eulesia-vm.config.system.build.vm
+nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
 nix run .#ci-check
 ```
 

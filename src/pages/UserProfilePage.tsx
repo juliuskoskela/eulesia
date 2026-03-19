@@ -20,6 +20,7 @@ import { FollowButton, ReportButton } from "../components/common";
 import { useAuth } from "../hooks/useAuth";
 import { useStartConversation } from "../hooks/useApi";
 import { formatDateLong } from "../lib/formatTime";
+import { buildApiUrl } from "../lib/runtimeConfig";
 
 interface UserThread {
   id: string;
@@ -143,12 +144,9 @@ export function UserProfilePage() {
   } = useQuery({
     queryKey: ["userProfile", userId],
     queryFn: async () => {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/v1/users/${userId}`,
-        {
-          credentials: "include",
-        },
-      );
+      const response = await fetch(buildApiUrl(`/api/v1/users/${userId}`), {
+        credentials: "include",
+      });
       const data = await response.json();
       if (!data.success) throw new Error(data.error);
       return data.data as UserProfile;

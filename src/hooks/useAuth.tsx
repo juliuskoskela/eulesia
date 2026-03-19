@@ -9,6 +9,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import i18n from "../lib/i18n";
 import { api } from "../lib/api";
+import { buildApiUrl } from "../lib/runtimeConfig";
 import type { User } from "../lib/api";
 
 interface SanctionInfo {
@@ -64,12 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         err?.message?.includes("suspended")
       ) {
         try {
-          const response = await fetch(
-            `${import.meta.env.VITE_API_URL || "http://localhost:3001"}/api/v1/auth/me`,
-            {
-              credentials: "include",
-            },
-          );
+          const response = await fetch(buildApiUrl("/api/v1/auth/me"), {
+            credentials: "include",
+          });
           if (response.status === 403) {
             const data = await response.json();
             if (data.sanctionType) {

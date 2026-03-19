@@ -13,13 +13,20 @@ The application never reads these `.enc` files directly. Deployment decrypts the
 
 Local development is mostly separate from this flow. It uses defaults plus local `.env` files and is not the managed runtime secret inventory.
 
-## Target Layout
+## Layout
 
 ```text
 secrets/
   test/
     session-secret.enc
     meili-master-key.enc
+    mistral-api-key.enc
+    smtp-user.enc
+    smtp-pass.enc
+    vapid-public-key.enc
+    vapid-private-key.enc
+    firebase-service-account.json.enc
+    idura-client-secret.enc
   prod/
     session-secret.enc
     meili-master-key.enc
@@ -39,17 +46,17 @@ Runtime filenames drop the trailing `.enc`. For example:
 
 ## Secret Inventory
 
-| Secret file | Environments | Runtime consumer | Purpose | Generation or source |
-| --- | --- | --- | --- | --- |
-| `session-secret.enc` | `test`, `prod` | `/run/secrets/eulesia/session-secret` -> `SESSION_SECRET` | Signs app sessions and FTN/Idura flow session state | Generate locally with a random 32+ byte secret |
-| `meili-master-key.enc` | `test`, `prod` | `/run/secrets/eulesia/meili-master-key` -> `MEILI_MASTER_KEY` | Protects Meilisearch admin access and API writes | Generate locally with a random high-entropy secret |
-| `mistral-api-key.enc` | `prod` | `/run/secrets/eulesia/mistral-api-key` -> `MISTRAL_API_KEY` | Enables Mistral-backed import summarization | Create in the Mistral console |
-| `smtp-user.enc` | `prod` | `/run/secrets/eulesia/smtp-user` -> `SMTP_USER` | SMTP authentication username | Obtain from the SMTP provider |
-| `smtp-pass.enc` | `prod` | `/run/secrets/eulesia/smtp-pass` -> `SMTP_PASS` | SMTP authentication password | Obtain from the SMTP provider |
-| `vapid-public-key.enc` | `prod` | `/run/secrets/eulesia/vapid-public-key` -> `VAPID_PUBLIC_KEY` | Public half of the web push keypair returned to clients | Generate together with the private key using `web-push` |
-| `vapid-private-key.enc` | `prod` | `/run/secrets/eulesia/vapid-private-key` -> `VAPID_PRIVATE_KEY` | Private half of the web push keypair used for push signing | Generate together with the public key using `web-push` |
-| `firebase-service-account.json.enc` | `prod` | `/run/secrets/eulesia/firebase-service-account.json` -> `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials for native push notifications | Download a service account JSON from Firebase / Google Cloud |
-| `idura-client-secret.enc` | `prod` | `/run/secrets/eulesia/idura-client-secret` -> `IDURA_CLIENT_SECRET` | OIDC client secret for FTN / Idura authentication | Obtain from Idura / Criipto when the client is provisioned |
+| Secret file                         | Environments   | Runtime consumer                                                                       | Purpose                                                      | Generation or source                                         |
+| ----------------------------------- | -------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| `session-secret.enc`                | `test`, `prod` | `/run/secrets/eulesia/session-secret` -> `SESSION_SECRET`                              | Signs app sessions and FTN/Idura flow session state          | Generate locally with a random 32+ byte secret               |
+| `meili-master-key.enc`              | `test`, `prod` | `/run/secrets/eulesia/meili-master-key` -> `MEILI_MASTER_KEY`                          | Protects Meilisearch admin access and API writes             | Generate locally with a random high-entropy secret           |
+| `mistral-api-key.enc`               | `test`, `prod` | `/run/secrets/eulesia/mistral-api-key` -> `MISTRAL_API_KEY`                            | Enables Mistral-backed import summarization                  | Create in the Mistral console                                |
+| `smtp-user.enc`                     | `test`, `prod` | `/run/secrets/eulesia/smtp-user` -> `SMTP_USER`                                        | SMTP authentication username                                 | Obtain from the SMTP provider                                |
+| `smtp-pass.enc`                     | `test`, `prod` | `/run/secrets/eulesia/smtp-pass` -> `SMTP_PASS`                                        | SMTP authentication password                                 | Obtain from the SMTP provider                                |
+| `vapid-public-key.enc`              | `test`, `prod` | `/run/secrets/eulesia/vapid-public-key` -> `VAPID_PUBLIC_KEY`                          | Public half of the web push keypair returned to clients      | Generate together with the private key using `web-push`      |
+| `vapid-private-key.enc`             | `test`, `prod` | `/run/secrets/eulesia/vapid-private-key` -> `VAPID_PRIVATE_KEY`                        | Private half of the web push keypair used for push signing   | Generate together with the public key using `web-push`       |
+| `firebase-service-account.json.enc` | `test`, `prod` | `/run/secrets/eulesia/firebase-service-account.json` -> `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials for native push notifications | Download a service account JSON from Firebase / Google Cloud |
+| `idura-client-secret.enc`           | `test`, `prod` | `/run/secrets/eulesia/idura-client-secret` -> `IDURA_CLIENT_SECRET`                    | OIDC client secret for FTN / Idura authentication            | Obtain from Idura / Criipto when the client is provisioned   |
 
 ## Generation and Acquisition
 
@@ -119,5 +126,11 @@ These values are important, but they are not secrets and should not be stored as
 - Do not commit plaintext secret files.
 - Keep file names stable across environments so Nix and runtime paths stay predictable.
 - For JSON credentials, preserve the original JSON payload and only add the `.enc` suffix.
+
+## Current State
+
+- `secrets/test/` now carries the full runtime secret surface, seeded from the local test values and fresh generated session, Meilisearch, and VAPID secrets.
+- `secrets/prod/` now uses the same per-file shape, but several files still contain placeholders and must be replaced before any production deployment.
+- `nixosConfigurations.eulesia-vm`, `eulesia-test`, and `eulesia-prod` all decrypt the same runtime filenames under `/run/secrets/eulesia/`.
 
 For deployment details and runtime path wiring, see [Deployment](./deployment.md).

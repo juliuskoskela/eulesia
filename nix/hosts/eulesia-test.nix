@@ -8,7 +8,7 @@
     ../modules/eulesia.nix
   ];
 
-  networking.hostName = "eulesia-prod";
+  networking.hostName = "eulesia-test";
   networking.useDHCP = lib.mkDefault true;
 
   boot.loader.grub.device = "/dev/sda";
@@ -23,7 +23,7 @@
     age.keyFile = "/var/lib/sops-nix/key.txt";
     secrets = import ./lib/eulesia-secrets.nix {
       inherit config;
-      secretDir = ../../secrets/prod;
+      secretDir = ../../secrets/test;
     };
   };
 
@@ -31,8 +31,8 @@
     enable = true;
     package = eulesiaPackages.api;
     frontendPackage = eulesiaPackages.frontend;
-    appDomain = "eulesia.eu";
-    apiDomain = "api.eulesia.eu";
+    appDomain = "test.eulesia.eu";
+    apiDomain = "api.test.eulesia.eu";
     email = {
       provider = "smtp";
       from = "noreply@aihiolabs.com";
@@ -57,9 +57,9 @@
       IDURA_CLIENT_SECRET = config.sops.secrets."idura-client-secret".path;
     };
     extraEnvironment = {
-      IDURA_DOMAIN = "idura.example.invalid";
-      IDURA_CLIENT_ID = "replace-me";
-      IDURA_CALLBACK_URL = "https://api.eulesia.eu/api/v1/auth/ftn/callback";
+      IDURA_DOMAIN = "eulesia-test.criipto.id";
+      IDURA_CLIENT_ID = "urn:my:application:identifier:923383";
+      IDURA_CALLBACK_URL = "https://api.test.eulesia.eu/api/v1/auth/ftn/callback";
     };
   };
 

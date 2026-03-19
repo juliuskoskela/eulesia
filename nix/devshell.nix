@@ -13,6 +13,8 @@ _: {
       ripgrep
       fd
       curl
+      sops
+      age
       postgresql_16
       meilisearch
       python3
@@ -60,6 +62,7 @@ _: {
             nix run .#db-migrate
             nix run .#db-reset
             nix build .#nixosConfigurations.eulesia-vm.config.system.build.toplevel
+            nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
           EOF
         '';
       };

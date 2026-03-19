@@ -80,6 +80,7 @@
       }
       // lib.optionalAttrs (system == "x86_64-linux") {
         vm-build = inputs.self.nixosConfigurations.eulesia-vm.config.system.build.vm;
+        test-host-build = inputs.self.nixosConfigurations.eulesia-test.config.system.build.toplevel;
       };
   };
 }

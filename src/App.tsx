@@ -23,6 +23,7 @@ import {
 import { PWAProvider } from "./hooks/usePWA";
 import { useNativePush } from "./hooks/useNativePush";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { buildApiUrl } from "./lib/runtimeConfig";
 
 // Lazy-loaded pages — route-based code splitting
 const LoginPage = lazy(() =>
@@ -598,8 +599,10 @@ function MagicLinkVerify() {
       try {
         // The backend will set the session cookie when we visit this URL
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL || "http://localhost:3001"}/api/v1/auth/verify/${token}`,
-          { credentials: "include" },
+          buildApiUrl(`/api/v1/auth/verify/${token}`),
+          {
+            credentials: "include",
+          },
         );
 
         if (response.ok) {
