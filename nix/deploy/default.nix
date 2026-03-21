@@ -37,7 +37,12 @@
         ensure_clean_secret_surface() {
           for path in \
             "$REPO_ROOT/secrets.env" \
-            "$REPO_ROOT/idura-oauth2-client-secret"
+            "$REPO_ROOT/idura-oauth2-client-secret" \
+            "$REPO_ROOT/idura-signing-key.jwk.json" \
+            "$REPO_ROOT/idura-encryption-key.jwk.json" \
+            "$REPO_ROOT/sig.jwk.json" \
+            "$REPO_ROOT/enc.jwk.json" \
+            "$REPO_ROOT/jwks.private.json"
           do
             if [ -e "$path" ]; then
               echo "Unsafe plaintext secret artifact present: $path"
@@ -242,7 +247,12 @@
         ensure_clean_secret_surface() {
           for path in \
             "$REPO_ROOT/secrets.env" \
-            "$REPO_ROOT/idura-oauth2-client-secret"
+            "$REPO_ROOT/idura-oauth2-client-secret" \
+            "$REPO_ROOT/idura-signing-key.jwk.json" \
+            "$REPO_ROOT/idura-encryption-key.jwk.json" \
+            "$REPO_ROOT/sig.jwk.json" \
+            "$REPO_ROOT/enc.jwk.json" \
+            "$REPO_ROOT/jwks.private.json"
           do
             if [ -e "$path" ]; then
               echo "Unsafe plaintext secret artifact present: $path"
@@ -271,6 +281,21 @@
             fi
             sleep 1
           done
+        }
+
+        ensure_remote_store_space() {
+          FREE_KB=$(
+            "$SSH_BIN" "''${SSH_OPTS[@]}" root@localhost \
+              "df -Pk /nix/.rw-store 2>/dev/null | awk 'NR==2 { print \$4 }'"
+          )
+
+          if [ -z "$FREE_KB" ] || [ "$FREE_KB" -lt 1048576 ]; then
+            echo "The VM writable Nix store overlay is too full for deployment."
+            "$SSH_BIN" "''${SSH_OPTS[@]}" root@localhost \
+              "df -h / /nix/.rw-store /var || true"
+            echo "Restart the VM with just vm-run so it picks up the current disk layout."
+            exit 1
+          fi
         }
 
         wait_for_remote_service() {
@@ -338,6 +363,7 @@
         ensure_clean_secret_surface
         ensure_vm_age_key
         wait_for_ssh
+        ensure_remote_store_space
 
         if [ -f "$VM_SOPS_AGE_KEY_FILE" ]; then
           echo "Installing local sops age key into the VM..."

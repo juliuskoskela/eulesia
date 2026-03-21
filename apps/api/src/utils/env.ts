@@ -15,6 +15,11 @@ const envSchema = z.object({
   AUTH_REGISTRATION_MODE: z
     .enum(["invite-only", "ftn-open"])
     .default("invite-only"),
+  IDURA_DOMAIN: z.string().optional(),
+  IDURA_CLIENT_ID: z.string().optional(),
+  IDURA_CALLBACK_URL: z.string().url().optional(),
+  IDURA_SIGNING_KEY_FILE: z.string().optional(),
+  IDURA_ENCRYPTION_KEY_FILE: z.string().optional(),
 
   // Email - SMTP is recommended for EU sovereignty
   EMAIL_PROVIDER: z.enum(["smtp", "console"]).default("console"),

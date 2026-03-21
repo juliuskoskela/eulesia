@@ -18,5 +18,6 @@ in {
   "vapid-public-key" = mkBinarySecret "vapid-public-key";
   "vapid-private-key" = mkBinarySecret "vapid-private-key";
   "firebase-service-account.json" = mkBinarySecret "firebase-service-account.json";
-  "idura-client-secret" = mkBinarySecret "idura-client-secret";
+  "idura-signing-key.jwk.json" = mkBinarySecret "idura-signing-key.jwk.json";
+  "idura-encryption-key.jwk.json" = mkBinarySecret "idura-encryption-key.jwk.json";
 }

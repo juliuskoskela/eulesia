@@ -1,4 +1,4 @@
-import { Router, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { eq, and, gt, or, lt } from "drizzle-orm";
 import * as argon2 from "argon2";
@@ -23,16 +23,21 @@ import { authMiddleware } from "../middleware/auth.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { env } from "../utils/env.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { getSessionCookieOptions } from "../utils/cookies.js";
+import {
+  getSessionCookieOptions,
+  shouldUseSecureCookies,
+} from "../utils/cookies.js";
+import {
+  buildIduraAuthorizeUrl,
+  completeIduraAuthentication,
+  getFtnFailureRedirect,
+  isIduraFtnEnabled,
+} from "../services/iduraFtn.js";
 import { indexUser } from "../services/search/meilisearch.js";
 import type { AuthenticatedRequest } from "../types/index.js";
 
 const router = Router();
-const ftnEnabled = Boolean(
-  process.env.IDURA_DOMAIN &&
-    process.env.IDURA_CLIENT_ID &&
-    process.env.IDURA_CLIENT_SECRET,
-);
+const ftnEnabled = isIduraFtnEnabled();
 
 async function isRegistrationOpen() {
   const [regSetting] = await db
@@ -77,134 +82,166 @@ const loginSchema = z.object({
 // FTN (Finnish Trust Network) via Idura Verify
 // ============================================
 
+async function saveSession(req: Request): Promise<void> {
+  if (!req.session) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    req.session.save((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+async function clearFtnSession(req: Request): Promise<void> {
+  if (!req.session) {
+    return;
+  }
+
+  delete req.session.ftnInviteCode;
+  delete req.session.ftnNonce;
+  delete req.session.ftnState;
+
+  await saveSession(req);
+}
+
 // Only initialize Idura if credentials are configured
-let iduraRedirect: any = null;
 if (ftnEnabled) {
   // express-session middleware for FTN routes only (SDK needs it for OIDC state/nonce)
   const ftnSession = expressSession({
     secret: env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 5 * 60 * 1000 }, // 5 min – only needed during OIDC flow
+    cookie: {
+      httpOnly: true,
+      maxAge: 5 * 60 * 1000,
+      sameSite: "lax",
+      secure: shouldUseSecureCookies(),
+    }, // 5 min – only needed during OIDC flow
   });
 
   // Apply session middleware only to FTN routes
   router.use("/ftn", ftnSession);
 
-  // Dynamic import to avoid startup crash if SDK not installed
-  import("@criipto/verify-express")
-    .then(({ CriiptoVerifyExpressRedirect }) => {
-      iduraRedirect = new CriiptoVerifyExpressRedirect({
-        domain: process.env.IDURA_DOMAIN!,
-        clientID: process.env.IDURA_CLIENT_ID!,
-        clientSecret: process.env.IDURA_CLIENT_SECRET!,
-        redirectUri:
-          process.env.IDURA_CALLBACK_URL || "/api/v1/auth/ftn/callback",
-        postLogoutRedirectUri: "/",
-        beforeAuthorize(_req: any, options: any) {
-          return {
-            ...options,
-            acr_values: "urn:grn:authn:fi:all", // FTN – all Finnish banks + mobile ID
-          };
-        },
+  // GET /auth/ftn/start - Begin FTN authentication
+  router.get(
+    "/ftn/start",
+    asyncHandler(async (req, res: Response) => {
+      const invite = req.query.invite || req.query.inviteCode;
+      const state = generateToken(24);
+      const nonce = generateToken(24);
+
+      req.session.ftnState = state;
+      req.session.ftnNonce = nonce;
+      req.session.ftnInviteCode =
+        typeof invite === "string" && invite.length > 0 ? invite : undefined;
+      await saveSession(req);
+
+      try {
+        const authorizeUrl = await buildIduraAuthorizeUrl({
+          nonce,
+          state,
+        });
+        res.redirect(authorizeUrl.href);
+      } catch (error) {
+        await clearFtnSession(req);
+        throw error;
+      }
+    }),
+  );
+
+  // GET /auth/ftn/callback - Handle Idura callback with JWT claims
+  router.get(
+    "/ftn/callback",
+    asyncHandler(async (req, res: Response) => {
+      if (req.query.error) {
+        await clearFtnSession(req);
+        return res.redirect(
+          getFtnFailureRedirect(
+            String(req.query.error_description || req.query.error),
+          ),
+        );
+      }
+
+      const code =
+        typeof req.query.code === "string" ? req.query.code : undefined;
+      const returnedState =
+        typeof req.query.state === "string" ? req.query.state : undefined;
+      const expectedState = req.session.ftnState;
+      const expectedNonce = req.session.ftnNonce;
+      const inviteCode = req.session.ftnInviteCode ?? null;
+
+      if (!code || !returnedState || !expectedState || !expectedNonce) {
+        await clearFtnSession(req);
+        return res.redirect(getFtnFailureRedirect("missing_ftn_session"));
+      }
+
+      if (returnedState !== expectedState) {
+        await clearFtnSession(req);
+        return res.redirect(getFtnFailureRedirect("invalid_state"));
+      }
+
+      let claims;
+
+      try {
+        claims = await completeIduraAuthentication({
+          code,
+          expectedNonce,
+        });
+      } catch (error) {
+        await clearFtnSession(req);
+        console.error("FTN callback failed:", error);
+        return res.redirect(getFtnFailureRedirect("ftn_failed"));
+      }
+
+      await clearFtnSession(req);
+
+      // Check for duplicate identity (one-person-one-account)
+      const [existing] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.rpSubject, claims.sub))
+        .limit(1);
+
+      if (existing) {
+        return res.redirect(getFtnFailureRedirect("duplicate_identity"));
+      }
+
+      // Create temporary token to bridge claims to registration form
+      const ftnToken = generateToken(32);
+
+      await db.insert(ftnPendingRegistrations).values({
+        token: hashToken(ftnToken),
+        givenName: claims.given_name,
+        familyName: claims.family_name,
+        sub: claims.sub,
+        country: claims.country || "FI",
+        inviteCode,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min
       });
 
-      // GET /auth/ftn/start - Begin FTN authentication
-      // Query params: ?inviteCode=EULESIA-XXXXXX
-      router.get("/ftn/start", (req, res, next) => {
-        if (!iduraRedirect) {
-          return res.status(503).json({
-            success: false,
-            error: "FTN authentication not configured",
-          });
-        }
+      // Clean up expired pending registrations (housekeeping)
+      await db
+        .delete(ftnPendingRegistrations)
+        .where(lt(ftnPendingRegistrations.expiresAt, new Date()))
+        .catch(() => {}); // Non-critical
 
-        // Store invite code in session for use after callback
-        const invite = req.query.invite || req.query.inviteCode;
-        if (invite) {
-          (req as any).session.inviteCode = invite;
-        }
-
-        iduraRedirect.middleware({
-          failureRedirect: "/api/v1/auth/ftn/error",
-          successReturnToOrRedirect: "/api/v1/auth/ftn/callback",
-        })(req, res, next);
+      // Redirect to registration form with FTN token and name
+      const params = new URLSearchParams({
+        ftn: ftnToken,
+        firstName: claims.given_name,
+        lastName: claims.family_name,
+        ...(inviteCode ? { invite: inviteCode } : {}),
       });
-
-      // GET /auth/ftn/callback - Handle Idura callback with JWT claims
-      router.get(
-        "/ftn/callback",
-        (req, res, next) => {
-          if (!iduraRedirect) {
-            return res.status(503).json({
-              success: false,
-              error: "FTN authentication not configured",
-            });
-          }
-          iduraRedirect.middleware({
-            failureRedirect: "/api/v1/auth/ftn/error",
-            successReturnToOrRedirect: "/api/v1/auth/ftn/complete",
-          })(req, res, next);
-        },
-        asyncHandler(async (req, res: Response) => {
-          const claims = (req as any).claims;
-          if (
-            !claims ||
-            !claims.sub ||
-            !claims.given_name ||
-            !claims.family_name
-          ) {
-            return res.redirect(`${env.APP_URL}/?ftn_error=missing_claims`);
-          }
-
-          // Check for duplicate identity (one-person-one-account)
-          const [existing] = await db
-            .select({ id: users.id })
-            .from(users)
-            .where(eq(users.rpSubject, claims.sub))
-            .limit(1);
-
-          if (existing) {
-            return res.redirect(`${env.APP_URL}/?ftn_error=duplicate_identity`);
-          }
-
-          // Create temporary token to bridge claims to registration form
-          const ftnToken = generateToken(32);
-          const inviteCode = (req as any).session?.inviteCode || null;
-
-          await db.insert(ftnPendingRegistrations).values({
-            token: hashToken(ftnToken),
-            givenName: claims.given_name,
-            familyName: claims.family_name,
-            sub: claims.sub,
-            country: claims.country || "FI",
-            inviteCode,
-            expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min
-          });
-
-          // Clean up expired pending registrations (housekeeping)
-          await db
-            .delete(ftnPendingRegistrations)
-            .where(lt(ftnPendingRegistrations.expiresAt, new Date()))
-            .catch(() => {}); // Non-critical
-
-          // Redirect to registration form with FTN token and name
-          const params = new URLSearchParams({
-            ftn: ftnToken,
-            firstName: claims.given_name,
-            lastName: claims.family_name,
-            ...(inviteCode ? { invite: inviteCode } : {}),
-          });
-          res.redirect(`${env.APP_URL}/?${params.toString()}`);
-        }),
-      );
-    })
-    .catch((err) => {
-      console.warn(
-        "Idura SDK not available, FTN authentication disabled:",
-        err.message,
-      );
-    });
+      res.redirect(`${env.APP_URL}/?${params.toString()}`);
+    }),
+  );
 }
 
 // GET /auth/ftn/error - Handle FTN authentication errors

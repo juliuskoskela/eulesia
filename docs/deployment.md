@@ -82,6 +82,7 @@ The module interface is centered on `services.eulesia.*`, including:
 - `database.{createLocally,name,user,url}`
 - `meilisearch.{createLocally,listenAddress,listenPort,url,masterKeyFile}`
 - `auth.sessionSecretFile`
+- `auth.idura.{enable,domain,clientId,callbackUrl,signingKeyFile,encryptionKeyFile}`
 - `email.smtp.{host,port,secure,userFile,passFile}`
 - `push.{vapidPublicKeyFile,vapidPrivateKeyFile,vapidSubject,firebaseServiceAccountKeyFile}`
 - `ai.{mistralApiKeyFile,mistralModel}`
@@ -108,7 +109,7 @@ Before the first real NixOS deployment, verify and adjust:
 - disk layout in the production host config
 - SSH access
 - server age recipients in `.sops.yaml`
-- Idura/OAuth values in `extraEnvironment`
+- `services.eulesia.auth.idura.*` values in the target host config
 
 ## Required Secrets
 
@@ -124,7 +125,18 @@ Production runtime still expects these decrypted files under `/run/secrets/eules
 - `/run/secrets/eulesia/vapid-public-key`
 - `/run/secrets/eulesia/vapid-private-key`
 - `/run/secrets/eulesia/firebase-service-account.json`
-- `/run/secrets/eulesia/idura-client-secret`
+- `/run/secrets/eulesia/idura-signing-key.jwk.json`
+- `/run/secrets/eulesia/idura-encryption-key.jwk.json`
+
+For FTN/Idura tenants, the operator flow is:
+
+1. Run `just generate-idura-jwks local/idura-jwks`.
+2. Encrypt `idura-signing-key.jwk.json` and `idura-encryption-key.jwk.json` into `secrets/<env>/`.
+3. Upload `idura-client-jwks.public.json` to the matching Idura application as the static client JWKS.
+4. Configure the Idura app to use signed requests, `private_key_jwt`, and encrypted token responses.
+5. Deploy the matching NixOS host config.
+
+When syncing to an existing Idura app, reuse the matching private JWKs instead of generating a fresh pair. For the current test tenant, the local operator source is the untracked `local/jwks.private.json`.
 
 ## Deploy
 
@@ -166,7 +178,7 @@ The VM config uses:
 - local Meilisearch
 - packaged frontend + API from this flake
 
-`just vm-run` and `just vm-deploy` use the dedicated local VM key at `$HOME/.local/share/eulesia/vm-sops-age.key`, not the workstation `sops` keyring. They also refuse to run while plaintext runtime secret files like `secrets.env` or `idura-oauth2-client-secret` are present in the repo root.
+`just vm-run` and `just vm-deploy` use the dedicated local VM key at `$HOME/.local/share/eulesia/vm-sops-age.key`, not the workstation `sops` keyring. They also refuse to run while plaintext runtime secret files like `secrets.env`, `idura-signing-key.jwk.json`, or `idura-encryption-key.jwk.json` are present in the repo root.
 
 ## Hetzner Bootstrap
 

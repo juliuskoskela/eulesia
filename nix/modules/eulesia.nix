@@ -36,6 +36,8 @@ with lib; let
     (map toString (filter (path: path != null) (
       [
         cfg.auth.sessionSecretFile
+        cfg.auth.idura.signingKeyFile
+        cfg.auth.idura.encryptionKeyFile
         cfg.meilisearch.masterKeyFile
         cfg.email.smtp.userFile
         cfg.email.smtp.passFile
@@ -55,6 +57,11 @@ with lib; let
     ${optionalString cfg.database.createLocally (stringEnv "PGUSER" cfg.database.user)}
     ${stringEnv "APP_URL" appUrl}
     ${stringEnv "API_URL" apiUrl}
+    ${optionalString cfg.auth.idura.enable (stringEnv "IDURA_DOMAIN" cfg.auth.idura.domain)}
+    ${optionalString cfg.auth.idura.enable (stringEnv "IDURA_CLIENT_ID" cfg.auth.idura.clientId)}
+    ${optionalString cfg.auth.idura.enable (stringEnv "IDURA_CALLBACK_URL" cfg.auth.idura.callbackUrl)}
+    ${optionalString (cfg.auth.idura.enable && cfg.auth.idura.signingKeyFile != null) (stringEnv "IDURA_SIGNING_KEY_FILE" (toString cfg.auth.idura.signingKeyFile))}
+    ${optionalString (cfg.auth.idura.enable && cfg.auth.idura.encryptionKeyFile != null) (stringEnv "IDURA_ENCRYPTION_KEY_FILE" (toString cfg.auth.idura.encryptionKeyFile))}
     ${stringEnv "EMAIL_PROVIDER" cfg.email.provider}
     ${stringEnv "EMAIL_FROM" cfg.email.from}
     ${stringEnv "MEILI_URL" cfg.meilisearch.url}
@@ -282,6 +289,44 @@ in {
         ];
         description = "Additional native app origins allowed by the API.";
       };
+
+      idura = {
+        enable = mkOption {
+          type = types.bool;
+          default = false;
+          description = "Enable the FTN/Idura authentication flow.";
+        };
+
+        domain = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Idura tenant domain used for FTN authentication.";
+        };
+
+        clientId = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Client ID for the Idura FTN application.";
+        };
+
+        callbackUrl = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Absolute callback URL registered in the Idura application.";
+        };
+
+        signingKeyFile = mkOption {
+          type = types.nullOr types.path;
+          default = null;
+          description = "Private JWK file used for FTN request signing and private_key_jwt client authentication.";
+        };
+
+        encryptionKeyFile = mkOption {
+          type = types.nullOr types.path;
+          default = null;
+          description = "Private JWK file used to decrypt encrypted FTN id_token responses.";
+        };
+      };
     };
 
     push = {
@@ -374,6 +419,19 @@ in {
       {
         assertion = !cfg.tls.enable || cfg.tls.acmeEmail != null;
         message = "Set services.eulesia.tls.acmeEmail when TLS is enabled.";
+      }
+      {
+        assertion =
+          !cfg.auth.idura.enable
+          || (
+            cfg.auth.idura.domain
+            != null
+            && cfg.auth.idura.clientId != null
+            && cfg.auth.idura.callbackUrl != null
+            && cfg.auth.idura.signingKeyFile != null
+            && cfg.auth.idura.encryptionKeyFile != null
+          );
+        message = "Set services.eulesia.auth.idura.{domain,clientId,callbackUrl,signingKeyFile,encryptionKeyFile} when Idura FTN authentication is enabled.";
       }
     ];
 

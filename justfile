@@ -51,6 +51,9 @@ vm-run:
 vm-deploy:
     nix run .#deploy-vm
 
+generate-idura-jwks out_dir="local/idura-jwks":
+    nix run .#generate-idura-jwks -- {{out_dir}}
+
 test-host-build:
     nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
 

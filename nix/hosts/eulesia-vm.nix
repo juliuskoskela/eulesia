@@ -38,6 +38,11 @@
         image = "var.img";
         size = 8 * 1024;
       }
+      {
+        mountPoint = "/nix/.rw-store";
+        image = "store-overlay.img";
+        size = 8 * 1024;
+      }
     ];
     interfaces = [
       {
@@ -94,8 +99,10 @@
     frontendPackage = eulesiaPackages.frontend;
     appDomain = "localhost";
     apiDomain = "api.localhost";
-    tls.enable = false;
-    tls.acmeEmail = null;
+    tls = {
+      enable = false;
+      acmeEmail = null;
+    };
     email = {
       provider = "smtp";
       from = "noreply@aihiolabs.com";
@@ -103,31 +110,38 @@
         host = "mail.infomaniak.com";
         port = 587;
         secure = false;
+        userFile = config.sops.secrets."smtp-user".path;
+        passFile = config.sops.secrets."smtp-pass".path;
       };
     };
-    auth.sessionSecretFile = config.sops.secrets."session-secret".path;
-    auth.registrationMode = "ftn-open";
+    auth = {
+      sessionSecretFile = config.sops.secrets."session-secret".path;
+      registrationMode = "ftn-open";
+      idura = {
+        enable = true;
+        domain = "eulesia-test.criipto.id";
+        clientId = "urn:my:application:identifier:923383";
+        callbackUrl = "http://localhost:18080/api/v1/auth/ftn/callback";
+        signingKeyFile =
+          config.sops.secrets."idura-signing-key.jwk.json".path;
+        encryptionKeyFile =
+          config.sops.secrets."idura-encryption-key.jwk.json".path;
+      };
+    };
     meilisearch = {
       listenAddress = "0.0.0.0";
       masterKeyFile = config.sops.secrets."meili-master-key".path;
     };
     ai.mistralApiKeyFile = config.sops.secrets."mistral-api-key".path;
-    email.smtp.userFile = config.sops.secrets."smtp-user".path;
-    email.smtp.passFile = config.sops.secrets."smtp-pass".path;
     push = {
       vapidPublicKeyFile = config.sops.secrets."vapid-public-key".path;
       vapidPrivateKeyFile = config.sops.secrets."vapid-private-key".path;
-      firebaseServiceAccountKeyFile = config.sops.secrets."firebase-service-account.json".path;
-    };
-    extraSecretEnvironmentFiles = {
-      IDURA_CLIENT_SECRET = config.sops.secrets."idura-client-secret".path;
+      firebaseServiceAccountKeyFile =
+        config.sops.secrets."firebase-service-account.json".path;
     };
     extraEnvironment = {
       APP_URL = "http://localhost:18080";
       API_URL = "http://localhost:18080";
-      IDURA_DOMAIN = "eulesia-test.criipto.id";
-      IDURA_CLIENT_ID = "urn:my:application:identifier:923383";
-      IDURA_CALLBACK_URL = "http://localhost:18080/api/v1/auth/ftn/callback";
     };
   };
 

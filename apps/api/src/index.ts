@@ -112,7 +112,10 @@ const waitlistLimiter = rateLimit({
 });
 
 app.use(limiter);
-app.use("/api/v1/auth", authLimiter);
+app.post("/api/v1/auth/login", authLimiter);
+app.post("/api/v1/auth/register", authLimiter);
+app.post("/api/v1/auth/magic-link", authLimiter);
+app.get("/api/v1/auth/ftn/start", authLimiter);
 app.use("/api/v1/waitlist/join", waitlistLimiter);
 
 // Body parsing

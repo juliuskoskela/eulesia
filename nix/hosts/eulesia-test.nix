@@ -40,26 +40,31 @@
         host = "mail.infomaniak.com";
         port = 587;
         secure = false;
+        userFile = config.sops.secrets."smtp-user".path;
+        passFile = config.sops.secrets."smtp-pass".path;
       };
     };
     tls.acmeEmail = "admin@eulesia.eu";
-    auth.sessionSecretFile = config.sops.secrets."session-secret".path;
+    auth = {
+      sessionSecretFile = config.sops.secrets."session-secret".path;
+      idura = {
+        enable = true;
+        domain = "eulesia-test.criipto.id";
+        clientId = "urn:my:application:identifier:923383";
+        callbackUrl = "https://api.test.eulesia.eu/api/v1/auth/ftn/callback";
+        signingKeyFile =
+          config.sops.secrets."idura-signing-key.jwk.json".path;
+        encryptionKeyFile =
+          config.sops.secrets."idura-encryption-key.jwk.json".path;
+      };
+    };
     meilisearch.masterKeyFile = config.sops.secrets."meili-master-key".path;
     ai.mistralApiKeyFile = config.sops.secrets."mistral-api-key".path;
-    email.smtp.userFile = config.sops.secrets."smtp-user".path;
-    email.smtp.passFile = config.sops.secrets."smtp-pass".path;
     push = {
       vapidPublicKeyFile = config.sops.secrets."vapid-public-key".path;
       vapidPrivateKeyFile = config.sops.secrets."vapid-private-key".path;
-      firebaseServiceAccountKeyFile = config.sops.secrets."firebase-service-account.json".path;
-    };
-    extraSecretEnvironmentFiles = {
-      IDURA_CLIENT_SECRET = config.sops.secrets."idura-client-secret".path;
-    };
-    extraEnvironment = {
-      IDURA_DOMAIN = "eulesia-test.criipto.id";
-      IDURA_CLIENT_ID = "urn:my:application:identifier:923383";
-      IDURA_CALLBACK_URL = "https://api.test.eulesia.eu/api/v1/auth/ftn/callback";
+      firebaseServiceAccountKeyFile =
+        config.sops.secrets."firebase-service-account.json".path;
     };
   };
 

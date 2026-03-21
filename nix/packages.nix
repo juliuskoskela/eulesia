@@ -32,7 +32,7 @@ _: {
       generate-idura-jwks = {
         type = "app";
         program = "${generateIduraJwks}/bin/generate-idura-jwks";
-        meta.description = "Generate local Idura JWKS material";
+        meta.description = "Generate FTN-compliant Idura client keys and public JWKS";
       };
       default = {
         type = "app";

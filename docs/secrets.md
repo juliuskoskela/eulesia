@@ -26,7 +26,8 @@ secrets/
     vapid-public-key.enc
     vapid-private-key.enc
     firebase-service-account.json.enc
-    idura-client-secret.enc
+    idura-signing-key.jwk.json.enc
+    idura-encryption-key.jwk.json.enc
   prod/
     session-secret.enc
     meili-master-key.enc
@@ -36,7 +37,8 @@ secrets/
     vapid-public-key.enc
     vapid-private-key.enc
     firebase-service-account.json.enc
-    idura-client-secret.enc
+    idura-signing-key.jwk.json.enc
+    idura-encryption-key.jwk.json.enc
 ```
 
 Runtime filenames drop the trailing `.enc`. For example:
@@ -46,17 +48,18 @@ Runtime filenames drop the trailing `.enc`. For example:
 
 ## Secret Inventory
 
-| Secret file                         | Environments   | Runtime consumer                                                                       | Purpose                                                      | Generation or source                                         |
-| ----------------------------------- | -------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| `session-secret.enc`                | `test`, `prod` | `/run/secrets/eulesia/session-secret` -> `SESSION_SECRET`                              | Signs app sessions and FTN/Idura flow session state          | Generate locally with a random 32+ byte secret               |
-| `meili-master-key.enc`              | `test`, `prod` | `/run/secrets/eulesia/meili-master-key` -> `MEILI_MASTER_KEY`                          | Protects Meilisearch admin access and API writes             | Generate locally with a random high-entropy secret           |
-| `mistral-api-key.enc`               | `test`, `prod` | `/run/secrets/eulesia/mistral-api-key` -> `MISTRAL_API_KEY`                            | Enables Mistral-backed import summarization                  | Create in the Mistral console                                |
-| `smtp-user.enc`                     | `test`, `prod` | `/run/secrets/eulesia/smtp-user` -> `SMTP_USER`                                        | SMTP authentication username                                 | Obtain from the SMTP provider                                |
-| `smtp-pass.enc`                     | `test`, `prod` | `/run/secrets/eulesia/smtp-pass` -> `SMTP_PASS`                                        | SMTP authentication password                                 | Obtain from the SMTP provider                                |
-| `vapid-public-key.enc`              | `test`, `prod` | `/run/secrets/eulesia/vapid-public-key` -> `VAPID_PUBLIC_KEY`                          | Public half of the web push keypair returned to clients      | Generate together with the private key using `web-push`      |
-| `vapid-private-key.enc`             | `test`, `prod` | `/run/secrets/eulesia/vapid-private-key` -> `VAPID_PRIVATE_KEY`                        | Private half of the web push keypair used for push signing   | Generate together with the public key using `web-push`       |
-| `firebase-service-account.json.enc` | `test`, `prod` | `/run/secrets/eulesia/firebase-service-account.json` -> `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials for native push notifications | Download a service account JSON from Firebase / Google Cloud |
-| `idura-client-secret.enc`           | `test`, `prod` | `/run/secrets/eulesia/idura-client-secret` -> `IDURA_CLIENT_SECRET`                    | OIDC client secret for FTN / Idura authentication            | Obtain from Idura / Criipto when the client is provisioned   |
+| Secret file                         | Environments   | Runtime consumer                                                                       | Purpose                                                                              | Generation or source                                         |
+| ----------------------------------- | -------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `session-secret.enc`                | `test`, `prod` | `/run/secrets/eulesia/session-secret` -> `SESSION_SECRET`                              | Signs app sessions and FTN/Idura flow session state                                  | Generate locally with a random 32+ byte secret               |
+| `meili-master-key.enc`              | `test`, `prod` | `/run/secrets/eulesia/meili-master-key` -> `MEILI_MASTER_KEY`                          | Protects Meilisearch admin access and API writes                                     | Generate locally with a random high-entropy secret           |
+| `mistral-api-key.enc`               | `test`, `prod` | `/run/secrets/eulesia/mistral-api-key` -> `MISTRAL_API_KEY`                            | Enables Mistral-backed import summarization                                          | Create in the Mistral console                                |
+| `smtp-user.enc`                     | `test`, `prod` | `/run/secrets/eulesia/smtp-user` -> `SMTP_USER`                                        | SMTP authentication username                                                         | Obtain from the SMTP provider                                |
+| `smtp-pass.enc`                     | `test`, `prod` | `/run/secrets/eulesia/smtp-pass` -> `SMTP_PASS`                                        | SMTP authentication password                                                         | Obtain from the SMTP provider                                |
+| `vapid-public-key.enc`              | `test`, `prod` | `/run/secrets/eulesia/vapid-public-key` -> `VAPID_PUBLIC_KEY`                          | Public half of the web push keypair returned to clients                              | Generate together with the private key using `web-push`      |
+| `vapid-private-key.enc`             | `test`, `prod` | `/run/secrets/eulesia/vapid-private-key` -> `VAPID_PRIVATE_KEY`                        | Private half of the web push keypair used for push signing                           | Generate together with the public key using `web-push`       |
+| `firebase-service-account.json.enc` | `test`, `prod` | `/run/secrets/eulesia/firebase-service-account.json` -> `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials for native push notifications                         | Download a service account JSON from Firebase / Google Cloud |
+| `idura-signing-key.jwk.json.enc`    | `test`, `prod` | `/run/secrets/eulesia/idura-signing-key.jwk.json` -> `IDURA_SIGNING_KEY_FILE`          | Private JWK used to sign FTN request objects and `private_key_jwt` client assertions | Generate locally with `just generate-idura-jwks`             |
+| `idura-encryption-key.jwk.json.enc` | `test`, `prod` | `/run/secrets/eulesia/idura-encryption-key.jwk.json` -> `IDURA_ENCRYPTION_KEY_FILE`    | Private JWK used to decrypt encrypted FTN `id_token` responses                       | Generate locally with `just generate-idura-jwks`             |
 
 ## Generation and Acquisition
 
@@ -102,9 +105,28 @@ Store the public and private values in separate secret files. `VAPID_SUBJECT` is
 
 Create or reuse a Google Cloud service account for Firebase Admin usage, then download the JSON credential file. Encrypt the full JSON document as `firebase-service-account.json.enc`.
 
-### Idura Client Secret
+### Idura FTN Key Material
 
-Provision the FTN / Idura client in Idura or Criipto, then store the issued client secret. The client ID, domain, and callback URL are configuration values and should stay outside the secret inventory.
+Generate FTN-ready signing and encryption keys with:
+
+```bash
+just generate-idura-jwks local/idura-jwks
+```
+
+By default this creates:
+
+- an `ES256` P-256 signing key
+- an `RSA-OAEP-256` encryption key
+
+This creates:
+
+- `idura-signing-key.jwk.json`
+- `idura-encryption-key.jwk.json`
+- `idura-client-jwks.public.json`
+
+Encrypt the two private JWK files into `secrets/<env>/`. Upload `idura-client-jwks.public.json` to the matching Idura application as the static client JWKS. The public JWKS is operator material, not a runtime secret, and should stay out of the encrypted secret tree.
+
+If you are syncing Eulesia to an existing Idura application, do not generate a new keypair. Encrypt the matching existing private JWKs instead. For the current test tenant, the matching private operator material is kept locally in the untracked `local/jwks.private.json`.
 
 ## Non-Secret Adjacent Config
 
@@ -113,6 +135,7 @@ These values are important, but they are not secrets and should not be stored as
 - `IDURA_CLIENT_ID`
 - `IDURA_DOMAIN`
 - `IDURA_CALLBACK_URL`
+- `idura-client-jwks.public.json`
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_SECURE`
