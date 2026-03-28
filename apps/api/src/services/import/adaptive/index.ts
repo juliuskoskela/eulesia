@@ -9,6 +9,7 @@
  */
 
 import type { MinuteFetcher, MinuteSource, Meeting } from '../fetchers/types.js'
+import type { AdminLevel } from '../discovery/admin-entities.js'
 import type { FetcherConfig } from './config-schema.js'
 import { scraperDb, scraperConfigs } from '../../../db/scraper-db.js'
 import { eq } from 'drizzle-orm'
@@ -568,7 +569,9 @@ export async function loadAdaptiveSourcesFromDb(): Promise<MinuteSource[]> {
     .where(eq(scraperConfigs.status, 'active'))
 
   return configs.map((c: typeof scraperConfigs.$inferSelect) => ({
-    municipality: c.municipalityName,
+    municipality: c.entityName || c.municipalityName,
+    entityName: c.entityName || c.municipalityName,
+    adminLevel: c.adminLevel as AdminLevel,
     type: 'adaptive',
     url: c.baseUrl,
     country: c.country,

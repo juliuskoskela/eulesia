@@ -29,7 +29,7 @@ async function main() {
 
   if (listOnly) {
     console.log("Available municipalities:");
-    for (const m of getAvailableMunicipalities()) {
+    for (const m of await getAvailableMunicipalities()) {
       console.log(`  - ${m}`);
     }
     return;

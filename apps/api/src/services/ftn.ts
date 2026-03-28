@@ -79,7 +79,7 @@ async function createClientAssertion(config: FtnConfig, tokenEndpoint: string): 
     .setJti(crypto.randomUUID())
     .setIssuedAt(now)
     .setExpirationTime(now + 120) // 2 minutes
-    .sign(privateKey as jose.KeyLike)
+    .sign(privateKey)
 }
 
 /**
@@ -111,7 +111,7 @@ async function createSignedAuthRequest(
     .setAudience(metadata.issuer)
     .setIssuedAt(now)
     .setExpirationTime(now + 300) // 5 minutes
-    .sign(privateKey as jose.KeyLike)
+    .sign(privateKey)
 }
 
 /**
@@ -121,7 +121,7 @@ async function decryptJwe(jwe: string, jwks: { keys: jose.JWK[] }): Promise<stri
   const encKey = getEncryptionKey(jwks)
   const privateKey = await jose.importJWK(encKey, encKey.alg!)
 
-  const { plaintext } = await jose.compactDecrypt(jwe, privateKey as jose.KeyLike)
+  const { plaintext } = await jose.compactDecrypt(jwe, privateKey)
   return new TextDecoder().decode(plaintext)
 }
 
