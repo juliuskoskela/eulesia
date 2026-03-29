@@ -10,70 +10,73 @@
  * scraper_config entry is created with the appropriate template.
  */
 
-import { scraperDb, scraperConfigs } from '../../../db/scraper-db.js'
-import { eq, and } from 'drizzle-orm'
-import { getTemplate } from '../adaptive/templates.js'
-import type { CountryConfig, UrlPattern } from './registry-sources.js'
-import type { AdminLevel, AdminEntity } from './admin-entities.js'
+import { scraperDb, scraperConfigs } from "../../../db/scraper-db.js";
+import { eq, and } from "drizzle-orm";
+import { getTemplate } from "../adaptive/templates.js";
+import type { CountryConfig, UrlPattern } from "./registry-sources.js";
+import type { AdminLevel, AdminEntity } from "./admin-entities.js";
 
-const PROBE_TIMEOUT_MS = 8000
+const PROBE_TIMEOUT_MS = 8000;
 
 async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export interface ProbeResult {
-  municipalityName: string   // Legacy — entity name stored here for backward compat
-  entityName?: string        // Generic entity name
-  adminLevel?: AdminLevel    // 'municipality' | 'county' | 'region' | 'state'
-  slug: string
-  country: string
-  systemType: string | null
-  url: string | null
-  confirmed: boolean
-  error?: string
+  municipalityName: string; // Legacy — entity name stored here for backward compat
+  entityName?: string; // Generic entity name
+  adminLevel?: AdminLevel; // 'municipality' | 'county' | 'region' | 'state'
+  slug: string;
+  country: string;
+  systemType: string | null;
+  url: string | null;
+  confirmed: boolean;
+  error?: string;
 }
 
 /**
  * Probe a single URL with timeout and optional confirmation.
  */
-async function probeUrl(url: string, confirmPattern?: string): Promise<{ ok: boolean; html?: string }> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
+async function probeUrl(
+  url: string,
+  confirmPattern?: string,
+): Promise<{ ok: boolean; html?: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
 
   try {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Eulesia/1.0 (civic platform; contact@eulesia.eu)',
+        "User-Agent": "Eulesia/1.0 (civic platform; contact@eulesia.eu)",
       },
-      redirect: 'follow',
-    })
+      redirect: "follow",
+    });
 
-    clearTimeout(timer)
+    clearTimeout(timer);
 
     if (!response.ok) {
-      return { ok: false }
+      return { ok: false };
     }
 
-    const html = await response.text()
+    const html = await response.text();
 
     // If we have a confirmation pattern, check for it
     if (confirmPattern) {
       if (!html.toLowerCase().includes(confirmPattern.toLowerCase())) {
-        return { ok: false }
+        return { ok: false };
       }
     }
 
     // Basic validation: page should have some content
     if (html.length < 100) {
-      return { ok: false }
+      return { ok: false };
     }
 
-    return { ok: true, html }
+    return { ok: true, html };
   } catch {
-    clearTimeout(timer)
-    return { ok: false }
+    clearTimeout(timer);
+    return { ok: false };
   }
 }
 
@@ -86,13 +89,13 @@ export async function probeMunicipality(
   slug: string,
   urlPatterns: UrlPattern[],
   country: string,
-  delayMs: number
+  delayMs: number,
 ): Promise<ProbeResult> {
   for (const pattern of urlPatterns) {
-    const url = pattern.buildUrl(slug)
+    const url = pattern.buildUrl(slug);
 
-    const result = await probeUrl(url, pattern.confirmPattern)
-    await sleep(delayMs)
+    const result = await probeUrl(url, pattern.confirmPattern);
+    await sleep(delayMs);
 
     if (result.ok) {
       return {
@@ -102,7 +105,7 @@ export async function probeMunicipality(
         systemType: pattern.system,
         url,
         confirmed: true,
-      }
+      };
     }
   }
 
@@ -113,44 +116,51 @@ export async function probeMunicipality(
     systemType: null,
     url: null,
     confirmed: false,
-  }
+  };
 }
 
 /**
  * Check if a scraper config already exists for this municipality+country.
  */
-async function configExists(municipalityName: string, country: string): Promise<boolean> {
+async function configExists(
+  municipalityName: string,
+  country: string,
+): Promise<boolean> {
   const existing = await scraperDb
     .select({ id: scraperConfigs.id })
     .from(scraperConfigs)
     .where(
       and(
         eq(scraperConfigs.municipalityName, municipalityName),
-        eq(scraperConfigs.country, country)
-      )
+        eq(scraperConfigs.country, country),
+      ),
     )
-    .limit(1)
+    .limit(1);
 
-  return existing.length > 0
+  return existing.length > 0;
 }
 
 /**
  * Save a discovered scraper config to the database.
  */
-export async function saveDiscoveredConfig(result: ProbeResult): Promise<string | null> {
-  if (!result.confirmed || !result.url || !result.systemType) return null
+export async function saveDiscoveredConfig(
+  result: ProbeResult,
+): Promise<string | null> {
+  if (!result.confirmed || !result.url || !result.systemType) return null;
 
   // Check if already exists
   if (await configExists(result.municipalityName, result.country)) {
-    console.log(`   [probe] Skipping ${result.municipalityName} (${result.country}) — already configured`)
-    return null
+    console.log(
+      `   [probe] Skipping ${result.municipalityName} (${result.country}) — already configured`,
+    );
+    return null;
   }
 
   // Get template config for the detected system
-  const template = getTemplate(result.systemType)
+  const template = getTemplate(result.systemType);
   if (!template) {
-    console.log(`   [probe] No template for system type: ${result.systemType}`)
-    return null
+    console.log(`   [probe] No template for system type: ${result.systemType}`);
+    return null;
   }
 
   const [inserted] = await scraperDb
@@ -160,25 +170,38 @@ export async function saveDiscoveredConfig(result: ProbeResult): Promise<string 
       country: result.country,
       systemType: result.systemType,
       baseUrl: result.url,
-      discoveredBy: 'probe',
+      discoveredBy: "probe",
       config: template,
-      configGeneratedBy: 'template',
-      status: 'active',
+      configGeneratedBy: "template",
+      status: "active",
       contentLanguage: getLanguageForCountry(result.country),
     })
-    .returning({ id: scraperConfigs.id })
+    .returning({ id: scraperConfigs.id });
 
-  console.log(`   [probe] Saved config for ${result.municipalityName} (${result.country}, ${result.systemType})`)
-  return inserted.id
+  console.log(
+    `   [probe] Saved config for ${result.municipalityName} (${result.country}, ${result.systemType})`,
+  );
+  return inserted.id;
 }
 
 function getLanguageForCountry(country: string): string {
   const map: Record<string, string> = {
-    FI: 'fi', EE: 'et', DE: 'de', SE: 'sv', FR: 'fr',
-    NL: 'nl', NO: 'no', DK: 'da', AT: 'de', PL: 'pl',
-    CZ: 'cs', ES: 'es', IT: 'it', PT: 'pt',
-  }
-  return map[country] || 'en'
+    FI: "fi",
+    EE: "et",
+    DE: "de",
+    SE: "sv",
+    FR: "fr",
+    NL: "nl",
+    NO: "no",
+    DK: "da",
+    AT: "de",
+    PL: "pl",
+    CZ: "cs",
+    ES: "es",
+    IT: "it",
+    PT: "pt",
+  };
+  return map[country] || "en";
 }
 
 /**
@@ -187,16 +210,23 @@ function getLanguageForCountry(country: string): string {
  */
 export async function discoverCountry(
   config: CountryConfig,
-  options?: { limit?: number; dryRun?: boolean }
-): Promise<{ probed: number; found: number; saved: number; results: ProbeResult[] }> {
-  const limit = options?.limit ?? config.probeLimit
-  const municipalities = config.municipalities.slice(0, limit)
+  options?: { limit?: number; dryRun?: boolean },
+): Promise<{
+  probed: number;
+  found: number;
+  saved: number;
+  results: ProbeResult[];
+}> {
+  const limit = options?.limit ?? config.probeLimit;
+  const municipalities = config.municipalities.slice(0, limit);
 
-  console.log(`\n🔍 Discovery: ${config.name} (${municipalities.length} municipalities)`)
+  console.log(
+    `\n🔍 Discovery: ${config.name} (${municipalities.length} municipalities)`,
+  );
 
-  const results: ProbeResult[] = []
-  let found = 0
-  let saved = 0
+  const results: ProbeResult[] = [];
+  let found = 0;
+  let saved = 0;
 
   for (const muni of municipalities) {
     const result = await probeMunicipality(
@@ -204,26 +234,28 @@ export async function discoverCountry(
       muni.slug,
       config.urlPatterns,
       config.code,
-      config.probeDelayMs
-    )
+      config.probeDelayMs,
+    );
 
-    results.push(result)
+    results.push(result);
 
     if (result.confirmed) {
-      found++
-      console.log(`   ✅ ${muni.name}: ${result.systemType} (${result.url})`)
+      found++;
+      console.log(`   ✅ ${muni.name}: ${result.systemType} (${result.url})`);
 
       if (!options?.dryRun) {
-        const id = await saveDiscoveredConfig(result)
-        if (id) saved++
+        const id = await saveDiscoveredConfig(result);
+        if (id) saved++;
       }
     } else {
-      console.log(`   ❌ ${muni.name}: not found`)
+      console.log(`   ❌ ${muni.name}: not found`);
     }
   }
 
-  console.log(`\n📊 Discovery complete: ${found}/${municipalities.length} found, ${saved} saved`)
-  return { probed: municipalities.length, found, saved, results }
+  console.log(
+    `\n📊 Discovery complete: ${found}/${municipalities.length} found, ${saved} saved`,
+  );
+  return { probed: municipalities.length, found, saved, results };
 }
 
 /**
@@ -232,43 +264,45 @@ export async function discoverCountry(
  */
 export async function geocodeMunicipality(
   name: string,
-  country: string
+  country: string,
 ): Promise<{
-  osmId: number
-  lat: number
-  lon: number
-  displayName: string
-  adminLevel?: number
+  osmId: number;
+  lat: number;
+  lon: number;
+  displayName: string;
+  adminLevel?: number;
 } | null> {
-  const url = new URL('https://nominatim.openstreetmap.org/search')
-  url.searchParams.set('q', `${name}, ${country}`)
-  url.searchParams.set('format', 'json')
-  url.searchParams.set('limit', '1')
-  url.searchParams.set('featuretype', 'city')
-  url.searchParams.set('addressdetails', '1')
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", `${name}, ${country}`);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("featuretype", "city");
+  url.searchParams.set("addressdetails", "1");
 
   try {
     const response = await fetch(url.toString(), {
       headers: {
-        'User-Agent': 'Eulesia/1.0 (civic platform; contact@eulesia.eu)',
+        "User-Agent": "Eulesia/1.0 (civic platform; contact@eulesia.eu)",
       },
-    })
+    });
 
-    if (!response.ok) return null
+    if (!response.ok) return null;
 
-    const data = await response.json()
-    if (!Array.isArray(data) || data.length === 0) return null
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
 
-    const result = data[0]
+    const result = data[0];
     return {
       osmId: parseInt(result.osm_id, 10),
       lat: parseFloat(result.lat),
       lon: parseFloat(result.lon),
       displayName: result.display_name,
-      adminLevel: result.address?.admin_level ? parseInt(result.address.admin_level, 10) : undefined,
-    }
+      adminLevel: result.address?.admin_level
+        ? parseInt(result.address.admin_level, 10)
+        : undefined,
+    };
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -284,17 +318,17 @@ export async function probeEntity(
   entity: AdminEntity,
   urlPatterns: UrlPattern[],
   country: string,
-  delayMs: number
+  delayMs: number,
 ): Promise<ProbeResult> {
   for (const pattern of urlPatterns) {
-    const url = pattern.buildUrl(entity.slug)
+    const url = pattern.buildUrl(entity.slug);
 
-    const result = await probeUrl(url, pattern.confirmPattern)
-    await sleep(delayMs)
+    const result = await probeUrl(url, pattern.confirmPattern);
+    await sleep(delayMs);
 
     if (result.ok) {
       return {
-        municipalityName: entity.name,  // Legacy compat
+        municipalityName: entity.name, // Legacy compat
         entityName: entity.name,
         adminLevel: entity.adminLevel,
         slug: entity.slug,
@@ -302,7 +336,7 @@ export async function probeEntity(
         systemType: pattern.system,
         url,
         confirmed: true,
-      }
+      };
     }
   }
 
@@ -315,17 +349,19 @@ export async function probeEntity(
     systemType: null,
     url: null,
     confirmed: false,
-  }
+  };
 }
 
 /**
  * Save a discovered entity config — supports admin levels.
  */
-export async function saveDiscoveredEntityConfig(result: ProbeResult): Promise<string | null> {
-  if (!result.confirmed || !result.url || !result.systemType) return null
+export async function saveDiscoveredEntityConfig(
+  result: ProbeResult,
+): Promise<string | null> {
+  if (!result.confirmed || !result.url || !result.systemType) return null;
 
-  const entityName = result.entityName || result.municipalityName
-  const adminLevel = result.adminLevel || 'municipality'
+  const entityName = result.entityName || result.municipalityName;
+  const adminLevel = result.adminLevel || "municipality";
 
   // Check if already exists (entity name + country + admin level)
   const existing = await scraperDb
@@ -335,41 +371,45 @@ export async function saveDiscoveredEntityConfig(result: ProbeResult): Promise<s
       and(
         eq(scraperConfigs.municipalityName, entityName),
         eq(scraperConfigs.country, result.country),
-        eq(scraperConfigs.adminLevel, adminLevel)
-      )
+        eq(scraperConfigs.adminLevel, adminLevel),
+      ),
     )
-    .limit(1)
+    .limit(1);
 
   if (existing.length > 0) {
-    console.log(`   [probe] Skipping ${entityName} (${result.country}/${adminLevel}) — already configured`)
-    return null
+    console.log(
+      `   [probe] Skipping ${entityName} (${result.country}/${adminLevel}) — already configured`,
+    );
+    return null;
   }
 
-  const template = getTemplate(result.systemType)
+  const template = getTemplate(result.systemType);
   if (!template) {
-    console.log(`   [probe] No template for system type: ${result.systemType}`)
-    return null
+    console.log(`   [probe] No template for system type: ${result.systemType}`);
+    return null;
   }
 
   const [inserted] = await scraperDb
     .insert(scraperConfigs)
     .values({
-      municipalityName: entityName,   // Legacy column
-      entityName: entityName,          // New column
+      municipalityName: entityName, // Legacy column
+      entityName: entityName, // New column
       adminLevel: adminLevel,
       country: result.country,
       systemType: result.systemType,
       baseUrl: result.url,
-      discoveredBy: 'probe',
+      discoveredBy: "probe",
       config: template,
-      configGeneratedBy: 'template',
-      status: 'active',
+      configGeneratedBy: "template",
+      status: "active",
       contentLanguage: getLanguageForCountry(result.country),
     })
-    .returning({ id: scraperConfigs.id })
+    .returning({ id: scraperConfigs.id });
 
-  console.log(`   [probe] Saved config for ${entityName} (${result.country}/${adminLevel}, ${result.systemType})`)
-  return inserted.id
+  console.log(
+    `   [probe] Saved config for ${entityName} (${result.country}/${adminLevel}, ${result.systemType})`,
+  );
+  return inserted.id;
 }
 
 /**
@@ -378,44 +418,63 @@ export async function saveDiscoveredEntityConfig(result: ProbeResult): Promise<s
  */
 export async function discoverCountryFull(
   config: CountryConfig,
-  options?: { limit?: number; dryRun?: boolean; adminLevels?: AdminLevel[] }
-): Promise<{ probed: number; found: number; saved: number; results: ProbeResult[] }> {
+  options?: { limit?: number; dryRun?: boolean; adminLevels?: AdminLevel[] },
+): Promise<{
+  probed: number;
+  found: number;
+  saved: number;
+  results: ProbeResult[];
+}> {
   // First: discover municipalities (existing behavior)
-  const muniResults = await discoverCountry(config, options)
-  let totalProbed = muniResults.probed
-  let totalFound = muniResults.found
-  let totalSaved = muniResults.saved
-  const allResults = [...muniResults.results]
+  const muniResults = await discoverCountry(config, options);
+  let totalProbed = muniResults.probed;
+  let totalFound = muniResults.found;
+  let totalSaved = muniResults.saved;
+  const allResults = [...muniResults.results];
 
   // Then: discover higher admin levels if configured
   if (config.adminEntities && config.adminUrlPatterns) {
-    const levelFilter = options?.adminLevels
+    const levelFilter = options?.adminLevels;
 
     for (const entity of config.adminEntities) {
       // Skip if admin level filter is active and this level is excluded
-      if (levelFilter && !levelFilter.includes(entity.adminLevel)) continue
+      if (levelFilter && !levelFilter.includes(entity.adminLevel)) continue;
 
-      const patterns = config.adminUrlPatterns[entity.adminLevel]
-      if (!patterns || patterns.length === 0) continue
+      const patterns = config.adminUrlPatterns[entity.adminLevel];
+      if (!patterns || patterns.length === 0) continue;
 
-      const result = await probeEntity(entity, patterns, config.code, config.probeDelayMs)
-      allResults.push(result)
-      totalProbed++
+      const result = await probeEntity(
+        entity,
+        patterns,
+        config.code,
+        config.probeDelayMs,
+      );
+      allResults.push(result);
+      totalProbed++;
 
       if (result.confirmed) {
-        totalFound++
-        console.log(`   ✅ [${entity.adminLevel}] ${entity.name}: ${result.systemType} (${result.url})`)
+        totalFound++;
+        console.log(
+          `   ✅ [${entity.adminLevel}] ${entity.name}: ${result.systemType} (${result.url})`,
+        );
 
         if (!options?.dryRun) {
-          const id = await saveDiscoveredEntityConfig(result)
-          if (id) totalSaved++
+          const id = await saveDiscoveredEntityConfig(result);
+          if (id) totalSaved++;
         }
       } else {
-        console.log(`   ❌ [${entity.adminLevel}] ${entity.name}: not found`)
+        console.log(`   ❌ [${entity.adminLevel}] ${entity.name}: not found`);
       }
     }
   }
 
-  console.log(`\n📊 Full discovery complete: ${totalFound}/${totalProbed} found, ${totalSaved} saved`)
-  return { probed: totalProbed, found: totalFound, saved: totalSaved, results: allResults }
+  console.log(
+    `\n📊 Full discovery complete: ${totalFound}/${totalProbed} found, ${totalSaved} saved`,
+  );
+  return {
+    probed: totalProbed,
+    found: totalFound,
+    saved: totalSaved,
+    results: allResults,
+  };
 }

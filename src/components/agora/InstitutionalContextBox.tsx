@@ -85,11 +85,13 @@ export function InstitutionalContextBox({
       </div>
 
       {/* Sections */}
-      <div className={`divide-y ${
-        isAiGenerated
-          ? 'divide-purple-200 dark:divide-purple-800/50'
-          : 'divide-violet-200 dark:divide-violet-800/50'
-      }`}>
+      <div
+        className={`divide-y ${
+          isAiGenerated
+            ? "divide-purple-200 dark:divide-purple-800/50"
+            : "divide-violet-200 dark:divide-violet-800/50"
+        }`}
+      >
         {/* Documents */}
         {docs.length > 0 && (
           <div>

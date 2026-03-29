@@ -14,23 +14,23 @@
 
 export interface EditorialPrompts {
   /** System prompt for the editorial gate (stage 1) */
-  editorialGateSystem: string
+  editorialGateSystem: string;
   /** User prompt template for editorial gate. Placeholders: {municipality}, {organ}, {text} */
-  editorialGateUser: string
+  editorialGateUser: string;
   /** System prompt for article writing (stage 2) */
-  writeArticleSystem: string
+  writeArticleSystem: string;
   /** User prompt template for article writing. Placeholders: {municipality}, {organ}, {itemNumber}, {excerpt} */
-  writeArticleUser: string
+  writeArticleUser: string;
   /** System prompt for verification (stage 3) */
-  verifyArticleSystem: string
+  verifyArticleSystem: string;
   /** User prompt template for verification. Placeholders: {title}, {summary}, {keyPoints}, {municipality}, {excerpt} */
-  verifyArticleUser: string
+  verifyArticleUser: string;
   /** Default tag to add to all imported items */
-  defaultTag: string
+  defaultTag: string;
   /** Key points header for thread content */
-  keyPointsHeader: string
+  keyPointsHeader: string;
   /** Footer template. Placeholders: {sourceUrl} */
-  footerTemplate: string
+  footerTemplate: string;
 }
 
 // ============================================
@@ -154,10 +154,11 @@ ALKUPERÄINEN PÖYTÄKIRJAOTE ({municipality}):
 
 Vertaa uutista alkuperäiseen. Vastaa vain JSON-muodossa.`,
 
-  defaultTag: 'pöytäkirja',
-  keyPointsHeader: '**Keskeiset kohdat:**',
-  footerTemplate: '*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Näytä alkuperäinen →]({sourceUrl})*',
-}
+  defaultTag: "pöytäkirja",
+  keyPointsHeader: "**Keskeiset kohdat:**",
+  footerTemplate:
+    "*Eulesia summary — Generated with [Mistral AI](https://mistral.ai). [Näytä alkuperäinen →]({sourceUrl})*",
+};
 
 // ============================================
 // SWEDISH (sv)
@@ -272,10 +273,11 @@ ORIGINALTEXT FRÅN PROTOKOLL ({municipality}):
 
 Jämför nyheten med originalet. Svara bara i JSON-format.`,
 
-  defaultTag: 'protokoll',
-  keyPointsHeader: '**Huvudpunkter:**',
-  footerTemplate: '*Eulesia sammanfattning — Genererad med [Mistral AI](https://mistral.ai). [Visa original →]({sourceUrl})*',
-}
+  defaultTag: "protokoll",
+  keyPointsHeader: "**Huvudpunkter:**",
+  footerTemplate:
+    "*Eulesia sammanfattning — Genererad med [Mistral AI](https://mistral.ai). [Visa original →]({sourceUrl})*",
+};
 
 // ============================================
 // NORWEGIAN (no/nb)
@@ -390,10 +392,11 @@ ORIGINALTEKST FRA PROTOKOLL ({municipality}):
 
 Sammenlign nyheten med originalen. Svar bare i JSON-format.`,
 
-  defaultTag: 'protokoll',
-  keyPointsHeader: '**Hovedpunkter:**',
-  footerTemplate: '*Eulesia sammendrag — Generert med [Mistral AI](https://mistral.ai). [Vis original →]({sourceUrl})*',
-}
+  defaultTag: "protokoll",
+  keyPointsHeader: "**Hovedpunkter:**",
+  footerTemplate:
+    "*Eulesia sammendrag — Generert med [Mistral AI](https://mistral.ai). [Vis original →]({sourceUrl})*",
+};
 
 // ============================================
 // DANISH (da)
@@ -508,10 +511,11 @@ ORIGINALTEKST FRA MØDEREFERAT ({municipality}):
 
 Sammenlign nyheden med originalen. Svar kun i JSON-format.`,
 
-  defaultTag: 'referat',
-  keyPointsHeader: '**Hovedpunkter:**',
-  footerTemplate: '*Eulesia sammenfatning — Genereret med [Mistral AI](https://mistral.ai). [Vis original →]({sourceUrl})*',
-}
+  defaultTag: "referat",
+  keyPointsHeader: "**Hovedpunkter:**",
+  footerTemplate:
+    "*Eulesia sammenfatning — Genereret med [Mistral AI](https://mistral.ai). [Vis original →]({sourceUrl})*",
+};
 
 // ============================================
 // ESTONIAN (et)
@@ -626,10 +630,11 @@ ALGNE PROTOKOLLIVÄLJAVÕTE ({municipality}):
 
 Võrdle uudist originaaliga. Vasta ainult JSON-formaadis.`,
 
-  defaultTag: 'protokoll',
-  keyPointsHeader: '**Põhipunktid:**',
-  footerTemplate: '*Eulesia kokkuvõte — Genereeritud [Mistral AI](https://mistral.ai) abil. [Vaata originaali →]({sourceUrl})*',
-}
+  defaultTag: "protokoll",
+  keyPointsHeader: "**Põhipunktid:**",
+  footerTemplate:
+    "*Eulesia kokkuvõte — Genereeritud [Mistral AI](https://mistral.ai) abil. [Vaata originaali →]({sourceUrl})*",
+};
 
 // ============================================
 // GERMAN (de)
@@ -744,10 +749,11 @@ ORIGINALTEXT AUS DEM PROTOKOLL ({municipality}):
 
 Vergleiche die Nachricht mit dem Original. Antworte nur im JSON-Format.`,
 
-  defaultTag: 'protokoll',
-  keyPointsHeader: '**Hauptpunkte:**',
-  footerTemplate: '*Eulesia Zusammenfassung — Erstellt mit [Mistral AI](https://mistral.ai). [Original anzeigen →]({sourceUrl})*',
-}
+  defaultTag: "protokoll",
+  keyPointsHeader: "**Hauptpunkte:**",
+  footerTemplate:
+    "*Eulesia Zusammenfassung — Erstellt mit [Mistral AI](https://mistral.ai). [Original anzeigen →]({sourceUrl})*",
+};
 
 // ============================================
 // Registry
@@ -757,35 +763,38 @@ const PROMPTS_BY_LANGUAGE: Record<string, EditorialPrompts> = {
   fi: FI_PROMPTS,
   sv: SV_PROMPTS,
   no: NO_PROMPTS,
-  nb: NO_PROMPTS,  // Norwegian Bokmål alias
-  nn: NO_PROMPTS,  // Norwegian Nynorsk alias
+  nb: NO_PROMPTS, // Norwegian Bokmål alias
+  nn: NO_PROMPTS, // Norwegian Nynorsk alias
   da: DA_PROMPTS,
   et: ET_PROMPTS,
   de: DE_PROMPTS,
-}
+};
 
 /**
  * Get editorial prompts for a language.
  * Falls back to Finnish if language not supported.
  */
 export function getPrompts(language: string): EditorialPrompts {
-  return PROMPTS_BY_LANGUAGE[language] || FI_PROMPTS
+  return PROMPTS_BY_LANGUAGE[language] || FI_PROMPTS;
 }
 
 /**
  * Get all supported languages.
  */
 export function getSupportedLanguages(): string[] {
-  return Object.keys(PROMPTS_BY_LANGUAGE)
+  return Object.keys(PROMPTS_BY_LANGUAGE);
 }
 
 /**
  * Fill placeholders in a prompt template.
  */
-export function fillTemplate(template: string, vars: Record<string, string>): string {
-  let result = template
+export function fillTemplate(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  let result = template;
   for (const [key, value] of Object.entries(vars)) {
-    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+    result = result.replace(new RegExp(`\\{${key}\\}`, "g"), value);
   }
-  return result
+  return result;
 }

@@ -332,7 +332,7 @@ class ApiClient {
   }
 
   async deleteClub(id: string): Promise<void> {
-    await this.request(`/clubs/${id}`, { method: 'DELETE' })
+    await this.request(`/clubs/${id}`, { method: "DELETE" });
   }
 
   async joinClub(clubId: string): Promise<void> {
@@ -378,29 +378,38 @@ class ApiClient {
   // Club invitations
   async inviteToClub(clubId: string, userId: string): Promise<ClubInvitation> {
     return this.request(`/clubs/${clubId}/invite`, {
-      method: 'POST',
-      body: JSON.stringify({ userId })
-    })
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
   }
 
   async getClubInvitations(clubId: string): Promise<ClubInvitation[]> {
-    return this.request(`/clubs/${clubId}/invitations`)
+    return this.request(`/clubs/${clubId}/invitations`);
   }
 
   async getMyClubInvitations(): Promise<ClubInvitationWithDetails[]> {
-    return this.request('/clubs/my-invitations')
+    return this.request("/clubs/my-invitations");
   }
 
   async acceptClubInvitation(invitationId: string): Promise<void> {
-    await this.request(`/clubs/invitations/${invitationId}/accept`, { method: 'POST' })
+    await this.request(`/clubs/invitations/${invitationId}/accept`, {
+      method: "POST",
+    });
   }
 
   async declineClubInvitation(invitationId: string): Promise<void> {
-    await this.request(`/clubs/invitations/${invitationId}/decline`, { method: 'POST' })
+    await this.request(`/clubs/invitations/${invitationId}/decline`, {
+      method: "POST",
+    });
   }
 
-  async cancelClubInvitation(clubId: string, invitationId: string): Promise<void> {
-    await this.request(`/clubs/${clubId}/invitations/${invitationId}`, { method: 'DELETE' })
+  async cancelClubInvitation(
+    clubId: string,
+    invitationId: string,
+  ): Promise<void> {
+    await this.request(`/clubs/${clubId}/invitations/${invitationId}`, {
+      method: "DELETE",
+    });
   }
 
   // Club moderation
@@ -1498,34 +1507,34 @@ export interface ClubWithThreads extends Club {
 }
 
 export interface ClubInvitation {
-  id: string
-  clubId?: string
-  status: string
-  createdAt: string
+  id: string;
+  clubId?: string;
+  status: string;
+  createdAt: string;
   invitee?: {
-    id: string
-    name: string
-    username: string
-    avatarUrl?: string
-  }
+    id: string;
+    name: string;
+    username: string;
+    avatarUrl?: string;
+  };
 }
 
 export interface ClubInvitationWithDetails {
-  id: string
-  status: string
-  createdAt: string
+  id: string;
+  status: string;
+  createdAt: string;
   club: {
-    id: string
-    name: string
-    slug: string
-    coverImageUrl?: string
-    memberCount: number
-  }
+    id: string;
+    name: string;
+    slug: string;
+    coverImageUrl?: string;
+    memberCount: number;
+  };
   inviter: {
-    id: string
-    name: string
-    avatarUrl?: string
-  }
+    id: string;
+    name: string;
+    avatarUrl?: string;
+  };
 }
 
 export interface ClubThread {

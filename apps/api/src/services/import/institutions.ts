@@ -10,8 +10,14 @@
  * "taken over" by the real institution later.
  */
 
-import { db, users, institutionTopics, municipalities, locations } from '../../db/index.js'
-import { eq, and, ilike } from 'drizzle-orm'
+import {
+  db,
+  users,
+  institutionTopics,
+  municipalities,
+  locations,
+} from "../../db/index.js";
+import { eq, and, ilike } from "drizzle-orm";
 
 // ============================================
 // BOT USER
@@ -25,47 +31,60 @@ export async function getOrCreateBotUser(): Promise<string> {
   const existing = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.username, 'eulesia-bot'))
-    .limit(1)
+    .where(eq(users.username, "eulesia-bot"))
+    .limit(1);
 
   if (existing.length > 0) {
     // Ensure display name is up to date
-    await db.update(users).set({ name: 'Eulesia Summary' }).where(eq(users.id, existing[0].id))
-    return existing[0].id
+    await db
+      .update(users)
+      .set({ name: "Eulesia Summary" })
+      .where(eq(users.id, existing[0].id));
+    return existing[0].id;
   }
 
   const [botUser] = await db
     .insert(users)
     .values({
-      username: 'eulesia-bot',
-      name: 'Eulesia Summary',
-      email: 'bot@eulesia.eu',
-      role: 'institution',
-      institutionType: 'agency',
-      institutionName: 'Eulesia',
+      username: "eulesia-bot",
+      name: "Eulesia Summary",
+      email: "bot@eulesia.eu",
+      role: "institution",
+      institutionType: "agency",
+      institutionName: "Eulesia",
       identityVerified: true,
-      identityProvider: 'system',
-      identityLevel: 'high'
+      identityProvider: "system",
+      identityLevel: "high",
     })
-    .returning({ id: users.id })
+    .returning({ id: users.id });
 
-  return botUser.id
+  return botUser.id;
 }
 
 // ============================================
 // INSTITUTION PLACEHOLDER ACCOUNTS
 // ============================================
 
-type InstitutionType = 'municipality' | 'ministry' | 'agency' | 'county' | 'region' | 'state'
-type PersistedInstitutionType = 'municipality' | 'ministry' | 'agency' | 'organization'
+type InstitutionType =
+  | "municipality"
+  | "ministry"
+  | "agency"
+  | "county"
+  | "region"
+  | "state";
+type PersistedInstitutionType =
+  | "municipality"
+  | "ministry"
+  | "agency"
+  | "organization";
 
 interface InstitutionOptions {
   /** Municipality ID to link to (for municipal institutions) */
-  municipalityId?: string
+  municipalityId?: string;
   /** Municipality name — auto-creates municipality record if municipalityId not provided */
-  municipalityName?: string
+  municipalityName?: string;
   /** Country code — used for location resolution. Default: 'FI' */
-  country?: string
+  country?: string;
 }
 
 /**
@@ -75,26 +94,28 @@ interface InstitutionOptions {
 function slugify(name: string): string {
   return name
     .toLowerCase()
-    .replace(/ä/g, 'a')
-    .replace(/ö/g, 'o')
-    .replace(/å/g, 'a')
-    .replace(/ü/g, 'u')
-    .replace(/é/g, 'e')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
+    .replace(/ä/g, "a")
+    .replace(/ö/g, "o")
+    .replace(/å/g, "a")
+    .replace(/ü/g, "u")
+    .replace(/é/g, "e")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
 }
 
-function normalizeInstitutionType(type: InstitutionType): PersistedInstitutionType {
+function normalizeInstitutionType(
+  type: InstitutionType,
+): PersistedInstitutionType {
   switch (type) {
-    case 'municipality':
-    case 'ministry':
-    case 'agency':
-      return type
-    case 'county':
-    case 'region':
-    case 'state':
-      return 'organization'
+    case "municipality":
+    case "ministry":
+    case "agency":
+      return type;
+    case "county":
+    case "region":
+    case "state":
+      return "organization";
   }
 }
 
@@ -116,42 +137,43 @@ function normalizeInstitutionType(type: InstitutionType): PersistedInstitutionTy
 export async function getOrCreateInstitution(
   name: string,
   type: InstitutionType,
-  options: InstitutionOptions = {}
+  options: InstitutionOptions = {},
 ): Promise<string> {
   // First check by institutionName (canonical lookup)
   const existing = await db
     .select({ id: users.id })
     .from(users)
-    .where(and(
-      eq(users.role, 'institution'),
-      eq(users.institutionName, name)
-    ))
-    .limit(1)
+    .where(and(eq(users.role, "institution"), eq(users.institutionName, name)))
+    .limit(1);
 
   if (existing.length > 0) {
-    return existing[0].id
+    return existing[0].id;
   }
 
   // Resolve municipality ID if municipality name is provided
-  let municipalityId = options.municipalityId
-  if (!municipalityId && options.municipalityName && type === 'municipality') {
-    municipalityId = await getOrCreateMunicipalityRecord(options.municipalityName, options.country)
+  let municipalityId = options.municipalityId;
+  if (!municipalityId && options.municipalityName && type === "municipality") {
+    municipalityId = await getOrCreateMunicipalityRecord(
+      options.municipalityName,
+      options.country,
+    );
   }
 
   // Generate a unique username
-  const slug = slugify(name)
-  const username = `inst-${slug}`
+  const slug = slugify(name);
+  const username = `inst-${slug}`;
 
   // Check if username already taken (edge case)
   const usernameExists = await db
     .select({ id: users.id })
     .from(users)
     .where(eq(users.username, username))
-    .limit(1)
+    .limit(1);
 
-  const finalUsername = usernameExists.length > 0
-    ? `${username}-${Date.now().toString(36).slice(-4)}`
-    : username
+  const finalUsername =
+    usernameExists.length > 0
+      ? `${username}-${Date.now().toString(36).slice(-4)}`
+      : username;
 
   const [institution] = await db
     .insert(users)
@@ -159,49 +181,54 @@ export async function getOrCreateInstitution(
       username: finalUsername,
       name,
       institutionName: name,
-      role: 'institution',
+      role: "institution",
       institutionType: normalizeInstitutionType(type),
       municipalityId,
       identityVerified: false,
-      identityProvider: 'eulesia-bot',
-      identityLevel: 'basic'
+      identityProvider: "eulesia-bot",
+      identityLevel: "basic",
     })
-    .returning({ id: users.id })
+    .returning({ id: users.id });
 
-  console.log(`  Created institution placeholder: ${name} (@${finalUsername})`)
-  return institution.id
+  console.log(`  Created institution placeholder: ${name} (@${finalUsername})`);
+  return institution.id;
 }
 
 /**
  * Get or create a municipality record by name.
  * Now accepts country parameter for multi-country support.
  */
-async function getOrCreateMunicipalityRecord(name: string, country: string = 'FI'): Promise<string> {
-  const normalized = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+async function getOrCreateMunicipalityRecord(
+  name: string,
+  country: string = "FI",
+): Promise<string> {
+  const normalized = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 
   const existing = await db
     .select({ id: municipalities.id })
     .from(municipalities)
-    .where(and(
-      eq(municipalities.name, normalized),
-      eq(municipalities.country, country)
-    ))
-    .limit(1)
+    .where(
+      and(
+        eq(municipalities.name, normalized),
+        eq(municipalities.country, country),
+      ),
+    )
+    .limit(1);
 
   if (existing.length > 0) {
-    return existing[0].id
+    return existing[0].id;
   }
 
   const [created] = await db
     .insert(municipalities)
     .values({
       name: normalized,
-      nameFi: country === 'FI' ? normalized : undefined,
+      nameFi: country === "FI" ? normalized : undefined,
       country,
     })
-    .returning({ id: municipalities.id })
+    .returning({ id: municipalities.id });
 
-  return created.id
+  return created.id;
 }
 
 // ============================================
@@ -219,49 +246,64 @@ async function getOrCreateMunicipalityRecord(name: string, country: string = 'FI
  * @param entityName - Name of the municipality, county, region, or state
  * @param country - ISO 3166-1 alpha-2 country code. Default: 'FI'
  */
-export async function resolveLocationForEntity(entityName: string, country: string = 'FI'): Promise<string | null> {
-  const normalized = entityName.charAt(0).toUpperCase() + entityName.slice(1).toLowerCase()
+export async function resolveLocationForEntity(
+  entityName: string,
+  country: string = "FI",
+): Promise<string | null> {
+  const normalized =
+    entityName.charAt(0).toUpperCase() + entityName.slice(1).toLowerCase();
 
   // Check if location already exists in DB
   const [existing] = await db
     .select({ id: locations.id })
     .from(locations)
-    .where(and(
-      ilike(locations.name, normalized),
-      eq(locations.country, country)
-    ))
-    .limit(1)
+    .where(
+      and(ilike(locations.name, normalized), eq(locations.country, country)),
+    )
+    .limit(1);
 
   if (existing) {
-    return existing.id
+    return existing.id;
   }
 
   // Try Nominatim to create location
   try {
-    const { searchNominatim } = await import('../nominatim.js')
+    const { searchNominatim } = await import("../nominatim.js");
     const results = await searchNominatim(normalized, {
       country,
-      featuretype: 'city',
-      limit: 1
-    })
+      featuretype: "city",
+      limit: 1,
+    });
 
     if (results.length > 0) {
-      const { activateLocation } = await import('../locations.js')
-      const osmType = results[0].osm_type === 'relation' ? 'relation' : results[0].osm_type === 'way' ? 'way' : 'node'
-      const location = await activateLocation(osmType as 'node' | 'way' | 'relation', results[0].osm_id)
-      console.log(`  Resolved location for ${normalized} (${country}): ${location.name} (${location.latitude}, ${location.longitude})`)
-      return location.id
+      const { activateLocation } = await import("../locations.js");
+      const osmType =
+        results[0].osm_type === "relation"
+          ? "relation"
+          : results[0].osm_type === "way"
+            ? "way"
+            : "node";
+      const location = await activateLocation(
+        osmType as "node" | "way" | "relation",
+        results[0].osm_id,
+      );
+      console.log(
+        `  Resolved location for ${normalized} (${country}): ${location.name} (${location.latitude}, ${location.longitude})`,
+      );
+      return location.id;
     }
   } catch (err) {
     // Nominatim unavailable — not critical, location can be resolved later
-    console.log(`  Could not resolve location for ${normalized} (${country}): ${err instanceof Error ? err.message : err}`)
+    console.log(
+      `  Could not resolve location for ${normalized} (${country}): ${err instanceof Error ? err.message : err}`,
+    );
   }
 
-  return null
+  return null;
 }
 
 /** @deprecated Use resolveLocationForEntity instead */
-export const resolveLocationForMunicipality = resolveLocationForEntity
+export const resolveLocationForMunicipality = resolveLocationForEntity;
 
 // ============================================
 // TOPIC TAG HELPERS
@@ -270,12 +312,14 @@ export const resolveLocationForMunicipality = resolveLocationForEntity
 /**
  * Get the topic tag associated with an institution.
  */
-export async function getInstitutionTopicTag(institutionId: string): Promise<string | null> {
+export async function getInstitutionTopicTag(
+  institutionId: string,
+): Promise<string | null> {
   const [topic] = await db
     .select({ topicTag: institutionTopics.topicTag })
     .from(institutionTopics)
     .where(eq(institutionTopics.institutionId, institutionId))
-    .limit(1)
+    .limit(1);
 
-  return topic?.topicTag || null
+  return topic?.topicTag || null;
 }

@@ -19,7 +19,7 @@
  * - WebDelib (France)
  */
 
-import type { FetcherConfig } from './config-schema.js'
+import type { FetcherConfig } from "./config-schema.js";
 
 // ============================================
 // FINLAND: CloudNC
@@ -27,25 +27,26 @@ import type { FetcherConfig } from './config-schema.js'
 
 export const cloudncTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       // Matches: href='/fi-FI/Toimielimet/Organ/Kokous_DATE' ... >Organ - Kokous DD.MM.YYYY Pöytäkirja
-      pattern: "href='([^']*\\/Kokous_([^']+))'[^>]*>([^<]*?(\\d{1,2}\\.\\d{1,2}\\.\\d{4})[^<]*P\u00f6yt\u00e4kirja)",
+      pattern:
+        "href='([^']*\\/Kokous_([^']+))'[^>]*>([^<]*?(\\d{1,2}\\.\\d{1,2}\\.\\d{4})[^<]*P\u00f6yt\u00e4kirja)",
       groups: { url: 1, id: 2, title: 3, date: 4 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Pöytäkirja'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Pöytäkirja"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       // CloudNC: find download button on meeting page
       linkPattern: 'href="(\\/download\\/noname\\/\\{[^}]+\\}\\/\\d+)"',
     },
   },
-}
+};
 
 // ============================================
 // FINLAND: Dynasty
@@ -53,34 +54,44 @@ export const cloudncTemplate: FetcherConfig = {
 
 export const dynastyTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       // Matches Dynasty/OnCloudOS meeting links: href='...page=meeting&id=NNNN'
       // Captures the full href (for URL resolution) and the meeting ID.
       // Protocol filtering via protocolIndicators (checks ±500 char window).
-      pattern: "href=['\"]([^'\"]*?page=meeting&(?:amp;)?id=(\\d+)[^'\"]*?)['\"]",
+      pattern:
+        "href=['\"]([^'\"]*?page=meeting&(?:amp;)?id=(\\d+)[^'\"]*?)['\"]",
       groups: { url: 1, id: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['icon_protocol', 'Pöytäkirja', 'P&ouml;yt&auml;kirja', 'protocol', 'filetitle protocol'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: [
+      "icon_protocol",
+      "Pöytäkirja",
+      "P&ouml;yt&auml;kirja",
+      "protocol",
+      "filetitle protocol",
+    ],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf-with-html-fallback',
+    strategy: "pdf-with-html-fallback",
     pdf: {
       // Dynasty: predictable PDF path
-      urlTemplate: '{origin}{pathPrefix}/kokous/{meetingId}.PDF',
+      urlTemplate: "{origin}{pathPrefix}/kokous/{meetingId}.PDF",
     },
     html: {
       // Fallback: extract individual meeting items
-      itemPattern: 'page=meetingitem&(?:amp;)?id=(\\d+-\\d+)[^"]*"[^>]*>([^<]*)',
-      itemUrlTemplate: '{baseUrlNoQuery}?page=meetingitem&id={itemId}',
-      contentSelectors: ['div.content'],
-      contentPatterns: ['<div[^>]*class="[^"]*content[^"]*"[^>]*>([\\s\\S]*?)<\\/div>'],
+      itemPattern:
+        'page=meetingitem&(?:amp;)?id=(\\d+-\\d+)[^"]*"[^>]*>([^<]*)',
+      itemUrlTemplate: "{baseUrlNoQuery}?page=meetingitem&id={itemId}",
+      contentSelectors: ["div.content"],
+      contentPatterns: [
+        '<div[^>]*class="[^"]*content[^"]*"[^>]*>([\\s\\S]*?)<\\/div>',
+      ],
     },
   },
-}
+};
 
 // ============================================
 // FINLAND: Tweb (Triplan)
@@ -88,25 +99,26 @@ export const dynastyTemplate: FetcherConfig = {
 
 export const twebTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/dbisa.dll/ktwebscr/pk_tek_tweb.htm',
-    method: 'GET',
+    url: "{baseUrl}/dbisa.dll/ktwebscr/pk_tek_tweb.htm",
+    method: "GET",
     meetingSelector: {
       // Matches: pk_asil_tweb.htm?+bid=NNNN">Link text
       pattern: 'pk_asil_tweb\\.htm\\?\\+bid=(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
+    dateFormat: "DD.MM.YYYY",
     protocolIndicators: [], // Tweb doesn't distinguish protocol from agenda in search
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
-      itemPattern: 'ktproxy2\\.dll\\?doctype=3&(?:amp;)?docid=(\\d+)[^"]*"[^>]*>([^<]*)',
-      itemUrlTemplate: '{baseUrl}/ktproxy2.dll?doctype=3&docid={itemId}',
+      itemPattern:
+        'ktproxy2\\.dll\\?doctype=3&(?:amp;)?docid=(\\d+)[^"]*"[^>]*>([^<]*)',
+      itemUrlTemplate: "{baseUrl}/ktproxy2.dll?doctype=3&docid={itemId}",
     },
   },
-}
+};
 
 // ============================================
 // FINLAND: Tweb "new" (ktwebscr variant, no dbisa.dll)
@@ -117,26 +129,28 @@ export const twebTemplate: FetcherConfig = {
 
 export const twebNewTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/pk_kokl_tweb.htm',
-    method: 'GET',
+    url: "{baseUrl}/pk_kokl_tweb.htm",
+    method: "GET",
     meetingSelector: {
       // Matches: href="/ktwebscr/pk_asil_tweb.htm?bid=NNNN">DD.MM.YYYY HH:MM
-      pattern: 'href="([^"]*pk_asil_tweb\\.htm\\?bid=(\\d+)[^"]*)"[^>]*>(\\d{1,2}\\.\\d{1,2}\\.\\d{4}[^<]*)',
+      pattern:
+        'href="([^"]*pk_asil_tweb\\.htm\\?bid=(\\d+)[^"]*)"[^>]*>(\\d{1,2}\\.\\d{1,2}\\.\\d{4}[^<]*)',
       groups: { url: 1, id: 2, title: 3 },
     },
-    dateFormat: 'DD.MM.YYYY',
+    dateFormat: "DD.MM.YYYY",
     protocolIndicators: [],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
       // Items on the meeting page: fileshow?doctype=7&docid=NNNNNN">Title
-      itemPattern: 'fileshow\\?doctype=7&(?:amp;)?docid=(\\d+)[^"]*"[^>]*>([^<]*)',
-      itemUrlTemplate: '{baseUrl}/fileshow?doctype=3&docid={itemId}',
+      itemPattern:
+        'fileshow\\?doctype=7&(?:amp;)?docid=(\\d+)[^"]*"[^>]*>([^<]*)',
+      itemUrlTemplate: "{baseUrl}/fileshow?doctype=3&docid={itemId}",
     },
   },
-}
+};
 
 // ============================================
 // FINLAND: Helsinki (Ahjo/Drupal)
@@ -147,33 +161,31 @@ export const twebNewTemplate: FetcherConfig = {
 
 export const helsinkiPaatoksetTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       // Cards with links to /fi/paattajat/{body}/asiakirjat/{docId}
       pattern: 'href="(/fi/paattajat/[^/]+/asiakirjat/(\\d+))"',
       groups: { url: 1, id: 2 },
     },
-    dateFormat: 'D.M.YYYY',
-    protocolIndicators: ['Pöytäkirja'],
-    paginationPattern: '\\?page=(\\d+)',
+    dateFormat: "D.M.YYYY",
+    protocolIndicators: ["Pöytäkirja"],
+    paginationPattern: "\\?page=(\\d+)",
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
       // Agenda items link to /fi/asia/hel-YYYY-NNNNNN?paatos=UUID
       itemPattern: 'href="(/fi/asia/(hel-[^"?]+)[^"]*)"',
-      itemUrlTemplate: 'https://paatokset.hel.fi{itemUrl}',
-      contentSelectors: ['#main-content', 'article', 'main'],
+      itemUrlTemplate: "https://paatokset.hel.fi{itemUrl}",
+      contentSelectors: ["#main-content", "article", "main"],
     },
   },
   textCleaning: {
-    stripPatterns: [
-      'VALITUSOSOITUS[\\s\\S]*$',
-    ],
+    stripPatterns: ["VALITUSOSOITUS[\\s\\S]*$"],
   },
-}
+};
 
 // ============================================
 // GERMANY: ALLRIS (CC e-gov GmbH)
@@ -184,31 +196,31 @@ export const helsinkiPaatoksetTemplate: FetcherConfig = {
 
 export const allrisTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/bi/si010_e.asp',
-    method: 'GET',
+    url: "{baseUrl}/bi/si010_e.asp",
+    method: "GET",
     meetingSelector: {
       // ALLRIS lists sessions with links to si010_j.asp?Si_ID=NNNN
       pattern: 'si010_j\\.asp\\?(?:__cjsSi=|Si_ID=)(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Niederschrift', 'Protokoll', 'Sitzungsprotokoll'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Niederschrift", "Protokoll", "Sitzungsprotokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
       // ALLRIS: agenda items link to to010.asp?Si_ID=NNN&To_ID=NNN
       itemPattern: 'to010\\.asp\\?[^"]*To_ID=(\\d+)[^"]*"[^>]*>([^<]*)',
-      itemUrlTemplate: '{baseUrl}/bi/to010.asp?To_ID={itemId}',
-      contentSelectors: ['div.WordSection1', 'div.allris_body', 'article'],
+      itemUrlTemplate: "{baseUrl}/bi/to010.asp?To_ID={itemId}",
+      contentSelectors: ["div.WordSection1", "div.allris_body", "article"],
       contentPatterns: [
         '<div[^>]*class="[^"]*WordSection[^"]*"[^>]*>([\\s\\S]*?)<\\/div>',
         '<div[^>]*class="[^"]*allris_body[^"]*"[^>]*>([\\s\\S]*?)<\\/div>',
       ],
     },
   },
-}
+};
 
 // ============================================
 // GERMANY: SessionNet
@@ -218,25 +230,25 @@ export const allrisTemplate: FetcherConfig = {
 
 export const sessionNetTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/bi/si010.asp',
-    method: 'GET',
+    url: "{baseUrl}/bi/si010.asp",
+    method: "GET",
     meetingSelector: {
       pattern: 'si010\\.asp\\?(?:__csiSi=|Si_ID=)(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Niederschrift', 'Protokoll'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Niederschrift", "Protokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
       itemPattern: 'to010\\.asp\\?[^"]*To_ID=(\\d+)[^"]*"[^>]*>([^<]*)',
-      itemUrlTemplate: '{baseUrl}/bi/to010.asp?To_ID={itemId}',
-      contentSelectors: ['div.smc_field_text', 'div.WordSection1'],
+      itemUrlTemplate: "{baseUrl}/bi/to010.asp?To_ID={itemId}",
+      contentSelectors: ["div.smc_field_text", "div.WordSection1"],
     },
   },
-}
+};
 
 // ============================================
 // GERMANY: SD.NET (regio iT)
@@ -244,23 +256,23 @@ export const sessionNetTemplate: FetcherConfig = {
 
 export const sdnetTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/sdnetrim/UGhVM0hpd2NXNFdFcExjZQ==/Sitzungskalender',
-    method: 'GET',
+    url: "{baseUrl}/sdnetrim/UGhVM0hpd2NXNFdFcExjZQ==/Sitzungskalender",
+    method: "GET",
     meetingSelector: {
       pattern: 'Sitzung/(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Niederschrift', 'Protokoll'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Niederschrift", "Protokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
-      contentSelectors: ['div.sitzung-content', 'article', 'main'],
+      contentSelectors: ["div.sitzung-content", "article", "main"],
     },
   },
-}
+};
 
 // ============================================
 // ESTONIA: VOLIS / Amphora
@@ -271,26 +283,26 @@ export const sdnetTemplate: FetcherConfig = {
 
 export const volisTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/index.aspx?type=12&org=1',
-    method: 'GET',
+    url: "{baseUrl}/index.aspx?type=12&org=1",
+    method: "GET",
     meetingSelector: {
       // VOLIS lists sessions with links containing document IDs
       pattern: 'index\\.aspx\\?id=(\\d+)&type=12[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Protokoll', 'protokoll'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Protokoll", "protokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
       itemPattern: 'index\\.aspx\\?id=(\\d+)&type=7[^"]*"[^>]*>([^<]*)',
-      itemUrlTemplate: '{baseUrl}/index.aspx?id={itemId}&type=7',
-      contentSelectors: ['div.doc-content', 'div.content-area', 'article'],
+      itemUrlTemplate: "{baseUrl}/index.aspx?id={itemId}&type=7",
+      contentSelectors: ["div.doc-content", "div.content-area", "article"],
     },
   },
-}
+};
 
 // ============================================
 // ESTONIA: Delta (newer system)
@@ -298,23 +310,23 @@ export const volisTemplate: FetcherConfig = {
 
 export const deltaTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/documents',
-    method: 'GET',
+    url: "{baseUrl}/documents",
+    method: "GET",
     meetingSelector: {
       pattern: 'documents/(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Protokoll', 'Istungi protokoll'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Protokoll", "Istungi protokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
-      contentSelectors: ['div.document-content', 'article', 'main'],
+      contentSelectors: ["div.document-content", "article", "main"],
     },
   },
-}
+};
 
 // ============================================
 // SWEDEN: Municipal Protocols
@@ -324,24 +336,24 @@ export const deltaTemplate: FetcherConfig = {
 
 export const swedenGenericTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       // Swedish municipalities often list protocols as PDF links
       pattern: 'href="([^"]*protokoll[^"]*\\.pdf)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'YYYY-MM-DD',
-    protocolIndicators: ['Protokoll', 'protokoll', 'Sammanträdesprotokoll'],
+    dateFormat: "YYYY-MM-DD",
+    protocolIndicators: ["Protokoll", "protokoll", "Sammanträdesprotokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // SWEDEN: Flexite
@@ -349,23 +361,23 @@ export const swedenGenericTemplate: FetcherConfig = {
 
 export const flexiteTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/meetings',
-    method: 'GET',
+    url: "{baseUrl}/meetings",
+    method: "GET",
     meetingSelector: {
       pattern: 'meetings/(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'YYYY-MM-DD',
-    protocolIndicators: ['Protokoll', 'Justerat protokoll'],
+    dateFormat: "YYYY-MM-DD",
+    protocolIndicators: ["Protokoll", "Justerat protokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // FRANCE: WebDelib (open-source, ADULLACT)
@@ -375,23 +387,23 @@ export const flexiteTemplate: FetcherConfig = {
 
 export const webDelibTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/seances',
-    method: 'GET',
+    url: "{baseUrl}/seances",
+    method: "GET",
     meetingSelector: {
       pattern: 'seances/(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD/MM/YYYY',
-    protocolIndicators: ['Procès-verbal', 'PV', 'Délibération'],
+    dateFormat: "DD/MM/YYYY",
+    protocolIndicators: ["Procès-verbal", "PV", "Délibération"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // FRANCE: iDélibes
@@ -399,23 +411,23 @@ export const webDelibTemplate: FetcherConfig = {
 
 export const iDelibesTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/deliberations',
-    method: 'GET',
+    url: "{baseUrl}/deliberations",
+    method: "GET",
     meetingSelector: {
       pattern: 'deliberations/(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD/MM/YYYY',
-    protocolIndicators: ['Procès-verbal', 'Délibération'],
+    dateFormat: "DD/MM/YYYY",
+    protocolIndicators: ["Procès-verbal", "Délibération"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // NETHERLANDS: iBabs / NotuBiz
@@ -423,43 +435,43 @@ export const iDelibesTemplate: FetcherConfig = {
 
 export const ibabsTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/meetings',
-    method: 'GET',
+    url: "{baseUrl}/meetings",
+    method: "GET",
     meetingSelector: {
       pattern: 'meetings/(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD-MM-YYYY',
-    protocolIndicators: ['Notulen', 'Besluitenlijst'],
+    dateFormat: "DD-MM-YYYY",
+    protocolIndicators: ["Notulen", "Besluitenlijst"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
-      contentSelectors: ['div.meeting-content', 'article', 'main'],
+      contentSelectors: ["div.meeting-content", "article", "main"],
     },
   },
-}
+};
 
 export const notubizTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}/vergaderingen',
-    method: 'GET',
+    url: "{baseUrl}/vergaderingen",
+    method: "GET",
     meetingSelector: {
       pattern: 'vergadering/(\\d+)[^"]*"[^>]*>([^<]*)',
       groups: { id: 1, url: 1, title: 2 },
     },
-    dateFormat: 'DD-MM-YYYY',
-    protocolIndicators: ['Notulen', 'Besluitenlijst', 'Verslag'],
+    dateFormat: "DD-MM-YYYY",
+    protocolIndicators: ["Notulen", "Besluitenlijst", "Verslag"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
-      contentSelectors: ['div.vergadering-content', 'article'],
+      contentSelectors: ["div.vergadering-content", "article"],
     },
   },
-}
+};
 
 // ============================================
 // NORWAY: Municipal Protocols
@@ -467,23 +479,23 @@ export const notubizTemplate: FetcherConfig = {
 
 export const norwayGenericTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       pattern: 'href="([^"]*protokoll[^"]*)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Protokoll', 'Møteprotokoll'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Protokoll", "Møteprotokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // DENMARK: Municipal Decisions
@@ -491,23 +503,23 @@ export const norwayGenericTemplate: FetcherConfig = {
 
 export const denmarkGenericTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       pattern: 'href="([^"]*referat[^"]*)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Referat', 'Beslutningsprotokol'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Referat", "Beslutningsprotokol"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'html',
+    strategy: "html",
     html: {
-      contentSelectors: ['div.meeting-content', 'article', 'main'],
+      contentSelectors: ["div.meeting-content", "article", "main"],
     },
   },
-}
+};
 
 // ============================================
 // SPAIN: Municipal Acts (Actas)
@@ -515,23 +527,23 @@ export const denmarkGenericTemplate: FetcherConfig = {
 
 export const spainGenericTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       pattern: 'href="([^"]*acta[^"]*)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'DD/MM/YYYY',
-    protocolIndicators: ['Acta', 'Pleno', 'Sesión'],
+    dateFormat: "DD/MM/YYYY",
+    protocolIndicators: ["Acta", "Pleno", "Sesión"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // ITALY: Municipal Deliberations
@@ -539,23 +551,23 @@ export const spainGenericTemplate: FetcherConfig = {
 
 export const italyGenericTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       pattern: 'href="([^"]*deliber[^"]*)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'DD/MM/YYYY',
-    protocolIndicators: ['Delibera', 'Verbale', 'Seduta'],
+    dateFormat: "DD/MM/YYYY",
+    protocolIndicators: ["Delibera", "Verbale", "Seduta"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // PORTUGAL: Municipal Minutes (Atas)
@@ -563,23 +575,23 @@ export const italyGenericTemplate: FetcherConfig = {
 
 export const portugalGenericTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       pattern: 'href="([^"]*ata[^"]*)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'DD/MM/YYYY',
-    protocolIndicators: ['Ata', 'Deliberação', 'Sessão'],
+    dateFormat: "DD/MM/YYYY",
+    protocolIndicators: ["Ata", "Deliberação", "Sessão"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // POLAND: Municipal Protocols (BIP)
@@ -588,23 +600,23 @@ export const portugalGenericTemplate: FetcherConfig = {
 
 export const polandBipTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       pattern: 'href="([^"]*protok[^"]*)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Protokół', 'Protokol'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Protokół", "Protokol"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // CZECH REPUBLIC: Municipal Minutes (Zápis)
@@ -612,23 +624,23 @@ export const polandBipTemplate: FetcherConfig = {
 
 export const czechGenericTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       pattern: 'href="([^"]*zapis[^"]*)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Zápis', 'Usnesení'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Zápis", "Usnesení"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // AUSTRIA: Municipal Protocols
@@ -637,23 +649,23 @@ export const czechGenericTemplate: FetcherConfig = {
 
 export const austriaGenericTemplate: FetcherConfig = {
   meetingList: {
-    url: '{baseUrl}',
-    method: 'GET',
+    url: "{baseUrl}",
+    method: "GET",
     meetingSelector: {
       pattern: 'href="([^"]*(?:protokoll|sitzung)[^"]*)"[^>]*>([^<]*)',
       groups: { url: 1, id: 1, title: 2 },
     },
-    dateFormat: 'DD.MM.YYYY',
-    protocolIndicators: ['Protokoll', 'Niederschrift', 'Sitzungsprotokoll'],
+    dateFormat: "DD.MM.YYYY",
+    protocolIndicators: ["Protokoll", "Niederschrift", "Sitzungsprotokoll"],
     maxMeetings: 10,
   },
   contentExtraction: {
-    strategy: 'pdf',
+    strategy: "pdf",
     pdf: {
       linkPattern: 'href="([^"]*\\.pdf)"',
     },
   },
-}
+};
 
 // ============================================
 // Template Registry
@@ -664,8 +676,8 @@ export const TEMPLATES: Record<string, FetcherConfig> = {
   cloudnc: cloudncTemplate,
   dynasty: dynastyTemplate,
   tweb: twebTemplate,
-  'tweb-new': twebNewTemplate,
-  'helsinki-paatokset': helsinkiPaatoksetTemplate,
+  "tweb-new": twebNewTemplate,
+  "helsinki-paatokset": helsinkiPaatoksetTemplate,
 
   // Germany
   allris: allrisTemplate,
@@ -678,7 +690,7 @@ export const TEMPLATES: Record<string, FetcherConfig> = {
 
   // Sweden
   flexite: flexiteTemplate,
-  'sweden-generic': swedenGenericTemplate,
+  "sweden-generic": swedenGenericTemplate,
 
   // France
   webdelib: webDelibTemplate,
@@ -689,24 +701,24 @@ export const TEMPLATES: Record<string, FetcherConfig> = {
   notubiz: notubizTemplate,
 
   // Nordics
-  'norway-generic': norwayGenericTemplate,
-  'denmark-generic': denmarkGenericTemplate,
+  "norway-generic": norwayGenericTemplate,
+  "denmark-generic": denmarkGenericTemplate,
 
   // Southern Europe
-  'spain-generic': spainGenericTemplate,
-  'italy-generic': italyGenericTemplate,
-  'portugal-generic': portugalGenericTemplate,
+  "spain-generic": spainGenericTemplate,
+  "italy-generic": italyGenericTemplate,
+  "portugal-generic": portugalGenericTemplate,
 
   // Central/Eastern Europe
-  'poland-bip': polandBipTemplate,
-  'czech-generic': czechGenericTemplate,
-  'austria-generic': austriaGenericTemplate,
-}
+  "poland-bip": polandBipTemplate,
+  "czech-generic": czechGenericTemplate,
+  "austria-generic": austriaGenericTemplate,
+};
 
 /**
  * Get a template config for a known system type.
  * Returns null if no template exists.
  */
 export function getTemplate(systemType: string): FetcherConfig | null {
-  return TEMPLATES[systemType] || null
+  return TEMPLATES[systemType] || null;
 }

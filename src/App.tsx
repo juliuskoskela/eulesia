@@ -241,6 +241,12 @@ function AppRoutes() {
             isAuthenticated ? <Navigate to="/agora" replace /> : <LoginPage />
           }
         />
+        <Route
+          path="/register"
+          element={
+            isAuthenticated ? <Navigate to="/agora" replace /> : <LoginPage />
+          }
+        />
         <Route path="/auth/verify/:token" element={<MagicLinkVerify />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
 

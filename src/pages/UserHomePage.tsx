@@ -160,7 +160,9 @@ function RoomCard({ room }: { room: Room }) {
           )}
         </div>
         <div>
-          <h3 className="font-medium text-gray-900 dark:text-gray-100">{room.name}</h3>
+          <h3 className="font-medium text-gray-900 dark:text-gray-100">
+            {room.name}
+          </h3>
           {room.description && (
             <p className="text-xs text-gray-500 truncate max-w-[200px]">
               {room.description}

@@ -1,4 +1,4 @@
-_: {
+{inputs, ...}: {
   perSystem = {
     config,
     pkgs,
@@ -43,6 +43,7 @@ _: {
             config.packages.test
             config.packages.ci-check
             config.packages.generate-idura-jwks
+            inputs.nixos-anywhere.packages.${pkgs.system}.nixos-anywhere
           ];
 
         shellHook = ''
@@ -61,9 +62,13 @@ _: {
           Useful commands:
             nix run .#db-migrate
             nix run .#db-reset
+            just bootstrap-test
+            just get-test-age-key
+            just rebuild-test
             just vm-run
             just vm-deploy
             nix build .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
+            nix build .#nixosConfigurations.eulesia-test-bootstrap.config.system.build.toplevel
             nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
           EOF
         '';

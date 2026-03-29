@@ -6,8 +6,8 @@
  *   cd apps/api && npx tsx src/services/import/test-mistral.ts
  */
 
-import 'dotenv/config'
-import { generateMinutesSummary } from './mistral.js'
+import "dotenv/config";
+import { generateMinutesSummary } from "./mistral.js";
 
 const TEST_MINUTES = `
 RAUTALAMMIN KUNTA
@@ -30,42 +30,45 @@ Asiaan liittyvät asiakirjat:
 - Talousarvioesitys 2024
 - Teknisen toimen selvitys korjaustarpeista
 - Sosiaalitoimen palvelutarveselvitys
-`
+`;
 
 async function main() {
-  console.log('Testing Mistral API integration...\n')
+  console.log("Testing Mistral API integration...\n");
 
   if (!process.env.MISTRAL_API_KEY) {
-    console.error('❌ MISTRAL_API_KEY not set in .env')
-    process.exit(1)
+    console.error("❌ MISTRAL_API_KEY not set in .env");
+    process.exit(1);
   }
 
-  console.log('✅ API key found')
-  console.log('📤 Sending test request...\n')
+  console.log("✅ API key found");
+  console.log("📤 Sending test request...\n");
 
   try {
-    const result = await generateMinutesSummary(TEST_MINUTES, 'Rautalampi', 'kunnanhallituksen kokous')
+    const result = await generateMinutesSummary(
+      TEST_MINUTES,
+      "Rautalampi",
+      "kunnanhallituksen kokous",
+    );
 
-    console.log('='.repeat(50))
-    console.log('RESULT')
-    console.log('='.repeat(50))
-    console.log()
-    console.log(`Title: ${result.title}`)
-    console.log()
-    console.log('Summary:')
-    console.log(result.summary)
-    console.log()
-    console.log('Tags:', result.tags.join(', '))
-    console.log()
-    console.log('Key Points:')
-    result.keyPoints.forEach(p => console.log(`  - ${p}`))
-    console.log()
-    console.log('✅ Mistral integration working!')
-
+    console.log("=".repeat(50));
+    console.log("RESULT");
+    console.log("=".repeat(50));
+    console.log();
+    console.log(`Title: ${result.title}`);
+    console.log();
+    console.log("Summary:");
+    console.log(result.summary);
+    console.log();
+    console.log("Tags:", result.tags.join(", "));
+    console.log();
+    console.log("Key Points:");
+    result.keyPoints.forEach((p) => console.log(`  - ${p}`));
+    console.log();
+    console.log("✅ Mistral integration working!");
   } catch (err) {
-    console.error('❌ Error:', err)
-    process.exit(1)
+    console.error("❌ Error:", err);
+    process.exit(1);
   }
 }
 
-main()
+main();

@@ -6,6 +6,7 @@
     ...
   }: let
     deploy-rs = inputs.deploy-rs.packages.${system}.default;
+    inherit (inputs.nixos-anywhere.packages.${system}) nixos-anywhere;
 
     runMicrovm = pkgs.writeShellApplication {
       name = "eulesia-run-microvm";
@@ -404,21 +405,81 @@
       text = ''
         set -euo pipefail
 
-        TARGET_HOST="''${EULESIA_TEST_TARGET_HOST:-}"
+        TARGET_HOST="''${EULESIA_TEST_TARGET_HOST:-eulesia-server-test}"
         TARGET_USER="''${EULESIA_TEST_SSH_USER:-root}"
         BUILD_HOST="''${EULESIA_TEST_BUILD_HOST:-localhost}"
 
-        if [ -z "$TARGET_HOST" ]; then
-          echo "Missing EULESIA_TEST_TARGET_HOST."
-          echo "Set it to the Hetzner private IP or private DNS name for the test host."
-          exit 1
+        cmd=(
+          nixos-rebuild
+          switch
+          --flake
+          ".#eulesia-test"
+          --target-host
+          "$TARGET_USER@$TARGET_HOST"
+        )
+
+        if [ -n "$BUILD_HOST" ] && [ "$BUILD_HOST" != "localhost" ]; then
+          cmd+=(
+            --build-host
+            "$BUILD_HOST"
+          )
         fi
 
-        exec nixos-rebuild switch \
-          --flake ".#eulesia-test" \
-          --target-host "$TARGET_USER@$TARGET_HOST" \
-          --build-host "$BUILD_HOST" \
-          "$@"
+        exec "''${cmd[@]}" "$@"
+      '';
+    };
+
+    bootstrapTest = pkgs.writeShellApplication {
+      name = "eulesia-bootstrap-test";
+      runtimeInputs = with pkgs; [
+        coreutils
+        openssh
+        nixos-anywhere
+      ];
+      text = ''
+        set -euo pipefail
+
+        TARGET_HOST="''${EULESIA_TEST_TARGET_HOST:-eulesia-server-test}"
+        TARGET_USER="''${EULESIA_TEST_SSH_USER:-root}"
+
+        echo "This will wipe the system disk and PostgreSQL volume on $TARGET_USER@$TARGET_HOST."
+        echo "It installs the minimal eulesia-test-bootstrap configuration with disko."
+        printf "Continue with bootstrap installation? (yes/no): "
+        read -r confirmation
+
+        if [ "$confirmation" != "yes" ]; then
+          echo "Bootstrap installation cancelled."
+          exit 0
+        fi
+
+        if [ -z "''${NIX_SSHOPTS:-}" ]; then
+          export NIX_SSHOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        fi
+
+        exec ${nixos-anywhere}/bin/nixos-anywhere \
+          --flake ".#eulesia-test-bootstrap" \
+          "$@" \
+          "$TARGET_USER@$TARGET_HOST"
+      '';
+    };
+
+    getTestAgeKey = pkgs.writeShellApplication {
+      name = "eulesia-get-test-age-key";
+      runtimeInputs = with pkgs; [
+        coreutils
+        openssh
+      ];
+      text = ''
+        set -euo pipefail
+
+        TARGET_HOST="''${EULESIA_TEST_TARGET_HOST:-eulesia-server-test}"
+        TARGET_USER="''${EULESIA_TEST_SSH_USER:-root}"
+
+        exec ssh \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          "$TARGET_USER@$TARGET_HOST" \
+          "age-keygen -y /var/lib/sops-nix/key.txt"
       '';
     };
   in {
@@ -445,6 +506,18 @@
         type = "app";
         program = "${rebuildTest}/bin/eulesia-rebuild-test";
         meta.description = "Deploy the Eulesia test NixOS configuration with nixos-rebuild";
+      };
+
+      bootstrap-test = {
+        type = "app";
+        program = "${bootstrapTest}/bin/eulesia-bootstrap-test";
+        meta.description = "Install the Eulesia test bootstrap NixOS configuration with nixos-anywhere";
+      };
+
+      get-test-age-key = {
+        type = "app";
+        program = "${getTestAgeKey}/bin/eulesia-get-test-age-key";
+        meta.description = "Fetch the test host age public key after bootstrap";
       };
 
       microvm = {
@@ -502,8 +575,20 @@
           eulesiaPackages = inputs.self.packages.x86_64-linux;
         };
         modules = [
+          inputs.disko.nixosModules.disko
           inputs.sops-nix.nixosModules.sops
           ../hosts/eulesia-test.nix
+        ];
+      };
+
+      eulesia-test-bootstrap = inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = {
+          inherit inputs;
+        };
+        modules = [
+          inputs.disko.nixosModules.disko
+          ../hosts/eulesia-test-bootstrap.nix
         ];
       };
     };
@@ -519,7 +604,7 @@
     };
 
     deploy.nodes.eulesia-test = {
-      hostname = "test.eulesia.org";
+      hostname = "eulesia-server-test";
       sshUser = "root";
       fastConnection = true;
       profiles.system = {

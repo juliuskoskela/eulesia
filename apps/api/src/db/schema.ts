@@ -706,17 +706,30 @@ export const clubCommentVotes = pgTable(
 );
 
 // Club Invitations (for private clubs)
-export const clubInvitations = pgTable('club_invitations', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  clubId: uuid('club_id').notNull().references(() => clubs.id, { onDelete: 'cascade' }),
-  inviterId: uuid('inviter_id').notNull().references(() => users.id),
-  inviteeId: uuid('invitee_id').notNull().references(() => users.id),
-  status: varchar('status', { length: 20 }).default('pending'), // pending, accepted, declined
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
-}, (table) => ({
-  inviteeIdx: index('club_invitations_invitee_idx').on(table.inviteeId, table.status),
-  clubIdx: index('club_invitations_club_idx').on(table.clubId)
-}))
+export const clubInvitations = pgTable(
+  "club_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clubId: uuid("club_id")
+      .notNull()
+      .references(() => clubs.id, { onDelete: "cascade" }),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => users.id),
+    inviteeId: uuid("invitee_id")
+      .notNull()
+      .references(() => users.id),
+    status: varchar("status", { length: 20 }).default("pending"), // pending, accepted, declined
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    inviteeIdx: index("club_invitations_invitee_idx").on(
+      table.inviteeId,
+      table.status,
+    ),
+    clubIdx: index("club_invitations_club_idx").on(table.clubId),
+  }),
+);
 
 // Home Rooms (User's personal spaces)
 export const rooms = pgTable(

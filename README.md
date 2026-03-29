@@ -40,14 +40,14 @@ AI-powered import of municipal meeting minutes, ministry press releases, and EU 
 
 ## Tech Stack
 
-| Layer      | Technology                                |
-| ---------- | ----------------------------------------- |
-| Frontend   | React 19, TypeScript, Vite, Tailwind CSS  |
-| API        | Node.js, Express, Drizzle ORM             |
-| Database   | PostgreSQL                                |
-| Search     | Meilisearch (typo-tolerant, federated)    |
-| Real-time  | Socket.io (session-authenticated)         |
-| AI         | Mistral Large (EU-hosted, GDPR-compliant) |
+| Layer      | Technology                                             |
+| ---------- | ------------------------------------------------------ |
+| Frontend   | React 19, TypeScript, Vite, Tailwind CSS               |
+| API        | Node.js, Express, Drizzle ORM                          |
+| Database   | PostgreSQL                                             |
+| Search     | Meilisearch (typo-tolerant, federated)                 |
+| Real-time  | Socket.io (session-authenticated)                      |
+| AI         | Mistral Large (EU-hosted, GDPR-compliant)              |
 | Deployment | NixOS module, nginx, Traefik, nixos-rebuild, deploy-rs |
 
 ## Automated Content Import

@@ -57,6 +57,9 @@ generate-idura-jwks out_dir="local/idura-jwks":
 test-host-build:
     nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
 
+test-host-bootstrap-build:
+    nix build .#nixosConfigurations.eulesia-test-bootstrap.config.system.build.toplevel
+
 deploy:
     nix run .#deploy
 
@@ -65,6 +68,12 @@ deploy-test:
 
 rebuild-test:
     nix run .#rebuild-test
+
+bootstrap-test:
+    nix run .#bootstrap-test
+
+get-test-age-key:
+    nix run .#get-test-age-key
 
 shell:
     nix develop

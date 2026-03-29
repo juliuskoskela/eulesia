@@ -52,6 +52,9 @@
         nativeBuildInputs = [config.treefmt.build.wrapper];
       } ''
         cd ${repoSrc}
+        export HOME="$TMPDIR"
+        export XDG_CACHE_HOME="$TMPDIR/.cache"
+        mkdir -p "$XDG_CACHE_HOME"
         treefmt --fail-on-change
         touch $out
       '';

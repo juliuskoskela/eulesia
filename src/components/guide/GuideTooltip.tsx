@@ -56,8 +56,12 @@ export function GuideTooltip({
 
       {/* Content */}
       <div className="relative">
-        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-1">{title}</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{description}</p>
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-1">
+          {title}
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+          {description}
+        </p>
 
         {/* Step indicator and controls */}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">

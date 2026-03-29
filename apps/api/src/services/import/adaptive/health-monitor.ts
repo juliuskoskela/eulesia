@@ -5,11 +5,15 @@
  * Triggers self-healing when consecutive failures exceed threshold.
  */
 
-import { scraperDb, scraperConfigs, healthEvents } from '../../../db/scraper-db.js'
-import { eq, and, lt, sql } from 'drizzle-orm'
+import {
+  scraperDb,
+  scraperConfigs,
+  healthEvents,
+} from "../../../db/scraper-db.js";
+import { eq, and, lt, sql } from "drizzle-orm";
 
-const FAILURE_THRESHOLD = 5  // Consecutive failures before triggering self-heal
-const MAX_HEAL_ATTEMPTS = 3  // Max times to attempt self-healing before disabling
+const FAILURE_THRESHOLD = 5; // Consecutive failures before triggering self-heal
+const MAX_HEAL_ATTEMPTS = 3; // Max times to attempt self-healing before disabling
 
 // ============================================
 // Health Recording
@@ -22,18 +26,21 @@ export async function recordSuccess(configId: string): Promise<void> {
       lastSuccessAt: new Date(),
       consecutiveFailures: 0,
       totalSuccesses: sql`${scraperConfigs.totalSuccesses} + 1`,
-      status: 'active',
+      status: "active",
       updatedAt: new Date(),
     })
-    .where(eq(scraperConfigs.id, configId))
+    .where(eq(scraperConfigs.id, configId));
 
   await scraperDb.insert(healthEvents).values({
     configId,
-    eventType: 'success',
-  })
+    eventType: "success",
+  });
 }
 
-export async function recordFailure(configId: string, error: string): Promise<void> {
+export async function recordFailure(
+  configId: string,
+  error: string,
+): Promise<void> {
   const [updated] = await scraperDb
     .update(scraperConfigs)
     .set({
@@ -44,36 +51,43 @@ export async function recordFailure(configId: string, error: string): Promise<vo
       updatedAt: new Date(),
     })
     .where(eq(scraperConfigs.id, configId))
-    .returning({ consecutiveFailures: scraperConfigs.consecutiveFailures, healAttempts: scraperConfigs.healAttempts })
+    .returning({
+      consecutiveFailures: scraperConfigs.consecutiveFailures,
+      healAttempts: scraperConfigs.healAttempts,
+    });
 
   await scraperDb.insert(healthEvents).values({
     configId,
-    eventType: 'failure',
+    eventType: "failure",
     details: error.slice(0, 1000),
-  })
+  });
 
   // Check if self-healing should be triggered
   if (updated && updated.consecutiveFailures >= FAILURE_THRESHOLD) {
     if (updated.healAttempts < MAX_HEAL_ATTEMPTS) {
       await scraperDb
         .update(scraperConfigs)
-        .set({ status: 'failing' })
-        .where(eq(scraperConfigs.id, configId))
+        .set({ status: "failing" })
+        .where(eq(scraperConfigs.id, configId));
 
-      console.log(`   [health] Config ${configId} marked as failing (${updated.consecutiveFailures} consecutive failures)`)
+      console.log(
+        `   [health] Config ${configId} marked as failing (${updated.consecutiveFailures} consecutive failures)`,
+      );
     } else {
       await scraperDb
         .update(scraperConfigs)
-        .set({ status: 'disabled' })
-        .where(eq(scraperConfigs.id, configId))
+        .set({ status: "disabled" })
+        .where(eq(scraperConfigs.id, configId));
 
       await scraperDb.insert(healthEvents).values({
         configId,
-        eventType: 'disabled',
+        eventType: "disabled",
         details: `Disabled after ${MAX_HEAL_ATTEMPTS} heal attempts`,
-      })
+      });
 
-      console.log(`   [health] Config ${configId} disabled after ${MAX_HEAL_ATTEMPTS} heal attempts`)
+      console.log(
+        `   [health] Config ${configId} disabled after ${MAX_HEAL_ATTEMPTS} heal attempts`,
+      );
     }
   }
 }
@@ -82,18 +96,18 @@ export async function recordHealed(configId: string): Promise<void> {
   await scraperDb
     .update(scraperConfigs)
     .set({
-      status: 'active',
+      status: "active",
       consecutiveFailures: 0,
       lastHealedAt: new Date(),
       healAttempts: sql`${scraperConfigs.healAttempts} + 1`,
       updatedAt: new Date(),
     })
-    .where(eq(scraperConfigs.id, configId))
+    .where(eq(scraperConfigs.id, configId));
 
   await scraperDb.insert(healthEvents).values({
     configId,
-    eventType: 'healed',
-  })
+    eventType: "healed",
+  });
 }
 
 // ============================================
@@ -106,26 +120,29 @@ export async function getFailingConfigs() {
     .from(scraperConfigs)
     .where(
       and(
-        eq(scraperConfigs.status, 'failing'),
-        lt(scraperConfigs.healAttempts, MAX_HEAL_ATTEMPTS)
-      )
-    )
+        eq(scraperConfigs.status, "failing"),
+        lt(scraperConfigs.healAttempts, MAX_HEAL_ATTEMPTS),
+      ),
+    );
 }
 
 export async function getHealthSummary(): Promise<{
-  active: number
-  pending: number
-  failing: number
-  disabled: number
-  total: number
-  byCountry: Record<string, { active: number; failing: number; disabled: number }>
+  active: number;
+  pending: number;
+  failing: number;
+  disabled: number;
+  total: number;
+  byCountry: Record<
+    string,
+    { active: number; failing: number; disabled: number }
+  >;
 }> {
   const all = await scraperDb
     .select({
       status: scraperConfigs.status,
       country: scraperConfigs.country,
     })
-    .from(scraperConfigs)
+    .from(scraperConfigs);
 
   const summary = {
     active: 0,
@@ -133,33 +150,40 @@ export async function getHealthSummary(): Promise<{
     failing: 0,
     disabled: 0,
     total: all.length,
-    byCountry: {} as Record<string, { active: number; failing: number; disabled: number }>,
-  }
+    byCountry: {} as Record<
+      string,
+      { active: number; failing: number; disabled: number }
+    >,
+  };
 
   for (const row of all) {
-    const status = row.status as keyof typeof summary
-    if (status in summary && typeof summary[status] === 'number') {
-      (summary[status] as number)++
+    const status = row.status as keyof typeof summary;
+    if (status in summary && typeof summary[status] === "number") {
+      (summary[status] as number)++;
     }
 
     if (!summary.byCountry[row.country]) {
-      summary.byCountry[row.country] = { active: 0, failing: 0, disabled: 0 }
+      summary.byCountry[row.country] = { active: 0, failing: 0, disabled: 0 };
     }
-    const cs = row.status as 'active' | 'failing' | 'disabled'
+    const cs = row.status as "active" | "failing" | "disabled";
     if (cs in summary.byCountry[row.country]) {
-      summary.byCountry[row.country][cs]++
+      summary.byCountry[row.country][cs]++;
     }
   }
 
-  return summary
+  return summary;
 }
 
 export async function logHealthReport(): Promise<void> {
-  const summary = await getHealthSummary()
-  console.log(`\n📊 Scraper Health Report:`)
-  console.log(`   Total: ${summary.total} | Active: ${summary.active} | Pending: ${summary.pending} | Failing: ${summary.failing} | Disabled: ${summary.disabled}`)
+  const summary = await getHealthSummary();
+  console.log(`\n📊 Scraper Health Report:`);
+  console.log(
+    `   Total: ${summary.total} | Active: ${summary.active} | Pending: ${summary.pending} | Failing: ${summary.failing} | Disabled: ${summary.disabled}`,
+  );
 
   for (const [country, stats] of Object.entries(summary.byCountry)) {
-    console.log(`   ${country}: active=${stats.active} failing=${stats.failing} disabled=${stats.disabled}`)
+    console.log(
+      `   ${country}: active=${stats.active} failing=${stats.failing} disabled=${stats.disabled}`,
+    );
   }
 }

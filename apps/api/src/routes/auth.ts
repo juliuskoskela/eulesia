@@ -239,7 +239,7 @@ if (ftnEnabled) {
         lastName: claims.family_name,
         ...(inviteCode ? { invite: inviteCode } : {}),
       });
-      res.redirect(`${env.APP_URL}/?${params.toString()}`);
+      res.redirect(`${env.APP_URL}/register?${params.toString()}`);
     }),
   );
 }
@@ -249,7 +249,7 @@ router.get("/ftn/error", (req, res) => {
   const errorDesc =
     req.query.error_description || req.query.error || "ftn_failed";
   res.redirect(
-    `${env.APP_URL}/?ftn_error=${encodeURIComponent(String(errorDesc))}`,
+    `${env.APP_URL}/register?ftn_error=${encodeURIComponent(String(errorDesc))}`,
   );
 });
 

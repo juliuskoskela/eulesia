@@ -8,7 +8,9 @@ function isCapacitorOrigin(req?: Request): boolean {
 }
 
 function getConfiguredCookieSecurity(): boolean {
-  return env.APP_URL.startsWith("https://") || env.API_URL.startsWith("https://");
+  return (
+    env.APP_URL.startsWith("https://") || env.API_URL.startsWith("https://")
+  );
 }
 
 export function shouldUseSecureCookies(req?: Request): boolean {

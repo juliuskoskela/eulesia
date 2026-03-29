@@ -15,7 +15,8 @@ The flake exposes:
 - `nix run .#ci-check` for runner-agnostic CI checks
 - `nixosModules.eulesia` for reusable service configuration
 - `nixosConfigurations.eulesia-vm` plus `just vm-run` and `just vm-deploy` for local MicroVM validation
-- `nixosConfigurations.eulesia-test`, `nix run .#rebuild-test`, and `nix run .#deploy-test` for the public test host
+- `nixosConfigurations.eulesia-test-bootstrap`, `just bootstrap-test`, and `just get-test-age-key` for first install of the public test host
+- `nixosConfigurations.eulesia-test`, `nix run .#rebuild-test`, and `nix run .#deploy-test` for the public test host after bootstrap
 - `nixosConfigurations.eulesia-prod` and `nix run .#deploy` for production deployment
 
 The old Docker Compose setup is deprecated and should only be treated as a temporary fallback while the production host is migrated.
@@ -40,6 +41,7 @@ Useful validation commands:
 just lint
 just test
 just build
+just test-host-bootstrap-build
 just vm-build
 just test-host-build
 nix run .#ci-check
@@ -97,9 +99,11 @@ Current assumptions in the repo:
 
 - deploy target host: `95.216.206.136`
 - SSH user: `root`
+- default local SSH target alias for the test server: `eulesia-server-test`
 - domains: `eulesia.eu` and `api.eulesia.eu`
 - test domains: `test.eulesia.org` and `api.test.eulesia.org`
 - the test host uses Traefik as the public edge and password gate, with nginx bound to loopback as the internal origin
+- the test host bootstrap uses `disko` with `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114774765` as the system disk and `/dev/disk/by-id/scsi-0HC_Volume_105267941` as the PostgreSQL volume
 - managed runtime secrets should live under `secrets/prod/` and `secrets/test/`
 - one encrypted file per secret, using names such as `session-secret.enc` and `firebase-service-account.json.enc`
 - `sops-nix` materializes runtime secret files under `/run/secrets/eulesia/`
@@ -148,7 +152,10 @@ When syncing to an existing Idura app, reuse the matching private JWKs instead o
 Build and deploy through the flake:
 
 ```bash
+nix build .#nixosConfigurations.eulesia-test-bootstrap.config.system.build.toplevel
 nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
+nix run .#bootstrap-test
+nix run .#get-test-age-key
 nix run .#rebuild-test
 nix run .#deploy-test
 
@@ -156,7 +163,7 @@ nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
 nix run .#deploy
 ```
 
-Use `nix run .#rebuild-test` as the primary test-host deployment path. It wraps `nixos-rebuild switch` and requires `EULESIA_TEST_TARGET_HOST` to point at the Hetzner private address or private DNS name of the host.
+Use `nix run .#bootstrap-test` once for the first install and `nix run .#rebuild-test` for normal test-host updates. Both commands default to the local SSH target alias `eulesia-server-test`; override it with `EULESIA_TEST_TARGET_HOST` when needed. After the full test configuration is active, run update commands from a machine that is allowed to SSH to the host, typically Mercury or another VPN-attached machine.
 
 After the Traefik edge is enabled, public health checks require HTTP basic auth. CI therefore validates the backend origin over SSH against `127.0.0.1:8080` on the target host.
 
@@ -192,15 +199,48 @@ The VM config uses:
 
 ## Hetzner Bootstrap
 
-For a real Hetzner VPS, follow the same high-level flow used in `~/Repos/infra`:
+The test host now follows the same bootstrap pattern used in `~/Repos/infra`:
 
-1. Provision or bootstrap the target machine.
-2. Attach and format the PostgreSQL volume as `ext4` with label `eulesia-pg`.
-3. Generate the server age key on the target at `/var/lib/sops-nix/key.txt`.
-4. Add the server public key to `.sops.yaml`.
-5. Re-encrypt the relevant `secrets/test/*.enc` or `secrets/prod/*.enc` files, including `traefik-basic-auth-password.enc`.
-6. Set `EULESIA_TEST_TARGET_HOST` to the host's Hetzner private IP or private DNS name.
-7. Deploy the matching NixOS configuration with `nix run .#rebuild-test`.
+1. Ensure your local SSH config can reach the fresh server as `root@eulesia-server-test`, or export `EULESIA_TEST_TARGET_HOST` with the correct address.
+2. Validate the bootstrap configuration locally:
+
+```bash
+just test-host-bootstrap-build
+```
+
+3. Run the destructive first install:
+
+```bash
+just bootstrap-test
+```
+
+This wipes the system disk and the attached PostgreSQL volume, repartitions both with `disko`, installs the minimal `eulesia-test-bootstrap` configuration, and reboots into NixOS.
+
+4. Retrieve the generated age public key:
+
+```bash
+just get-test-age-key
+```
+
+5. Add that public key to `.sops.yaml` for the test secret rule, then re-encrypt the test secrets:
+
+```bash
+find secrets/test -name '*.enc' -print0 | xargs -0 -n1 sops updatekeys
+```
+
+6. Build and switch the real test host configuration:
+
+```bash
+just test-host-build
+just rebuild-test
+```
+
+7. For later changes, skip the bootstrap and use `just rebuild-test` directly.
+
+The test host disk layout is:
+
+- system disk: GPT, `1M` BIOS boot partition, `500M` EFI system partition mounted at `/boot`, ext4 root filesystem on `/`
+- data disk: GPT, single ext4 filesystem mounted at `/var/lib/postgresql`
 
 ## Legacy Docker Assets
 

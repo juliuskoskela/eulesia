@@ -280,7 +280,7 @@ export function TopBar() {
               <Link
                 to="/profile"
                 className="flex items-center gap-2 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                aria-label={t('nav.profile')}
+                aria-label={t("nav.profile")}
               >
                 <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center">
                   {currentUser.avatarUrl ? (

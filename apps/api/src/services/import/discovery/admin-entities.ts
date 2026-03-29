@@ -14,7 +14,7 @@
  * - municipality:  admin_level 7-8 (all countries)
  */
 
-export type AdminLevel = 'municipality' | 'county' | 'region' | 'state'
+export type AdminLevel = "municipality" | "county" | "region" | "state";
 
 /**
  * An administrative entity at any governance level.
@@ -22,17 +22,17 @@ export type AdminLevel = 'municipality' | 'county' | 'region' | 'state'
  */
 export interface AdminEntity {
   /** Display name in local language (e.g., "Pirkanmaan liitto", "Region Stockholm") */
-  name: string
+  name: string;
   /** URL-safe slug following country-specific conventions */
-  slug: string
+  slug: string;
   /** Administrative level */
-  adminLevel: AdminLevel
+  adminLevel: AdminLevel;
   /** Approximate population (for prioritization) */
-  population?: number
+  population?: number;
   /** Parent entity name for hierarchy (e.g., county's parent is a state in DE) */
-  parent?: string
+  parent?: string;
   /** ISO 3166-2 subdivision code if applicable (e.g., "FI-11" for Pirkanmaa) */
-  subdivisionCode?: string
+  subdivisionCode?: string;
 }
 
 /**
@@ -40,15 +40,15 @@ export interface AdminEntity {
  * Describes what each admin level means in a given country's governance structure.
  */
 export interface AdminLevelMeta {
-  level: AdminLevel
+  level: AdminLevel;
   /** Local name for this level (e.g., "maakuntaliitto", "fylkeskommune", "Bundesland") */
-  localName: string
+  localName: string;
   /** English name */
-  englishName: string
+  englishName: string;
   /** How many entities at this level */
-  count: number
+  count: number;
   /** What kind of decisions are made at this level */
-  scope?: string
+  scope?: string;
 }
 
 /**
@@ -58,47 +58,50 @@ export interface AdminLevelMeta {
 export const ADMIN_LEVEL_META: Record<string, AdminLevelMeta[]> = {
   FI: [
     {
-      level: 'region',
-      localName: 'maakuntaliitto',
-      englishName: 'Regional council',
+      level: "region",
+      localName: "maakuntaliitto",
+      englishName: "Regional council",
       count: 19,
-      scope: 'Regional planning, land use, EU structural funds, regional transport',
+      scope:
+        "Regional planning, land use, EU structural funds, regional transport",
     },
   ],
   SE: [
     {
-      level: 'region',
-      localName: 'region',
-      englishName: 'Region',
+      level: "region",
+      localName: "region",
+      englishName: "Region",
       count: 21,
-      scope: 'Healthcare, public transport, regional development, culture',
+      scope: "Healthcare, public transport, regional development, culture",
     },
   ],
   NO: [
     {
-      level: 'county',
-      localName: 'fylkeskommune',
-      englishName: 'County municipality',
+      level: "county",
+      localName: "fylkeskommune",
+      englishName: "County municipality",
       count: 15,
-      scope: 'Upper secondary education, regional transport, dental care, cultural heritage',
+      scope:
+        "Upper secondary education, regional transport, dental care, cultural heritage",
     },
   ],
   DK: [
     {
-      level: 'region',
-      localName: 'region',
-      englishName: 'Region',
+      level: "region",
+      localName: "region",
+      englishName: "Region",
       count: 5,
-      scope: 'Hospitals, healthcare, regional development, soil contamination',
+      scope: "Hospitals, healthcare, regional development, soil contamination",
     },
   ],
   DE: [
     {
-      level: 'state',
-      localName: 'Bundesland',
-      englishName: 'Federal state',
+      level: "state",
+      localName: "Bundesland",
+      englishName: "Federal state",
       count: 16,
-      scope: 'Education, police, healthcare, culture, justice — major legislative power',
+      scope:
+        "Education, police, healthcare, culture, justice — major legislative power",
     },
   ],
-}
+};

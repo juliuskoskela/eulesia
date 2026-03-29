@@ -442,7 +442,7 @@ export async function completeIduraAuthentication({
 }
 
 export function getFtnFailureRedirect(errorCode: string): string {
-  return `${env.APP_URL}/?ftn_error=${encodeURIComponent(errorCode)}`;
+  return `${env.APP_URL}/register?ftn_error=${encodeURIComponent(errorCode)}`;
 }
 
 export function getRequestJwtHeader(token: string): JWSHeaderParameters {

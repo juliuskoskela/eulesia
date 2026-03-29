@@ -118,9 +118,13 @@ function MunicipalityCard({
             <MapPin className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{municipality.name}</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+              {municipality.name}
+            </h3>
             {municipality.region && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">{municipality.region}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {municipality.region}
+              </p>
             )}
           </div>
         </div>

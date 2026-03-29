@@ -15,6 +15,7 @@ import {
   Mail,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import { SEOHead } from "../components/SEOHead";
 import { useAuth } from "../hooks/useAuth";
 import { api, type AuthConfig } from "../lib/api";
@@ -22,10 +23,41 @@ import { buildApiUrl } from "../lib/runtimeConfig";
 
 type LoginStep = "initial" | "login" | "register" | "invite-check";
 
+interface FtnReturnParams {
+  error: string | null;
+  firstName: string | null;
+  invite: string | null;
+  lastName: string | null;
+  token: string | null;
+}
+
+function readFtnReturnParams(search: string): FtnReturnParams {
+  const params = new URLSearchParams(search);
+
+  return {
+    error: params.get("ftn_error"),
+    firstName: params.get("firstName"),
+    invite: params.get("invite"),
+    lastName: params.get("lastName"),
+    token: params.get("ftn"),
+  };
+}
+
 export function LoginPage() {
   const { t, i18n } = useTranslation(["auth", "common"]);
+  const location = useLocation();
   const { login, register } = useAuth();
-  const [step, setStep] = useState<LoginStep>("initial");
+  const initialFtnReturn = readFtnReturnParams(location.search);
+  const hasInitialFtnReturn =
+    !!initialFtnReturn.token &&
+    !!initialFtnReturn.firstName &&
+    !!initialFtnReturn.lastName;
+
+  const [step, setStep] = useState<LoginStep>(() =>
+    location.pathname === "/register" || hasInitialFtnReturn
+      ? "register"
+      : "initial",
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
@@ -35,22 +67,31 @@ export function LoginPage() {
   const [loginPassword, setLoginPassword] = useState("");
 
   // Register form
-  const [inviteCode, setInviteCode] = useState("");
-  const [inviteValid, setInviteValid] = useState(false);
+  const [inviteCode, setInviteCode] = useState(initialFtnReturn.invite ?? "");
+  const [inviteValid, setInviteValid] = useState(
+    Boolean(initialFtnReturn.invite),
+  );
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
   const [regUsername, setRegUsername] = useState("");
   const [regPassword, setRegPassword] = useState("");
-  const [regFirstName, setRegFirstName] = useState("");
-  const [regLastName, setRegLastName] = useState("");
+  const [regFirstName, setRegFirstName] = useState(
+    initialFtnReturn.firstName ?? "",
+  );
+  const [regLastName, setRegLastName] = useState(
+    initialFtnReturn.lastName ?? "",
+  );
 
   // FTN (strong authentication)
-  const [ftnToken, setFtnToken] = useState<string | null>(null);
+  const [ftnToken, setFtnToken] = useState<string | null>(
+    hasInitialFtnReturn ? initialFtnReturn.token : null,
+  );
   const ftnVerified = !!ftnToken;
   const inviteOnlyRegistration = authConfig?.registrationMode !== "ftn-open";
   const canRegisterWithFtn =
     !!authConfig?.registrationOpen && !!authConfig?.ftnEnabled;
   const showRegisterStep =
-    step === "register" && (!inviteOnlyRegistration || inviteValid);
+    step === "register" &&
+    (!inviteOnlyRegistration || inviteValid || ftnVerified);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,12 +129,19 @@ export function LoginPage() {
 
   // Handle FTN callback parameters from URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("ftn");
-    const firstName = params.get("firstName");
-    const lastName = params.get("lastName");
-    const invite = params.get("invite");
-    const ftnError = params.get("ftn_error");
+    const {
+      error: ftnError,
+      firstName,
+      invite,
+      lastName,
+      token,
+    } = readFtnReturnParams(location.search);
+
+    if (location.pathname === "/register") {
+      setStep((currentStep) =>
+        currentStep === "initial" ? "register" : currentStep,
+      );
+    }
 
     if (ftnError) {
       if (ftnError === "duplicate_identity") {
@@ -101,22 +149,22 @@ export function LoginPage() {
       } else {
         setError(t("ftn.authFailed"));
       }
-      window.history.replaceState({}, "", window.location.pathname);
+      window.history.replaceState({}, "", location.pathname);
       return;
     }
 
     if (token && firstName && lastName) {
       setFtnToken(token);
-      setRegFirstName(decodeURIComponent(firstName));
-      setRegLastName(decodeURIComponent(lastName));
+      setRegFirstName(firstName);
+      setRegLastName(lastName);
       if (invite) {
-        setInviteCode(decodeURIComponent(invite));
+        setInviteCode(invite);
         setInviteValid(true);
       }
       setStep("register");
-      window.history.replaceState({}, "", window.location.pathname);
+      window.history.replaceState({}, "", location.pathname);
     }
-  }, [t]);
+  }, [location.pathname, location.search, t]);
 
   // Waitlist form
   const [waitlistEmail, setWaitlistEmail] = useState("");

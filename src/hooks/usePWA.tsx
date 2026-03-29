@@ -28,6 +28,8 @@ const PWAContext = createContext<PWAContextType>({
   installApp: async () => {},
 });
 
+const PWA_DISABLED_HOSTS = new Set(["test.eulesia.org"]);
+
 export function PWAProvider({ children }: { children: ReactNode }) {
   const [needRefresh, setNeedRefresh] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
@@ -49,6 +51,23 @@ export function PWAProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function registerSW() {
       if (!("serviceWorker" in navigator)) return;
+
+      if (PWA_DISABLED_HOSTS.has(window.location.hostname)) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((r) => r.unregister()));
+
+        if ("caches" in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(
+            cacheNames.map((cacheName) => caches.delete(cacheName)),
+          );
+        }
+
+        setRegistration(null);
+        setNeedRefresh(false);
+        setOfflineReady(false);
+        return;
+      }
 
       try {
         const { registerSW } = await import("virtual:pwa-register");

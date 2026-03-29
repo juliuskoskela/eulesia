@@ -23,6 +23,7 @@ _: {
         do
           if [ -f "$env_file" ]; then
             set -a
+            # shellcheck source=/dev/null
             . "$env_file"
             set +a
           fi
@@ -65,8 +66,7 @@ _: {
       }
 
       wait_for_postgres() {
-        local attempt
-        for attempt in $(seq 1 60); do
+        for _ in $(seq 1 60); do
           if pg_isready -h 127.0.0.1 -p "$EULESIA_PGPORT" >/dev/null 2>&1; then
             return 0
           fi
@@ -78,8 +78,7 @@ _: {
 
       wait_for_http() {
         local url="$1"
-        local attempt
-        for attempt in $(seq 1 60); do
+        for _ in $(seq 1 60); do
           if curl --silent --fail "$url" >/dev/null 2>&1; then
             return 0
           fi

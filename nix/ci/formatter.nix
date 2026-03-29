@@ -37,6 +37,11 @@ _: {
       runtimeInputs = [config.treefmt.build.wrapper];
       text = ''
         set -euo pipefail
+        HOME="$(mktemp -d)"
+        export HOME
+        XDG_CACHE_HOME="$HOME/.cache"
+        export XDG_CACHE_HOME
+        mkdir -p "$XDG_CACHE_HOME"
         treefmt --fail-on-change
       '';
     };

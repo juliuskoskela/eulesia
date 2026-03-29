@@ -130,7 +130,9 @@ export function MunicipalityPage() {
                 {municipality?.name || t("agora:municipality.defaultName")}
               </h1>
               {municipality?.region && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">{municipality.region}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {municipality.region}
+                </p>
               )}
             </div>
           </div>

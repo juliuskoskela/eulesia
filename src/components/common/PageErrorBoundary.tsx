@@ -57,7 +57,7 @@ export class PageErrorBoundary extends Component<Props, State> {
               {import.meta.env.DEV && this.state.error && (
                 <details className="mt-6 text-left">
                   <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
-                    {t('errorPages.dev.details')}
+                    {t("errorPages.dev.details")}
                   </summary>
                   <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs text-red-600 dark:text-red-400 overflow-auto max-h-40">
                     {this.state.error.message}
