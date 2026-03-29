@@ -150,6 +150,84 @@ These values are important, but they are not secrets and should not be stored as
 - Keep file names stable across environments so Nix and runtime paths stay predictable.
 - For JSON credentials, preserve the original JSON payload and only add the `.enc` suffix.
 
+## Developer Workstation Key Onboarding
+
+Developers who need access to `secrets/test/*` should use a normal local SOPS Age key on their workstation.
+
+If you already have Nix and this repo checked out, `nix develop` provides `age-keygen`, `sops`, and `just`. You do not need to install those tools separately.
+
+Use this path:
+
+```bash
+~/.config/sops/age/keys.txt
+```
+
+If that file already exists, reuse it. Do not generate a second workstation key unless you are intentionally rotating or replacing your local SOPS identity.
+
+If it does not exist yet, create it with:
+
+```bash
+mkdir -p ~/.config/sops/age
+age-keygen -o ~/.config/sops/age/keys.txt
+chmod 600 ~/.config/sops/age/keys.txt
+```
+
+Print your public recipient with:
+
+```bash
+age-keygen -y ~/.config/sops/age/keys.txt
+```
+
+Send only the public `age1...` recipient to a maintainer, together with a stable label such as `firstname.lastname@company.com workstation`.
+
+### Maintainer-side repo update
+
+After receiving the developer's public recipient, a maintainer should:
+
+1. Add a named or commented entry to `.sops.yaml`.
+2. Include that recipient in the `secrets/test/*.enc` creation rule.
+3. Re-encrypt the test secrets:
+
+```bash
+find secrets/test -name '*.enc' -print0 | xargs -0 -n1 sops updatekeys
+```
+
+4. Commit the `.sops.yaml` change together with the re-encrypted `secrets/test/*` files.
+
+That repo update is what gives the developer access to the current test secret set.
+
+### Developer verification
+
+After the maintainer has committed the recipient update:
+
+1. Pull the latest changes.
+2. Verify that SOPS can decrypt a test secret locally:
+
+```bash
+sops -d secrets/test/session-secret.enc >/dev/null
+```
+
+3. Optionally validate that the test host configuration builds:
+
+```bash
+nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel --no-link
+```
+
+If decryption fails, the usual causes are:
+
+- the wrong public recipient was added to `.sops.yaml`
+- the test secrets were not re-encrypted after adding the key
+- your workstation is not using `~/.config/sops/age/keys.txt`
+
+### Access model
+
+- Your workstation Age key allows local decryption of repo-managed secrets.
+- It does not by itself grant SSH access to the test server.
+- Direct workstation deploys also require your SSH public key to be authorized on the test host.
+- GitHub Actions deploys use shared repo-level Actions variables and secrets plus Mercury runners, not per-developer Age keys.
+
+For the full workstation and test-host flow, see [Deployment](./deployment.md).
+
 ## Current State
 
 - `secrets/test/` now carries the full runtime secret surface, seeded from the local test values and fresh generated session, Meilisearch, and VAPID secrets.
