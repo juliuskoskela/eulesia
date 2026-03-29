@@ -1,21 +1,21 @@
 keys:
   # julius.koskela@digimuoto.com workstation
   - &local_dev age1xy93kan6jxmp8wwayarejuvkxh99cfjyxdfwdryv0axr8dds5dhqws809e
-  # second developer workstation
-  - &dev_2 age1t94kyydev8zr3l53vrjsvqggnf4r4axeqv46s38vtej2xn62uavsmns849
+  # markus.sjoberg@aihiolabs.com workstation
+  - &markus_sjoberg age1t94kyydev8zr3l53vrjsvqggnf4r4axeqv46s38vtej2xn62uavsmns849
   # local MicroVM sops key used by just vm-run / just vm-deploy
-  - &local_vm age1r0y06ntxaku4ugt536mpz6e8tz08jkq6w84uxl4yhstgmmejlsxqdy9knp
-  # eulesia-server-test
-  - &test_host age1up3c8m6l4dkzerpa5dgnd5y2tq24lprdc60xj3unv6dg3jp6c5zqwf0jv0
+  - &local_microvm age1r0y06ntxaku4ugt536mpz6e8tz08jkq6w84uxl4yhstgmmejlsxqdy9knp
+  # eulesia-server-test host age key
+  - &eulesia_server_test age1up3c8m6l4dkzerpa5dgnd5y2tq24lprdc60xj3unv6dg3jp6c5zqwf0jv0
 
 creation_rules:
   # Local and test deployment secrets.
   - path_regex: secrets/test/[^/]+\.enc$
     age:
       - *local_dev
-      - *dev_2
-      - *local_vm
-      - *test_host
+      - *markus_sjoberg
+      - *local_microvm
+      - *eulesia_server_test
 
   # Production deployment secrets.
   - path_regex: secrets/prod/[^/]+\.enc$
