@@ -1,6 +1,6 @@
 keys:
   # Julius Koskela julius.koskela@digimuoto.com workstation
-  - &local_dev age1xy93kan6jxmp8wwayarejuvkxh99cfjyxdfwdryv0axr8dds5dhqws809e
+  - &julius_koskela age1xy93kan6jxmp8wwayarejuvkxh99cfjyxdfwdryv0axr8dds5dhqws809e
   # Markus Sjoberg markus.sjoberg@aihiolabs.com workstation
   - &markus_sjoberg age1t94kyydev8zr3l53vrjsvqggnf4r4axeqv46s38vtej2xn62uavsmns849
   # local MicroVM sops key used by just vm-run / just vm-deploy
@@ -12,7 +12,7 @@ creation_rules:
   # Local and test deployment secrets.
   - path_regex: secrets/test/[^/]+\.enc$
     age:
-      - *local_dev
+      - *julius_koskela
       - *markus_sjoberg
       - *local_microvm
       - *eulesia_server_test
@@ -20,5 +20,5 @@ creation_rules:
   # Production deployment secrets.
   - path_regex: secrets/prod/[^/]+\.enc$
     age:
-      - *local_dev
+      - *julius_koskela
       # Add the production host age recipient here after bootstrapping it.
