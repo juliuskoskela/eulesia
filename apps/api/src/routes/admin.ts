@@ -1027,11 +1027,6 @@ router.get(
     res.json({
       success: true,
       data: {
-        invitesEnabled: settingsMap["invites_enabled"] !== "false", // default: true
-        defaultInviteCount: parseInt(
-          settingsMap["default_invite_count"] || "5",
-          10,
-        ),
         registrationOpen: settingsMap["registration_open"] !== "false", // default: true
       },
     });
@@ -1043,25 +1038,11 @@ router.patch(
   "/settings",
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const schema = z.object({
-      invitesEnabled: z.boolean().optional(),
-      defaultInviteCount: z.number().int().min(0).max(100).optional(),
       registrationOpen: z.boolean().optional(),
     });
     const data = schema.parse(req.body);
 
     const updates: { key: string; value: string }[] = [];
-    if (data.invitesEnabled !== undefined) {
-      updates.push({
-        key: "invites_enabled",
-        value: String(data.invitesEnabled),
-      });
-    }
-    if (data.defaultInviteCount !== undefined) {
-      updates.push({
-        key: "default_invite_count",
-        value: String(data.defaultInviteCount),
-      });
-    }
     if (data.registrationOpen !== undefined) {
       updates.push({
         key: "registration_open",

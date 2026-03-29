@@ -56,7 +56,16 @@
         inherit config;
         secretDir = ../../secrets/prod;
       })
-      ["firebase-service-account.json"];
+      ["firebase-service-account.json"]
+      // {
+        "traefik-basic-auth-password" = {
+          owner = "root";
+          group = "root";
+          format = "binary";
+          sopsFile = ../../secrets/prod/traefik-basic-auth-password.enc;
+          path = "/run/secrets/traefik-basic-auth-password";
+        };
+      };
   };
 
   services = {
@@ -132,15 +141,22 @@
       };
 
       dynamicConfigOptions.http = {
-        middlewares.security-headers.headers = {
-          frameDeny = true;
-          contentTypeNosniff = true;
-          browserXssFilter = true;
-          referrerPolicy = "no-referrer-when-downgrade";
-          sslRedirect = true;
-          stsSeconds = 31536000;
-          stsIncludeSubdomains = true;
-          stsPreload = true;
+        middlewares = {
+          eulesia-prod-auth.basicAuth = {
+            usersFile = "/run/eulesia-prod/traefik-basic-auth.users";
+            realm = "Eulesia";
+          };
+
+          security-headers.headers = {
+            frameDeny = true;
+            contentTypeNosniff = true;
+            browserXssFilter = true;
+            referrerPolicy = "no-referrer-when-downgrade";
+            sslRedirect = true;
+            stsSeconds = 31536000;
+            stsIncludeSubdomains = true;
+            stsPreload = true;
+          };
         };
 
         routers = {
@@ -148,7 +164,10 @@
             rule = "Host(`eulesia.org`)";
             service = "eulesia";
             entryPoints = ["websecure"];
-            middlewares = ["security-headers"];
+            middlewares = [
+              "eulesia-prod-auth"
+              "security-headers"
+            ];
             tls.certResolver = "letsencrypt";
           };
 
@@ -156,7 +175,10 @@
             rule = "Host(`api.eulesia.org`)";
             service = "eulesia";
             entryPoints = ["websecure"];
-            middlewares = ["security-headers"];
+            middlewares = [
+              "eulesia-prod-auth"
+              "security-headers"
+            ];
             tls.certResolver = "letsencrypt";
           };
         };
@@ -192,7 +214,7 @@
       };
       auth = {
         sessionSecretFile = config.sops.secrets."session-secret".path;
-        registrationMode = "invite-only";
+        registrationMode = "ftn-open";
         idura = {
           enable = true;
           domain = "eulesia.idura.broker";
@@ -223,6 +245,37 @@
   environment.systemPackages = with pkgs; [
     curl
   ];
+
+  systemd.services.eulesia-prod-traefik-basic-auth = {
+    description = "Generate Traefik basic auth users file for Eulesia prod";
+    wantedBy = ["multi-user.target"];
+    before = ["traefik.service"];
+    wants = ["sops-install-secrets.service"];
+    after = ["sops-install-secrets.service"];
+    unitConfig = {
+      ConditionPathExists = config.sops.secrets."traefik-basic-auth-password".path;
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      set -euo pipefail
+
+      install -d -m 0750 -o traefik -g traefik /run/eulesia-prod
+      PASSWORD="$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.sops.secrets."traefik-basic-auth-password".path})"
+      HASH="$(${pkgs.openssl}/bin/openssl passwd -apr1 "$PASSWORD")"
+
+      printf 'eulesia-test:%s\n' "$HASH" > /run/eulesia-prod/traefik-basic-auth.users
+      chown traefik:traefik /run/eulesia-prod/traefik-basic-auth.users
+      chmod 0400 /run/eulesia-prod/traefik-basic-auth.users
+    '';
+  };
+
+  systemd.services.traefik = {
+    wants = ["eulesia-prod-traefik-basic-auth.service"];
+    after = ["eulesia-prod-traefik-basic-auth.service"];
+  };
 
   system.stateVersion = "24.11";
 }

@@ -13,7 +13,10 @@ process.env.SESSION_SECRET ??= "test-session-secret-value-with-32-chars";
 const {
   createPrivateKeyJwtAssertion,
   createSignedRequestObject,
+  getFtnFailureCodeFromError,
+  getFtnFailureCodeFromIdura,
   getRequestJwtHeader,
+  IduraTokenExchangeError,
   verifyEncryptedIdToken,
 } = await import("./iduraFtn.js");
 
@@ -192,5 +195,25 @@ describe("Idura FTN helpers", () => {
         issuerJwks,
       }),
     ).rejects.toThrow("Invalid FTN nonce");
+  });
+
+  it("classifies Idura 429 responses as a registration limit failure", () => {
+    expect(
+      getFtnFailureCodeFromIdura({
+        error: "rate_limited",
+        errorDescription: "Monthly registration limit reached",
+        status: 429,
+      }),
+    ).toBe("ftn_registration_limit");
+  });
+
+  it("classifies Idura token exchange quota errors through the callback helper", () => {
+    const error = new IduraTokenExchangeError({
+      error: "invalid_request",
+      errorDescription: "Monthly registration limit reached",
+      status: 400,
+    });
+
+    expect(getFtnFailureCodeFromError(error)).toBe("ftn_registration_limit");
   });
 });

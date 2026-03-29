@@ -87,6 +87,48 @@ interface IduraTokenResponse {
   id_token?: string;
 }
 
+interface IduraFailureDetails {
+  error?: string;
+  errorDescription?: string | null;
+  status?: number;
+}
+
+const IDURA_REGISTRATION_LIMIT_PATTERNS = [
+  /\b429\b/,
+  /\bquota\b/,
+  /\brate[ -]?limit\b/,
+  /\bmonthly\b.*\blimit\b/,
+  /\bregistration\b.*\blimit\b/,
+  /\blimit\b.*\breached\b/,
+  /\breached\b.*\blimit\b/,
+  /\bstrong\b.*\bauth\b.*\blimit\b/,
+  /\bregistration\b.*\btemporarily unavailable\b/,
+];
+
+export class IduraTokenExchangeError extends Error {
+  readonly iduraError?: string;
+  readonly iduraErrorDescription?: string;
+  readonly status: number;
+
+  constructor({
+    error,
+    errorDescription,
+    status,
+  }: {
+    error?: string;
+    errorDescription?: string;
+    status: number;
+  }) {
+    super(
+      errorDescription || error || `Idura token exchange failed with ${status}`,
+    );
+    this.name = "IduraTokenExchangeError";
+    this.iduraError = error;
+    this.iduraErrorDescription = errorDescription;
+    this.status = status;
+  }
+}
+
 let discoveryPromise: Promise<IduraDiscoveryDocument> | null = null;
 let clientKeysPromise: Promise<IduraClientKeys> | null = null;
 let issuerJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -406,11 +448,11 @@ export async function exchangeIduraAuthorizationCode(
   }
 
   if (!response.ok || payload.error) {
-    throw new Error(
-      payload.error_description ||
-        payload.error ||
-        `Idura token exchange failed with ${response.status}`,
-    );
+    throw new IduraTokenExchangeError({
+      error: payload.error,
+      errorDescription: payload.error_description,
+      status: response.status,
+    });
   }
 
   return payload;
@@ -443,6 +485,41 @@ export async function completeIduraAuthentication({
 
 export function getFtnFailureRedirect(errorCode: string): string {
   return `${env.APP_URL}/register?ftn_error=${encodeURIComponent(errorCode)}`;
+}
+
+function isIduraRegistrationLimitFailure({
+  error,
+  errorDescription,
+  status,
+}: IduraFailureDetails): boolean {
+  if (status === 429) {
+    return true;
+  }
+
+  const normalized = `${error ?? ""} ${errorDescription ?? ""}`.toLowerCase();
+  return IDURA_REGISTRATION_LIMIT_PATTERNS.some((pattern) =>
+    pattern.test(normalized),
+  );
+}
+
+export function getFtnFailureCodeFromIdura(
+  details: IduraFailureDetails,
+): string {
+  return isIduraRegistrationLimitFailure(details)
+    ? "ftn_registration_limit"
+    : "ftn_failed";
+}
+
+export function getFtnFailureCodeFromError(error: unknown): string {
+  if (error instanceof IduraTokenExchangeError) {
+    return getFtnFailureCodeFromIdura({
+      error: error.iduraError,
+      errorDescription: error.iduraErrorDescription,
+      status: error.status,
+    });
+  }
+
+  return "ftn_failed";
 }
 
 export function getRequestJwtHeader(token: string): JWSHeaderParameters {

@@ -46,4 +46,32 @@ describe("LoginPage", () => {
     expect(screen.getByDisplayValue("Doe")).toBeInTheDocument();
     expect(screen.getByText("ftn.verified")).toBeInTheDocument();
   });
+
+  it("shows the FTN-only registration entry point without invite UI", async () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "registerWithBankAuth" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("iHaveInvite")).not.toBeInTheDocument();
+    expect(screen.getByText("ftn.availabilityNotice")).toBeInTheDocument();
+  });
+
+  it("maps the Idura registration limit error to the dedicated retry message", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/register?ftn_error=ftn_registration_limit"]}
+      >
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText("ftn.registrationLimit"),
+    ).toBeInTheDocument();
+  });
 });

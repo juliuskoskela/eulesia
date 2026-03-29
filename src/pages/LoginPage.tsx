@@ -10,9 +10,6 @@ import {
   LogIn,
   ArrowRight,
   ArrowLeft,
-  Ticket,
-  Clock,
-  Mail,
 } from "lucide-react";
 import { useTranslation, Trans } from "react-i18next";
 import { useLocation } from "react-router-dom";
@@ -21,12 +18,11 @@ import { useAuth } from "../hooks/useAuth";
 import { api, type AuthConfig } from "../lib/api";
 import { buildApiUrl } from "../lib/runtimeConfig";
 
-type LoginStep = "initial" | "login" | "register" | "invite-check";
+type LoginStep = "initial" | "login" | "register";
 
 interface FtnReturnParams {
   error: string | null;
   firstName: string | null;
-  invite: string | null;
   lastName: string | null;
   token: string | null;
 }
@@ -37,14 +33,13 @@ function readFtnReturnParams(search: string): FtnReturnParams {
   return {
     error: params.get("ftn_error"),
     firstName: params.get("firstName"),
-    invite: params.get("invite"),
     lastName: params.get("lastName"),
     token: params.get("ftn"),
   };
 }
 
 export function LoginPage() {
-  const { t, i18n } = useTranslation(["auth", "common"]);
+  const { t } = useTranslation(["auth", "common"]);
   const location = useLocation();
   const { login, register } = useAuth();
   const initialFtnReturn = readFtnReturnParams(location.search);
@@ -67,11 +62,6 @@ export function LoginPage() {
   const [loginPassword, setLoginPassword] = useState("");
 
   // Register form
-  const [inviteCode, setInviteCode] = useState(initialFtnReturn.invite ?? "");
-  const [inviteValid, setInviteValid] = useState(
-    Boolean(initialFtnReturn.invite),
-  );
-  const [invitedBy, setInvitedBy] = useState<string | null>(null);
   const [regUsername, setRegUsername] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regFirstName, setRegFirstName] = useState(
@@ -88,12 +78,9 @@ export function LoginPage() {
     hasInitialFtnReturn ? initialFtnReturn.token : null,
   );
   const ftnVerified = !!ftnToken;
-  const inviteOnlyRegistration = authConfig?.registrationMode !== "ftn-open";
   const canRegisterWithFtn =
     !!authConfig?.registrationOpen && !!authConfig?.ftnEnabled;
-  const showRegisterStep =
-    step === "register" &&
-    (!inviteOnlyRegistration || inviteValid || ftnVerified);
+  const showRegisterStep = step === "register";
 
   useEffect(() => {
     let cancelled = false;
@@ -106,18 +93,12 @@ export function LoginPage() {
         }
 
         setAuthConfig(config);
-        setStep((currentStep) =>
-          config.registrationMode === "ftn-open" &&
-          currentStep === "invite-check"
-            ? "register"
-            : currentStep,
-        );
       })
       .catch((err) => {
         console.error("Failed to load auth config:", err);
         if (!cancelled) {
           setAuthConfig({
-            registrationMode: "invite-only",
+            registrationMode: "ftn-open",
             registrationOpen: true,
             ftnEnabled: false,
           });
@@ -134,23 +115,23 @@ export function LoginPage() {
     const {
       error: ftnError,
       firstName,
-      invite,
       lastName,
       token,
     } = readFtnReturnParams(location.search);
 
     if (location.pathname === "/register") {
-      setStep((currentStep) =>
-        currentStep === "initial" ? "register" : currentStep,
-      );
+      setStep("register");
     }
 
     if (ftnError) {
       if (ftnError === "duplicate_identity") {
         setError(t("ftn.alreadyRegistered"));
+      } else if (ftnError === "ftn_registration_limit") {
+        setError(t("ftn.registrationLimit"));
       } else {
         setError(t("ftn.authFailed"));
       }
+      setStep("register");
       window.history.replaceState({}, "", location.pathname);
       return;
     }
@@ -159,22 +140,10 @@ export function LoginPage() {
       setFtnToken(token);
       setRegFirstName(firstName);
       setRegLastName(lastName);
-      if (invite) {
-        setInviteCode(invite);
-        setInviteValid(true);
-      }
       setStep("register");
       window.history.replaceState({}, "", location.pathname);
     }
   }, [location.pathname, location.search, t]);
-
-  // Waitlist form
-  const [waitlistEmail, setWaitlistEmail] = useState("");
-  const [waitlistName, setWaitlistName] = useState("");
-  const [showWaitlist, setShowWaitlist] = useState(false);
-  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
-  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
-  const [waitlistLoading, setWaitlistLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,48 +160,6 @@ export function LoginPage() {
     }
   };
 
-  const handleWaitlistSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setWaitlistLoading(true);
-    setError(null);
-    try {
-      const result = await api.joinWaitlist(
-        waitlistEmail,
-        waitlistName || undefined,
-        i18n.language,
-      );
-      setWaitlistSubmitted(true);
-      setWaitlistPosition(result.position ?? null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("waitlist.submitFailed"));
-    } finally {
-      setWaitlistLoading(false);
-    }
-  };
-
-  const handleCheckInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const result = await api.validateInviteCode(inviteCode);
-      if (result.valid) {
-        setInviteValid(true);
-        setInvitedBy(result.invitedBy || null);
-        setStep("register");
-      } else {
-        setError(result.reason || t("invalidInvite"));
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("inviteValidationFailed"),
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -243,7 +170,6 @@ export function LoginPage() {
         username: regUsername,
         password: regPassword,
         name: `${regFirstName.trim()} ${regLastName.trim()}`,
-        ...(inviteOnlyRegistration && inviteCode ? { inviteCode } : {}),
         ...(ftnToken ? { ftnToken } : {}),
       });
       // Navigation handled by App.tsx
@@ -304,9 +230,7 @@ export function LoginPage() {
                       {t("welcome")}
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {inviteOnlyRegistration
-                        ? t("inviteOnlyBeta")
-                        : t("ftnOpenBeta")}
+                      {t("ftnOpenBeta")}
                     </p>
                   </div>
                 </div>
@@ -319,123 +243,18 @@ export function LoginPage() {
                   {t("signIn")}
                 </button>
 
-                {inviteOnlyRegistration ? (
-                  <>
-                    <button
-                      onClick={() => setStep("invite-check")}
-                      className="w-full bg-white dark:bg-gray-800 text-blue-800 dark:text-blue-300 border-2 border-blue-800 dark:border-blue-700 py-3 px-4 rounded-xl font-medium hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Ticket className="w-5 h-5" />
-                      {t("iHaveInvite")}
-                    </button>
+                <button
+                  onClick={() => setStep("register")}
+                  disabled={!canRegisterWithFtn}
+                  className="w-full bg-white dark:bg-gray-800 text-blue-800 dark:text-blue-300 border-2 border-blue-800 dark:border-blue-700 py-3 px-4 rounded-xl font-medium hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Fingerprint className="w-5 h-5" />
+                  {t("registerWithBankAuth")}
+                </button>
 
-                    {/* Waitlist */}
-                    <div className="mt-3">
-                      {!showWaitlist && !waitlistSubmitted && (
-                        <button
-                          onClick={() => setShowWaitlist(true)}
-                          className="w-full text-blue-600 dark:text-blue-400 text-sm hover:underline flex items-center justify-center gap-1"
-                        >
-                          <Clock className="w-4 h-4" />
-                          {t("waitlist.noInvite")}
-                        </button>
-                      )}
-
-                      {showWaitlist && !waitlistSubmitted && (
-                        <form
-                          onSubmit={handleWaitlistSubmit}
-                          className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800"
-                        >
-                          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                            {t("waitlist.title")}
-                          </h3>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                            {t("waitlist.description")}
-                          </p>
-                          <div className="space-y-2">
-                            <input
-                              type="email"
-                              value={waitlistEmail}
-                              onChange={(e) => setWaitlistEmail(e.target.value)}
-                              placeholder={t("waitlist.emailPlaceholder")}
-                              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-100"
-                              required
-                              autoFocus
-                            />
-                            <input
-                              type="text"
-                              value={waitlistName}
-                              onChange={(e) => setWaitlistName(e.target.value)}
-                              placeholder={t("waitlist.namePlaceholder")}
-                              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:text-gray-100"
-                            />
-                          </div>
-                          {error && (
-                            <div className="mt-2 text-sm text-red-600 dark:text-red-400">
-                              {error}
-                            </div>
-                          )}
-                          <div className="flex gap-2 mt-3">
-                            <button
-                              type="submit"
-                              disabled={waitlistLoading || !waitlistEmail}
-                              className="flex-1 bg-blue-800 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1"
-                            >
-                              {waitlistLoading ? (
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <>
-                                  <Mail className="w-4 h-4" />
-                                  {t("waitlist.submit")}
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowWaitlist(false);
-                                setError(null);
-                              }}
-                              className="text-gray-500 dark:text-gray-400 text-sm px-3 hover:text-gray-700 dark:hover:text-gray-200"
-                            >
-                              {t("common:actions.cancel")}
-                            </button>
-                          </div>
-                        </form>
-                      )}
-
-                      {waitlistSubmitted && (
-                        <div className="mt-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
-                            <CheckCircle className="w-5 h-5" />
-                            <span className="font-medium text-sm">
-                              {t("waitlist.success")}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                            {t("waitlist.successDescription")}
-                          </p>
-                          {waitlistPosition && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              {t("waitlist.position", {
-                                position: waitlistPosition,
-                              })}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setStep("register")}
-                    disabled={!canRegisterWithFtn}
-                    className="w-full bg-white dark:bg-gray-800 text-blue-800 dark:text-blue-300 border-2 border-blue-800 dark:border-blue-700 py-3 px-4 rounded-xl font-medium hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Fingerprint className="w-5 h-5" />
-                    {t("registerWithBankAuth")}
-                  </button>
-                )}
+                <p className="mt-3 text-sm text-blue-700 dark:text-blue-300">
+                  {t("ftn.availabilityNotice")}
+                </p>
 
                 {/* Future: EUDI Wallet button */}
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
@@ -545,84 +364,6 @@ export function LoginPage() {
               </form>
             )}
 
-            {authConfig &&
-              step === "invite-check" &&
-              inviteOnlyRegistration && (
-                <form onSubmit={handleCheckInvite}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                      <Ticket className="w-6 h-6 text-green-700" />
-                    </div>
-                    <div>
-                      <h2 className="font-semibold text-gray-900 dark:text-gray-100">
-                        {t("enterInviteCode")}
-                      </h2>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {t("needInvite")}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <label
-                      htmlFor="invite-code"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                    >
-                      {t("inviteCode")}
-                    </label>
-                    <input
-                      type="text"
-                      id="invite-code"
-                      value={inviteCode}
-                      onChange={(e) =>
-                        setInviteCode(e.target.value.toUpperCase())
-                      }
-                      placeholder="EULESIA-XXXXXX"
-                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-center text-lg tracking-wider dark:bg-gray-800 dark:text-gray-100"
-                      required
-                      autoFocus
-                    />
-                  </div>
-
-                  {error && (
-                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-xl text-sm text-red-700">
-                      {error}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isLoading || !inviteCode}
-                    className="w-full bg-green-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        {t("checking")}
-                      </>
-                    ) : (
-                      <>
-                        {t("common:actions.continue")}
-                        <ArrowRight className="w-5 h-5" />
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep("initial");
-                      setError(null);
-                      setInviteCode("");
-                    }}
-                    className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    {t("common:actions.back")}
-                  </button>
-                </form>
-              )}
-
             {authConfig && showRegisterStep && (
               <form onSubmit={handleRegister}>
                 <div className="flex items-center gap-3 mb-4">
@@ -633,27 +374,8 @@ export function LoginPage() {
                     <h2 className="font-semibold text-gray-900 dark:text-gray-100">
                       {t("createAccount")}
                     </h2>
-                    {inviteOnlyRegistration && invitedBy && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {t("invitedBy", { name: invitedBy })}
-                      </p>
-                    )}
                   </div>
                 </div>
-
-                {inviteOnlyRegistration && (
-                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl">
-                    <div className="flex items-center gap-2 text-green-700 text-sm">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>
-                        {t("inviteCodeConfirmed")}{" "}
-                        <span className="font-mono font-medium">
-                          {inviteCode}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                )}
 
                 {/* FTN verification status or button */}
                 {ftnVerified ? (
@@ -679,17 +401,16 @@ export function LoginPage() {
                           <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
                             {t("ftn.requiredDescription")}
                           </p>
+                          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                            {t("ftn.availabilityNotice")}
+                          </p>
                         </div>
                       </div>
                     </div>
 
                     {/* FTN strong authentication button */}
                     <a
-                      href={buildApiUrl(
-                        inviteOnlyRegistration && inviteCode
-                          ? `/api/v1/auth/ftn/start?invite=${encodeURIComponent(inviteCode)}`
-                          : "/api/v1/auth/ftn/start",
-                      )}
+                      href={buildApiUrl("/api/v1/auth/ftn/start")}
                       className="w-full mb-4 bg-blue-700 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 no-underline block"
                     >
                       <Fingerprint className="w-5 h-5" />
@@ -867,11 +588,8 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setStep(
-                      inviteOnlyRegistration ? "invite-check" : "initial",
-                    );
+                    setStep("initial");
                     setError(null);
-                    setInviteValid(false);
                     setFtnToken(null);
                   }}
                   className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
@@ -887,18 +605,10 @@ export function LoginPage() {
           <div className="mt-6 bg-blue-800/50 rounded-xl p-4 border border-blue-700">
             <h3 className="text-white font-medium flex items-center gap-2 mb-2">
               <Lock className="w-4 h-4" />
-              {t(
-                inviteOnlyRegistration
-                  ? "invitePhase.title"
-                  : "ftnOpenPhase.title",
-              )}
+              {t("ftnOpenPhase.title")}
             </h3>
             <p className="text-blue-200 text-sm">
-              {t(
-                inviteOnlyRegistration
-                  ? "invitePhase.description"
-                  : "ftnOpenPhase.description",
-              )}
+              {t("ftnOpenPhase.description")}
             </p>
           </div>
         </div>

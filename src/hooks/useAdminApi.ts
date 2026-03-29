@@ -266,48 +266,12 @@ export function useUpdateAdminSettings() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: {
-      invitesEnabled?: boolean;
-      defaultInviteCount?: number;
-      registrationOpen?: boolean;
-    }) => api.updateAdminSettings(data),
+    mutationFn: (data: { registrationOpen?: boolean }) =>
+      api.updateAdminSettings(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.settings });
       queryClient.invalidateQueries({ queryKey: adminKeys.modlog() });
     },
-  });
-}
-
-export function useSetUserInviteCount() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ userId, count }: { userId: string; count: number }) =>
-      api.setUserInviteCount(userId, count),
-    onSuccess: (_, { userId }) => {
-      queryClient.invalidateQueries({ queryKey: adminKeys.user(userId) });
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-    },
-  });
-}
-
-// Admin invites
-export function useGenerateAdminInvites() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (count: number) => api.generateAdminInvites(count),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "invites"] });
-      queryClient.invalidateQueries({ queryKey: adminKeys.modlog() });
-    },
-  });
-}
-
-export function useAdminInvites(status?: string) {
-  return useQuery({
-    queryKey: ["admin", "invites", status],
-    queryFn: () => api.getAdminInvites(status),
   });
 }
 

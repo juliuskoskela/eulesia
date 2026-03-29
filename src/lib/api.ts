@@ -26,7 +26,6 @@ export interface AuthConfig {
 }
 
 export interface RegisterRequest {
-  inviteCode?: string;
   username: string;
   password: string;
   name: string;
@@ -96,27 +95,6 @@ class ApiClient {
 
   async getCurrentUser(): Promise<User> {
     return this.request("/auth/me");
-  }
-
-  // Invites
-  async getInvites(): Promise<InvitesData> {
-    return this.request("/invites");
-  }
-
-  async createInvite(): Promise<InviteCode> {
-    return this.request("/invites", { method: "POST" });
-  }
-
-  async validateInviteCode(code: string): Promise<InviteValidation> {
-    return this.request(`/invites/validate/${code}`);
-  }
-
-  async revokeInvite(id: string): Promise<void> {
-    await this.request(`/invites/${id}`, { method: "DELETE" });
-  }
-
-  async getInviteTree(): Promise<InvitedUser[]> {
-    return this.request("/invites/tree");
   }
 
   // Users
@@ -1043,55 +1021,18 @@ class ApiClient {
   // ─── Admin settings ──────────────────────────────
 
   async getAdminSettings(): Promise<{
-    invitesEnabled: boolean;
-    defaultInviteCount: number;
     registrationOpen: boolean;
   }> {
     return this.request("/admin/settings");
   }
 
   async updateAdminSettings(data: {
-    invitesEnabled?: boolean;
-    defaultInviteCount?: number;
     registrationOpen?: boolean;
   }): Promise<void> {
     return this.request("/admin/settings", {
       method: "PATCH",
       body: JSON.stringify(data),
     });
-  }
-
-  async setUserInviteCount(
-    userId: string,
-    count: number,
-  ): Promise<{ id: string; inviteCodesRemaining: number }> {
-    return this.request(`/admin/users/${userId}/invites`, {
-      method: "PATCH",
-      body: JSON.stringify({ count }),
-    });
-  }
-
-  async generateAdminInvites(
-    count: number,
-  ): Promise<{ id: string; code: string; createdAt: string }[]> {
-    return this.request("/admin/invites/generate", {
-      method: "POST",
-      body: JSON.stringify({ count }),
-    });
-  }
-
-  async getAdminInvites(status?: string): Promise<
-    {
-      id: string;
-      code: string;
-      status: string;
-      usedAt: string | null;
-      createdAt: string;
-      usedBy: { name: string } | null;
-    }[]
-  > {
-    const params = status ? `?status=${status}` : "";
-    return this.request(`/admin/invites${params}`);
   }
 
   // ─── User reports & appeals ──────────────────────────────
@@ -1867,34 +1808,6 @@ export interface LocationHierarchyItem {
 
 export interface LocationWithHierarchy extends LocationResult {
   hierarchy: LocationHierarchyItem[];
-}
-
-// Invite types
-export interface InviteCode {
-  id: string;
-  code: string;
-  status: "available" | "used" | "revoked";
-  usedAt?: string;
-  createdAt: string;
-  usedBy?: { name: string } | null;
-}
-
-export interface InviteValidation {
-  valid: boolean;
-  reason?: string;
-  invitedBy?: string;
-}
-
-export interface InvitesData {
-  codes: InviteCode[];
-  remaining: number;
-}
-
-export interface InvitedUser {
-  id: string;
-  name: string;
-  username: string;
-  createdAt: string;
 }
 
 // Subscription types
