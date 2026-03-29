@@ -211,7 +211,7 @@ Before the first production switch, verify all of the following:
 
 Current production caveats in the repo:
 
-- production Idura/FTN is intentionally disabled until the real tenant domain and client id are available
+- production Idura/FTN is configured for `eulesia.idura.broker` and client `urn:my:application:identifier:524753`, but the Idura application must still have the matching static client JWKS registered and the callback URL `https://eulesia.org/api/v1/auth/ftn/callback` allowed
 - Firebase/FCM is intentionally disabled until `secrets/prod/firebase-service-account.json.enc` contains a real service account JSON
 
 ## Test Deployment Access Model
@@ -399,7 +399,7 @@ find secrets/prod -name '*.enc' -print0 | xargs -0 -n1 sops updatekeys
 
 - `eulesia.org` and `api.eulesia.org` both point at the production host
 - `just audit-prod-secrets` passes
-- real production Idura domain and client id have been configured before enabling FTN
+- the Idura application at `eulesia.idura.broker` has the matching static client JWKS registered and allows `https://eulesia.org/api/v1/auth/ftn/callback`
 - `secrets/prod/firebase-service-account.json.enc` contains a real Firebase service account before enabling FCM/native push
 
 6. Build and switch the real production configuration:

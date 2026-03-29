@@ -173,10 +173,9 @@
         sessionSecretFile = config.sops.secrets."session-secret".path;
         registrationMode = "invite-only";
         idura = {
-          # Enable once the real production Idura tenant and client id are available.
-          enable = false;
-          domain = null;
-          clientId = null;
+          enable = true;
+          domain = "eulesia.idura.broker";
+          clientId = "urn:my:application:identifier:524753";
           callbackUrl = "https://eulesia.org/api/v1/auth/ftn/callback";
           signingKeyFile =
             config.sops.secrets."idura-signing-key.jwk.json".path;
