@@ -21,4 +21,4 @@ creation_rules:
   - path_regex: secrets/prod/[^/]+\.enc$
     age:
       - *julius_koskela
-      # Add the production host age recipient here after bootstrapping it.
+      # Add the eulesia-server-prod host age recipient here after bootstrapping it.

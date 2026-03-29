@@ -244,7 +244,7 @@ export function ThreadPage() {
       interactionType: "https://schema.org/CommentAction",
       userInteractionCount: comments.length,
     },
-    url: `https://eulesia.eu/agora/thread/${threadId}`,
+    url: `https://eulesia.org/agora/thread/${threadId}`,
   };
 
   return (

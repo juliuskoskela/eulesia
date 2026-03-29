@@ -49,7 +49,7 @@ function buildOgHtml(opts: {
     siteName = SITE_NAME,
   } = opts;
 
-  const appUrl = process.env.APP_URL || "https://eulesia.eu";
+  const appUrl = process.env.APP_URL || "https://eulesia.org";
   const fullUrl = url.startsWith("http") ? url : `${appUrl}${url}`;
   const imageUrl = image
     ? image.startsWith("http")

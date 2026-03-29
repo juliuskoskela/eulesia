@@ -315,7 +315,7 @@ export function AgoraPage() {
           isPartOf: {
             "@type": "WebSite",
             name: "Eulesia",
-            url: "https://eulesia.eu",
+            url: "https://eulesia.org",
           },
         }}
       />

@@ -61,8 +61,8 @@ interface PresentationRequest {
       // Optional: birth_date for additional verification
     }
   }],
-  client_id: 'https://eulesia.eu',
-  response_uri: 'https://api.eulesia.eu/api/v1/auth/eudi/callback',
+  client_id: 'https://eulesia.org',
+  response_uri: 'https://api.eulesia.org/api/v1/auth/eudi/callback',
   nonce: crypto.randomUUID(),
   state: crypto.randomUUID()
 }

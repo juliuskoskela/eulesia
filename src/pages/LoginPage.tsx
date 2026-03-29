@@ -264,7 +264,7 @@ export function LoginPage() {
           "@context": "https://schema.org",
           "@type": "WebSite",
           name: "Eulesia",
-          url: "https://eulesia.eu",
+          url: "https://eulesia.org",
           description: "Eurooppalainen kansalaisdemokratia-alusta",
         }}
       />

@@ -1,5 +1,5 @@
 # Eulesia - Citizen Democracy Platform
-# https://eulesia.eu
+# https://eulesia.org
 
 User-agent: *
 Allow: /
@@ -27,4 +27,4 @@ Disallow: /auth
 # API
 Disallow: /api/
 
-Sitemap: https://eulesia.eu/sitemap.xml
+Sitemap: https://eulesia.org/sitemap.xml

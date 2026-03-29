@@ -21,7 +21,7 @@ function formatDate(date: Date | string | null): string {
 
 router.get("/sitemap.xml", async (_req: Request, res: Response) => {
   try {
-    const appUrl = process.env.APP_URL || "https://eulesia.eu";
+    const appUrl = process.env.APP_URL || "https://eulesia.org";
 
     // Static pages
     const staticPages = [

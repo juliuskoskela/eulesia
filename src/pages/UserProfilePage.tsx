@@ -201,7 +201,7 @@ export function UserProfilePage() {
             "@type": "Person",
             name: user.name,
             ...(user.avatarUrl && { image: user.avatarUrl }),
-            url: `https://eulesia.eu/user/${userId}`,
+            url: `https://eulesia.org/user/${userId}`,
           },
         }}
       />

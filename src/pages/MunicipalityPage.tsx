@@ -112,7 +112,7 @@ export function MunicipalityPage() {
               name: municipality.region,
             },
           }),
-          url: `https://eulesia.eu/kunnat/${municipalityId}`,
+          url: `https://eulesia.org/kunnat/${municipalityId}`,
         }}
       />
       {/* Page header */}

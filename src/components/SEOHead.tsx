@@ -1,7 +1,7 @@
 import { Helmet } from "react-helmet-async";
 
 const SITE_NAME = "Eulesia";
-const SITE_URL = "https://eulesia.eu";
+const SITE_URL = "https://eulesia.org";
 const DEFAULT_DESCRIPTION = "Eurooppalainen kansalaisdemokratia-alusta";
 const DEFAULT_IMAGE = `${SITE_URL}/og-default.png`;
 

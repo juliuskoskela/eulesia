@@ -711,7 +711,7 @@ export function AboutPage() {
             "@context": "https://schema.org",
             "@type": "Organization",
             name: "Eulesia",
-            url: "https://eulesia.eu",
+            url: "https://eulesia.org",
             description: "Eurooppalainen kansalaisdemokratia-alusta",
           }}
         />

@@ -13,15 +13,17 @@ export function useDeepLinks() {
       try {
         const url = new URL(event.url);
 
-        // Magic link: api.eulesia.eu/api/v1/auth/verify/:token
+        // Magic link: api.eulesia.org/api/v1/auth/verify/:token
         const verifyMatch = url.pathname.match(/\/api\/v1\/auth\/verify\/(.+)/);
         if (verifyMatch) {
           navigate(`/auth/verify/${verifyMatch[1]}`);
           return;
         }
 
-        // App links: eulesia.eu/*
+        // App links: eulesia.org/*
         if (
+          url.hostname === "eulesia.org" ||
+          url.hostname === "www.eulesia.org" ||
           url.hostname === "eulesia.eu" ||
           url.hostname === "www.eulesia.eu"
         ) {

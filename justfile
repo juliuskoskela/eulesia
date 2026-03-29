@@ -60,11 +60,29 @@ test-host-build:
 test-host-bootstrap-build:
     nix build .#nixosConfigurations.eulesia-test-bootstrap.config.system.build.toplevel
 
+prod-host-build:
+    nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
+
+prod-host-bootstrap-build:
+    nix build .#nixosConfigurations.eulesia-prod-bootstrap.config.system.build.toplevel
+
 deploy:
     nix run .#deploy
 
 deploy-test:
     nix run .#deploy-test
+
+rebuild-prod:
+    nix run .#rebuild-prod
+
+bootstrap-prod:
+    nix run .#bootstrap-prod
+
+get-prod-age-key:
+    nix run .#get-prod-age-key
+
+audit-prod-secrets:
+    nix run .#audit-prod-secrets
 
 rebuild-test:
     nix run .#rebuild-test

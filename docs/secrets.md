@@ -150,6 +150,22 @@ These values are important, but they are not secrets and should not be stored as
 - Keep file names stable across environments so Nix and runtime paths stay predictable.
 - For JSON credentials, preserve the original JSON payload and only add the `.enc` suffix.
 
+## Secret Audit
+
+Use the built-in audit helper before the first production bootstrap and before any public cutover:
+
+```bash
+just audit-prod-secrets
+```
+
+This decrypts every file under `secrets/prod/` and flags obvious placeholder values such as:
+
+- `REPLACE_WITH_...`
+- `replace-with-...`
+- empty JSON objects like `{}`
+
+It is a safety net, not a full semantic validator. A passing audit means the files are no longer obvious placeholders, not that every credential has been tested against the live provider.
+
 ## Developer Workstation Key Onboarding
 
 Developers who need access to `secrets/test/*` should use a normal local SOPS Age key on their workstation.

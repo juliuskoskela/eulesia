@@ -482,6 +482,153 @@
           "age-keygen -y /var/lib/sops-nix/key.txt"
       '';
     };
+
+    rebuildProd = pkgs.writeShellApplication {
+      name = "eulesia-rebuild-prod";
+      runtimeInputs = with pkgs; [
+        coreutils
+        nix
+        nixos-rebuild
+        openssh
+      ];
+      text = ''
+        set -euo pipefail
+
+        TARGET_HOST="''${EULESIA_PROD_TARGET_HOST:-eulesia-server-prod}"
+        TARGET_USER="''${EULESIA_PROD_SSH_USER:-root}"
+        BUILD_HOST="''${EULESIA_PROD_BUILD_HOST:-localhost}"
+
+        cmd=(
+          nixos-rebuild
+          switch
+          --flake
+          ".#eulesia-prod"
+          --target-host
+          "$TARGET_USER@$TARGET_HOST"
+        )
+
+        if [ -n "$BUILD_HOST" ] && [ "$BUILD_HOST" != "localhost" ]; then
+          cmd+=(
+            --build-host
+            "$BUILD_HOST"
+          )
+        fi
+
+        exec "''${cmd[@]}" "$@"
+      '';
+    };
+
+    bootstrapProd = pkgs.writeShellApplication {
+      name = "eulesia-bootstrap-prod";
+      runtimeInputs = with pkgs; [
+        coreutils
+        openssh
+        nixos-anywhere
+      ];
+      text = ''
+        set -euo pipefail
+
+        TARGET_HOST="''${EULESIA_PROD_TARGET_HOST:-eulesia-server-prod}"
+        TARGET_USER="''${EULESIA_PROD_SSH_USER:-root}"
+
+        echo "This will wipe the system disk and PostgreSQL volume on $TARGET_USER@$TARGET_HOST."
+        echo "It installs the minimal eulesia-prod-bootstrap configuration with disko."
+        printf "Continue with bootstrap installation? (yes/no): "
+        read -r confirmation
+
+        if [ "$confirmation" != "yes" ]; then
+          echo "Bootstrap installation cancelled."
+          exit 0
+        fi
+
+        if [ -z "''${NIX_SSHOPTS:-}" ]; then
+          export NIX_SSHOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        fi
+
+        exec ${nixos-anywhere}/bin/nixos-anywhere \
+          --flake ".#eulesia-prod-bootstrap" \
+          "$@" \
+          "$TARGET_USER@$TARGET_HOST"
+      '';
+    };
+
+    getProdAgeKey = pkgs.writeShellApplication {
+      name = "eulesia-get-prod-age-key";
+      runtimeInputs = with pkgs; [
+        coreutils
+        openssh
+      ];
+      text = ''
+        set -euo pipefail
+
+        TARGET_HOST="''${EULESIA_PROD_TARGET_HOST:-eulesia-server-prod}"
+        TARGET_USER="''${EULESIA_PROD_SSH_USER:-root}"
+
+        exec ssh \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          "$TARGET_USER@$TARGET_HOST" \
+          "age-keygen -y /var/lib/sops-nix/key.txt"
+      '';
+    };
+
+    auditProdSecrets = pkgs.writeShellApplication {
+      name = "eulesia-audit-prod-secrets";
+      runtimeInputs = with pkgs; [
+        coreutils
+        gnugrep
+        jq
+        sops
+      ];
+      text = ''
+        set -euo pipefail
+
+        shopt -s nullglob
+        files=(secrets/prod/*.enc)
+
+        if [ "''${#files[@]}" -eq 0 ]; then
+          echo "No encrypted production secrets found under secrets/prod/."
+          exit 1
+        fi
+
+        failures=0
+
+        for file in "''${files[@]}"; do
+          content="$(sops -d "$file")"
+          compact="$(printf '%s' "$content" | tr -d '\n\r\t ')"
+          status="ok"
+          reason=""
+
+          if [ -z "$compact" ]; then
+            status="placeholder"
+            reason="empty value"
+          elif printf '%s' "$compact" | grep -Eq '^(REPLACE_WITH_|replace-with-)'; then
+            status="placeholder"
+            reason="replace-with placeholder"
+          elif printf '%s' "$content" | jq -e 'type == "object" and length == 0' >/dev/null 2>&1; then
+            status="placeholder"
+            reason="empty JSON object"
+          fi
+
+          printf '%-52s %s' "$file" "$status"
+          if [ -n "$reason" ]; then
+            printf ' (%s)' "$reason"
+          fi
+          printf '\n'
+
+          if [ "$status" != "ok" ]; then
+            failures=1
+          fi
+        done
+
+        if [ "$failures" -ne 0 ]; then
+          echo
+          echo "Production secrets still contain obvious placeholders."
+          echo "Replace the flagged values before cutting over production services."
+          exit 1
+        fi
+      '';
+    };
   in {
     apps = lib.optionalAttrs (system == "x86_64-linux") {
       deploy = {
@@ -520,6 +667,30 @@
         meta.description = "Fetch the test host age public key after bootstrap";
       };
 
+      rebuild-prod = {
+        type = "app";
+        program = "${rebuildProd}/bin/eulesia-rebuild-prod";
+        meta.description = "Deploy the Eulesia production NixOS configuration with nixos-rebuild";
+      };
+
+      bootstrap-prod = {
+        type = "app";
+        program = "${bootstrapProd}/bin/eulesia-bootstrap-prod";
+        meta.description = "Install the Eulesia production bootstrap NixOS configuration with nixos-anywhere";
+      };
+
+      get-prod-age-key = {
+        type = "app";
+        program = "${getProdAgeKey}/bin/eulesia-get-prod-age-key";
+        meta.description = "Fetch the production host age public key after bootstrap";
+      };
+
+      audit-prod-secrets = {
+        type = "app";
+        program = "${auditProdSecrets}/bin/eulesia-audit-prod-secrets";
+        meta.description = "Decrypt and audit production secrets for obvious placeholder values";
+      };
+
       microvm = {
         type = "app";
         program = "${runMicrovm}/bin/eulesia-run-microvm";
@@ -550,8 +721,20 @@
           eulesiaPackages = inputs.self.packages.x86_64-linux;
         };
         modules = [
+          inputs.disko.nixosModules.disko
           inputs.sops-nix.nixosModules.sops
           ../hosts/eulesia-prod.nix
+        ];
+      };
+
+      eulesia-prod-bootstrap = inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = {
+          inherit inputs;
+        };
+        modules = [
+          inputs.disko.nixosModules.disko
+          ../hosts/eulesia-prod-bootstrap.nix
         ];
       };
 
@@ -594,7 +777,7 @@
     };
 
     deploy.nodes.eulesia-prod = {
-      hostname = "95.216.206.136";
+      hostname = "eulesia.org";
       sshUser = "root";
       fastConnection = true;
       profiles.system = {
