@@ -1,0 +1,68 @@
+name: Deploy Test
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - nix
+      - mercury
+      - eulesia
+    timeout-minutes: 45
+    env:
+      EULESIA_TEST_TARGET_HOST: ${{ vars.EULESIA_TEST_TARGET_HOST }}
+      EULESIA_TEST_SSH_USER: root
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        run: |
+          if [ -z "$EULESIA_TEST_TARGET_HOST" ]; then
+            echo "Missing repository variable EULESIA_TEST_TARGET_HOST"
+            exit 1
+          fi
+          if [ -z "${{ secrets.EULESIA_TEST_SSH_KEY }}" ]; then
+            echo "Missing repository secret EULESIA_TEST_SSH_KEY"
+            exit 1
+          fi
+          if [ -z "${{ secrets.EULESIA_TEST_KNOWN_HOSTS }}" ]; then
+            echo "Missing repository secret EULESIA_TEST_KNOWN_HOSTS"
+            exit 1
+          fi
+
+      - name: Setup SSH
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "${{ secrets.EULESIA_TEST_SSH_KEY }}" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "${{ secrets.EULESIA_TEST_KNOWN_HOSTS }}" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Build test system
+        run: nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
+
+      - name: Deploy test system
+        run: |
+          export NIX_SSHOPTS="-i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+          nix run .#rebuild-test
+
+      - name: Wait for health checks
+        run: |
+          SSH="ssh -i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes root@$EULESIA_TEST_TARGET_HOST"
+          for _ in $(seq 1 30); do
+            if $SSH "curl -fsS -H 'Host: test.eulesia.org' http://127.0.0.1:8080/api/v1/health" >/dev/null; then
+              break
+            fi
+            sleep 5
+          done
+          $SSH "curl -fsS -H 'Host: test.eulesia.org' http://127.0.0.1:8080/api/v1/health"
+          $SSH "curl -fsS -H 'Host: test.eulesia.org' http://127.0.0.1:8080/api/v1/auth/config" | tee /tmp/auth-config.json
+          jq -e '.registrationMode == "ftn-open"' /tmp/auth-config.json >/dev/null

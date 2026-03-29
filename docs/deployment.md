@@ -15,7 +15,7 @@ The flake exposes:
 - `nix run .#ci-check` for runner-agnostic CI checks
 - `nixosModules.eulesia` for reusable service configuration
 - `nixosConfigurations.eulesia-vm` plus `just vm-run` and `just vm-deploy` for local MicroVM validation
-- `nixosConfigurations.eulesia-test` and `nix run .#deploy-test` for a public test host
+- `nixosConfigurations.eulesia-test`, `nix run .#rebuild-test`, and `nix run .#deploy-test` for the public test host
 - `nixosConfigurations.eulesia-prod` and `nix run .#deploy` for production deployment
 
 The old Docker Compose setup is deprecated and should only be treated as a temporary fallback while the production host is migrated.
@@ -98,7 +98,8 @@ Current assumptions in the repo:
 - deploy target host: `95.216.206.136`
 - SSH user: `root`
 - domains: `eulesia.eu` and `api.eulesia.eu`
-- test domains: `test.eulesia.eu` and `api.test.eulesia.eu`
+- test domains: `test.eulesia.org` and `api.test.eulesia.org`
+- the test host uses Traefik as the public edge and password gate, with nginx bound to loopback as the internal origin
 - managed runtime secrets should live under `secrets/prod/` and `secrets/test/`
 - one encrypted file per secret, using names such as `session-secret.enc` and `firebase-service-account.json.enc`
 - `sops-nix` materializes runtime secret files under `/run/secrets/eulesia/`
@@ -128,6 +129,10 @@ Production runtime still expects these decrypted files under `/run/secrets/eules
 - `/run/secrets/eulesia/idura-signing-key.jwk.json`
 - `/run/secrets/eulesia/idura-encryption-key.jwk.json`
 
+The test host also expects:
+
+- `/run/secrets/traefik-basic-auth-password`
+
 For FTN/Idura tenants, the operator flow is:
 
 1. Run `just generate-idura-jwks local/idura-jwks`.
@@ -144,13 +149,18 @@ Build and deploy through the flake:
 
 ```bash
 nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
+nix run .#rebuild-test
 nix run .#deploy-test
 
 nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
 nix run .#deploy
 ```
 
-`nix run .#deploy-test` and `nix run .#deploy` both use `deploy-rs` and activate the corresponding flake node. They assume the target host already has its own `/var/lib/sops-nix/key.txt` in place.
+Use `nix run .#rebuild-test` as the primary test-host deployment path. It wraps `nixos-rebuild switch` and requires `EULESIA_TEST_TARGET_HOST` to point at the Hetzner private address or private DNS name of the host.
+
+After the Traefik edge is enabled, public health checks require HTTP basic auth. CI therefore validates the backend origin over SSH against `127.0.0.1:8080` on the target host.
+
+`nix run .#deploy-test` and `nix run .#deploy` remain available through `deploy-rs` for manual use. All remote deployment paths assume the target host already has its own `/var/lib/sops-nix/key.txt` in place.
 
 The API service runs database migration as a pre-start step, so configuration switches restart the app against the current schema automatically.
 
@@ -185,10 +195,12 @@ The VM config uses:
 For a real Hetzner VPS, follow the same high-level flow used in `~/Repos/infra`:
 
 1. Provision or bootstrap the target machine.
-2. Generate the server age key on the target at `/var/lib/sops-nix/key.txt`.
-3. Add the server public key to `.sops.yaml`.
-4. Re-encrypt the relevant `secrets/test/*.enc` or `secrets/prod/*.enc` files.
-5. Deploy the matching NixOS configuration with `deploy-rs`.
+2. Attach and format the PostgreSQL volume as `ext4` with label `eulesia-pg`.
+3. Generate the server age key on the target at `/var/lib/sops-nix/key.txt`.
+4. Add the server public key to `.sops.yaml`.
+5. Re-encrypt the relevant `secrets/test/*.enc` or `secrets/prod/*.enc` files, including `traefik-basic-auth-password.enc`.
+6. Set `EULESIA_TEST_TARGET_HOST` to the host's Hetzner private IP or private DNS name.
+7. Deploy the matching NixOS configuration with `nix run .#rebuild-test`.
 
 ## Legacy Docker Assets
 

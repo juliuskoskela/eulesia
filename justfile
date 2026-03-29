@@ -63,6 +63,9 @@ deploy:
 deploy-test:
     nix run .#deploy-test
 
+rebuild-test:
+    nix run .#rebuild-test
+
 shell:
     nix develop
 

@@ -8,6 +8,7 @@ creation_rules:
     age:
       - *local_dev
       - *local_vm
+      # Add the real test host age recipient here after bootstrapping the VPS.
 
   # Production deployment secrets.
   - path_regex: secrets/prod/[^/]+\.enc$

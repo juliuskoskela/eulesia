@@ -14,6 +14,8 @@
 !apps/**
 !assets/
 !assets/**
+!.github/
+!.github/**
 !docker/
 !docker/**
 !docs/

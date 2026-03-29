@@ -392,6 +392,35 @@
         exit 1
       '';
     };
+
+    rebuildTest = pkgs.writeShellApplication {
+      name = "eulesia-rebuild-test";
+      runtimeInputs = with pkgs; [
+        coreutils
+        nix
+        nixos-rebuild
+        openssh
+      ];
+      text = ''
+        set -euo pipefail
+
+        TARGET_HOST="''${EULESIA_TEST_TARGET_HOST:-}"
+        TARGET_USER="''${EULESIA_TEST_SSH_USER:-root}"
+        BUILD_HOST="''${EULESIA_TEST_BUILD_HOST:-localhost}"
+
+        if [ -z "$TARGET_HOST" ]; then
+          echo "Missing EULESIA_TEST_TARGET_HOST."
+          echo "Set it to the Hetzner private IP or private DNS name for the test host."
+          exit 1
+        fi
+
+        exec nixos-rebuild switch \
+          --flake ".#eulesia-test" \
+          --target-host "$TARGET_USER@$TARGET_HOST" \
+          --build-host "$BUILD_HOST" \
+          "$@"
+      '';
+    };
   in {
     apps = lib.optionalAttrs (system == "x86_64-linux") {
       deploy = {
@@ -410,6 +439,12 @@
           exec ${deploy-rs}/bin/deploy .#eulesia-test "$@"
         ''}";
         meta.description = "Deploy the Eulesia test NixOS configuration with deploy-rs";
+      };
+
+      rebuild-test = {
+        type = "app";
+        program = "${rebuildTest}/bin/eulesia-rebuild-test";
+        meta.description = "Deploy the Eulesia test NixOS configuration with nixos-rebuild";
       };
 
       microvm = {
@@ -484,7 +519,7 @@
     };
 
     deploy.nodes.eulesia-test = {
-      hostname = "test.eulesia.eu";
+      hostname = "test.eulesia.org";
       sshUser = "root";
       fastConnection = true;
       profiles.system = {

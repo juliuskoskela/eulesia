@@ -48,7 +48,7 @@ AI-powered import of municipal meeting minutes, ministry press releases, and EU 
 | Search     | Meilisearch (typo-tolerant, federated)    |
 | Real-time  | Socket.io (session-authenticated)         |
 | AI         | Mistral Large (EU-hosted, GDPR-compliant) |
-| Deployment | NixOS module, nginx, deploy-rs            |
+| Deployment | NixOS module, nginx, Traefik, nixos-rebuild, deploy-rs |
 
 ## Automated Content Import
 
@@ -114,6 +114,7 @@ nix build .#frontend
 nix build .#api
 nix build .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
 nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
+nix run .#rebuild-test
 nix run .#ci-check
 ```
 
