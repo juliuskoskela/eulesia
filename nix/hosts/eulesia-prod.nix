@@ -32,10 +32,13 @@
 
   sops = {
     age.keyFile = "/var/lib/sops-nix/key.txt";
-    secrets = import ./lib/eulesia-secrets.nix {
-      inherit config;
-      secretDir = ../../secrets/prod;
-    };
+    secrets =
+      lib.removeAttrs
+      (import ./lib/eulesia-secrets.nix {
+        inherit config;
+        secretDir = ../../secrets/prod;
+      })
+      ["firebase-service-account.json"];
   };
 
   services = {
@@ -188,9 +191,8 @@
       push = {
         vapidPublicKeyFile = config.sops.secrets."vapid-public-key".path;
         vapidPrivateKeyFile = config.sops.secrets."vapid-private-key".path;
-        # The current prod Firebase secret is still a placeholder. Leave FCM
-        # disabled until a real service account JSON is encrypted into
-        # secrets/prod/firebase-service-account.json.enc.
+        # Native push stays disabled on prod until a real Firebase service
+        # account is provisioned and the host secret set is extended again.
         firebaseServiceAccountKeyFile = null;
       };
       extraEnvironment = {

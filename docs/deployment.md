@@ -259,7 +259,6 @@ The production secret tree currently materializes these files under `/run/secret
 - `/run/secrets/eulesia/smtp-pass`
 - `/run/secrets/eulesia/vapid-public-key`
 - `/run/secrets/eulesia/vapid-private-key`
-- `/run/secrets/eulesia/firebase-service-account.json`
 - `/run/secrets/eulesia/idura-signing-key.jwk.json`
 - `/run/secrets/eulesia/idura-encryption-key.jwk.json`
 
