@@ -1,7 +1,7 @@
 keys:
-  # julius.koskela@digimuoto.com workstation
+  # Julius Koskela julius.koskela@digimuoto.com workstation
   - &local_dev age1xy93kan6jxmp8wwayarejuvkxh99cfjyxdfwdryv0axr8dds5dhqws809e
-  # markus.sjoberg@aihiolabs.com workstation
+  # Markus Sjoberg markus.sjoberg@aihiolabs.com workstation
   - &markus_sjoberg age1t94kyydev8zr3l53vrjsvqggnf4r4axeqv46s38vtej2xn62uavsmns849
   # local MicroVM sops key used by just vm-run / just vm-deploy
   - &local_microvm age1r0y06ntxaku4ugt536mpz6e8tz08jkq6w84uxl4yhstgmmejlsxqdy9knp
