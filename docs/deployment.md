@@ -21,6 +21,93 @@ The flake exposes:
 
 The old Docker Compose setup is deprecated and should only be treated as a temporary fallback while the production host is migrated.
 
+## Install Nix
+
+Eulesia expects a working Nix installation with `nix-command` and `flakes` enabled. Use the official Nix installer and docs:
+
+- official install page: <https://nixos.org/download/>
+- quick start and manual: <https://nix.dev/manual/nix/2.34/quick-start>
+
+Current recommended install commands from the official download page:
+
+### Linux
+
+Recommended multi-user install:
+
+```bash
+sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install) --daemon
+```
+
+### macOS
+
+Recommended multi-user install:
+
+```bash
+sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install)
+```
+
+After installation:
+
+1. Open a new terminal.
+2. Ensure flakes are enabled for your user if they are not already:
+
+```bash
+mkdir -p ~/.config/nix
+echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+```
+
+3. Verify that Nix works:
+
+```bash
+nix --version
+```
+
+## New Developer Bootstrap
+
+For a new developer workstation:
+
+1. Clone the repository and enter it:
+
+```bash
+git clone https://github.com/Eulesia/eulesia.git
+cd eulesia
+```
+
+2. Enter the dev shell:
+
+```bash
+nix develop
+```
+
+3. Inside the dev shell, inspect the primary commands:
+
+```bash
+just
+```
+
+4. Start the local stack:
+
+```bash
+just dev
+```
+
+This starts:
+
+- PostgreSQL
+- Meilisearch
+- API on `http://localhost:3001`
+- frontend on `http://localhost:5173`
+
+The default dev shell already provides the tools needed for the Nix workflow, including:
+
+- `just`
+- `sops`
+- `age`
+- `nixos-anywhere`
+- PostgreSQL and Meilisearch client binaries
+
+If a developer only needs local app development, this is enough. If they need test secrets or deploy access, continue with [Developer Workstation Key Onboarding](./secrets.md#developer-workstation-key-onboarding).
+
 ## Local Validation
 
 ```bash
@@ -116,6 +203,38 @@ Before the first real NixOS deployment, verify and adjust:
 - server age recipients in `.sops.yaml`
 - `services.eulesia.auth.idura.*` values in the target host config
 
+## Test Deployment Access Model
+
+The test deployment has three separate access layers:
+
+1. Secret decryption on the developer workstation
+2. SSH access to the test host
+3. GitHub Actions configuration for merge-to-`main` deploys
+
+For direct workstation deploys to the test host, a developer needs all of the following:
+
+- their workstation Age recipient added to `.sops.yaml`
+- `secrets/test/*` re-encrypted after the recipient is added
+- their SSH public key authorized on the test host
+- a reachable SSH target, either via the local alias `eulesia-server-test` or `EULESIA_TEST_TARGET_HOST`
+
+For CI deploys from `Eulesia/eulesia`, the required GitHub Actions settings are:
+
+- variable `EULESIA_TEST_TARGET_HOST`
+- secret `EULESIA_TEST_SSH_KEY`
+- secret `EULESIA_TEST_KNOWN_HOSTS`
+
+The self-hosted runners themselves are not configured in this repo. They are provided by Mercury through `~/Repos/infra` and require the Mercury secret:
+
+- `github/eulesia-runner-token`
+
+The deploy workflow expects runner labels:
+
+- `self-hosted`
+- `nix`
+- `mercury`
+- `eulesia`
+
 ## Required Secrets
 
 The canonical inventory, purpose, and generation guidance lives in [Secrets](./secrets.md).
@@ -163,9 +282,73 @@ nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
 nix run .#deploy
 ```
 
-Use `nix run .#bootstrap-test` once for the first install and `nix run .#rebuild-test` for normal test-host updates. Both commands default to the local SSH target alias `eulesia-server-test`; override it with `EULESIA_TEST_TARGET_HOST` when needed. After the full test configuration is active, run update commands from a machine that is allowed to SSH to the host, typically Mercury or another VPN-attached machine.
+### Test Host First Install
+
+Use `nix run .#bootstrap-test` once for the first install and `nix run .#rebuild-test` for normal test-host updates. Both commands default to the local SSH target alias `eulesia-server-test`; override it with `EULESIA_TEST_TARGET_HOST` when needed.
+
+For a fresh Hetzner test host:
+
+1. Bootstrap the minimal host:
+
+```bash
+just test-host-bootstrap-build
+just bootstrap-test
+```
+
+2. Retrieve the generated test-host Age recipient:
+
+```bash
+just get-test-age-key
+```
+
+3. Add that public key to `.sops.yaml` for the test secret rule and re-encrypt the test secrets:
+
+```bash
+find secrets/test -name '*.enc' -print0 | xargs -0 -n1 sops updatekeys
+```
+
+4. Build and switch the real test host configuration:
+
+```bash
+just test-host-build
+just rebuild-test
+```
+
+After the full test configuration is active, run update commands from a machine that is allowed to SSH to the host, typically Mercury or another VPN-attached machine.
 
 Before a developer can work with `secrets/test/*` or run `just rebuild-test` from their own workstation, their workstation Age recipient must be added to `.sops.yaml` and the test secrets must be re-encrypted. See [Developer Workstation Key Onboarding](./secrets.md#developer-workstation-key-onboarding).
+
+### Test Host Normal Updates
+
+For later changes to an already bootstrapped test host:
+
+```bash
+just test-host-build
+just rebuild-test
+```
+
+### Test Deployment from CI
+
+Merge-to-`main` test deployment runs through `.github/workflows/deploy-test.yml`.
+
+That workflow only works when all of the following are already in place:
+
+- Mercury has active self-hosted runners for `Eulesia/eulesia`
+- `Eulesia/eulesia` GitHub Actions has:
+  - variable `EULESIA_TEST_TARGET_HOST`
+  - secret `EULESIA_TEST_SSH_KEY`
+  - secret `EULESIA_TEST_KNOWN_HOSTS`
+
+The workflow builds the test system, deploys it with `nix run .#rebuild-test`, and then verifies health over SSH against `127.0.0.1:8080` on the target host.
+
+### Production
+
+Production remains available through:
+
+```bash
+nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
+nix run .#deploy
+```
 
 After the Traefik edge is enabled, public health checks require HTTP basic auth. CI therefore validates the backend origin over SSH against `127.0.0.1:8080` on the target host.
 
@@ -199,45 +382,9 @@ The VM config uses:
 
 `just vm-run` and `just vm-deploy` use the dedicated local VM key at `$HOME/.local/share/eulesia/vm-sops-age.key`, not the workstation `sops` keyring. They also refuse to run while plaintext runtime secret files like `secrets.env`, `idura-signing-key.jwk.json`, or `idura-encryption-key.jwk.json` are present in the repo root.
 
-## Hetzner Bootstrap
+## Hetzner Bootstrap Reference
 
-The test host now follows the same bootstrap pattern used in `~/Repos/infra`:
-
-1. Ensure your local SSH config can reach the fresh server as `root@eulesia-server-test`, or export `EULESIA_TEST_TARGET_HOST` with the correct address.
-2. Validate the bootstrap configuration locally:
-
-```bash
-just test-host-bootstrap-build
-```
-
-3. Run the destructive first install:
-
-```bash
-just bootstrap-test
-```
-
-This wipes the system disk and the attached PostgreSQL volume, repartitions both with `disko`, installs the minimal `eulesia-test-bootstrap` configuration, and reboots into NixOS.
-
-4. Retrieve the generated age public key:
-
-```bash
-just get-test-age-key
-```
-
-5. Add that public key to `.sops.yaml` for the test secret rule, then re-encrypt the test secrets:
-
-```bash
-find secrets/test -name '*.enc' -print0 | xargs -0 -n1 sops updatekeys
-```
-
-6. Build and switch the real test host configuration:
-
-```bash
-just test-host-build
-just rebuild-test
-```
-
-7. For later changes, skip the bootstrap and use `just rebuild-test` directly.
+The detailed operator walkthrough lives in [Deploy](#deploy), especially [Test Host First Install](#test-host-first-install). This section captures the host-specific facts that the bootstrap configuration currently assumes.
 
 The test host disk layout is:
 

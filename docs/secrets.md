@@ -154,6 +154,8 @@ These values are important, but they are not secrets and should not be stored as
 
 Developers who need access to `secrets/test/*` should use a normal local SOPS Age key on their workstation.
 
+If you already have Nix and this repo checked out, `nix develop` provides `age-keygen`, `sops`, and `just`. You do not need to install those tools separately.
+
 Use this path:
 
 ```bash
@@ -223,6 +225,8 @@ If decryption fails, the usual causes are:
 - It does not by itself grant SSH access to the test server.
 - Direct workstation deploys also require your SSH public key to be authorized on the test host.
 - GitHub Actions deploys use shared repo-level Actions variables and secrets plus Mercury runners, not per-developer Age keys.
+
+For the full workstation and test-host flow, see [Deployment](./deployment.md).
 
 ## Current State
 

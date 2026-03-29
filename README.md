@@ -68,6 +68,8 @@ AI-generated summaries are transparent (marked as "Eulesia summary — Generated
 
 - Nix with flakes enabled
 
+For first-time workstation setup on Linux or macOS, developer onboarding, and test-host deployment, start with [Deployment](./docs/deployment.md) and [Secrets](./docs/secrets.md).
+
 ### Setup
 
 ```bash
@@ -148,8 +150,8 @@ The Docker Compose files remain in the repo as a legacy fallback during migratio
 - [Geospatial Integration](./docs/geospatial-integration.md) — Location-based features
 - [API Reference](./docs/api-reference.md) — API endpoints
 - [Database Schema](./docs/database-schema.md) — Data models
-- [Deployment](./docs/deployment.md) — Production deployment
-- [Secrets](./docs/secrets.md) — Runtime secret inventory and generation
+- [Deployment](./docs/deployment.md) — Nix install, onboarding, and deployment
+- [Secrets](./docs/secrets.md) — Runtime secret inventory, generation, and Age key onboarding
 
 ## Academic Reference
 
