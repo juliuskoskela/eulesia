@@ -165,6 +165,8 @@ nix run .#deploy
 
 Use `nix run .#bootstrap-test` once for the first install and `nix run .#rebuild-test` for normal test-host updates. Both commands default to the local SSH target alias `eulesia-server-test`; override it with `EULESIA_TEST_TARGET_HOST` when needed. After the full test configuration is active, run update commands from a machine that is allowed to SSH to the host, typically Mercury or another VPN-attached machine.
 
+Before a developer can work with `secrets/test/*` or run `just rebuild-test` from their own workstation, their workstation Age recipient must be added to `.sops.yaml` and the test secrets must be re-encrypted. See [Developer Workstation Key Onboarding](./secrets.md#developer-workstation-key-onboarding).
+
 After the Traefik edge is enabled, public health checks require HTTP basic auth. CI therefore validates the backend origin over SSH against `127.0.0.1:8080` on the target host.
 
 `nix run .#deploy-test` and `nix run .#deploy` remain available through `deploy-rs` for manual use. All remote deployment paths assume the target host already has its own `/var/lib/sops-nix/key.txt` in place.
