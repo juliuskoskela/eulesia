@@ -175,6 +175,9 @@ export function TopBar() {
           <span className="font-semibold text-gray-900 dark:text-gray-100 text-lg hidden sm:block">
             Eulesia
           </span>
+          <span className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
+            beta
+          </span>
         </Link>
 
         {/* Search bar - desktop */}

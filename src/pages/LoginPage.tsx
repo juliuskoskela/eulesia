@@ -3,6 +3,7 @@ import {
   Shield,
   Fingerprint,
   CheckCircle,
+  Clock,
   Lock,
   Users,
   Building2,
@@ -17,6 +18,9 @@ import { SEOHead } from "../components/SEOHead";
 import { useAuth } from "../hooks/useAuth";
 import { api, type AuthConfig } from "../lib/api";
 import { buildApiUrl } from "../lib/runtimeConfig";
+
+// Toggle to re-enable login/register UI when ready
+const REGISTRATION_OPEN = false;
 
 type LoginStep = "initial" | "login" | "register";
 
@@ -70,7 +74,6 @@ export function LoginPage() {
   const [regLastName, setRegLastName] = useState(
     initialFtnReturn.lastName ?? "",
   );
-
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   // FTN (strong authentication)
@@ -83,6 +86,8 @@ export function LoginPage() {
   const showRegisterStep = step === "register";
 
   useEffect(() => {
+    if (!REGISTRATION_OPEN) return;
+
     let cancelled = false;
 
     api
@@ -112,6 +117,8 @@ export function LoginPage() {
 
   // Handle FTN callback parameters from URL
   useEffect(() => {
+    if (!REGISTRATION_OPEN) return;
+
     const {
       error: ftnError,
       firstName,
@@ -201,6 +208,9 @@ export function LoginPage() {
             <span className="text-blue-800 font-bold text-xl">E</span>
           </div>
           <span className="text-white font-semibold text-2xl">Eulesia</span>
+          <span className="text-xs font-medium text-blue-200 bg-blue-700/50 px-2 py-0.5 rounded-full">
+            beta
+          </span>
         </div>
       </header>
 
@@ -211,395 +221,414 @@ export function LoginPage() {
           <h1 className="text-white text-3xl font-bold mb-3">{t("tagline")}</h1>
           <p className="text-blue-200 text-lg mb-8">{t("taglineBody")}</p>
 
-          {/* Login/Register card */}
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-xl">
-            {!authConfig && (
-              <div className="flex items-center justify-center py-10">
-                <div className="w-8 h-8 border-2 border-blue-800 border-t-transparent rounded-full animate-spin" />
+          {!REGISTRATION_OPEN ? (
+            /* Coming soon card */
+            <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-blue-800 dark:text-blue-300" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                    {t("comingSoon.title")}
+                  </h2>
+                </div>
               </div>
-            )}
-
-            {authConfig && step === "initial" && (
-              <>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                    <Fingerprint className="w-6 h-6 text-blue-800 dark:text-blue-300" />
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
-                      {t("welcome")}
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {t("ftnOpenBeta")}
-                    </p>
-                  </div>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                {t("comingSoon.description")}
+              </p>
+            </div>
+          ) : (
+            /* Login/Register card */
+            <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-xl">
+              {!authConfig && (
+                <div className="flex items-center justify-center py-10">
+                  <div className="w-8 h-8 border-2 border-blue-800 border-t-transparent rounded-full animate-spin" />
                 </div>
+              )}
 
-                <button
-                  onClick={() => setStep("login")}
-                  className="w-full bg-blue-800 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 mb-3"
-                >
-                  <LogIn className="w-5 h-5" />
-                  {t("signIn")}
-                </button>
+              {authConfig && step === "initial" && (
+                <>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                      <Fingerprint className="w-6 h-6 text-blue-800 dark:text-blue-300" />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                        {t("welcome")}
+                      </h2>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {t("ftnOpenBeta")}
+                      </p>
+                    </div>
+                  </div>
 
-                <button
-                  onClick={() => setStep("register")}
-                  disabled={!canRegisterWithFtn}
-                  className="w-full bg-white dark:bg-gray-800 text-blue-800 dark:text-blue-300 border-2 border-blue-800 dark:border-blue-700 py-3 px-4 rounded-xl font-medium hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Fingerprint className="w-5 h-5" />
-                  {t("registerWithBankAuth")}
-                </button>
-
-                <p className="mt-3 text-sm text-blue-700 dark:text-blue-300">
-                  {t("ftn.availabilityNotice")}
-                </p>
-
-                {/* Future: EUDI Wallet button */}
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
                   <button
-                    disabled
-                    className="w-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 py-3 px-4 rounded-xl font-medium flex items-center justify-center gap-2 cursor-not-allowed"
+                    onClick={() => setStep("login")}
+                    className="w-full bg-blue-800 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 mb-3"
                   >
-                    <Shield className="w-5 h-5" />
-                    {t("eudiWallet")}
+                    <LogIn className="w-5 h-5" />
+                    {t("signIn")}
                   </button>
-                </div>
-              </>
-            )}
 
-            {authConfig && step === "login" && (
-              <form onSubmit={handleLogin}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                    <LogIn className="w-6 h-6 text-blue-800 dark:text-blue-300" />
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
-                      {t("signIn")}
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {t("enterCredentials")}
-                    </p>
-                  </div>
-                </div>
+                  <button
+                    onClick={() => setStep("register")}
+                    disabled={!canRegisterWithFtn}
+                    className="w-full bg-white dark:bg-gray-800 text-blue-800 dark:text-blue-300 border-2 border-blue-800 dark:border-blue-700 py-3 px-4 rounded-xl font-medium hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Fingerprint className="w-5 h-5" />
+                    {t("registerWithBankAuth")}
+                  </button>
 
-                <div className="space-y-4 mb-4">
-                  <div>
-                    <label
-                      htmlFor="login-username"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  <p className="mt-3 text-sm text-blue-700 dark:text-blue-300">
+                    {t("ftn.availabilityNotice")}
+                  </p>
+
+                  {/* Future: EUDI Wallet button */}
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+                    <button
+                      disabled
+                      className="w-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 py-3 px-4 rounded-xl font-medium flex items-center justify-center gap-2 cursor-not-allowed"
                     >
-                      {t("username")}
-                    </label>
-                    <input
-                      type="text"
-                      id="login-username"
-                      value={loginUsername}
-                      onChange={(e) => setLoginUsername(e.target.value)}
-                      placeholder={t("usernamePlaceholder")}
-                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
-                      required
-                      autoFocus
-                      autoComplete="username"
-                    />
+                      <Shield className="w-5 h-5" />
+                      {t("eudiWallet")}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {authConfig && step === "login" && (
+                <form onSubmit={handleLogin}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                      <LogIn className="w-6 h-6 text-blue-800 dark:text-blue-300" />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                        {t("signIn")}
+                      </h2>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {t("enterCredentials")}
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="login-password"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                    >
-                      {t("password")}
-                    </label>
-                    <input
-                      type="password"
-                      id="login-password"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
-                      required
-                      autoComplete="current-password"
-                    />
-                  </div>
-                </div>
+                  <div className="space-y-4 mb-4">
+                    <div>
+                      <label
+                        htmlFor="login-username"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                      >
+                        {t("username")}
+                      </label>
+                      <input
+                        type="text"
+                        id="login-username"
+                        value={loginUsername}
+                        onChange={(e) => setLoginUsername(e.target.value)}
+                        placeholder={t("usernamePlaceholder")}
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
+                        required
+                        autoFocus
+                        autoComplete="username"
+                      />
+                    </div>
 
-                {error && (
-                  <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-xl text-sm text-red-700">
-                    {error}
+                    <div>
+                      <label
+                        htmlFor="login-password"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                      >
+                        {t("password")}
+                      </label>
+                      <input
+                        type="password"
+                        id="login-password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
+                        required
+                        autoComplete="current-password"
+                      />
+                    </div>
                   </div>
-                )}
 
-                <button
-                  type="submit"
-                  disabled={isLoading || !loginUsername || !loginPassword}
-                  className="w-full bg-blue-800 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      {t("signingIn")}
-                    </>
+                  {error && (
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-xl text-sm text-red-700">
+                      {error}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading || !loginUsername || !loginPassword}
+                    className="w-full bg-blue-800 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        {t("signingIn")}
+                      </>
+                    ) : (
+                      <>
+                        {t("signIn")}
+                        <ArrowRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep("initial");
+                      setError(null);
+                    }}
+                    className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    {t("common:actions.back")}
+                  </button>
+                </form>
+              )}
+
+              {authConfig && showRegisterStep && (
+                <form onSubmit={handleRegister}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                      <UserPlus className="w-6 h-6 text-green-700" />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                        {t("createAccount")}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* FTN verification status or button */}
+                  {ftnVerified ? (
+                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                      <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 text-sm">
+                        <Fingerprint className="w-4 h-4" />
+                        <span className="font-medium">{t("ftn.verified")}</span>
+                      </div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        {t("ftn.nameFromBank")}
+                      </p>
+                    </div>
                   ) : (
                     <>
-                      {t("signIn")}
-                      <ArrowRight className="w-5 h-5" />
+                      {/* FTN required notice */}
+                      <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                        <div className="flex items-start gap-2">
+                          <Fingerprint className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm text-amber-800 dark:text-amber-200">
+                            <p className="font-medium">
+                              {t("ftn.requiredTitle")}
+                            </p>
+                            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                              {t("ftn.requiredDescription")}
+                            </p>
+                            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                              {t("ftn.availabilityNotice")}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* FTN strong authentication button */}
+                      <a
+                        href={buildApiUrl("/api/v1/auth/ftn/start")}
+                        className="w-full mb-4 bg-blue-700 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 no-underline block"
+                      >
+                        <Fingerprint className="w-5 h-5" />
+                        {t("ftn.authenticateWithBank")}
+                      </a>
                     </>
                   )}
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep("initial");
-                    setError(null);
-                  }}
-                  className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  {t("common:actions.back")}
-                </button>
-              </form>
-            )}
-
-            {authConfig && showRegisterStep && (
-              <form onSubmit={handleRegister}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                    <UserPlus className="w-6 h-6 text-green-700" />
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
-                      {t("createAccount")}
-                    </h2>
-                  </div>
-                </div>
-
-                {/* FTN verification status or button */}
-                {ftnVerified ? (
-                  <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 text-sm">
-                      <Fingerprint className="w-4 h-4" />
-                      <span className="font-medium">{t("ftn.verified")}</span>
+                  {error && (
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-xl text-sm text-red-700">
+                      {error}
                     </div>
-                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                      {t("ftn.nameFromBank")}
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    {/* FTN required notice */}
-                    <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
-                      <div className="flex items-start gap-2">
-                        <Fingerprint className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                        <div className="text-sm text-amber-800 dark:text-amber-200">
-                          <p className="font-medium">
-                            {t("ftn.requiredTitle")}
-                          </p>
-                          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                            {t("ftn.requiredDescription")}
-                          </p>
-                          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                            {t("ftn.availabilityNotice")}
-                          </p>
+                  )}
+
+                  {/* Registration form - only shown after FTN verification */}
+                  {ftnVerified && (
+                    <>
+                      <div className="space-y-4 mb-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label
+                              htmlFor="reg-firstname"
+                              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                            >
+                              {t("firstName")}
+                            </label>
+                            <input
+                              type="text"
+                              id="reg-firstname"
+                              value={regFirstName}
+                              onChange={(e) => setRegFirstName(e.target.value)}
+                              placeholder={t("firstNamePlaceholder")}
+                              className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
+                              required
+                              autoComplete="given-name"
+                            />
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {t("ftn.firstNameHint")}
+                            </p>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="reg-lastname"
+                              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                            >
+                              {t("lastName")}
+                            </label>
+                            <input
+                              type="text"
+                              id="reg-lastname"
+                              value={regLastName}
+                              className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed dark:text-gray-100"
+                              required
+                              autoComplete="family-name"
+                              readOnly
+                            />
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* FTN strong authentication button */}
-                    <a
-                      href={buildApiUrl("/api/v1/auth/ftn/start")}
-                      className="w-full mb-4 bg-blue-700 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 no-underline block"
-                    >
-                      <Fingerprint className="w-5 h-5" />
-                      {t("ftn.authenticateWithBank")}
-                    </a>
-                  </>
-                )}
-
-                {error && (
-                  <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-xl text-sm text-red-700">
-                    {error}
-                  </div>
-                )}
-
-                {/* Registration form - only shown after FTN verification */}
-                {ftnVerified && (
-                  <>
-                    <div className="space-y-4 mb-4">
-                      <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label
-                            htmlFor="reg-firstname"
+                            htmlFor="reg-username"
                             className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                           >
-                            {t("firstName")}
+                            {t("username")}
                           </label>
                           <input
                             type="text"
-                            id="reg-firstname"
-                            value={regFirstName}
-                            onChange={(e) => setRegFirstName(e.target.value)}
-                            placeholder={t("firstNamePlaceholder")}
+                            id="reg-username"
+                            value={regUsername}
+                            onChange={(e) =>
+                              setRegUsername(
+                                e.target.value
+                                  .toLowerCase()
+                                  .replace(/[^a-z0-9_]/g, ""),
+                              )
+                            }
+                            placeholder={t("usernamePlaceholder")}
                             className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                             required
-                            autoComplete="given-name"
+                            autoFocus
+                            autoComplete="username"
+                            pattern="[a-z0-9_]+"
                           />
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {t("ftn.firstNameHint")}
+                            {t("usernameHint")}
                           </p>
                         </div>
+
                         <div>
                           <label
-                            htmlFor="reg-lastname"
+                            htmlFor="reg-password"
                             className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                           >
-                            {t("lastName")}
+                            {t("password")}
                           </label>
                           <input
-                            type="text"
-                            id="reg-lastname"
-                            value={regLastName}
-                            className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl bg-gray-50 dark:bg-gray-800/50 cursor-not-allowed dark:text-gray-100"
+                            type="password"
+                            id="reg-password"
+                            value={regPassword}
+                            onChange={(e) => setRegPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
                             required
-                            autoComplete="family-name"
-                            readOnly
+                            minLength={6}
+                            autoComplete="new-password"
                           />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {t("passwordHint")}
+                          </p>
                         </div>
                       </div>
 
-                      <div>
-                        <label
-                          htmlFor="reg-username"
-                          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                        >
-                          {t("username")}
-                        </label>
+                      <label className="flex items-start gap-3 cursor-pointer">
                         <input
-                          type="text"
-                          id="reg-username"
-                          value={regUsername}
-                          onChange={(e) =>
-                            setRegUsername(
-                              e.target.value
-                                .toLowerCase()
-                                .replace(/[^a-z0-9_]/g, ""),
-                            )
-                          }
-                          placeholder={t("usernamePlaceholder")}
-                          className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
+                          type="checkbox"
+                          checked={termsAccepted}
+                          onChange={(e) => setTermsAccepted(e.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
                           required
-                          autoFocus
-                          autoComplete="username"
-                          pattern="[a-z0-9_]+"
                         />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {t("usernameHint")}
-                        </p>
-                      </div>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          <Trans
+                            i18nKey="termsAccept"
+                            ns="auth"
+                            components={{
+                              termsLink: (
+                                <a
+                                  href="/terms"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                                />
+                              ),
+                              privacyLink: (
+                                <a
+                                  href="/privacy"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                                />
+                              ),
+                            }}
+                          />
+                        </span>
+                      </label>
 
-                      <div>
-                        <label
-                          htmlFor="reg-password"
-                          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                        >
-                          {t("password")}
-                        </label>
-                        <input
-                          type="password"
-                          id="reg-password"
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full px-4 py-3 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-gray-100"
-                          required
-                          minLength={6}
-                          autoComplete="new-password"
-                        />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {t("passwordHint")}
-                        </p>
-                      </div>
-                    </div>
+                      <button
+                        type="submit"
+                        disabled={
+                          isLoading ||
+                          !regUsername ||
+                          !regPassword ||
+                          !regFirstName.trim() ||
+                          !regLastName.trim() ||
+                          !termsAccepted
+                        }
+                        className="w-full bg-green-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isLoading ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            {t("creatingAccount")}
+                          </>
+                        ) : (
+                          <>
+                            {t("createAccount")}
+                            <ArrowRight className="w-5 h-5" />
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
 
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={termsAccepted}
-                        onChange={(e) => setTermsAccepted(e.target.checked)}
-                        className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
-                        required
-                      />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        <Trans
-                          i18nKey="termsAccept"
-                          ns="auth"
-                          components={{
-                            termsLink: (
-                              <a
-                                href="/terms"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 dark:text-blue-400 underline hover:no-underline"
-                              />
-                            ),
-                            privacyLink: (
-                              <a
-                                href="/privacy"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 dark:text-blue-400 underline hover:no-underline"
-                              />
-                            ),
-                          }}
-                        />
-                      </span>
-                    </label>
-
-                    <button
-                      type="submit"
-                      disabled={
-                        isLoading ||
-                        !regUsername ||
-                        !regPassword ||
-                        !regFirstName.trim() ||
-                        !regLastName.trim() ||
-                        !termsAccepted
-                      }
-                      className="w-full bg-green-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isLoading ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          {t("creatingAccount")}
-                        </>
-                      ) : (
-                        <>
-                          {t("createAccount")}
-                          <ArrowRight className="w-5 h-5" />
-                        </>
-                      )}
-                    </button>
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep("initial");
-                    setError(null);
-                    setFtnToken(null);
-                  }}
-                  className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  {t("common:actions.back")}
-                </button>
-              </form>
-            )}
-          </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep("initial");
+                      setError(null);
+                      setFtnToken(null);
+                    }}
+                    className="w-full mt-3 text-gray-500 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300 flex items-center justify-center gap-1"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    {t("common:actions.back")}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Identity explanation */}
           <div className="mt-6 bg-blue-800/50 rounded-xl p-4 border border-blue-700">
