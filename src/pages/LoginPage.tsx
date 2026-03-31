@@ -20,7 +20,7 @@ import { api, type AuthConfig } from "../lib/api";
 import { buildApiUrl } from "../lib/runtimeConfig";
 
 // Toggle to re-enable login/register UI when ready
-const REGISTRATION_OPEN = false;
+const REGISTRATION_OPEN = true;
 
 type LoginStep = "initial" | "login" | "register";
 
