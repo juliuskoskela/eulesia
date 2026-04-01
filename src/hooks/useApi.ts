@@ -1051,6 +1051,13 @@ export function useUpdateProfile() {
   });
 }
 
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (data: Parameters<typeof api.changePassword>[0]) =>
+      api.changePassword(data),
+  });
+}
+
 export function useExportData() {
   return useMutation({
     mutationFn: () => api.exportData(),

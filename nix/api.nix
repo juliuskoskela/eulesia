@@ -53,6 +53,13 @@ pkgs.buildNpmPackage {
     EOF
     chmod +x $out/bin/eulesia-api-migrate
 
+    cat > $out/bin/eulesia-api-bootstrap-admins <<EOF
+    #!${pkgs.runtimeShell}
+    set -euo pipefail
+    exec ${pkgs.nodejs_22}/bin/node $out/share/eulesia-api/dist/scripts/bootstrap-admins.js "\$@"
+    EOF
+    chmod +x $out/bin/eulesia-api-bootstrap-admins
+
     runHook postInstall
   '';
 }

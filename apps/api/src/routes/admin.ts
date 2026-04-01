@@ -24,6 +24,7 @@ import { AppError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
+import { isSopsManagedOperatorAccount } from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -136,6 +137,7 @@ router.get(
         name: users.name,
         avatarUrl: users.avatarUrl,
         role: users.role,
+        managedBy: users.managedBy,
         institutionType: users.institutionType,
         institutionName: users.institutionName,
         identityVerified: users.identityVerified,
@@ -205,7 +207,7 @@ router.get(
 
 // PATCH /admin/users/:id/role
 const changeRoleSchema = z.object({
-  role: z.enum(["citizen", "institution", "admin"]),
+  role: z.enum(["citizen", "institution"]),
 });
 
 router.patch(
@@ -220,6 +222,12 @@ router.patch(
       .where(eq(users.id, id))
       .limit(1);
     if (!user) throw new AppError(404, "User not found");
+    if (isSopsManagedOperatorAccount(user)) {
+      throw new AppError(
+        400,
+        "Bootstrap-managed admin accounts must be changed through SOPS/Nix",
+      );
+    }
 
     const oldRole = user.role;
     await db.update(users).set({ role }).where(eq(users.id, id));
@@ -251,6 +259,12 @@ router.patch(
       .where(eq(users.id, id))
       .limit(1);
     if (!user) throw new AppError(404, "User not found");
+    if (isSopsManagedOperatorAccount(user)) {
+      throw new AppError(
+        400,
+        "Bootstrap-managed admin accounts cannot be identity-verified in-app",
+      );
+    }
 
     await db
       .update(users)

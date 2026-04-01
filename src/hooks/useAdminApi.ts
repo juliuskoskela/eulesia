@@ -65,7 +65,7 @@ export function useChangeUserRole() {
       role,
     }: {
       id: string;
-      role: "citizen" | "institution" | "admin";
+      role: "citizen" | "institution";
     }) => api.changeUserRole(id, role),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: adminKeys.user(id) });

@@ -66,6 +66,7 @@
     "noSanctions": "Ei sanktioita",
     "confirmRoleTitle": "Vahvista roolinvaihto",
     "confirmRoleDesc": "Haluatko varmasti vaihtaa käyttäjän {{name}} roolin: {{role}}?",
+    "roleManagedBySops": "Tämä ylläpitäjätili on SOPS/Nix-hallittu eikä sitä voi muuttaa hallintapaneelista.",
     "confirmAdminTitle": "Myönnä ylläpitäjäoikeudet",
     "confirmAdminDesc": "Olet antamassa käyttäjälle {{name}} ylläpitäjäoikeudet. Ylläpitäjä voi hallita kaikkia käyttäjiä, sisältöä ja asetuksia.",
     "confirmAdminWarning": "Kirjoita ADMIN vahvistaaksesi:",

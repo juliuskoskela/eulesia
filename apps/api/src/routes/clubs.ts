@@ -19,6 +19,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { notify } from "../services/notify.js";
 import { indexClub } from "../services/search/index.js";
 import type { AuthenticatedRequest } from "../types/index.js";
+import { sanitizePublicUserSummary } from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -157,6 +158,7 @@ router.get(
           id: users.id,
           name: users.name,
           avatarUrl: users.avatarUrl,
+          managedBy: users.managedBy,
         },
       })
       .from(clubs)
@@ -177,7 +179,7 @@ router.get(
       data: {
         items: clubList.map(({ club, creator }) => ({
           ...club,
-          creator,
+          creator: sanitizePublicUserSummary(creator),
           isMember: memberships[club.id] || false,
         })),
         total: count,
@@ -387,6 +389,7 @@ router.get(
           id: users.id,
           name: users.name,
           avatarUrl: users.avatarUrl,
+          managedBy: users.managedBy,
         },
         role: clubMembers.role,
       })
@@ -406,6 +409,7 @@ router.get(
           id: users.id,
           name: users.name,
           avatarUrl: users.avatarUrl,
+          managedBy: users.managedBy,
         },
         role: clubMembers.role,
       })
@@ -422,6 +426,7 @@ router.get(
           name: users.name,
           avatarUrl: users.avatarUrl,
           identityVerified: users.identityVerified,
+          managedBy: users.managedBy,
         },
       })
       .from(clubThreads)
@@ -457,12 +462,15 @@ router.get(
       success: true,
       data: {
         ...club,
-        moderators: staffMembers.map((m) => m.user),
-        members: allMembers.map((m) => ({ ...m.user, role: m.role })),
+        moderators: staffMembers.map((m) => sanitizePublicUserSummary(m.user)),
+        members: allMembers.map((m) => ({
+          ...sanitizePublicUserSummary(m.user),
+          role: m.role,
+        })),
         threads: threadList.map(({ thread, author }) => ({
           ...thread,
           userVote: threadVoteMap.get(thread.id) || 0,
-          author,
+          author: sanitizePublicUserSummary(author),
         })),
         isMember,
         memberRole,
@@ -1010,6 +1018,7 @@ router.get(
           avatarUrl: users.avatarUrl,
           role: users.role,
           identityVerified: users.identityVerified,
+          managedBy: users.managedBy,
         },
       })
       .from(clubThreads)
@@ -1047,6 +1056,7 @@ router.get(
           avatarUrl: users.avatarUrl,
           role: users.role,
           identityVerified: users.identityVerified,
+          managedBy: users.managedBy,
         },
       })
       .from(clubComments)
@@ -1080,7 +1090,7 @@ router.get(
       data: {
         ...threadData.thread,
         userVote: threadUserVote,
-        author: threadData.author,
+        author: sanitizePublicUserSummary(threadData.author),
         memberRole,
         comments: commentList.map(({ comment, author }) => {
           if (comment.isHidden) {
@@ -1101,7 +1111,7 @@ router.get(
           return {
             ...comment,
             userVote: commentVoteMap.get(comment.id) || 0,
-            author,
+            author: sanitizePublicUserSummary(author),
           };
         }),
       },

@@ -14,6 +14,7 @@ import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import type { AuthenticatedRequest } from "../types/index.js";
+import { sanitizePublicUserSummary } from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -361,6 +362,7 @@ router.get(
             name: users.name,
             avatarUrl: users.avatarUrl,
             role: users.role,
+            managedBy: users.managedBy,
           },
         })
         .from(threads)
@@ -382,7 +384,7 @@ router.get(
           ...municipality,
           threads: recentThreads.map((t) => ({
             ...t.thread,
-            author: t.author,
+            author: sanitizePublicUserSummary(t.author),
           })),
           clubs: municipalityClubs,
         },
@@ -411,6 +413,7 @@ router.get(
             name: users.name,
             avatarUrl: users.avatarUrl,
             role: users.role,
+            managedBy: users.managedBy,
           },
         })
         .from(threads)
@@ -431,7 +434,10 @@ router.get(
         data: {
           ...place.place,
           municipality: place.municipality,
-          threads: placeThreads.map((t) => ({ ...t.thread, author: t.author })),
+          threads: placeThreads.map((t) => ({
+            ...t.thread,
+            author: sanitizePublicUserSummary(t.author),
+          })),
           clubs: placeClubs,
         },
       });
@@ -444,6 +450,7 @@ router.get(
             name: users.name,
             avatarUrl: users.avatarUrl,
             role: users.role,
+            managedBy: users.managedBy,
           },
           municipality: municipalities,
           place: places,
@@ -470,7 +477,7 @@ router.get(
         data: {
           ...thread.thread,
           tags: tags.map((t) => t.tag),
-          author: thread.author,
+          author: sanitizePublicUserSummary(thread.author),
           municipality: thread.municipality,
           place: thread.place,
         },

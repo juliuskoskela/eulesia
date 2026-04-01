@@ -37,6 +37,27 @@
     "push": "Push notifications",
     "pushDesc": "Receive notifications even when the browser is closed"
   },
+  "password": {
+    "title": "Admin password",
+    "seedTitle": "Bootstrap password is only a seed",
+    "description": "The SOPS-provided password only seeds this operator account. After you change it here, rebuilds keep your chosen password instead of overwriting it.",
+    "recovery": "If the password is lost, operations can run a one-shot reseed build.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "changeButton": "Change password",
+    "changing": "Changing...",
+    "success": "Password updated. Other sessions were signed out.",
+    "errors": {
+      "currentRequired": "Enter your current password",
+      "newRequired": "Enter a new password",
+      "tooShort": "New password must be at least 6 characters",
+      "confirmMismatch": "New passwords do not match",
+      "currentPasswordIncorrect": "Current password is incorrect",
+      "notSupported": "This account does not support password changes",
+      "updateFailed": "Password update failed"
+    }
+  },
   "privacy": {
     "title": "Privacy & Data",
     "notProduct": "Your data is not the product",

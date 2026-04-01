@@ -23,6 +23,7 @@
     "import:ministry": "tsx src/services/import/run-ministry-import.ts",
     "discover:municipalities": "tsx src/services/import/discover-municipalities.ts",
     "create-invites": "tsx src/scripts/create-invites.ts",
+    "bootstrap-admins": "tsx src/scripts/bootstrap-admins.ts",
     "fix:coords": "tsx src/scripts/fix-municipality-coords.ts",
     "test": "vitest",
     "test:run": "vitest run"

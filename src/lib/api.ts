@@ -109,6 +109,16 @@ class ApiClient {
     });
   }
 
+  async changePassword(data: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<{ changed: boolean }> {
+    return this.request("/users/me/password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   async exportData(): Promise<unknown> {
     return this.request("/users/me/data");
   }
@@ -881,7 +891,7 @@ class ApiClient {
 
   async changeUserRole(
     id: string,
-    role: "citizen" | "institution" | "admin",
+    role: "citizen" | "institution",
   ): Promise<{ id: string; role: string }> {
     return this.request(`/admin/users/${id}/role`, {
       method: "PATCH",
@@ -1271,7 +1281,7 @@ class ApiClient {
 // Types
 export interface User {
   id: string;
-  email: string;
+  email: string | null;
   name: string;
   verifiedName?: string;
   avatarUrl?: string;
@@ -1991,11 +2001,12 @@ export interface AdminDashboard {
 
 export interface AdminUser {
   id: string;
-  email: string;
+  email: string | null;
   username: string;
   name: string;
   avatarUrl?: string;
   role: "citizen" | "institution" | "admin";
+  managedBy?: string | null;
   institutionType?: string;
   institutionName?: string;
   identityVerified: boolean;

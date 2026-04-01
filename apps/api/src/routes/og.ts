@@ -8,6 +8,7 @@ import {
   users,
 } from "../db/index.js";
 import { eq } from "drizzle-orm";
+import { isSopsManagedOperatorAccount } from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -269,12 +270,15 @@ router.get("/user/:userId", async (req: Request, res: Response) => {
         name: users.name,
         avatarUrl: users.avatarUrl,
         role: users.role,
+        managedBy: users.managedBy,
       })
       .from(users)
       .where(eq(users.id, req.params.userId))
       .limit(1);
 
-    if (!user) return defaultOg(req, res);
+    if (!user || isSopsManagedOperatorAccount(user)) {
+      return defaultOg(req, res);
+    }
 
     res.send(
       buildOgHtml({

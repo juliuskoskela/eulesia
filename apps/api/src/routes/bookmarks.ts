@@ -14,6 +14,7 @@ import { authMiddleware } from "../middleware/auth.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import type { AuthenticatedRequest } from "../types/index.js";
+import { sanitizePublicUserSummary } from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -137,6 +138,7 @@ router.get(
           institutionType: users.institutionType,
           institutionName: users.institutionName,
           identityVerified: users.identityVerified,
+          managedBy: users.managedBy,
         },
         municipality: municipalities,
       })
@@ -218,7 +220,7 @@ router.get(
         return {
           ...full.thread,
           tags: tagsByThread[bookmark.threadId] || [],
-          author: full.author,
+          author: sanitizePublicUserSummary(full.author),
           municipality: full.municipality,
           userVote: userVotes[bookmark.threadId] || 0,
           isBookmarked: true,

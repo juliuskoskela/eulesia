@@ -66,6 +66,7 @@
     "noSanctions": "No sanctions",
     "confirmRoleTitle": "Confirm role change",
     "confirmRoleDesc": "Are you sure you want to change {{name}}'s role to {{role}}?",
+    "roleManagedBySops": "This admin account is managed by SOPS/Nix and cannot be changed from the admin panel.",
     "confirmAdminTitle": "Grant admin privileges",
     "confirmAdminDesc": "You are about to grant admin privileges to {{name}}. Admins can manage all users, content, and settings.",
     "confirmAdminWarning": "Type ADMIN to confirm:",

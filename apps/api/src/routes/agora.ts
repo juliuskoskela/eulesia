@@ -26,6 +26,10 @@ import crypto from "crypto";
 import { io } from "../index.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
+import {
+  getPublicAccountName,
+  sanitizePublicUserSummary,
+} from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -279,6 +283,7 @@ router.get(
           institutionType: users.institutionType,
           institutionName: users.institutionName,
           identityVerified: users.identityVerified,
+          managedBy: users.managedBy,
         },
         municipality: municipalities,
       })
@@ -381,7 +386,7 @@ router.get(
         items: filteredThreads.map(({ thread, author, municipality }) => ({
           ...thread,
           tags: tagsByThread[thread.id] || [],
-          author,
+          author: sanitizePublicUserSummary(author),
           municipality,
           userVote: userVotes[thread.id] || 0,
           sourceInstitutionName: thread.sourceInstitutionId
@@ -427,6 +432,7 @@ router.get(
           institutionType: users.institutionType,
           institutionName: users.institutionName,
           identityVerified: users.identityVerified,
+          managedBy: users.managedBy,
         },
         municipality: municipalities,
       })
@@ -477,6 +483,7 @@ router.get(
           institutionType: users.institutionType,
           institutionName: users.institutionName,
           identityVerified: users.identityVerified,
+          managedBy: users.managedBy,
         },
       })
       .from(comments)
@@ -548,11 +555,11 @@ router.get(
     let editorName: string | null = null;
     if (threadData.thread.editedBy) {
       const [editor] = await db
-        .select({ name: users.name })
+        .select({ name: users.name, managedBy: users.managedBy })
         .from(users)
         .where(eq(users.id, threadData.thread.editedBy))
         .limit(1);
-      editorName = editor?.name || null;
+      editorName = editor ? getPublicAccountName(editor) : null;
     }
 
     res.json({
@@ -561,7 +568,7 @@ router.get(
         ...threadData.thread,
         editorName,
         tags: tags.map((t) => t.tag),
-        author: threadData.author,
+        author: sanitizePublicUserSummary(threadData.author),
         municipality: threadData.municipality,
         userVote: threadUserVote,
         isBookmarked,
@@ -586,7 +593,7 @@ router.get(
           }
           return {
             ...comment,
-            author,
+            author: sanitizePublicUserSummary(author),
             userVote: userVotes[comment.id] || 0,
           };
         }),
@@ -1370,6 +1377,7 @@ router.get(
           id: users.id,
           name: users.name,
           avatarUrl: users.avatarUrl,
+          managedBy: users.managedBy,
         },
       })
       .from(editHistory)
@@ -1382,7 +1390,13 @@ router.get(
       )
       .orderBy(desc(editHistory.editedAt));
 
-    res.json({ success: true, data: history });
+    res.json({
+      success: true,
+      data: history.map((entry) => ({
+        ...entry,
+        editor: sanitizePublicUserSummary(entry.editor),
+      })),
+    });
   }),
 );
 
@@ -1524,6 +1538,7 @@ router.get(
           role: users.role,
           institutionType: users.institutionType,
           institutionName: users.institutionName,
+          managedBy: users.managedBy,
         },
         municipality: municipalities,
       })
@@ -1607,7 +1622,7 @@ router.get(
         items: threadList.map(({ thread, author, municipality }) => ({
           ...thread,
           tags: tagsByThread[thread.id] || [],
-          author,
+          author: sanitizePublicUserSummary(author),
           municipality,
           userVote: userVotes[thread.id] || 0,
           sourceInstitutionName: thread.sourceInstitutionId

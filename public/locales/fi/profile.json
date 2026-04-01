@@ -37,6 +37,27 @@
     "push": "Push-ilmoitukset",
     "pushDesc": "Saat ilmoituksia myös kun selain on kiinni"
   },
+  "password": {
+    "title": "Ylläpitäjän salasana",
+    "seedTitle": "Bootstrap-salasana on vain siemen",
+    "description": "SOPSista tuleva salasana vain alustaa tämän operaattoritilin. Kun vaihdat sen täällä, rebuildit säilyttävät valitsemasi salasanan eivätkä ylikirjoita sitä.",
+    "recovery": "Jos salasana katoaa, ylläpito voi tehdä kertaluonteisen reseed-buildin.",
+    "currentPassword": "Nykyinen salasana",
+    "newPassword": "Uusi salasana",
+    "confirmPassword": "Vahvista uusi salasana",
+    "changeButton": "Vaihda salasana",
+    "changing": "Vaihdetaan...",
+    "success": "Salasana päivitettiin. Muut istunnot kirjattiin ulos.",
+    "errors": {
+      "currentRequired": "Anna nykyinen salasanasi",
+      "newRequired": "Anna uusi salasana",
+      "tooShort": "Uuden salasanan on oltava vähintään 6 merkkiä",
+      "confirmMismatch": "Uudet salasanat eivät täsmää",
+      "currentPasswordIncorrect": "Nykyinen salasana on virheellinen",
+      "notSupported": "Tämä tili ei tue salasanan vaihtoa",
+      "updateFailed": "Salasanan vaihto epäonnistui"
+    }
+  },
   "privacy": {
     "title": "Yksityisyys ja data",
     "notProduct": "Datasi ei ole tuote",

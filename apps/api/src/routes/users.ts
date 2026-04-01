@@ -1,9 +1,10 @@
 import { Router, type Response } from "express";
 import { z } from "zod";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, inArray, and, ne } from "drizzle-orm";
 import {
   db,
   users,
+  sessions,
   municipalities,
   threads,
   threadTags,
@@ -13,7 +14,9 @@ import { authMiddleware } from "../middleware/auth.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { getSessionCookieOptions } from "../utils/cookies.js";
+import { hashPassword, verifyPassword } from "../utils/crypto.js";
 import type { AuthenticatedRequest } from "../types/index.js";
+import { isSopsManagedOperatorAccount } from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -26,6 +29,11 @@ const updateUserSchema = z.object({
   notificationReplies: z.boolean().optional(),
   notificationMentions: z.boolean().optional(),
   notificationOfficial: z.boolean().optional(),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 // GET /users/:id - Get user public profile with their public threads
@@ -41,6 +49,7 @@ router.get(
         verifiedName: users.verifiedName,
         avatarUrl: users.avatarUrl,
         role: users.role,
+        managedBy: users.managedBy,
         institutionType: users.institutionType,
         institutionName: users.institutionName,
         identityVerified: users.identityVerified,
@@ -53,6 +62,12 @@ router.get(
     if (!user) {
       throw new AppError(404, "User not found");
     }
+
+    if (isSopsManagedOperatorAccount(user)) {
+      throw new AppError(404, "User not found");
+    }
+
+    const { managedBy: _managedBy, ...publicUser } = user;
 
     // Get user's public Agora threads (not club threads or private content)
     const userThreads = await db
@@ -192,7 +207,7 @@ router.get(
     res.json({
       success: true,
       data: {
-        ...user,
+        ...publicUser,
         threads: userThreads.map((t) => ({
           ...t,
           tags: tagsByThread[t.id] || [],
@@ -225,6 +240,17 @@ router.patch(
     const userId = currentUser.id;
     const updates = updateUserSchema.parse(req.body);
 
+    if (
+      isSopsManagedOperatorAccount(req.user) &&
+      (updates.name !== undefined ||
+        updates.avatarUrl !== undefined ||
+        updates.municipalityId !== undefined)
+    ) {
+      throw new AppError(
+        400,
+        "Bootstrap-managed admin accounts cannot change managed profile fields",
+      );
+    }
     if (
       currentUser.identityVerified &&
       typeof updates.name === "string" &&
@@ -259,6 +285,60 @@ router.patch(
       .returning();
 
     res.json({ success: true, data: updatedUser });
+  }),
+);
+
+// POST /users/me/password - Change own password
+router.post(
+  "/me/password",
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.id;
+    const passwordHash = req.user!.passwordHash;
+
+    if (!passwordHash) {
+      throw new AppError(400, "This account does not support password changes");
+    }
+
+    const { currentPassword, newPassword } = changePasswordSchema.parse(
+      req.body,
+    );
+
+    const currentPasswordMatches = await verifyPassword(
+      passwordHash,
+      currentPassword,
+    );
+
+    if (!currentPasswordMatches) {
+      throw new AppError(400, "Current password is incorrect");
+    }
+
+    const nextPasswordHash = await hashPassword(newPassword);
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({
+          passwordHash: nextPasswordHash,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+
+      if (req.sessionId) {
+        await tx
+          .delete(sessions)
+          .where(
+            and(eq(sessions.userId, userId), ne(sessions.id, req.sessionId)),
+          );
+      } else {
+        await tx.delete(sessions).where(eq(sessions.userId, userId));
+      }
+    });
+
+    res.json({
+      success: true,
+      data: { changed: true },
+    });
   }),
 );
 
@@ -457,6 +537,13 @@ router.delete(
   authMiddleware,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.id;
+
+    if (isSopsManagedOperatorAccount(req.user)) {
+      throw new AppError(
+        403,
+        "Bootstrap-managed admin accounts cannot self-delete",
+      );
+    }
 
     const {
       notifications,

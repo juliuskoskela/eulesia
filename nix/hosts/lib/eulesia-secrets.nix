@@ -10,6 +10,7 @@
     path = "/run/secrets/eulesia/${name}";
   };
 in {
+  "admin-accounts.json" = mkBinarySecret "admin-accounts.json";
   "session-secret" = mkBinarySecret "session-secret";
   "meili-master-key" = mkBinarySecret "meili-master-key";
   "mistral-api-key" = mkBinarySecret "mistral-api-key";

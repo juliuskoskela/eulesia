@@ -199,6 +199,8 @@
         };
       };
       auth = {
+        bootstrapAdminAccountsFile =
+          config.sops.secrets."admin-accounts.json".path;
         sessionSecretFile = config.sops.secrets."session-secret".path;
         registrationMode = "ftn-open";
         idura = {

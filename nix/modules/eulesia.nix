@@ -36,6 +36,7 @@ with lib; let
     (map toString (filter (path: path != null) (
       [
         cfg.auth.sessionSecretFile
+        cfg.auth.bootstrapAdminAccountsFile
         cfg.auth.idura.signingKeyFile
         cfg.auth.idura.encryptionKeyFile
         cfg.meilisearch.masterKeyFile
@@ -88,6 +89,7 @@ with lib; let
     ${fileEnv "FIREBASE_SERVICE_ACCOUNT_KEY" cfg.push.firebaseServiceAccountKeyFile}
     ${extraEnvironment}
     ${stringEnv "AUTH_REGISTRATION_MODE" cfg.auth.registrationMode}
+    ${optionalString (cfg.auth.bootstrapAdminAccountsFile != null) (stringEnv "BOOTSTRAP_ADMIN_ACCOUNTS_FILE" (toString cfg.auth.bootstrapAdminAccountsFile))}
     ${extraSecretEnvironment}
   '';
 in {
@@ -265,6 +267,12 @@ in {
         type = types.nullOr types.path;
         default = null;
         description = "File containing the session signing secret.";
+      };
+
+      bootstrapAdminAccountsFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = "Structured JSON file containing SOPS-managed bootstrap admin accounts.";
       };
 
       registrationMode = mkOption {
@@ -559,6 +567,7 @@ in {
           set -euo pipefail
           ${apiEnvironment}
           ${cfg.package}/bin/eulesia-api-migrate
+          ${cfg.package}/bin/eulesia-api-bootstrap-admins
         '';
         serviceConfig = {
           Type = "simple";
