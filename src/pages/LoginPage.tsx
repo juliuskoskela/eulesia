@@ -571,7 +571,9 @@ export function LoginPage() {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-blue-600 dark:text-blue-400 underline hover:no-underline"
-                                />
+                                >
+                                  terms of service
+                                </a>
                               ),
                               privacyLink: (
                                 <a
@@ -579,7 +581,9 @@ export function LoginPage() {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-blue-600 dark:text-blue-400 underline hover:no-underline"
-                                />
+                                >
+                                  privacy policy
+                                </a>
                               ),
                             }}
                           />
