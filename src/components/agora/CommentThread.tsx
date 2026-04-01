@@ -17,7 +17,7 @@ import { formatRelativeTime } from "../../lib/formatTime";
 import type { UserRole } from "../../types";
 
 interface CommentAuthor {
-  id: string;
+  id: string | null;
   name: string;
   role: UserRole;
   verified: boolean;

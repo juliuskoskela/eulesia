@@ -437,9 +437,9 @@ export function RoomPage() {
                     {t("room.members")}
                   </label>
                   <div className="border border-gray-200 dark:border-gray-800 rounded-lg divide-y divide-gray-100 dark:divide-gray-800">
-                    {members.map((member) => (
+                    {members.map((member, index) => (
                       <div
-                        key={member.id}
+                        key={member.id ?? `${member.name}-${index}`}
                         className="flex items-center justify-between px-3 py-2"
                       >
                         <div className="flex items-center gap-2 min-w-0">
@@ -465,6 +465,7 @@ export function RoomPage() {
                         </div>
                         <button
                           onClick={() => {
+                            if (!member.id) return;
                             if (
                               confirm(
                                 t("room.confirmRemoveMember", {
@@ -475,7 +476,9 @@ export function RoomPage() {
                               removeRoomMemberMutation.mutate(member.id);
                             }
                           }}
-                          disabled={removeRoomMemberMutation.isPending}
+                          disabled={
+                            removeRoomMemberMutation.isPending || !member.id
+                          }
                           className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
                           aria-label={t("room.removeMember")}
                           title={t("room.removeMember")}

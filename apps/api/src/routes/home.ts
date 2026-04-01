@@ -21,6 +21,10 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { io } from "../index.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
+import {
+  isSopsManagedOperatorAccount,
+  sanitizePublicUserSummary,
+} from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -47,14 +51,27 @@ const inviteSchema = z.object({
 });
 
 // Helper to format user summary
-function formatUserSummary(user: typeof users.$inferSelect) {
-  return {
+function formatUserSummary(
+  user: typeof users.$inferSelect,
+  options?: { publicView?: boolean },
+) {
+  const summary = {
     id: user.id,
     name: user.name,
     avatarUrl: user.avatarUrl,
     role: user.role,
     institutionType: user.institutionType,
+    institutionName: user.institutionName,
+    identityVerified: user.identityVerified,
+    managedBy: user.managedBy,
   };
+
+  if (options?.publicView) {
+    return sanitizePublicUserSummary(summary);
+  }
+
+  const { managedBy: _managedBy, ...privateUserSummary } = summary;
+  return privateUserSummary;
 }
 
 // ============================================================
@@ -239,6 +256,7 @@ router.get(
 
     const { room, owner } = roomData;
     const isOwner = currentUserId === owner.id;
+    const shouldSanitizeUserSummaries = room.visibility === "public";
 
     // Check access for private rooms
     if (room.visibility === "private" && !isOwner) {
@@ -320,8 +338,14 @@ router.get(
       success: true,
       data: {
         ...room,
-        owner: formatUserSummary(owner),
-        members: members.map(formatUserSummary),
+        owner: formatUserSummary(owner, {
+          publicView: shouldSanitizeUserSummaries,
+        }),
+        members: members.map((member) =>
+          formatUserSummary(member, {
+            publicView: shouldSanitizeUserSummaries,
+          }),
+        ),
         messages: messagesData
           .map(({ message, author }) => {
             if (message.isHidden) {
@@ -339,7 +363,9 @@ router.get(
             }
             return {
               ...message,
-              author: formatUserSummary(author),
+              author: formatUserSummary(author, {
+                publicView: shouldSanitizeUserSummaries,
+              }),
               reactions: reactionsMap[message.id] || [],
             };
           })
@@ -495,7 +521,9 @@ router.post(
 
     const messageData = {
       ...message,
-      author: formatUserSummary(author),
+      author: formatUserSummary(author, {
+        publicView: room.visibility === "public",
+      }),
     };
 
     // Broadcast to room via Socket.IO
@@ -532,6 +560,16 @@ router.patch(
 
     if (!message) {
       throw new AppError(404, "Message not found");
+    }
+
+    const [room] = await db
+      .select({ visibility: rooms.visibility })
+      .from(rooms)
+      .where(eq(rooms.id, roomId))
+      .limit(1);
+
+    if (!room) {
+      throw new AppError(404, "Room not found");
     }
 
     if (message.authorId !== userId && req.user!.role !== "admin") {
@@ -574,7 +612,9 @@ router.patch(
       contentHtml: updated.contentHtml,
       editedBy: userId,
       editedAt: updated.editedAt,
-      author: formatUserSummary(author),
+      author: formatUserSummary(author, {
+        publicView: room.visibility === "public",
+      }),
     });
 
     res.json({ success: true, data: updated });
@@ -928,8 +968,13 @@ router.get(
       throw new AppError(404, "User not found");
     }
 
-    // Get rooms (public ones, or all if viewing own home)
     const isOwnHome = currentUserId === userId;
+
+    if (isSopsManagedOperatorAccount(homeOwner) && !isOwnHome) {
+      throw new AppError(404, "User not found");
+    }
+
+    // Get rooms (public ones, or all if viewing own home)
 
     let roomsQuery = db
       .select({
@@ -1013,7 +1058,7 @@ router.get(
     res.json({
       success: true,
       data: {
-        owner: formatUserSummary(homeOwner),
+        owner: formatUserSummary(homeOwner, { publicView: !isOwnHome }),
         rooms: accessibleRooms,
         recentActivity: {
           threads: recentThreads,

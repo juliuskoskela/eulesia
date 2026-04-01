@@ -49,6 +49,7 @@
     "verification": "Henkilöllisyyden vahvistus",
     "grantVerification": "Vahvista henkilöllisyys",
     "removeVerification": "Poista vahvistus",
+    "verificationManagedBySops": "Tämä ylläpitäjätili on SOPS/Nix-hallittu eikä sen vahvistustilaa voi muuttaa hallintapaneelista.",
     "role": "Rooli",
     "sanctions": "Sanktiot",
     "issueSanction": "Anna sanktio",

@@ -908,8 +908,12 @@ export function ClubViewPage() {
               {t("moderators")}
             </h3>
             <div className="space-y-2">
-              {moderators.map((mod) => (
-                <ActorBadge key={mod.id} user={transformUser(mod)} size="sm" />
+              {moderators.map((mod, index) => (
+                <ActorBadge
+                  key={mod.id ?? `moderator-${index}`}
+                  user={transformUser(mod)}
+                  size="sm"
+                />
               ))}
             </div>
           </div>
@@ -923,43 +927,72 @@ export function ClubViewPage() {
               {t("memberList")} ({members.length})
             </h3>
             <div className="flex flex-wrap gap-2">
-              {members.slice(0, 20).map((member) => (
+              {members.slice(0, 20).map((member, index) => (
                 <div
-                  key={member.id}
+                  key={member.id ?? `member-${index}`}
                   className="relative flex items-center gap-1.5 px-2 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-full text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                 >
-                  <Link
-                    to={`/home/${member.id}`}
-                    className="flex items-center gap-1.5"
-                  >
-                    {member.avatarUrl ? (
-                      <img
-                        src={member.avatarUrl}
-                        alt=""
-                        className="w-5 h-5 rounded-full"
-                      />
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-medium text-teal-700">
-                        {member.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <span className="text-gray-700 dark:text-gray-300">
-                      {member.name}
-                    </span>
-                    {member.role === "admin" && (
-                      <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">
-                        {t("moderation.admin")}
+                  {member.id ? (
+                    <Link
+                      to={`/home/${member.id}`}
+                      className="flex items-center gap-1.5"
+                    >
+                      {member.avatarUrl ? (
+                        <img
+                          src={member.avatarUrl}
+                          alt=""
+                          className="w-5 h-5 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-medium text-teal-700">
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-gray-700 dark:text-gray-300">
+                        {member.name}
                       </span>
-                    )}
-                    {member.role === "moderator" && (
-                      <span className="text-[10px] text-blue-700 bg-blue-100 px-1 rounded">
-                        {t("moderation.moderator")}
+                      {member.role === "admin" && (
+                        <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">
+                          {t("moderation.admin")}
+                        </span>
+                      )}
+                      {member.role === "moderator" && (
+                        <span className="text-[10px] text-blue-700 bg-blue-100 px-1 rounded">
+                          {t("moderation.moderator")}
+                        </span>
+                      )}
+                    </Link>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      {member.avatarUrl ? (
+                        <img
+                          src={member.avatarUrl}
+                          alt=""
+                          className="w-5 h-5 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-medium text-teal-700">
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-gray-700 dark:text-gray-300">
+                        {member.name}
                       </span>
-                    )}
-                  </Link>
+                      {member.role === "admin" && (
+                        <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">
+                          {t("moderation.admin")}
+                        </span>
+                      )}
+                      {member.role === "moderator" && (
+                        <span className="text-[10px] text-blue-700 bg-blue-100 px-1 rounded">
+                          {t("moderation.moderator")}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Moderation menu button */}
-                  {isAdminOrMod && (
+                  {isAdminOrMod && member.id && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -991,9 +1024,10 @@ export function ClubViewPage() {
                               (role) => (
                                 <button
                                   key={role}
-                                  onClick={() =>
-                                    handleChangeRole(member.id, role)
-                                  }
+                                  onClick={() => {
+                                    if (!member.id) return;
+                                    handleChangeRole(member.id, role);
+                                  }}
                                   disabled={
                                     member.role === role ||
                                     updateRoleMutation.isPending
@@ -1061,9 +1095,14 @@ export function ClubViewPage() {
                   {t("common:actions.cancel")}
                 </button>
                 <button
-                  onClick={() => handleRemoveMember(confirmRemoveMember.id)}
-                  disabled={removeMemberMutation.isPending}
+                  onClick={() => {
+                    if (!confirmRemoveMember.id) return;
+                    handleRemoveMember(confirmRemoveMember.id);
+                  }}
                   className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  disabled={
+                    removeMemberMutation.isPending || !confirmRemoveMember.id
+                  }
                 >
                   {removeMemberMutation.isPending
                     ? "..."

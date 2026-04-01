@@ -14,6 +14,7 @@ export function ActorBadge({
   size = "md",
 }: ActorBadgeProps) {
   const isInstitution = user.role === "institution";
+  const canLinkToProfile = Boolean(user.id);
 
   const sizeClasses = {
     sm: "w-6 h-6 text-xs",
@@ -22,13 +23,8 @@ export function ActorBadge({
   };
 
   const avatarColor = isInstitution ? "bg-violet-600" : "bg-teal-600";
-
-  return (
-    <Link
-      to={`/user/${user.id}`}
-      className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-      onClick={(e) => e.stopPropagation()}
-    >
+  const content = (
+    <>
       {user.avatarUrl ? (
         <img
           src={user.avatarUrl}
@@ -47,12 +43,11 @@ export function ActorBadge({
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
             <span
-              className={`font-medium text-gray-900 hover:underline ${size === "sm" ? "text-sm" : ""}`}
+              className={`font-medium text-gray-900 ${canLinkToProfile ? "hover:underline" : ""} ${size === "sm" ? "text-sm" : ""}`}
             >
               {user.name}
             </span>
 
-            {/* Role indicator */}
             {isInstitution ? (
               <span className="inline-flex items-center gap-1 text-xs text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded">
                 <Building2 className="w-3 h-3" />
@@ -69,7 +64,6 @@ export function ActorBadge({
             )}
           </div>
 
-          {/* Institution type */}
           {isInstitution && user.institutionType && (
             <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
               {user.institutionType}
@@ -77,6 +71,20 @@ export function ActorBadge({
           )}
         </div>
       )}
+    </>
+  );
+
+  if (!canLinkToProfile) {
+    return <div className="flex items-center gap-2">{content}</div>;
+  }
+
+  return (
+    <Link
+      to={`/user/${user.id}`}
+      className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {content}
     </Link>
   );
 }

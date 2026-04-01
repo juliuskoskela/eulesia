@@ -36,7 +36,7 @@ describe("operator account helpers", () => {
         managedBy: "sops_admin",
       }),
     ).toEqual({
-      id: "user-1",
+      id: null,
       name: MANAGED_OPERATOR_PUBLIC_NAME,
       avatarUrl: null,
       role: "citizen",

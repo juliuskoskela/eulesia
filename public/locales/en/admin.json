@@ -49,6 +49,7 @@
     "verification": "Identity verification",
     "grantVerification": "Verify identity",
     "removeVerification": "Remove verification",
+    "verificationManagedBySops": "This admin account is managed by SOPS/Nix and its verification state cannot be changed from the admin panel.",
     "role": "Role",
     "sanctions": "Sanctions",
     "issueSanction": "Issue Sanction",

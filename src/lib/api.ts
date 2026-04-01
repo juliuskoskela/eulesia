@@ -1409,7 +1409,7 @@ export interface Comment {
 }
 
 export interface UserSummary {
-  id: string;
+  id: string | null;
   name: string;
   avatarUrl?: string;
   role: "citizen" | "institution" | "admin";
@@ -1445,7 +1445,7 @@ export interface Club {
 }
 
 export interface ClubMember {
-  id: string;
+  id: string | null;
   name: string;
   avatarUrl?: string;
   role: string;

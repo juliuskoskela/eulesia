@@ -9,12 +9,20 @@ type OperatorAccountLike =
   | undefined;
 
 type PublicUserSummaryLike = OperatorAccountLike & {
+  id?: string | null;
   name?: string | null;
   avatarUrl?: string | null;
   role?: "citizen" | "institution" | "admin" | null;
   institutionType?: string | null;
   institutionName?: string | null;
   identityVerified?: boolean | null;
+};
+
+type SanitizedPublicUserSummary<T extends PublicUserSummaryLike> = Omit<
+  T,
+  "managedBy" | "id"
+> & {
+  id: string | null;
 };
 
 export function isSopsManagedOperatorAccount(
@@ -46,21 +54,21 @@ export function getPublicAccountName(
 
 export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
   account: T,
-): Omit<T, "managedBy">;
+): SanitizedPublicUserSummary<T>;
 export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
   account: T | null,
-): Omit<T, "managedBy"> | null;
+): SanitizedPublicUserSummary<T> | null;
 export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
   account: T | undefined,
-): Omit<T, "managedBy"> | undefined;
+): SanitizedPublicUserSummary<T> | undefined;
 export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
   account: T | null | undefined,
-): Omit<T, "managedBy"> | null | undefined;
+): SanitizedPublicUserSummary<T> | null | undefined;
 export function sanitizePublicUserSummary(account: null): null;
 export function sanitizePublicUserSummary(account: undefined): undefined;
 export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
   account: T | null | undefined,
-): Omit<T, "managedBy"> | null | undefined {
+): SanitizedPublicUserSummary<T> | null | undefined {
   if (account === null || account === undefined) {
     return account;
   }
@@ -68,16 +76,20 @@ export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
   const { managedBy: _managedBy, ...publicUser } = account;
 
   if (!isSopsManagedOperatorAccount(account)) {
-    return publicUser;
+    return {
+      ...publicUser,
+      id: publicUser.id ?? null,
+    } as SanitizedPublicUserSummary<T>;
   }
 
   return {
     ...publicUser,
+    id: null,
     name: MANAGED_OPERATOR_PUBLIC_NAME,
     avatarUrl: null,
     role: "citizen",
     institutionType: null,
     institutionName: null,
     identityVerified: false,
-  } as Omit<T, "managedBy">;
+  } as SanitizedPublicUserSummary<T>;
 }
