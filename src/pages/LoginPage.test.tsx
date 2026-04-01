@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { api } from "../lib/api";
 import { LoginPage } from "./LoginPage";
 
 vi.mock("../components/SEOHead", () => ({
@@ -21,17 +22,27 @@ vi.mock("../lib/api", () => ({
 }));
 
 describe("LoginPage", () => {
-  it("renders the coming soon message when registration is closed", () => {
+  beforeEach(() => {
+    vi.mocked(api.getAuthConfig).mockResolvedValue({
+      registrationMode: "ftn-open",
+      registrationOpen: true,
+      ftnEnabled: true,
+    });
+  });
+
+  it("renders login and FTN registration actions when registration is open", async () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <LoginPage />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("comingSoon.title")).toBeInTheDocument();
-    expect(screen.getByText("comingSoon.description")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "signIn" }),
-    ).not.toBeInTheDocument();
+      await screen.findByRole("button", { name: "signIn" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "registerWithBankAuth" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("comingSoon.title")).not.toBeInTheDocument();
   });
 });
