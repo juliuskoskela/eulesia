@@ -269,7 +269,7 @@ router.get("/link-preview", async (req: Request, res: Response) => {
         signal: controller.signal,
         redirect: "follow",
         headers: {
-          "User-Agent": "EulesiaBot/1.0 (+https://eulesia.eu)",
+          "User-Agent": "EulesiaBot/1.0 (+https://eulesia.org)",
           Accept: "text/html,application/xhtml+xml",
         },
       });

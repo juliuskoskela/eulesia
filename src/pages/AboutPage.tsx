@@ -6,7 +6,6 @@ import {
   Building2,
   Shield,
   Sparkles,
-  BookOpen,
   Scale,
   Landmark,
   FlaskConical,
@@ -311,16 +310,45 @@ function AboutContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(
                 [
-                  { key: "identity", icon: <Fingerprint className="w-4 h-4" />, color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20" },
-                  { key: "institutional", icon: <Landmark className="w-4 h-4" />, color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20" },
-                  { key: "socialAgency", icon: <MessageCircle className="w-4 h-4" />, color: "text-violet-600 bg-violet-50 dark:bg-violet-900/20" },
-                  { key: "noAttention", icon: <EyeOff className="w-4 h-4" />, color: "text-orange-600 bg-orange-50 dark:bg-orange-900/20" },
-                  { key: "publicGovernance", icon: <Scale className="w-4 h-4" />, color: "text-teal-600 bg-teal-50 dark:bg-teal-900/20" },
-                  { key: "privacy", icon: <Lock className="w-4 h-4" />, color: "text-green-600 bg-green-50 dark:bg-green-900/20" },
+                  {
+                    key: "identity",
+                    icon: <Fingerprint className="w-4 h-4" />,
+                    color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+                  },
+                  {
+                    key: "institutional",
+                    icon: <Landmark className="w-4 h-4" />,
+                    color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20",
+                  },
+                  {
+                    key: "socialAgency",
+                    icon: <MessageCircle className="w-4 h-4" />,
+                    color: "text-violet-600 bg-violet-50 dark:bg-violet-900/20",
+                  },
+                  {
+                    key: "noAttention",
+                    icon: <EyeOff className="w-4 h-4" />,
+                    color: "text-orange-600 bg-orange-50 dark:bg-orange-900/20",
+                  },
+                  {
+                    key: "publicGovernance",
+                    icon: <Scale className="w-4 h-4" />,
+                    color: "text-teal-600 bg-teal-50 dark:bg-teal-900/20",
+                  },
+                  {
+                    key: "privacy",
+                    icon: <Lock className="w-4 h-4" />,
+                    color: "text-green-600 bg-green-50 dark:bg-green-900/20",
+                  },
                 ] as { key: string; icon: React.ReactNode; color: string }[]
               ).map(({ key, icon, color }) => (
-                <div key={key} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 flex gap-3">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+                <div
+                  key={key}
+                  className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 flex gap-3"
+                >
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}
+                  >
                     {icon}
                   </div>
                   <div>
@@ -620,13 +648,33 @@ function AboutContent() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {(
                 [
-                  { key: "why1", icon: <Database className="w-4 h-4" />, color: "text-amber-700 bg-amber-100 dark:bg-amber-800/30 dark:text-amber-300" },
-                  { key: "why2", icon: <Unlink className="w-4 h-4" />, color: "text-amber-700 bg-amber-100 dark:bg-amber-800/30 dark:text-amber-300" },
-                  { key: "why3", icon: <Timer className="w-4 h-4" />, color: "text-amber-700 bg-amber-100 dark:bg-amber-800/30 dark:text-amber-300" },
+                  {
+                    key: "why1",
+                    icon: <Database className="w-4 h-4" />,
+                    color:
+                      "text-amber-700 bg-amber-100 dark:bg-amber-800/30 dark:text-amber-300",
+                  },
+                  {
+                    key: "why2",
+                    icon: <Unlink className="w-4 h-4" />,
+                    color:
+                      "text-amber-700 bg-amber-100 dark:bg-amber-800/30 dark:text-amber-300",
+                  },
+                  {
+                    key: "why3",
+                    icon: <Timer className="w-4 h-4" />,
+                    color:
+                      "text-amber-700 bg-amber-100 dark:bg-amber-800/30 dark:text-amber-300",
+                  },
                 ] as { key: string; icon: React.ReactNode; color: string }[]
               ).map(({ key, icon, color }) => (
-                <div key={key} className="bg-white dark:bg-gray-900/60 rounded-lg p-3 border border-amber-200 dark:border-amber-700/30">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center mb-2 ${color}`}>
+                <div
+                  key={key}
+                  className="bg-white dark:bg-gray-900/60 rounded-lg p-3 border border-amber-200 dark:border-amber-700/30"
+                >
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center mb-2 ${color}`}
+                  >
                     {icon}
                   </div>
                   <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">
@@ -711,7 +759,7 @@ export function AboutPage() {
             "@context": "https://schema.org",
             "@type": "Organization",
             name: "Eulesia",
-            url: "https://eulesia.eu",
+            url: "https://eulesia.org",
             description: "Eurooppalainen kansalaisdemokratia-alusta",
           }}
         />

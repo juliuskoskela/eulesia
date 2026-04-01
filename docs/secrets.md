@@ -48,18 +48,18 @@ Runtime filenames drop the trailing `.enc`. For example:
 
 ## Secret Inventory
 
-| Secret file                         | Environments   | Runtime consumer                                                                       | Purpose                                                                              | Generation or source                                         |
-| ----------------------------------- | -------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `session-secret.enc`                | `test`, `prod` | `/run/secrets/eulesia/session-secret` -> `SESSION_SECRET`                              | Signs app sessions and FTN/Idura flow session state                                  | Generate locally with a random 32+ byte secret               |
-| `meili-master-key.enc`              | `test`, `prod` | `/run/secrets/eulesia/meili-master-key` -> `MEILI_MASTER_KEY`                          | Protects Meilisearch admin access and API writes                                     | Generate locally with a random high-entropy secret           |
-| `mistral-api-key.enc`               | `test`, `prod` | `/run/secrets/eulesia/mistral-api-key` -> `MISTRAL_API_KEY`                            | Enables Mistral-backed import summarization                                          | Create in the Mistral console                                |
-| `smtp-user.enc`                     | `test`, `prod` | `/run/secrets/eulesia/smtp-user` -> `SMTP_USER`                                        | SMTP authentication username                                                         | Obtain from the SMTP provider                                |
-| `smtp-pass.enc`                     | `test`, `prod` | `/run/secrets/eulesia/smtp-pass` -> `SMTP_PASS`                                        | SMTP authentication password                                                         | Obtain from the SMTP provider                                |
-| `vapid-public-key.enc`              | `test`, `prod` | `/run/secrets/eulesia/vapid-public-key` -> `VAPID_PUBLIC_KEY`                          | Public half of the web push keypair returned to clients                              | Generate together with the private key using `web-push`      |
-| `vapid-private-key.enc`             | `test`, `prod` | `/run/secrets/eulesia/vapid-private-key` -> `VAPID_PRIVATE_KEY`                        | Private half of the web push keypair used for push signing                           | Generate together with the public key using `web-push`       |
-| `firebase-service-account.json.enc` | `test`, `prod` | `/run/secrets/eulesia/firebase-service-account.json` -> `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials for native push notifications                         | Download a service account JSON from Firebase / Google Cloud |
-| `idura-signing-key.jwk.json.enc`    | `test`, `prod` | `/run/secrets/eulesia/idura-signing-key.jwk.json` -> `IDURA_SIGNING_KEY_FILE`          | Private JWK used to sign FTN request objects and `private_key_jwt` client assertions | Generate locally with `just generate-idura-jwks`             |
-| `idura-encryption-key.jwk.json.enc` | `test`, `prod` | `/run/secrets/eulesia/idura-encryption-key.jwk.json` -> `IDURA_ENCRYPTION_KEY_FILE`    | Private JWK used to decrypt encrypted FTN `id_token` responses                       | Generate locally with `just generate-idura-jwks`             |
+| Secret file                         | Environments                       | Runtime consumer                                                                       | Purpose                                                                              | Generation or source                                         |
+| ----------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `session-secret.enc`                | `test`, `prod`                     | `/run/secrets/eulesia/session-secret` -> `SESSION_SECRET`                              | Signs app sessions and FTN/Idura flow session state                                  | Generate locally with a random 32+ byte secret               |
+| `meili-master-key.enc`              | `test`, `prod`                     | `/run/secrets/eulesia/meili-master-key` -> `MEILI_MASTER_KEY`                          | Protects Meilisearch admin access and API writes                                     | Generate locally with a random high-entropy secret           |
+| `mistral-api-key.enc`               | `test`, `prod`                     | `/run/secrets/eulesia/mistral-api-key` -> `MISTRAL_API_KEY`                            | Enables Mistral-backed import summarization                                          | Create in the Mistral console                                |
+| `smtp-user.enc`                     | `test`, `prod`                     | `/run/secrets/eulesia/smtp-user` -> `SMTP_USER`                                        | SMTP authentication username                                                         | Obtain from the SMTP provider                                |
+| `smtp-pass.enc`                     | `test`, `prod`                     | `/run/secrets/eulesia/smtp-pass` -> `SMTP_PASS`                                        | SMTP authentication password                                                         | Obtain from the SMTP provider                                |
+| `vapid-public-key.enc`              | `test`, `prod`                     | `/run/secrets/eulesia/vapid-public-key` -> `VAPID_PUBLIC_KEY`                          | Public half of the web push keypair returned to clients                              | Generate together with the private key using `web-push`      |
+| `vapid-private-key.enc`             | `test`, `prod`                     | `/run/secrets/eulesia/vapid-private-key` -> `VAPID_PRIVATE_KEY`                        | Private half of the web push keypair used for push signing                           | Generate together with the public key using `web-push`       |
+| `firebase-service-account.json.enc` | `test`, `prod` when FCM is enabled | `/run/secrets/eulesia/firebase-service-account.json` -> `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials for native push notifications                         | Download a service account JSON from Firebase / Google Cloud |
+| `idura-signing-key.jwk.json.enc`    | `test`, `prod`                     | `/run/secrets/eulesia/idura-signing-key.jwk.json` -> `IDURA_SIGNING_KEY_FILE`          | Private JWK used to sign FTN request objects and `private_key_jwt` client assertions | Generate locally with `just generate-idura-jwks`             |
+| `idura-encryption-key.jwk.json.enc` | `test`, `prod`                     | `/run/secrets/eulesia/idura-encryption-key.jwk.json` -> `IDURA_ENCRYPTION_KEY_FILE`    | Private JWK used to decrypt encrypted FTN `id_token` responses                       | Generate locally with `just generate-idura-jwks`             |
 
 ## Generation and Acquisition
 
@@ -105,6 +105,8 @@ Store the public and private values in separate secret files. `VAPID_SUBJECT` is
 
 Create or reuse a Google Cloud service account for Firebase Admin usage, then download the JSON credential file. Encrypt the full JSON document as `firebase-service-account.json.enc`.
 
+Production currently runs with Firebase native push disabled. Do not add a prod Firebase secret until you are ready to enable FCM on the production host again.
+
 ### Idura FTN Key Material
 
 Generate FTN-ready signing and encryption keys with:
@@ -149,6 +151,22 @@ These values are important, but they are not secrets and should not be stored as
 - Do not commit plaintext secret files.
 - Keep file names stable across environments so Nix and runtime paths stay predictable.
 - For JSON credentials, preserve the original JSON payload and only add the `.enc` suffix.
+
+## Secret Audit
+
+Use the built-in audit helper before the first production bootstrap and before any public cutover:
+
+```bash
+just audit-prod-secrets
+```
+
+This decrypts every file under `secrets/prod/` and flags obvious placeholder values such as:
+
+- `REPLACE_WITH_...`
+- `replace-with-...`
+- empty JSON objects like `{}`
+
+It is a safety net, not a full semantic validator. A passing audit means the files are no longer obvious placeholders, not that every credential has been tested against the live provider.
 
 ## Developer Workstation Key Onboarding
 

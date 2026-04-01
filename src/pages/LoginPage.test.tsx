@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { LoginPage } from "./LoginPage";
 import { api } from "../lib/api";
+import { LoginPage } from "./LoginPage";
 
 vi.mock("../components/SEOHead", () => ({
   SEOHead: () => null,
@@ -23,7 +23,6 @@ vi.mock("../lib/api", () => ({
 
 describe("LoginPage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.mocked(api.getAuthConfig).mockResolvedValue({
       registrationMode: "ftn-open",
       registrationOpen: true,
@@ -31,19 +30,19 @@ describe("LoginPage", () => {
     });
   });
 
-  it("renders the FTN registration handoff on the dedicated register route", async () => {
+  it("renders login and FTN registration actions when registration is open", async () => {
     render(
-      <MemoryRouter
-        initialEntries={[
-          "/register?ftn=test-token&firstName=Jane&lastName=Doe",
-        ]}
-      >
+      <MemoryRouter initialEntries={["/"]}>
         <LoginPage />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByDisplayValue("Jane")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Doe")).toBeInTheDocument();
-    expect(screen.getByText("ftn.verified")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "signIn" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "registerWithBankAuth" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("comingSoon.title")).not.toBeInTheDocument();
   });
 });

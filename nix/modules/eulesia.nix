@@ -132,13 +132,13 @@ in {
 
     appDomain = mkOption {
       type = types.str;
-      default = "eulesia.eu";
+      default = "eulesia.org";
       description = "Primary web domain.";
     };
 
     apiDomain = mkOption {
       type = types.str;
-      default = "api.eulesia.eu";
+      default = "api.eulesia.org";
       description = "API domain.";
     };
 

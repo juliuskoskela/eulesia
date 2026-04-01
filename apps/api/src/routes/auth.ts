@@ -8,7 +8,6 @@ import {
   users,
   magicLinks,
   sessions,
-  inviteCodes,
   siteSettings,
   ftnPendingRegistrations,
 } from "../db/index.js";
@@ -30,6 +29,8 @@ import {
 import {
   buildIduraAuthorizeUrl,
   completeIduraAuthentication,
+  getFtnFailureCodeFromError,
+  getFtnFailureCodeFromIdura,
   getFtnFailureRedirect,
   isIduraFtnEnabled,
 } from "../services/iduraFtn.js";
@@ -59,7 +60,6 @@ const verifySchema = z.object({
 });
 
 const registerSchema = z.object({
-  inviteCode: z.string().trim().min(1, "Invite code is required").optional(),
   username: z
     .string()
     .min(3)
@@ -104,7 +104,6 @@ async function clearFtnSession(req: Request): Promise<void> {
     return;
   }
 
-  delete req.session.ftnInviteCode;
   delete req.session.ftnNonce;
   delete req.session.ftnState;
 
@@ -133,14 +132,11 @@ if (ftnEnabled) {
   router.get(
     "/ftn/start",
     asyncHandler(async (req, res: Response) => {
-      const invite = req.query.invite || req.query.inviteCode;
       const state = generateToken(24);
       const nonce = generateToken(24);
 
       req.session.ftnState = state;
       req.session.ftnNonce = nonce;
-      req.session.ftnInviteCode =
-        typeof invite === "string" && invite.length > 0 ? invite : undefined;
       await saveSession(req);
 
       try {
@@ -164,7 +160,16 @@ if (ftnEnabled) {
         await clearFtnSession(req);
         return res.redirect(
           getFtnFailureRedirect(
-            String(req.query.error_description || req.query.error),
+            getFtnFailureCodeFromIdura({
+              error:
+                typeof req.query.error === "string"
+                  ? req.query.error
+                  : undefined,
+              errorDescription:
+                typeof req.query.error_description === "string"
+                  ? req.query.error_description
+                  : undefined,
+            }),
           ),
         );
       }
@@ -175,7 +180,6 @@ if (ftnEnabled) {
         typeof req.query.state === "string" ? req.query.state : undefined;
       const expectedState = req.session.ftnState;
       const expectedNonce = req.session.ftnNonce;
-      const inviteCode = req.session.ftnInviteCode ?? null;
 
       if (!code || !returnedState || !expectedState || !expectedNonce) {
         await clearFtnSession(req);
@@ -197,7 +201,9 @@ if (ftnEnabled) {
       } catch (error) {
         await clearFtnSession(req);
         console.error("FTN callback failed:", error);
-        return res.redirect(getFtnFailureRedirect("ftn_failed"));
+        return res.redirect(
+          getFtnFailureRedirect(getFtnFailureCodeFromError(error)),
+        );
       }
 
       await clearFtnSession(req);
@@ -222,7 +228,6 @@ if (ftnEnabled) {
         familyName: claims.family_name,
         sub: claims.sub,
         country: claims.country || "FI",
-        inviteCode,
         expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min
       });
 
@@ -237,7 +242,6 @@ if (ftnEnabled) {
         ftn: ftnToken,
         firstName: claims.given_name,
         lastName: claims.family_name,
-        ...(inviteCode ? { invite: inviteCode } : {}),
       });
       res.redirect(`${env.APP_URL}/register?${params.toString()}`);
     }),
@@ -246,10 +250,17 @@ if (ftnEnabled) {
 
 // GET /auth/ftn/error - Handle FTN authentication errors
 router.get("/ftn/error", (req, res) => {
-  const errorDesc =
-    req.query.error_description || req.query.error || "ftn_failed";
   res.redirect(
-    `${env.APP_URL}/register?ftn_error=${encodeURIComponent(String(errorDesc))}`,
+    getFtnFailureRedirect(
+      getFtnFailureCodeFromIdura({
+        error:
+          typeof req.query.error === "string" ? req.query.error : undefined,
+        errorDescription:
+          typeof req.query.error_description === "string"
+            ? req.query.error_description
+            : undefined,
+      }),
+    ),
   );
 });
 
@@ -309,15 +320,13 @@ router.post(
   }),
 );
 
-// POST /auth/register - Register with invite code, username and password
-// Optionally accepts ftnToken for strong authentication via FTN
+// POST /auth/register - Register with FTN, username and password
 router.post(
   "/register",
   asyncHandler(async (req, res: Response) => {
-    const registrationMode = env.AUTH_REGISTRATION_MODE;
-    const inviteRequired = registrationMode === "invite-only";
-    const { inviteCode, username, password, name, ftnToken } =
-      registerSchema.parse(req.body);
+    const { username, password, name, ftnToken } = registerSchema.parse(
+      req.body,
+    );
 
     if (!(await isRegistrationOpen())) {
       throw new AppError(403, "Registration is currently closed");
@@ -373,7 +382,7 @@ router.post(
       };
     }
 
-    if (!inviteRequired && !ftnClaims) {
+    if (!ftnClaims) {
       throw new AppError(
         403,
         "Registration on this deployment requires FTN authentication",
@@ -383,39 +392,8 @@ router.post(
     // Hash password before transaction (CPU-intensive work outside tx)
     const passwordHash = await argon2.hash(password);
 
-    // Use transaction to prevent race conditions on invite code + username
+    // Use transaction to prevent race conditions on username registration
     const newUser = await db.transaction(async (tx) => {
-      let inviteId: string | null = null;
-      let invitedByUserId: string | null = null;
-
-      if (inviteRequired) {
-        if (!inviteCode) {
-          throw new AppError(400, "Invite code is required");
-        }
-
-        // Validate invite code (inside tx for atomicity)
-        const [invite] = await tx
-          .select()
-          .from(inviteCodes)
-          .where(eq(inviteCodes.code, inviteCode.toUpperCase()))
-          .limit(1);
-
-        if (!invite) {
-          throw new AppError(400, "Invalid invite code");
-        }
-
-        if (invite.status !== "available") {
-          throw new AppError(400, "Invite code has already been used");
-        }
-
-        if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-          throw new AppError(400, "Invite code has expired");
-        }
-
-        inviteId = invite.id;
-        invitedByUserId = invite.createdBy;
-      }
-
       // Check if username already exists
       const [existing] = await tx
         .select({ id: users.id })
@@ -433,36 +411,17 @@ router.post(
         .values({
           username: username.toLowerCase(),
           passwordHash,
-          name: ftnClaims
-            ? `${ftnClaims.givenName} ${ftnClaims.familyName}`
-            : name,
-          invitedBy: invitedByUserId,
-          inviteCodesRemaining: 5,
-          identityProvider: ftnClaims ? "ftn" : "invite",
-          identityVerified: !!ftnClaims,
-          identityLevel: ftnClaims ? "substantial" : "basic",
-          ...(ftnClaims
-            ? {
-                verifiedName: `${ftnClaims.givenName} ${ftnClaims.familyName}`,
-                rpSubject: ftnClaims.sub,
-                identityIssuer: "idura_ftn",
-                identityVerifiedAt: new Date(),
-              }
-            : {}),
+          name,
+          inviteCodesRemaining: 0,
+          identityProvider: "ftn",
+          identityVerified: true,
+          identityLevel: "substantial",
+          verifiedName: `${ftnClaims.givenName} ${ftnClaims.familyName}`,
+          rpSubject: ftnClaims.sub,
+          identityIssuer: "idura_ftn",
+          identityVerifiedAt: new Date(),
         })
         .returning();
-
-      if (inviteId) {
-        // Mark invite code as used (atomic with user creation)
-        await tx
-          .update(inviteCodes)
-          .set({
-            usedBy: created.id,
-            status: "used",
-            usedAt: new Date(),
-          })
-          .where(eq(inviteCodes.id, inviteId));
-      }
 
       return created;
     });

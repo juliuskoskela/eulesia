@@ -2,7 +2,7 @@
 
 **Civic social media as European digital public infrastructure**
 
-[eulesia.eu](https://eulesia.eu)
+[eulesia.org](https://eulesia.org)
 
 Eulesia is an open-source civic platform that combines the social features people expect from modern social media — feeds, messaging, communities — with civic identity and institutional participation. No algorithms, no ads, no attention economy.
 
@@ -68,7 +68,7 @@ AI-generated summaries are transparent (marked as "Eulesia summary — Generated
 
 - Nix with flakes enabled
 
-For first-time workstation setup on Linux or macOS, developer onboarding, and test-host deployment, start with [Deployment](./docs/deployment.md) and [Secrets](./docs/secrets.md).
+For first-time workstation setup on Linux or macOS, developer onboarding, and test or production host deployment, start with [Deployment](./docs/deployment.md) and [Secrets](./docs/secrets.md).
 
 ### Setup
 
@@ -115,7 +115,11 @@ just vm-deploy   # Hot-deploy the current system into the running VM
 nix build .#frontend
 nix build .#api
 nix build .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
+nix build .#nixosConfigurations.eulesia-prod-bootstrap.config.system.build.toplevel
+nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
 nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
+nix run .#bootstrap-prod
+nix run .#rebuild-prod
 nix run .#rebuild-test
 nix run .#ci-check
 ```

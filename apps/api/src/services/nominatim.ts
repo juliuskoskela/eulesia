@@ -9,7 +9,7 @@
  */
 
 const NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org";
-const USER_AGENT = "Eulesia/1.0 (https://eulesia.eu contact@eulesia.eu)";
+const USER_AGENT = "Eulesia/1.0 (https://eulesia.org contact@eulesia.eu)";
 const RATE_LIMIT_MS = 1100; // Slightly over 1 second to be safe
 
 // Track last request time for rate limiting

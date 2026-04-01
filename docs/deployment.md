@@ -17,7 +17,8 @@ The flake exposes:
 - `nixosConfigurations.eulesia-vm` plus `just vm-run` and `just vm-deploy` for local MicroVM validation
 - `nixosConfigurations.eulesia-test-bootstrap`, `just bootstrap-test`, and `just get-test-age-key` for first install of the public test host
 - `nixosConfigurations.eulesia-test`, `nix run .#rebuild-test`, and `nix run .#deploy-test` for the public test host after bootstrap
-- `nixosConfigurations.eulesia-prod` and `nix run .#deploy` for production deployment
+- `nixosConfigurations.eulesia-prod-bootstrap`, `just bootstrap-prod`, and `just get-prod-age-key` for first install of the production host
+- `nixosConfigurations.eulesia-prod`, `nix run .#rebuild-prod`, and `nix run .#deploy` for the production host after bootstrap
 
 The old Docker Compose setup is deprecated and should only be treated as a temporary fallback while the production host is migrated.
 
@@ -128,9 +129,12 @@ Useful validation commands:
 just lint
 just test
 just build
+just audit-prod-secrets
 just test-host-bootstrap-build
+just prod-host-bootstrap-build
 just vm-build
 just test-host-build
+just prod-host-build
 nix run .#ci-check
 ```
 
@@ -161,7 +165,7 @@ It configures:
 - the packaged frontend served by nginx
 - local PostgreSQL and Meilisearch when enabled
 - uploads storage
-- TLS termination through nginx + ACME
+- TLS termination either directly through nginx or behind an external edge proxy such as Traefik
 - environment and secret injection for the API
 
 The module interface is centered on `services.eulesia.*`, including:
@@ -180,28 +184,35 @@ The module interface is centered on `services.eulesia.*`, including:
 
 ## Production Configuration
 
-`nixosConfigurations.eulesia-prod` is the production-oriented host definition currently wired into the deploy target.
+`nixosConfigurations.eulesia-prod` is the production-oriented host definition for `eulesia.org`.
 
 Current assumptions in the repo:
 
-- deploy target host: `95.216.206.136`
+- deploy SSH target alias: `eulesia-server-prod`
 - SSH user: `root`
-- default local SSH target alias for the test server: `eulesia-server-test`
-- domains: `eulesia.eu` and `api.eulesia.eu`
+- production domains: `eulesia.org` and `api.eulesia.org`
 - test domains: `test.eulesia.org` and `api.test.eulesia.org`
-- the test host uses Traefik as the public edge and password gate, with nginx bound to loopback as the internal origin
+- both test and production use Traefik as the public edge, with nginx bound to `127.0.0.1:8080` as the internal origin
+- both test and production use a same-origin browser API base on the app domain, with `api.*` kept as an alias and compatibility host
 - the test host bootstrap uses `disko` with `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114774765` as the system disk and `/dev/disk/by-id/scsi-0HC_Volume_105267941` as the PostgreSQL volume
-- managed runtime secrets should live under `secrets/prod/` and `secrets/test/`
-- one encrypted file per secret, using names such as `session-secret.enc` and `firebase-service-account.json.enc`
+- the production host bootstrap uses `disko` with `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114785278` as the system disk and `/dev/disk/by-id/scsi-0HC_Volume_105268989` as the PostgreSQL volume
+- managed runtime secrets live under `secrets/prod/` and `secrets/test/`
+- one encrypted file per secret is used, with names such as `session-secret.enc` and `firebase-service-account.json.enc`
 - `sops-nix` materializes runtime secret files under `/run/secrets/eulesia/`
 - the packaged frontend uses a same-origin `/api` base, so the same static build works for VM, test, and production hosts
 
-Before the first real NixOS deployment, verify and adjust:
+Before the first production switch, verify all of the following:
 
-- disk layout in the production host config
-- SSH access
-- server age recipients in `.sops.yaml`
-- `services.eulesia.auth.idura.*` values in the target host config
+- `api.eulesia.org` DNS exists and points at the production host, so ACME can issue both certificates
+- the operator can SSH to `eulesia-server-prod` as `root` with an authorized public key
+- the production host Age recipient has been added to `.sops.yaml` and `secrets/prod/*` have been re-encrypted
+- `just audit-prod-secrets` reports no obvious placeholders
+- `services.eulesia.auth.idura.*` has real production values before enabling FTN on production
+
+Current production caveats in the repo:
+
+- production Idura/FTN is configured for `eulesia.idura.broker` and client `urn:my:application:identifier:524753`, but the Idura application must still have the matching static client JWKS registered and the callback URL `https://eulesia.org/api/v1/auth/ftn/callback` allowed
+- Firebase/FCM is intentionally disabled until `secrets/prod/firebase-service-account.json.enc` contains a real service account JSON
 
 ## Test Deployment Access Model
 
@@ -239,7 +250,7 @@ The deploy workflow expects runner labels:
 
 The canonical inventory, purpose, and generation guidance lives in [Secrets](./secrets.md).
 
-Production runtime still expects these decrypted files under `/run/secrets/eulesia/`:
+The production secret tree currently materializes these files under `/run/secrets/eulesia/`:
 
 - `/run/secrets/eulesia/session-secret`
 - `/run/secrets/eulesia/meili-master-key`
@@ -248,7 +259,6 @@ Production runtime still expects these decrypted files under `/run/secrets/eules
 - `/run/secrets/eulesia/smtp-pass`
 - `/run/secrets/eulesia/vapid-public-key`
 - `/run/secrets/eulesia/vapid-private-key`
-- `/run/secrets/eulesia/firebase-service-account.json`
 - `/run/secrets/eulesia/idura-signing-key.jwk.json`
 - `/run/secrets/eulesia/idura-encryption-key.jwk.json`
 
@@ -266,6 +276,12 @@ For FTN/Idura tenants, the operator flow is:
 
 When syncing to an existing Idura app, reuse the matching private JWKs instead of generating a fresh pair. For the current test tenant, the local operator source is the untracked `local/jwks.private.json`.
 
+Before first production cutover, audit the committed prod secrets for placeholders:
+
+```bash
+just audit-prod-secrets
+```
+
 ## Deploy
 
 Build and deploy through the flake:
@@ -278,7 +294,11 @@ nix run .#get-test-age-key
 nix run .#rebuild-test
 nix run .#deploy-test
 
+nix build .#nixosConfigurations.eulesia-prod-bootstrap.config.system.build.toplevel
 nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
+nix run .#bootstrap-prod
+nix run .#get-prod-age-key
+nix run .#rebuild-prod
 nix run .#deploy
 ```
 
@@ -341,16 +361,61 @@ That workflow only works when all of the following are already in place:
 
 The workflow builds the test system, deploys it with `nix run .#rebuild-test`, and then verifies health over SSH against `127.0.0.1:8080` on the target host.
 
-### Production
+### Production First Install
 
-Production remains available through:
+Use `nix run .#bootstrap-prod` once for the first install and `nix run .#rebuild-prod` for normal production-host updates. Both commands default to the local SSH target alias `eulesia-server-prod`; override it with `EULESIA_PROD_TARGET_HOST` when needed.
+
+For a fresh Hetzner production host:
+
+1. Audit the committed production secrets:
 
 ```bash
-nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
-nix run .#deploy
+just audit-prod-secrets
 ```
 
-After the Traefik edge is enabled, public health checks require HTTP basic auth. CI therefore validates the backend origin over SSH against `127.0.0.1:8080` on the target host.
+2. Bootstrap the minimal host:
+
+```bash
+just prod-host-bootstrap-build
+just bootstrap-prod
+```
+
+This step is destructive. It repartitions both the system disk and the PostgreSQL volume.
+
+3. Retrieve the generated production-host Age recipient:
+
+```bash
+just get-prod-age-key
+```
+
+4. Add that public key to `.sops.yaml` for the production secret rule and re-encrypt the production secrets:
+
+```bash
+find secrets/prod -name '*.enc' -print0 | xargs -0 -n1 sops updatekeys
+```
+
+5. Ensure the production prerequisites are ready:
+
+- `eulesia.org` and `api.eulesia.org` both point at the production host
+- `just audit-prod-secrets` passes
+- the Idura application at `eulesia.idura.broker` has the matching static client JWKS registered and allows `https://eulesia.org/api/v1/auth/ftn/callback`
+- `secrets/prod/firebase-service-account.json.enc` contains a real Firebase service account before enabling FCM/native push
+
+6. Build and switch the real production configuration:
+
+```bash
+just prod-host-build
+just rebuild-prod
+```
+
+### Production Normal Updates
+
+For later changes to an already bootstrapped production host:
+
+```bash
+just prod-host-build
+just rebuild-prod
+```
 
 `nix run .#deploy-test` and `nix run .#deploy` remain available through `deploy-rs` for manual use. All remote deployment paths assume the target host already has its own `/var/lib/sops-nix/key.txt` in place.
 
@@ -384,12 +449,21 @@ The VM config uses:
 
 ## Hetzner Bootstrap Reference
 
-The detailed operator walkthrough lives in [Deploy](#deploy), especially [Test Host First Install](#test-host-first-install). This section captures the host-specific facts that the bootstrap configuration currently assumes.
+The detailed operator walkthrough lives in [Deploy](#deploy), especially [Test Host First Install](#test-host-first-install) and [Production First Install](#production-first-install). This section captures the host-specific facts that the bootstrap configurations currently assume.
 
-The test host disk layout is:
+All bootstrap installs are destructive. `nixos-anywhere` plus `disko` repartitions the target disks and replaces the existing operating system.
+
+The shared disk layout shape is:
 
 - system disk: GPT, `1M` BIOS boot partition, `500M` EFI system partition mounted at `/boot`, ext4 root filesystem on `/`
-- data disk: GPT, single ext4 filesystem mounted at `/var/lib/postgresql`
+- PostgreSQL volume: GPT, single ext4 filesystem mounted at `/var/lib/postgresql`
+
+The currently wired host disk IDs are:
+
+- test system disk: `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114774765`
+- test PostgreSQL volume: `/dev/disk/by-id/scsi-0HC_Volume_105267941`
+- production system disk: `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114785278`
+- production PostgreSQL volume: `/dev/disk/by-id/scsi-0HC_Volume_105268989`
 
 ## Legacy Docker Assets
 

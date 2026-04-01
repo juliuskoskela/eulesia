@@ -180,16 +180,25 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
       const apiUrl = process.env.API_URL || "http://localhost:3001";
       const isLocalUpload = src.startsWith("/uploads/");
       const isApiUpload = src.startsWith(`${apiUrl}/uploads/`);
-      const isApiDomain = src.startsWith("https://api.eulesia.eu/uploads/");
+      const isKnownUploadDomain =
+        src.startsWith("https://api.eulesia.org/uploads/") ||
+        src.startsWith("https://eulesia.org/uploads/") ||
+        src.startsWith("https://api.eulesia.eu/uploads/") ||
+        src.startsWith("https://eulesia.eu/uploads/");
       const isExternalImage =
         src.startsWith("https://") &&
         /\.(jpg|jpeg|png|gif|webp|avif|bmp)/i.test(src);
 
-      if (!isLocalUpload && !isApiUpload && !isApiDomain && !isExternalImage) {
+      if (
+        !isLocalUpload &&
+        !isApiUpload &&
+        !isKnownUploadDomain &&
+        !isExternalImage
+      ) {
         return { tagName: "", attribs: {} };
       }
 
-      if (isLocalUpload || isApiUpload || isApiDomain) {
+      if (isLocalUpload || isApiUpload || isKnownUploadDomain) {
         return {
           tagName,
           attribs: {

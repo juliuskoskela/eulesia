@@ -119,7 +119,7 @@ Eulesia — European Civic Digital Infrastructure
     inviteCode: string,
     locale: string = "en",
   ): Promise<boolean> {
-    const appUrl = env.APP_URL || "https://eulesia.eu";
+    const appUrl = env.APP_URL || "https://eulesia.org";
     const isFinnish = locale === "fi";
 
     const subject = isFinnish

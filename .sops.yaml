@@ -7,6 +7,8 @@ keys:
   - &local_microvm age1r0y06ntxaku4ugt536mpz6e8tz08jkq6w84uxl4yhstgmmejlsxqdy9knp
   # eulesia-server-test host age key
   - &eulesia_server_test age1up3c8m6l4dkzerpa5dgnd5y2tq24lprdc60xj3unv6dg3jp6c5zqwf0jv0
+  # eulesia-server-prod host age key
+  - &eulesia_server_prod age1x3cgtqsprjwcr8sh4ylgdj5akvja2qjfapr6y2x3jlpw7qphudzqy2ud8a
 
 creation_rules:
   # Local and test deployment secrets.
@@ -21,4 +23,4 @@ creation_rules:
   - path_regex: secrets/prod/[^/]+\.enc$
     age:
       - *julius_koskela
-      # Add the production host age recipient here after bootstrapping it.
+      - *eulesia_server_prod

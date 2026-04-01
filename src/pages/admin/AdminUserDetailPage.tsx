@@ -11,7 +11,6 @@ import {
   FileText,
   Loader2,
   AlertTriangle,
-  TicketCheck,
 } from "lucide-react";
 import { AdminLayout } from "../../components/admin";
 import {
@@ -20,7 +19,6 @@ import {
   useToggleVerification,
   useIssueSanction,
   useRevokeSanction,
-  useSetUserInviteCount,
 } from "../../hooks/useAdminApi";
 import { formatRelativeTime, formatDateLong } from "../../lib/formatTime";
 
@@ -32,7 +30,6 @@ export function AdminUserDetailPage() {
   const toggleVerificationMutation = useToggleVerification();
   const issueSanctionMutation = useIssueSanction();
   const revokeSanctionMutation = useRevokeSanction();
-  const setInviteCountMutation = useSetUserInviteCount();
 
   const [showSanctionForm, setShowSanctionForm] = useState(false);
   const [sanctionType, setSanctionType] = useState<
@@ -202,54 +199,8 @@ export function AdminUserDetailPage() {
             )}
           </div>
 
-          {/* Invite codes */}
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5 mb-2">
-              <TicketCheck className="w-3.5 h-3.5" />
-              {t("userDetail.inviteCodes")}
-            </label>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() =>
-                  id &&
-                  user.inviteCodesRemaining > 0 &&
-                  setInviteCountMutation.mutate({
-                    userId: id,
-                    count: user.inviteCodesRemaining - 1,
-                  })
-                }
-                disabled={
-                  setInviteCountMutation.isPending ||
-                  user.inviteCodesRemaining <= 0
-                }
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
-              >
-                −
-              </button>
-              <span className="w-10 text-center font-semibold text-gray-900 dark:text-gray-100">
-                {user.inviteCodesRemaining ?? 0}
-              </span>
-              <button
-                onClick={() =>
-                  id &&
-                  setInviteCountMutation.mutate({
-                    userId: id,
-                    count: (user.inviteCodesRemaining ?? 0) + 1,
-                  })
-                }
-                disabled={setInviteCountMutation.isPending}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
-              >
-                +
-              </button>
-              {setInviteCountMutation.isPending && (
-                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-              )}
-            </div>
-          </div>
-
           {/* Role change */}
-          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-800">
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
               {t("userDetail.role")}
             </label>

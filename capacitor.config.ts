@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
     // Development: uncomment to proxy to Vite dev server
     // url: 'http://YOUR_LOCAL_IP:5173',
     androidScheme: "https",
-    allowNavigation: ["api.eulesia.eu"],
+    allowNavigation: ["api.eulesia.org", "api.eulesia.eu"],
   },
   ios: {
     limitsNavigationsToAppBoundDomains: false,
