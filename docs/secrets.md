@@ -18,6 +18,7 @@ Local development is mostly separate from this flow. It uses defaults plus local
 ```text
 secrets/
   test/
+    admin-accounts.json.enc
     session-secret.enc
     meili-master-key.enc
     mistral-api-key.enc
@@ -29,6 +30,7 @@ secrets/
     idura-signing-key.jwk.json.enc
     idura-encryption-key.jwk.json.enc
   prod/
+    admin-accounts.json.enc
     session-secret.enc
     meili-master-key.enc
     mistral-api-key.enc
@@ -43,23 +45,25 @@ secrets/
 
 Runtime filenames drop the trailing `.enc`. For example:
 
+- `secrets/prod/admin-accounts.json.enc` becomes `/run/secrets/eulesia/admin-accounts.json`
 - `secrets/prod/session-secret.enc` becomes `/run/secrets/eulesia/session-secret`
 - `secrets/prod/firebase-service-account.json.enc` becomes `/run/secrets/eulesia/firebase-service-account.json`
 
 ## Secret Inventory
 
-| Secret file                         | Environments                       | Runtime consumer                                                                       | Purpose                                                                              | Generation or source                                         |
-| ----------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `session-secret.enc`                | `test`, `prod`                     | `/run/secrets/eulesia/session-secret` -> `SESSION_SECRET`                              | Signs app sessions and FTN/Idura flow session state                                  | Generate locally with a random 32+ byte secret               |
-| `meili-master-key.enc`              | `test`, `prod`                     | `/run/secrets/eulesia/meili-master-key` -> `MEILI_MASTER_KEY`                          | Protects Meilisearch admin access and API writes                                     | Generate locally with a random high-entropy secret           |
-| `mistral-api-key.enc`               | `test`, `prod`                     | `/run/secrets/eulesia/mistral-api-key` -> `MISTRAL_API_KEY`                            | Enables Mistral-backed import summarization                                          | Create in the Mistral console                                |
-| `smtp-user.enc`                     | `test`, `prod`                     | `/run/secrets/eulesia/smtp-user` -> `SMTP_USER`                                        | SMTP authentication username                                                         | Obtain from the SMTP provider                                |
-| `smtp-pass.enc`                     | `test`, `prod`                     | `/run/secrets/eulesia/smtp-pass` -> `SMTP_PASS`                                        | SMTP authentication password                                                         | Obtain from the SMTP provider                                |
-| `vapid-public-key.enc`              | `test`, `prod`                     | `/run/secrets/eulesia/vapid-public-key` -> `VAPID_PUBLIC_KEY`                          | Public half of the web push keypair returned to clients                              | Generate together with the private key using `web-push`      |
-| `vapid-private-key.enc`             | `test`, `prod`                     | `/run/secrets/eulesia/vapid-private-key` -> `VAPID_PRIVATE_KEY`                        | Private half of the web push keypair used for push signing                           | Generate together with the public key using `web-push`       |
-| `firebase-service-account.json.enc` | `test`, `prod` when FCM is enabled | `/run/secrets/eulesia/firebase-service-account.json` -> `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials for native push notifications                         | Download a service account JSON from Firebase / Google Cloud |
-| `idura-signing-key.jwk.json.enc`    | `test`, `prod`                     | `/run/secrets/eulesia/idura-signing-key.jwk.json` -> `IDURA_SIGNING_KEY_FILE`          | Private JWK used to sign FTN request objects and `private_key_jwt` client assertions | Generate locally with `just generate-idura-jwks`             |
-| `idura-encryption-key.jwk.json.enc` | `test`, `prod`                     | `/run/secrets/eulesia/idura-encryption-key.jwk.json` -> `IDURA_ENCRYPTION_KEY_FILE`    | Private JWK used to decrypt encrypted FTN `id_token` responses                       | Generate locally with `just generate-idura-jwks`             |
+| Secret file                         | Environments                       | Runtime consumer                                                                       | Purpose                                                                              | Generation or source                                           |
+| ----------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `admin-accounts.json.enc`           | `test`, `prod`                     | `/run/secrets/eulesia/admin-accounts.json` -> `BOOTSTRAP_ADMIN_ACCOUNTS_FILE`          | Declarative bootstrap of dedicated operator/admin accounts and their seed passwords  | Maintain as structured JSON with pre-generated password hashes |
+| `session-secret.enc`                | `test`, `prod`                     | `/run/secrets/eulesia/session-secret` -> `SESSION_SECRET`                              | Signs app sessions and FTN/Idura flow session state                                  | Generate locally with a random 32+ byte secret                 |
+| `meili-master-key.enc`              | `test`, `prod`                     | `/run/secrets/eulesia/meili-master-key` -> `MEILI_MASTER_KEY`                          | Protects Meilisearch admin access and API writes                                     | Generate locally with a random high-entropy secret             |
+| `mistral-api-key.enc`               | `test`, `prod`                     | `/run/secrets/eulesia/mistral-api-key` -> `MISTRAL_API_KEY`                            | Enables Mistral-backed import summarization                                          | Create in the Mistral console                                  |
+| `smtp-user.enc`                     | `test`, `prod`                     | `/run/secrets/eulesia/smtp-user` -> `SMTP_USER`                                        | SMTP authentication username                                                         | Obtain from the SMTP provider                                  |
+| `smtp-pass.enc`                     | `test`, `prod`                     | `/run/secrets/eulesia/smtp-pass` -> `SMTP_PASS`                                        | SMTP authentication password                                                         | Obtain from the SMTP provider                                  |
+| `vapid-public-key.enc`              | `test`, `prod`                     | `/run/secrets/eulesia/vapid-public-key` -> `VAPID_PUBLIC_KEY`                          | Public half of the web push keypair returned to clients                              | Generate together with the private key using `web-push`        |
+| `vapid-private-key.enc`             | `test`, `prod`                     | `/run/secrets/eulesia/vapid-private-key` -> `VAPID_PRIVATE_KEY`                        | Private half of the web push keypair used for push signing                           | Generate together with the public key using `web-push`         |
+| `firebase-service-account.json.enc` | `test`, `prod` when FCM is enabled | `/run/secrets/eulesia/firebase-service-account.json` -> `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials for native push notifications                         | Download a service account JSON from Firebase / Google Cloud   |
+| `idura-signing-key.jwk.json.enc`    | `test`, `prod`                     | `/run/secrets/eulesia/idura-signing-key.jwk.json` -> `IDURA_SIGNING_KEY_FILE`          | Private JWK used to sign FTN request objects and `private_key_jwt` client assertions | Generate locally with `just generate-idura-jwks`               |
+| `idura-encryption-key.jwk.json.enc` | `test`, `prod`                     | `/run/secrets/eulesia/idura-encryption-key.jwk.json` -> `IDURA_ENCRYPTION_KEY_FILE`    | Private JWK used to decrypt encrypted FTN `id_token` responses                       | Generate locally with `just generate-idura-jwks`               |
 
 ## Generation and Acquisition
 
@@ -72,6 +76,38 @@ openssl rand -base64 48
 ```
 
 Use a different value for `test` and `prod`.
+
+### Bootstrap Admin Accounts
+
+Create a structured JSON file for dedicated operator accounts and encrypt it as `admin-accounts.json.enc`.
+
+Recommended shape:
+
+```json
+[
+  {
+    "username": "ops_elli",
+    "name": "Elli Esimerkki",
+    "passwordHash": "$argon2id$..."
+  }
+]
+```
+
+Use pre-generated Argon2 password hashes. The runtime only needs the hash, so plaintext passwords do not need to live in the repo-managed secret set.
+
+`email` is optional. If you omit it, the account remains password-only and cannot participate in the magic-link login flow.
+
+`passwordHash` is a seed password. It is applied when the account is first created and when the stored password hash is missing, but normal rebuilds do not overwrite a password that the operator has later changed in the app.
+
+If a password must be recovered through infrastructure, add `"reseedPassword": true` to the relevant account entry for one rebuild. That forces the seed password back onto the account and revokes existing sessions. Remove the flag again after the recovery build so future rebuilds go back to preserving the user-set password.
+
+From the repo root, generate a compatible Argon2 hash with:
+
+```bash
+node --input-type=module -e 'import argon2 from "argon2"; console.log(await argon2.hash(process.argv[1]))' 'replace-with-plaintext-password'
+```
+
+For the full add, rotate, recover, and deprovision runbook, see [Admin Surface](./admin-surface.md).
 
 ### Meilisearch Master Key
 

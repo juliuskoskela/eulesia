@@ -174,7 +174,7 @@ The module interface is centered on `services.eulesia.*`, including:
 - `appDomain` and `apiDomain`
 - `database.{createLocally,name,user,url}`
 - `meilisearch.{createLocally,listenAddress,listenPort,url,masterKeyFile}`
-- `auth.sessionSecretFile`
+- `auth.{sessionSecretFile,bootstrapAdminAccountsFile}`
 - `auth.idura.{enable,domain,clientId,callbackUrl,signingKeyFile,encryptionKeyFile}`
 - `email.smtp.{host,port,secure,userFile,passFile}`
 - `push.{vapidPublicKeyFile,vapidPrivateKeyFile,vapidSubject,firebaseServiceAccountKeyFile}`
@@ -197,7 +197,7 @@ Current assumptions in the repo:
 - the test host bootstrap uses `disko` with `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114774765` as the system disk and `/dev/disk/by-id/scsi-0HC_Volume_105267941` as the PostgreSQL volume
 - the production host bootstrap uses `disko` with `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114785278` as the system disk and `/dev/disk/by-id/scsi-0HC_Volume_105268989` as the PostgreSQL volume
 - managed runtime secrets live under `secrets/prod/` and `secrets/test/`
-- one encrypted file per secret is used, with names such as `session-secret.enc` and `firebase-service-account.json.enc`
+- one encrypted file per secret is used, with names such as `session-secret.enc`, `admin-accounts.json.enc`, and `firebase-service-account.json.enc`
 - `sops-nix` materializes runtime secret files under `/run/secrets/eulesia/`
 - the packaged frontend uses a same-origin `/api` base, so the same static build works for VM, test, and production hosts
 
@@ -213,6 +213,8 @@ Current production caveats in the repo:
 
 - production Idura/FTN is configured for `eulesia.idura.broker` and client `urn:my:application:identifier:524753`, but the Idura application must still have the matching static client JWKS registered and the callback URL `https://eulesia.org/api/v1/auth/ftn/callback` allowed
 - Firebase/FCM is intentionally disabled until `secrets/prod/firebase-service-account.json.enc` contains a real service account JSON
+
+For bootstrap-managed admin accounts, changes to `secrets/<env>/admin-accounts.json.enc` only take effect after a deploy or host rebuild runs the API `preStart` bootstrap step. The operational runbook for add, rotate, recover, and deprovision flows is documented in [Admin Surface](./admin-surface.md).
 
 ## Test Deployment Access Model
 
@@ -249,6 +251,8 @@ The deploy workflow expects runner labels:
 ## Required Secrets
 
 The canonical inventory, purpose, and generation guidance lives in [Secrets](./secrets.md).
+
+The admin authorization and bootstrap model is documented in [Admin Surface](./admin-surface.md).
 
 The production secret tree currently materializes these files under `/run/secrets/eulesia/`:
 

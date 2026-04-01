@@ -22,7 +22,26 @@ Or on error:
 
 ## Authentication
 
-Authentication uses magic links (passwordless email login) and session cookies.
+Authentication uses session cookies. Login methods currently include:
+
+- username or email plus password via `POST /auth/login`
+- email magic links via `POST /auth/magic-link` and `GET /auth/verify/:token`
+- FTN-backed registration via the `/auth/ftn/*` flow when enabled
+
+Bootstrap-managed operator accounts are intended to use password login. They do not use the in-app admin promotion flow and may omit `email` entirely to stay out of magic-link login.
+
+### POST `/auth/login`
+
+Login with username or email plus password.
+
+**Request:**
+
+```json
+{
+  "username": "ops_elli",
+  "password": "secret"
+}
+```
 
 ### POST `/auth/magic-link`
 
@@ -103,9 +122,52 @@ Update current user's profile.
 }
 ```
 
+### POST `/users/me/password`
+
+Change the current user's password.
+
+Bootstrap-managed operator accounts use this to rotate away from the SOPS seed password. Rebuilds preserve the user-set password unless an explicit reseed is requested.
+
+**Request:**
+
+```json
+{
+  "currentPassword": "old-secret",
+  "newPassword": "new-secret"
+}
+```
+
 ### GET `/users/me/data`
 
 Export all user data (GDPR compliance).
+
+---
+
+## Admin
+
+All admin endpoints require an authenticated user whose `role` is `admin`.
+
+Key surfaces live under `/admin`, including:
+
+- `GET /admin/dashboard`
+- `GET /admin/users`
+- `GET /admin/users/:id`
+- `PATCH /admin/users/:id/role`
+- `PATCH /admin/users/:id/verify`
+- `POST /admin/users/:id/sanction`
+- `GET /admin/users/:id/sanctions`
+- `DELETE /admin/sanctions/:id`
+- `GET /admin/reports`
+- `GET /admin/reports/:id`
+- `PATCH /admin/reports/:id`
+- `GET /admin/modlog`
+- `GET /admin/transparency`
+- `GET /admin/appeals`
+- `PATCH /admin/appeals/:id`
+- `GET /admin/settings`
+- `PATCH /admin/settings`
+
+The broader admin surface, including frontend routes and bootstrap-managed operator accounts, is documented in [Admin Surface](./admin-surface.md).
 
 ---
 

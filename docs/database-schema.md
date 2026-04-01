@@ -77,28 +77,29 @@ Geographic entities for scoping discussions.
 
 ### users
 
-Platform users - citizens and institutions.
+Platform users. Runtime privilege is still encoded in `role`, and dedicated bootstrap-managed operator accounts are tagged separately through `managed_by`.
 
-| Column                | Type             | Constraints        |
-| --------------------- | ---------------- | ------------------ |
-| id                    | uuid             | PK, default random |
-| email                 | varchar(255)     | UNIQUE, NOT NULL   |
-| name                  | varchar(255)     | NOT NULL           |
-| avatar_url            | varchar(500)     |                    |
-| role                  | user_role        | Default 'citizen'  |
-| institution_type      | institution_type |                    |
-| institution_name      | varchar(255)     |                    |
-| municipality_id       | uuid             | FK municipalities  |
-| identity_verified     | boolean          | Default false      |
-| identity_provider     | varchar(50)      |                    |
-| identity_level        | identity_level   | Default 'basic'    |
-| notification_replies  | boolean          | Default true       |
-| notification_mentions | boolean          | Default true       |
-| notification_official | boolean          | Default true       |
-| locale                | varchar(10)      | Default 'en'       |
-| created_at            | timestamp        | Default now()      |
-| updated_at            | timestamp        | Default now()      |
-| last_seen_at          | timestamp        |                    |
+| Column                | Type             | Constraints                                |
+| --------------------- | ---------------- | ------------------------------------------ |
+| id                    | uuid             | PK, default random                         |
+| email                 | varchar(255)     | UNIQUE                                     |
+| name                  | varchar(255)     | NOT NULL                                   |
+| avatar_url            | varchar(500)     |                                            |
+| role                  | user_role        | Default 'citizen'                          |
+| managed_by            | varchar(50)      | Nullable operator-account ownership marker |
+| institution_type      | institution_type |                                            |
+| institution_name      | varchar(255)     |                                            |
+| municipality_id       | uuid             | FK municipalities                          |
+| identity_verified     | boolean          | Default false                              |
+| identity_provider     | varchar(50)      |                                            |
+| identity_level        | identity_level   | Default 'basic'                            |
+| notification_replies  | boolean          | Default true                               |
+| notification_mentions | boolean          | Default true                               |
+| notification_official | boolean          | Default true                               |
+| locale                | varchar(10)      | Default 'en'                               |
+| created_at            | timestamp        | Default now()                              |
+| updated_at            | timestamp        | Default now()                              |
+| last_seen_at          | timestamp        |                                            |
 
 **Indexes:**
 
