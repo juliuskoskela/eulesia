@@ -58,16 +58,29 @@ jobs:
           install -d -m 700 "$HOME/.ssh"
           cp "$DEPLOY_KEY" "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
-          ssh-keyscan -t ed25519 "$EULESIA_PROD_TARGET_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          ssh-keyscan -t ed25519 "$EULESIA_PROD_TARGET_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
           chmod 600 "$HOME/.ssh/known_hosts"
+
+          # SSH config so nixos-rebuild and nix-copy-closure both use the deploy key
+          cat > "$HOME/.ssh/config" << SSHEOF
+          Host $EULESIA_PROD_TARGET_HOST
+            User root
+            IdentityFile $HOME/.ssh/id_ed25519
+            UserKnownHostsFile $HOME/.ssh/known_hosts
+            StrictHostKeyChecking yes
+          SSHEOF
+          chmod 600 "$HOME/.ssh/config"
+
+          # Verify SSH works
+          ssh root@"$EULESIA_PROD_TARGET_HOST" "echo 'SSH connection OK'"
 
       - name: Build production system
         run: nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
 
       - name: Deploy production system
-        run: |
-          export NIX_SSHOPTS="-i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
-          nix run .#rebuild-prod
+        env:
+          NIX_SSHOPTS: "-i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+        run: nix run .#rebuild-prod
 
       - name: Health checks
         run: |
