@@ -88,6 +88,9 @@
             config.packages.lint
             config.packages.test
             config.packages.ci-check
+            pkgs.gnumake
+            pkgs.gcc
+            pkgs.nodePackages.node-gyp
           ];
         shellHook = ''
           export PLAYWRIGHT_BROWSERS_PATH="${playwrightBrowsers}"
