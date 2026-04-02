@@ -2,24 +2,26 @@
 
 ## Overview
 
-Eulesia currently exposes platform administration as an application-level privilege on user accounts.
+Eulesia platform administration uses a dedicated admin account system that is fully separated from regular user accounts.
 
-The live authorization switch is still:
+Admin accounts live in the `admin_accounts` table, authenticate through `admin_sessions`, and use their own auth endpoints and cookie (`admin_session`). They do not appear in user queries, search, or public discovery.
 
-- `users.role = "admin"` in [apps/api/src/db/schema.ts](../apps/api/src/db/schema.ts)
-- enforced by `requireAdmin()` in [apps/api/src/middleware/admin.ts](../apps/api/src/middleware/admin.ts)
-- mirrored in frontend route gating in [src/App.tsx](../src/App.tsx)
-
-This document describes the current admin surface and the intended bootstrap model for dedicated operator accounts.
+Admin access is enforced by `adminAuthMiddleware` in [apps/api/src/middleware/adminAuth.ts](../apps/api/src/middleware/adminAuth.ts), which validates the `admin_session` cookie against the `admin_sessions` table.
 
 ## Backend Admin API Surface
 
-All admin endpoints are mounted under `/api/v1/admin` in [apps/api/src/routes/index.ts](../apps/api/src/routes/index.ts) and require both:
+### Admin Auth
 
-- `authMiddleware`
-- `requireAdmin`
+Auth endpoints are mounted under `/api/v1/admin/auth` in [apps/api/src/routes/admin-auth.ts](../apps/api/src/routes/admin-auth.ts):
 
-The current backend admin surface is implemented in [apps/api/src/routes/admin.ts](../apps/api/src/routes/admin.ts) and covers:
+- `POST /admin/auth/login` -- username + password login
+- `POST /admin/auth/logout` -- end admin session
+- `GET /admin/auth/me` -- current admin account
+- `POST /admin/auth/change-password` -- change admin password
+
+### Admin Management
+
+Management endpoints are mounted under `/api/v1/admin` in [apps/api/src/routes/admin.ts](../apps/api/src/routes/admin.ts) and require `adminAuthMiddleware`:
 
 - dashboard and aggregate stats
 - user listing and user detail inspection
@@ -39,11 +41,18 @@ Related non-`/admin` surfaces with inline admin checks also exist, for example i
 
 ## Frontend Admin Surface
 
-Frontend admin routing is gated by `currentUser?.role === "admin"` in [src/App.tsx](../src/App.tsx).
+The admin panel is served from a dedicated subdomain:
+
+- Production: `admin.eulesia.org`
+- Test: `admin.test.eulesia.org`
+
+Authentication uses the `useAdminAuth` hook in [src/hooks/useAdminAuth.tsx](../src/hooks/useAdminAuth.tsx).
+
+The admin login page is at `/admin/login` via [src/pages/admin/AdminLoginPage.tsx](../src/pages/admin/AdminLoginPage.tsx).
 
 The current admin pages include:
 
-- `/admin`
+- `/admin` -- dashboard
 - `/admin/users`
 - `/admin/users/:id`
 - `/admin/reports`
@@ -56,13 +65,9 @@ The current admin pages include:
 - `/admin/waitlist`
 - `/admin/settings`
 
-The navigation shell lives in [src/components/admin/AdminSidebar.tsx](../src/components/admin/AdminSidebar.tsx).
-
 ## Bootstrap-Managed Admin Accounts
 
-Phase 1 keeps `users.role = "admin"` as the runtime privilege switch, but stops minting admin privilege from the application UI.
-
-Instead, dedicated operator accounts are bootstrapped from a SOPS-managed structured secret:
+Admin accounts are bootstrapped from a SOPS-managed structured secret:
 
 - `secrets/test/admin-accounts.json.enc`
 - `secrets/prod/admin-accounts.json.enc`
@@ -75,39 +80,22 @@ At runtime the file is decrypted to:
 
 - `/run/secrets/eulesia/admin-accounts.json`
 
-Then `systemd.services.eulesia-api.preStart` runs an idempotent bootstrap step after schema sync:
+Then `systemd.services.eulesia-api.preStart` runs the idempotent bootstrap step after migrations:
 
-- create missing dedicated admin accounts
+- create missing admin accounts in `admin_accounts`
 - update managed account details
-- seed a password for new accounts or accounts whose password hash is missing
-- preserve user-changed passwords by default
+- hash and seed a plaintext password for new accounts or accounts with a missing password hash
+- preserve operator-changed passwords by default
 - allow an explicit one-shot password reseed when requested in the secret file
-- keep managed accounts on `role = "admin"`
-- tag those rows with `managedBy = "sops_admin"`
+- keep managed accounts tagged with `managedBy = "sops_admin"`
 
-The bootstrap implementation intentionally refuses to take over an existing non-managed user row. That keeps the transition conservative: dedicated operator accounts should be created explicitly rather than silently converting an arbitrary citizen or institution account into infra-managed admin state.
+The bootstrap implementation refuses to take over an existing non-managed account row.
 
-## Public Exposure Rules
-
-Bootstrap-managed operator accounts are treated as non-public operational identities.
-
-They should not appear in:
-
-- public user profiles
-- user search
-- public discovery surfaces
-
-They also should not be mutable from normal end-user flows. In Phase 1 that means:
-
-- admin promotion is removed from the in-app role editor
-- magic-link login is disabled for SOPS-managed operator accounts
-- self-service profile changes only allow notification and locale settings
-- self-service password changes are allowed so operators can rotate away from the seed password
-- self-service account deletion is blocked for SOPS-managed operator accounts
+For the full design and secret shape, see [Admin Bootstrap Design](./admin-bootstrap-design.md).
 
 ## Secret Shape
 
-`admin-accounts.json.enc` is a JSON array of dedicated operator accounts.
+`admin-accounts.json.enc` is a JSON array of dedicated operator accounts using **plaintext passwords** (hashed at bootstrap time).
 
 Example:
 
@@ -117,14 +105,14 @@ Example:
     "managedKey": "ops_elli",
     "username": "ops_elli",
     "name": "Elli Esimerkki",
-    "passwordHash": "$argon2id$..."
+    "password": "replace-with-plaintext-password"
   },
   {
     "managedKey": "ops_matti",
     "username": "ops_matti",
     "email": "ops.matti@example.invalid",
     "name": "Matti Malli",
-    "passwordHash": "$argon2id$..."
+    "password": "replace-with-plaintext-password"
   }
 ]
 ```
@@ -132,68 +120,58 @@ Example:
 Notes:
 
 - `managedKey` is required and must stay stable for the lifetime of that managed operator identity
-- `passwordHash` is preferred over plaintext passwords
-- `passwordHash` is a seed password, not an always-authoritative password sync target
-- `email` is optional; omitting it keeps the account out of the magic-link flow entirely
+- `password` is a **plaintext** seed password, hashed to Argon2 by the bootstrap script at runtime
+- `password` is a seed password, not an always-authoritative password sync target
+- `email` is optional; omitting it keeps the account out of email-based flows entirely
 - removal from the file does not delete or disable the account automatically
 - `reseedPassword: true` is an optional one-shot recovery switch that forces the seed password back onto the account during the next rebuild; remove it after the recovery build
-- if a managed account's stored password hash is empty or null, the next bootstrap run reseeds it from `passwordHash`
-- if declarative deprovisioning is needed later, it should be implemented explicitly rather than by omission
+- if a managed account's stored password hash is empty or null, the next bootstrap run reseeds it from `password`
 
 ## Operator Runbook
-
-This is the current operational procedure for managing bootstrap-managed admin accounts.
 
 ### Add a New Admin Account
 
 1. Generate a password and store the plaintext in the operator password manager.
-2. Generate an Argon2 hash for that password from the repo root:
-
-   ```bash
-   node --input-type=module -e 'import argon2 from "argon2"; console.log(await argon2.hash(process.argv[1]))' 'replace-with-plaintext-password'
-   ```
-
-3. Add a new entry to `secrets/<env>/admin-accounts.json.enc` with `username`, optional `email`, `name`, and `passwordHash`.
+2. Add a new entry to `secrets/<env>/admin-accounts.json.enc` with `username`, optional `email`, `name`, and `password` (plaintext).
    Also assign a stable `managedKey` such as `ops_juliuskoskela`.
-4. Re-encrypt and commit the updated secret file.
-5. Deploy or rebuild the target host so `systemd.services.eulesia-api.preStart` runs the bootstrap sync.
-6. Give the operator the plaintext seed password through the normal secure out-of-band channel.
+3. Re-encrypt and commit the updated secret file.
+4. Deploy or rebuild the target host so `systemd.services.eulesia-api.preStart` runs the bootstrap sync. The bootstrap hashes the plaintext password at runtime.
+5. Give the operator the plaintext seed password through the normal secure out-of-band channel.
 
 ### Rotate an Admin Password Normally
 
-Normal rotation happens in the app, not through SOPS:
+Normal rotation happens in the admin panel, not through SOPS:
 
-1. Sign in as the operator account.
-2. Use `POST /users/me/password` or the profile password form.
-3. Keep the SOPS `passwordHash` entry unchanged.
+1. Sign in at the admin subdomain (e.g. `admin.eulesia.org`).
+2. Use `POST /api/v1/admin/auth/change-password`.
+3. Keep the SOPS `password` entry unchanged.
 
-Normal rebuilds preserve the user-set password and do not overwrite it from the secret file.
+Normal rebuilds preserve the operator-set password and do not overwrite it from the secret file.
 
 ### Recover a Lost Admin Password
 
 If the operator has lost access, recover through infrastructure:
 
-1. Generate a new password and Argon2 hash.
-2. Update that account's `passwordHash` in `secrets/<env>/admin-accounts.json.enc`.
+1. Generate a new password.
+2. Update that account's `password` in `secrets/<env>/admin-accounts.json.enc`.
 3. Add `"reseedPassword": true` to that same account entry.
 4. Re-encrypt and deploy or rebuild the target host once.
 5. Confirm the operator can sign in with the new seed password.
 6. Remove `reseedPassword` from the secret file and deploy normally afterward.
 
-That recovery rebuild forces the seed password back onto the account and revokes existing sessions for that user.
+That recovery rebuild forces the seed password back onto the account and revokes existing admin sessions for that account.
 
 ### Update Managed Profile Details
 
-The bootstrap owns these fields:
+The bootstrap owns these fields on `admin_accounts`:
 
 - `managedKey`
 - `username`
 - `email`
 - `name`
-- `role = "admin"`
 - `managedBy = "sops_admin"`
 
-To change those fields, edit the secret entry and rebuild the host. Keep `managedKey` stable when renaming `username` or `email`; it is the bootstrap reconciliation key. In-app profile editing does not own them for bootstrap-managed accounts.
+To change those fields, edit the secret entry and rebuild the host. Keep `managedKey` stable when renaming `username` or `email`; it is the bootstrap reconciliation key.
 
 ### Deprovision an Admin Account
 
@@ -201,8 +179,8 @@ Removing an entry from `admin-accounts.json.enc` does not delete, disable, or de
 
 Today deprovisioning is explicit and manual:
 
-1. remove or change the account's admin privilege in the application or database with deliberate operator action
-2. remove the account from the secret file so bootstrap stops managing it
-3. deploy the updated host configuration
+1. Remove or disable the account in the database with deliberate operator action.
+2. Remove the account from the secret file so bootstrap stops managing it.
+3. Deploy the updated host configuration.
 
 There is no declarative disable or delete flag yet.

@@ -171,7 +171,7 @@ It configures:
 The module interface is centered on `services.eulesia.*`, including:
 
 - `package` and `frontendPackage`
-- `appDomain` and `apiDomain`
+- `appDomain`, `apiDomain`, and `adminDomain`
 - `database.{createLocally,name,user,url}`
 - `meilisearch.{createLocally,listenAddress,listenPort,url,masterKeyFile}`
 - `auth.{sessionSecretFile,bootstrapAdminAccountsFile}`
@@ -182,6 +182,24 @@ The module interface is centered on `services.eulesia.*`, including:
 - `extraEnvironment`
 - `extraSecretEnvironmentFiles`
 
+## Admin Subdomain
+
+The admin panel is served from a dedicated subdomain:
+
+- Production: `admin.eulesia.org`
+- Test: `admin.test.eulesia.org`
+
+This is configured via the `services.eulesia.adminDomain` NixOS option. When set, the module creates an nginx virtual host that:
+
+- redirects `= /` to `302 /admin` (so visiting the bare admin domain goes to the admin login)
+- serves the frontend static build for all other paths
+
+Traefik routes external HTTPS traffic to the nginx vhost with TLS termination. The admin domain needs a DNS record pointing to the same host as the main app domain.
+
+Cookie domain is set to the parent domain (`.eulesia.org` for production, `.test.eulesia.org` for test) via `services.eulesia.auth.cookieDomain`. This allows the `admin_session` cookie to be shared across the admin subdomain and the main app domain.
+
+Admin authentication is entirely separate from user authentication. See [Admin Surface](./admin-surface.md) for details.
+
 ## Production Configuration
 
 `nixosConfigurations.eulesia-prod` is the production-oriented host definition for `eulesia.org`.
@@ -190,8 +208,8 @@ Current assumptions in the repo:
 
 - deploy SSH target alias: `eulesia-server-prod`
 - SSH user: `root`
-- production domains: `eulesia.org` and `api.eulesia.org`
-- test domains: `test.eulesia.org` and `api.test.eulesia.org`
+- production domains: `eulesia.org`, `api.eulesia.org`, and `admin.eulesia.org`
+- test domains: `test.eulesia.org`, `api.test.eulesia.org`, and `admin.test.eulesia.org`
 - both test and production use Traefik as the public edge, with nginx bound to `127.0.0.1:8080` as the internal origin
 - both test and production use a same-origin browser API base on the app domain, with `api.*` kept as an alias and compatibility host
 - the test host bootstrap uses `disko` with `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114774765` as the system disk and `/dev/disk/by-id/scsi-0HC_Volume_105267941` as the PostgreSQL volume

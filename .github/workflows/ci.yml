@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ATTIC_ENDPOINT: http://localhost:8088
+
+jobs:
+  format-check:
+    name: Format Check
+    runs-on: [self-hosted, nix, mercury, eulesia]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure Attic cache
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_AUTH_TOKEN }}
+          ATTIC_CACHE: ${{ secrets.ATTIC_CACHE_NAME }}
+          ATTIC_PUBKEY: ${{ secrets.ATTIC_PUBLIC_KEY }}
+        run: |
+          if [ -z "$ATTIC_TOKEN" ]; then
+            echo "Attic secrets not configured, skipping cache"
+            exit 0
+          fi
+          if ! command -v attic &> /dev/null; then
+            nix profile install github:zhaofengli/attic
+          fi
+          attic login mercury "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
+          attic use "$ATTIC_CACHE"
+          mkdir -p ~/.config/nix
+          cat >> ~/.config/nix/nix.conf << EOF
+          substituters = https://cache.nixos.org ${ATTIC_ENDPOINT}/${ATTIC_CACHE}
+          trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= ${ATTIC_PUBKEY}
+          EOF
+
+      - name: Check formatting
+        run: nix fmt -- --fail-on-change .
+
+  flake-check:
+    name: Flake Check
+    runs-on: [self-hosted, nix, mercury, eulesia]
+    needs: [format-check]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure Attic cache
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_AUTH_TOKEN }}
+          ATTIC_CACHE: ${{ secrets.ATTIC_CACHE_NAME }}
+          ATTIC_PUBKEY: ${{ secrets.ATTIC_PUBLIC_KEY }}
+        run: |
+          if [ -z "$ATTIC_TOKEN" ]; then
+            echo "Attic secrets not configured, skipping cache"
+            exit 0
+          fi
+          if ! command -v attic &> /dev/null; then
+            nix profile install github:zhaofengli/attic
+          fi
+          attic login mercury "$ATTIC_ENDPOINT" "$ATTIC_TOKEN"
+          attic use "$ATTIC_CACHE"
+          mkdir -p ~/.config/nix
+          cat >> ~/.config/nix/nix.conf << EOF
+          substituters = https://cache.nixos.org ${ATTIC_ENDPOINT}/${ATTIC_CACHE}
+          trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= ${ATTIC_PUBKEY}
+          EOF
+
+      - name: Run flake checks
+        id: checks
+        run: |
+          set +e
+          BUILD_START=$(date +%s)
+
+          if nix flake check --print-build-logs 2>&1 | tee check.log; then
+            CHECK_STATUS="success"
+          else
+            CHECK_STATUS="failure"
+          fi
+
+          BUILD_END=$(date +%s)
+          BUILD_DURATION=$((BUILD_END - BUILD_START))
+
+          CACHE_HITS=$(grep -c "copying path.*from" check.log || true)
+          BUILDS_FROM_SOURCE=$(grep -c "building " check.log || true)
+
+          echo "check_duration=${BUILD_DURATION}" >> "$GITHUB_OUTPUT"
+          echo "cache_hits=${CACHE_HITS}" >> "$GITHUB_OUTPUT"
+          echo "builds_from_source=${BUILDS_FROM_SOURCE}" >> "$GITHUB_OUTPUT"
+          echo "check_status=${CHECK_STATUS}" >> "$GITHUB_OUTPUT"
+
+          if [ "$CHECK_STATUS" = "failure" ]; then
+            exit 1
+          fi
+
+      - name: Push to Attic cache
+        if: success()
+        env:
+          ATTIC_CACHE: ${{ secrets.ATTIC_CACHE_NAME }}
+        run: |
+          if [ -z "$ATTIC_CACHE" ]; then exit 0; fi
+          for result in result*; do
+            if [ -L "$result" ]; then
+              attic push "$ATTIC_CACHE" "./$result" || true
+            fi
+          done
+
+      - name: Generate check summary
+        if: always()
+        run: |
+          TOTAL_DEPS=$((${{ steps.checks.outputs.cache_hits }} + ${{ steps.checks.outputs.builds_from_source }}))
+          if [ $TOTAL_DEPS -gt 0 ]; then
+            CACHE_HIT_RATE=$(awk "BEGIN {printf \"%.1f\", (${{ steps.checks.outputs.cache_hits }} / $TOTAL_DEPS) * 100}")
+          else
+            CACHE_HIT_RATE="N/A"
+          fi
+
+          echo "## Flake Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ steps.checks.outputs.check_status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Duration:** ${{ steps.checks.outputs.check_duration }}s" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cache Hit Rate:** ${CACHE_HIT_RATE}% (${{ steps.checks.outputs.cache_hits }}/$TOTAL_DEPS)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Built from Source:** ${{ steps.checks.outputs.builds_from_source }}" >> $GITHUB_STEP_SUMMARY
+
+  ci-success:
+    name: CI Success
+    needs: [format-check, flake-check]
+    runs-on: [self-hosted, nix, mercury, eulesia]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.format-check.result }}" != "success" ] || \
+             [ "${{ needs.flake-check.result }}" != "success" ]; then
+            echo "One or more CI jobs failed"
+            echo "  format-check: ${{ needs.format-check.result }}"
+            echo "  flake-check: ${{ needs.flake-check.result }}"
+            exit 1
+          fi
+          echo "All CI jobs passed successfully!"
