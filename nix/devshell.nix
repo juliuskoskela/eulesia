@@ -92,8 +92,12 @@
             pkgs.gnumake
             pkgs.gcc
             pkgs.nodePackages.node-gyp
+            playwrightBrowsers
           ];
-        shellHook = "";
+        shellHook = ''
+          export PLAYWRIGHT_BROWSERS_PATH="${playwrightBrowsers}"
+          export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+        '';
       };
     };
   };
