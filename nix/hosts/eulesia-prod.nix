@@ -11,6 +11,13 @@
     ../modules/eulesia.nix
   ];
 
+  # Keep store clean — 3 generations in GRUB, weekly GC
+  nix.gc = {
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 14d";
+  };
+
   networking = {
     hostName = "eulesia-prod";
     useDHCP = lib.mkDefault true;

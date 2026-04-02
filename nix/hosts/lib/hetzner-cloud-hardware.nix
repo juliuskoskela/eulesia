@@ -10,6 +10,7 @@
         device = "nodev";
         efiSupport = true;
         efiInstallAsRemovable = true;
+        configurationLimit = 3;
       };
       efi.canTouchEfiVariables = false;
     };
