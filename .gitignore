@@ -8,12 +8,18 @@
 *
 
 # === Directories ===
+!agents/
+!agents/**
 !android/
 !android/**
 !apps/
 !apps/**
 !assets/
 !assets/**
+!.claude/
+!.claude/**
+!.codex/
+!.codex/**
 !.github/
 !.github/**
 !docker/
