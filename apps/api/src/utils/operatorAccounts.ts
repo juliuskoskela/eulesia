@@ -101,6 +101,43 @@ function shouldPreservePublicUserSummaryId(
   return account.id === options.preserveIdForUserId;
 }
 
+export type FormatUserSummaryOptions = {
+  publicView?: boolean;
+  preserveId?: boolean;
+  preserveIdForUserId?: string | null;
+};
+
+export function formatUserSummaryForResponse<
+  T extends PublicUserSummaryLike & { managedBy?: string | null },
+>(user: T | null, options?: FormatUserSummaryOptions) {
+  if (user === null) {
+    return null;
+  }
+  const summary = {
+    id: user.id,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    institutionType: user.institutionType,
+    institutionName: user.institutionName,
+    identityVerified: user.identityVerified,
+    managedBy: user.managedBy,
+  };
+
+  if (options?.publicView) {
+    return sanitizePublicUserSummary(summary, {
+      preserveId: options.preserveId,
+      preserveIdForUserId: options.preserveIdForUserId,
+    });
+  }
+
+  const { managedBy: _managedBy, ...privateUserSummary } = summary;
+  return {
+    ...privateUserSummary,
+    canViewProfile: canViewPublicUserProfile(summary),
+  };
+}
+
 export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
   account: T,
   options?: SanitizePublicUserSummaryOptions,

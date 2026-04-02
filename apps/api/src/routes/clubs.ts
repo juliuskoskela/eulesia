@@ -20,7 +20,7 @@ import { notify } from "../services/notify.js";
 import { indexClub } from "../services/search/index.js";
 import type { AuthenticatedRequest } from "../types/index.js";
 import {
-  canViewPublicUserProfile,
+  formatUserSummaryForResponse as formatClubUserSummary,
   getPublicUserId,
   sanitizePublicUserSummary,
 } from "../utils/operatorAccounts.js";
@@ -74,43 +74,6 @@ const createClubCommentSchema = z.object({
 const clubVoteSchema = z.object({
   value: z.number().int().min(-1).max(1),
 });
-
-type ClubUserSummary = {
-  id?: string | null;
-  name?: string | null;
-  avatarUrl?: string | null;
-  role?: "citizen" | "institution" | "admin" | null;
-  institutionType?: string | null;
-  institutionName?: string | null;
-  identityVerified?: boolean | null;
-  managedBy?: string | null;
-};
-
-function formatClubUserSummary(
-  user: ClubUserSummary | null,
-  options?: {
-    publicView?: boolean;
-    preserveId?: boolean;
-    preserveIdForUserId?: string | null;
-  },
-) {
-  if (user === null) {
-    return null;
-  }
-
-  if (options?.publicView) {
-    return sanitizePublicUserSummary(user, {
-      preserveId: options.preserveId,
-      preserveIdForUserId: options.preserveIdForUserId,
-    });
-  }
-
-  const { managedBy: _managedBy, ...privateUserSummary } = user;
-  return {
-    ...privateUserSummary,
-    canViewProfile: canViewPublicUserProfile(user),
-  };
-}
 
 // GET /clubs - List clubs (public + user's closed clubs)
 router.get(

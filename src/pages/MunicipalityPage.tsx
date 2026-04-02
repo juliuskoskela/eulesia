@@ -8,11 +8,8 @@ import { ThreadCard, InlineThreadForm } from "../components/agora";
 import { ContentEndMarker, FollowButton } from "../components/common";
 import { useThreads, useMunicipalities } from "../hooks/useApi";
 import { useAuth } from "../hooks/useAuth";
-import type {
-  Thread as ApiThread,
-  UserSummary,
-  Municipality,
-} from "../lib/api";
+import type { Thread as ApiThread, Municipality } from "../lib/api";
+import { transformAuthor } from "../utils/transforms";
 
 // Transform API thread to component format
 function transformThread(thread: ApiThread) {
@@ -33,30 +30,6 @@ function transformThread(thread: ApiThread) {
     source: thread.source,
     sourceUrl: thread.sourceUrl,
     aiGenerated: thread.aiGenerated,
-  };
-}
-
-// Transform API user to component format
-function transformAuthor(author: UserSummary) {
-  return {
-    id: author.id,
-    name: author.name,
-    role: author.role,
-    verified: author.identityVerified ?? false,
-    canViewProfile: author.canViewProfile ?? Boolean(author.id),
-    avatarUrl: author.avatarUrl,
-    avatarInitials: author.name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase(),
-    institutionType: author.institutionType as
-      | "municipality"
-      | "agency"
-      | "ministry"
-      | undefined,
-    institutionName: author.institutionName,
   };
 }
 
@@ -191,17 +164,23 @@ export function MunicipalityPage() {
               <MapPin className="w-8 h-8 text-blue-400" />
             </div>
             <p className="font-medium text-gray-700 dark:text-gray-300">
-              {t("agora:municipality.noDiscussionsYet", { defaultValue: "Täällä ei ole vielä keskusteluja." })}
+              {t("agora:municipality.noDiscussionsYet", {
+                defaultValue: "Täällä ei ole vielä keskusteluja.",
+              })}
             </p>
             <p className="text-sm mt-1 text-gray-500">
-              {t("agora:municipality.beFirst", { defaultValue: "Ole ensimmäinen joka aloittaa!" })}
+              {t("agora:municipality.beFirst", {
+                defaultValue: "Ole ensimmäinen joka aloittaa!",
+              })}
             </p>
             {!currentUser && (
               <Link
                 to="/kirjaudu"
                 className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >
-                {t("common:actions.signIn", { defaultValue: "Kirjaudu sisään" })}
+                {t("common:actions.signIn", {
+                  defaultValue: "Kirjaudu sisään",
+                })}
               </Link>
             )}
           </div>

@@ -48,36 +48,8 @@ import {
 } from "../hooks/useApi";
 import { api } from "../lib/api";
 import { formatRelativeTime } from "../lib/formatTime";
-import type {
-  UserSummary,
-  ClubThread,
-  ClubMember,
-  LocationResult,
-} from "../lib/api";
-
-// Transform API user to component format
-function transformUser(user: UserSummary) {
-  return {
-    id: user.id,
-    name: user.name,
-    role: user.role,
-    verified: user.identityVerified ?? false,
-    canViewProfile: user.canViewProfile ?? Boolean(user.id),
-    avatarUrl: user.avatarUrl,
-    avatarInitials: user.name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase(),
-    institutionType: user.institutionType as
-      | "municipality"
-      | "agency"
-      | "ministry"
-      | undefined,
-    institutionName: user.institutionName,
-  };
-}
+import type { ClubThread, ClubMember, LocationResult } from "../lib/api";
+import { transformAuthor as transformUser } from "../utils/transforms";
 
 export function ClubViewPage() {
   const { t } = useTranslation("clubs");
@@ -897,7 +869,8 @@ export function ClubViewPage() {
             className="w-full text-left px-4 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1.5 transition-colors"
           >
             <Users className="w-3.5 h-3.5" />
-            {showMemberList ? t("hideMemberList") : t("memberList")} ({club.memberCount})
+            {showMemberList ? t("hideMemberList") : t("memberList")} (
+            {club.memberCount})
           </button>
         )}
 

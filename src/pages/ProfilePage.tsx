@@ -460,16 +460,25 @@ export function ProfilePage() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       updateProfileMutation.mutate({ name: nameInput } as any, {
-                        onSuccess: () => { refreshUser(); setEditingName(false); },
+                        onSuccess: () => {
+                          refreshUser();
+                          setEditingName(false);
+                        },
                       });
                     }
-                    if (e.key === "Escape") { setNameInput(currentUser.name); setEditingName(false); }
+                    if (e.key === "Escape") {
+                      setNameInput(currentUser.name);
+                      setEditingName(false);
+                    }
                   }}
                 />
                 <button
                   onClick={() => {
                     updateProfileMutation.mutate({ name: nameInput } as any, {
-                      onSuccess: () => { refreshUser(); setEditingName(false); },
+                      onSuccess: () => {
+                        refreshUser();
+                        setEditingName(false);
+                      },
                     });
                   }}
                   className="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg"
@@ -477,7 +486,10 @@ export function ProfilePage() {
                   {t("common:actions.save", { defaultValue: "Tallenna" })}
                 </button>
                 <button
-                  onClick={() => { setNameInput(currentUser.name); setEditingName(false); }}
+                  onClick={() => {
+                    setNameInput(currentUser.name);
+                    setEditingName(false);
+                  }}
                   className="text-xs px-2 py-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                 >
                   {t("common:actions.cancel", { defaultValue: "Peruuta" })}
@@ -496,11 +508,15 @@ export function ProfilePage() {
                 </button>
               </div>
             )}
-            {currentUser.verifiedName && currentUser.verifiedName !== currentUser.name && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {t("profile:name.verifiedAs", { defaultValue: "Virallinen nimi:" })} {currentUser.verifiedName}
-              </p>
-            )}
+            {currentUser.verifiedName &&
+              currentUser.verifiedName !== currentUser.name && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {t("profile:name.verifiedAs", {
+                    defaultValue: "Virallinen nimi:",
+                  })}{" "}
+                  {currentUser.verifiedName}
+                </p>
+              )}
             <div className="flex items-center gap-2 mt-1">
               {currentUser.identityVerified && (
                 <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-full">
@@ -773,6 +789,7 @@ export function ProfilePage() {
             )}
           </div>
         </div>
+        */}
         {/* Invite Codes */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
@@ -898,8 +915,7 @@ export function ProfilePage() {
             )}
           </div>
         </div>
-        */}
-        {currentUser.role === "admin" && (
+        {currentUser.isManagedAccount && currentUser.hasPassword && (
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
               <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">

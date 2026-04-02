@@ -192,11 +192,13 @@ router.get(
       .from(comments)
       .where(eq(comments.authorId, id));
 
+    const { passwordHash: _, managedKey: _mk, ...safeUser } = user;
+
     res.json({
       success: true,
       data: {
-        ...user,
-        passwordHash: undefined,
+        ...safeUser,
+        isManagedAccount: isSopsManagedOperatorAccount(user),
         sanctions,
         threadCount: threadCount.count,
         commentCount: commentCount.count,

@@ -6,6 +6,27 @@ import {
 } from "./adminAccounts.js";
 
 describe("parseBootstrapAdminAccounts", () => {
+  it("throws on invalid JSON", () => {
+    expect(() => parseBootstrapAdminAccounts("not json")).toThrow(
+      "must contain valid JSON data",
+    );
+  });
+
+  it("throws on schema validation failure", () => {
+    expect(() =>
+      parseBootstrapAdminAccounts(
+        JSON.stringify([
+          {
+            managedKey: "ok",
+            username: "ab", // too short (min 3)
+            name: "Test",
+            passwordHash: "$argon2id$test",
+          },
+        ]),
+      ),
+    ).toThrow();
+  });
+
   it("normalizes usernames and emails", () => {
     const accounts = parseBootstrapAdminAccounts(
       JSON.stringify([
@@ -183,6 +204,54 @@ describe("selectExistingBootstrapAdmin", () => {
     );
 
     expect(existing?.id).toBe("user-1");
+  });
+
+  it("falls back to email match when username does not match", () => {
+    const existing = selectExistingBootstrapAdmin(
+      {
+        managedKey: "ops_julius",
+        username: "juliuskoskela",
+        email: "julius.koskela@digimuoto.com",
+        name: "Julius Koskela",
+        passwordHash: "$argon2id$seed",
+        reseedPassword: false,
+      },
+      [
+        {
+          id: "user-1",
+          username: "different_name",
+          email: "julius.koskela@digimuoto.com",
+          managedBy: "sops_admin",
+          managedKey: null,
+        },
+      ],
+    );
+
+    expect(existing?.id).toBe("user-1");
+  });
+
+  it("returns null when no candidates match", () => {
+    const existing = selectExistingBootstrapAdmin(
+      {
+        managedKey: "ops_julius",
+        username: "juliuskoskela",
+        email: "julius.koskela@digimuoto.com",
+        name: "Julius Koskela",
+        passwordHash: "$argon2id$seed",
+        reseedPassword: false,
+      },
+      [
+        {
+          id: "user-1",
+          username: "unrelated",
+          email: "unrelated@example.org",
+          managedBy: null,
+          managedKey: null,
+        },
+      ],
+    );
+
+    expect(existing).toBeNull();
   });
 
   it("rejects a renamed managed account if the new username belongs to another row", () => {

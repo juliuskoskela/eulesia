@@ -74,6 +74,24 @@ describe("transformAuthor", () => {
     expect(result.avatarInitials).toBe("CO");
   });
 
+  it("handles a managed operator author with null id", () => {
+    const result = transformAuthor({
+      id: null,
+      name: "Eulesia Operator",
+      role: "citizen",
+      identityVerified: false,
+      avatarUrl: undefined,
+      canViewProfile: false,
+      institutionType: undefined,
+      institutionName: undefined,
+    } as unknown as UserSummary);
+
+    expect(result.id).toBeNull();
+    expect(result.canViewProfile).toBe(false);
+    expect(result.name).toBe("Eulesia Operator");
+    expect(result.avatarInitials).toBe("EO");
+  });
+
   it("preserves an explicit non-linkable profile flag", () => {
     const result = transformAuthor({
       ...mockAuthor,

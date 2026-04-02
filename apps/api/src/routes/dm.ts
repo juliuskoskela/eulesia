@@ -17,7 +17,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { io } from "../index.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
-import { canViewPublicUserProfile } from "../utils/operatorAccounts.js";
+import { formatUserSummaryForResponse as formatUserSummary } from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -29,19 +29,6 @@ const startConversationSchema = z.object({
 const sendMessageSchema = z.object({
   content: z.string().min(1).max(5000),
 });
-
-// Helper to format user summary
-function formatUserSummary(user: typeof users.$inferSelect) {
-  return {
-    id: user.id,
-    name: user.name,
-    avatarUrl: user.avatarUrl,
-    canViewProfile: canViewPublicUserProfile(user),
-    role: user.role,
-    institutionType: user.institutionType,
-    institutionName: user.institutionName,
-  };
-}
 
 // GET /dm — List user's conversations
 router.get(

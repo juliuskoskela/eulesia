@@ -284,8 +284,7 @@ function SearchResultsList({ results, onResultClick }: SearchResultsListProps) {
       )}
 
       {/* Locations — includes municipalities + locations combined */}
-      {(results.municipalities.length > 0 ||
-        results.locations?.length > 0) && (
+      {(results.municipalities.length > 0 || results.locations?.length > 0) && (
         <ResultSection title={t("search.locations")} icon={MapPin}>
           {results.municipalities.map((m) => (
             <Link

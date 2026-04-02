@@ -29,12 +29,12 @@ import { useAuth } from "../hooks/useAuth";
 import { useGuide } from "../hooks/useGuide";
 import type {
   Thread as ApiThread,
-  UserSummary,
   FeedScope,
   SortBy,
   TopPeriod,
   ExploreThread,
 } from "../lib/api";
+import { transformAuthor } from "../utils/transforms";
 
 // Transform API thread to component format
 function transformThread(thread: ApiThread | ExploreThread) {
@@ -64,30 +64,6 @@ function transformThread(thread: ApiThread | ExploreThread) {
     cvsScore: exploreThread.cvsScore,
     scoreBreakdown: exploreThread.scoreBreakdown,
     isBookmarked: (thread as any).isBookmarked,
-  };
-}
-
-// Transform API user to component format
-function transformAuthor(author: UserSummary) {
-  return {
-    id: author.id,
-    name: author.name,
-    role: author.role,
-    verified: author.identityVerified ?? false,
-    canViewProfile: author.canViewProfile ?? Boolean(author.id),
-    avatarUrl: author.avatarUrl,
-    avatarInitials: author.name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase(),
-    institutionType: author.institutionType as
-      | "municipality"
-      | "agency"
-      | "ministry"
-      | undefined,
-    institutionName: author.institutionName,
   };
 }
 
@@ -390,7 +366,12 @@ export function AgoraPage() {
         {/* Manual onboarding via "?" button */}
         {showOnboarding && (
           <div className="py-4">
-            <FeedOnboarding onComplete={() => { handleOnboardingComplete(); setShowOnboarding(false); }} />
+            <FeedOnboarding
+              onComplete={() => {
+                handleOnboardingComplete();
+                setShowOnboarding(false);
+              }}
+            />
           </div>
         )}
 
@@ -400,10 +381,15 @@ export function AgoraPage() {
             <div className="flex items-start justify-between gap-2 mb-3">
               <div>
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                  {t("agora:onboarding.welcome", { defaultValue: "Tervetuloa Eulesiaan!" })}
+                  {t("agora:onboarding.welcome", {
+                    defaultValue: "Tervetuloa Eulesiaan!",
+                  })}
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {t("agora:onboarding.setupHint", { defaultValue: "Valitse kotikuntasi saadaksesi paikallisen syötteen." })}
+                  {t("agora:onboarding.setupHint", {
+                    defaultValue:
+                      "Valitse kotikuntasi saadaksesi paikallisen syötteen.",
+                  })}
                 </p>
               </div>
               <button
@@ -414,11 +400,16 @@ export function AgoraPage() {
               </button>
             </div>
             <FeedOnboarding
-              onComplete={() => { handleOnboardingComplete(); setSetupDismissed(true); }}
+              onComplete={() => {
+                handleOnboardingComplete();
+                setSetupDismissed(true);
+              }}
               compact
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 border-t border-blue-100 dark:border-blue-800 pt-3">
-              {t("agora:onboarding.followFriendsTip", { defaultValue: "Kavereita voi seurata heidän profiilisivultaan." })}
+              {t("agora:onboarding.followFriendsTip", {
+                defaultValue: "Kavereita voi seurata heidän profiilisivultaan.",
+              })}
             </p>
           </div>
         )}
@@ -454,42 +445,38 @@ export function AgoraPage() {
         )}
 
         {/* Thread list */}
-        {!isLoading &&
-          !error &&
-          threads.length > 0 && (
-            <div className="space-y-3">
-              {threads.map((item, index) => (
-                <div
-                  key={item.thread.id}
-                  {...(index === 0 ? { "data-guide": "agora-threadcard" } : {})}
-                >
-                  <ThreadCard
-                    thread={item.thread}
-                    author={item.author}
-                    onVote={handleVote}
-                    isVoting={voteThreadMutation.isPending}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+        {!isLoading && !error && threads.length > 0 && (
+          <div className="space-y-3">
+            {threads.map((item, index) => (
+              <div
+                key={item.thread.id}
+                {...(index === 0 ? { "data-guide": "agora-threadcard" } : {})}
+              >
+                <ThreadCard
+                  thread={item.thread}
+                  author={item.author}
+                  onVote={handleVote}
+                  isVoting={voteThreadMutation.isPending}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Empty state */}
-        {!isLoading &&
-          !error &&
-          threads.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              <p>{t("noThreads")}</p>
-              {feedScope === "following" && (
-                <button
-                  onClick={() => setSetupDismissed(false)}
-                  className="mt-2 text-blue-600 hover:underline text-sm"
-                >
-                  {t("editSubscriptions")}
-                </button>
-              )}
-            </div>
-          )}
+        {!isLoading && !error && threads.length === 0 && (
+          <div className="text-center py-12 text-gray-500">
+            <p>{t("noThreads")}</p>
+            {feedScope === "following" && (
+              <button
+                onClick={() => setSetupDismissed(false)}
+                className="mt-2 text-blue-600 hover:underline text-sm"
+              >
+                {t("editSubscriptions")}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Infinite scroll trigger / End marker */}
         {threads.length > 0 &&

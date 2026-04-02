@@ -22,10 +22,9 @@ import { io } from "../index.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
 import {
-  canViewPublicUserProfile,
+  formatUserSummaryForResponse as formatUserSummary,
   getPublicUserId,
   isSopsManagedOperatorAccount,
-  sanitizePublicUserSummary,
 } from "../utils/operatorAccounts.js";
 
 const router = Router();
@@ -51,35 +50,6 @@ const sendMessageSchema = z.object({
 const inviteSchema = z.object({
   userId: z.string().uuid(),
 });
-
-// Helper to format user summary
-function formatUserSummary(
-  user: typeof users.$inferSelect,
-  options?: { publicView?: boolean; preserveIdForUserId?: string | null },
-) {
-  const summary = {
-    id: user.id,
-    name: user.name,
-    avatarUrl: user.avatarUrl,
-    role: user.role,
-    institutionType: user.institutionType,
-    institutionName: user.institutionName,
-    identityVerified: user.identityVerified,
-    managedBy: user.managedBy,
-  };
-
-  if (options?.publicView) {
-    return sanitizePublicUserSummary(summary, {
-      preserveIdForUserId: options.preserveIdForUserId,
-    });
-  }
-
-  const { managedBy: _managedBy, ...privateUserSummary } = summary;
-  return {
-    ...privateUserSummary,
-    canViewProfile: canViewPublicUserProfile(summary),
-  };
-}
 
 // ============================================================
 // INVITATIONS — must be before /:userId catch-all
@@ -644,15 +614,27 @@ router.patch(
       .where(eq(users.id, userId))
       .limit(1);
 
-    io.to(`room:${roomId}`).emit("room_message_edited", {
+    const publicView = room.visibility === "public";
+    const editEventBase = {
       roomId,
       messageId,
       content: updated.content,
       contentHtml: updated.contentHtml,
       editedBy: userId,
       editedAt: updated.editedAt,
+    };
+
+    io.to(`room:${roomId}`)
+      .except(`user:${userId}`)
+      .emit("room_message_edited", {
+        ...editEventBase,
+        author: formatUserSummary(author, { publicView }),
+      });
+    io.to(`user:${userId}`).emit("room_message_edited", {
+      ...editEventBase,
       author: formatUserSummary(author, {
-        publicView: room.visibility === "public",
+        publicView,
+        preserveIdForUserId: userId,
       }),
     });
 

@@ -19,12 +19,14 @@ const scopeConfig = {
   national: {
     icon: Building2,
     tKey: "scope.national",
-    color: "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20",
+    color:
+      "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20",
   },
   european: {
     icon: Globe,
     tKey: "scope.european",
-    color: "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20",
+    color:
+      "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20",
   },
 };
 

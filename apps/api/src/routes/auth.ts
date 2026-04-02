@@ -10,6 +10,7 @@ import {
   sessions,
   siteSettings,
   ftnPendingRegistrations,
+  inviteCodes,
 } from "../db/index.js";
 import {
   generateMagicLinkToken,
@@ -88,6 +89,7 @@ const verifySchema = z.object({
 });
 
 const registerSchema = z.object({
+  inviteCode: z.string().min(1, "Invite code is required").optional(),
   username: z
     .string()
     .min(3)
@@ -132,6 +134,7 @@ async function clearFtnSession(req: Request): Promise<void> {
     return;
   }
 
+  delete req.session.inviteCode;
   delete req.session.ftnNonce;
   delete req.session.ftnState;
 
@@ -160,11 +163,14 @@ if (ftnEnabled) {
   router.get(
     "/ftn/start",
     asyncHandler(async (req, res: Response) => {
+      const invite = req.query.invite || req.query.inviteCode;
       const state = generateToken(24);
       const nonce = generateToken(24);
 
       req.session.ftnState = state;
       req.session.ftnNonce = nonce;
+      req.session.inviteCode =
+        typeof invite === "string" && invite.length > 0 ? invite : undefined;
       await saveSession(req);
 
       try {
@@ -208,6 +214,7 @@ if (ftnEnabled) {
         typeof req.query.state === "string" ? req.query.state : undefined;
       const expectedState = req.session.ftnState;
       const expectedNonce = req.session.ftnNonce;
+      const inviteCode = req.session.inviteCode ?? null;
 
       if (!code || !returnedState || !expectedState || !expectedNonce) {
         await clearFtnSession(req);
@@ -256,6 +263,7 @@ if (ftnEnabled) {
         familyName: claims.family_name,
         sub: claims.sub,
         country: claims.country || "FI",
+        inviteCode,
         expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min
       });
 
@@ -372,9 +380,10 @@ router.post(
 router.post(
   "/register",
   asyncHandler(async (req, res: Response) => {
-    const { username, password, name, ftnToken } = registerSchema.parse(
-      req.body,
-    );
+    const registrationMode = env.AUTH_REGISTRATION_MODE;
+    const inviteRequired = registrationMode === "invite-only";
+    const { inviteCode, username, password, name, ftnToken } =
+      registerSchema.parse(req.body);
 
     if (!(await isRegistrationOpen())) {
       throw new AppError(403, "Registration is currently closed");
@@ -387,6 +396,7 @@ router.post(
       sub: string;
       country: string | null;
     } | null = null;
+    let pendingInviteCode: string | null = null;
     let pendingRegistrationTokenHash: string | null = null;
     if (ftnToken) {
       pendingRegistrationTokenHash = hashToken(ftnToken);
@@ -428,9 +438,10 @@ router.post(
         sub: pending.sub,
         country: pending.country,
       };
+      pendingInviteCode = pending.inviteCode;
     }
 
-    if (!ftnClaims) {
+    if (!inviteRequired && !ftnClaims) {
       throw new AppError(
         403,
         "Registration on this deployment requires FTN authentication",
@@ -444,6 +455,37 @@ router.post(
     let newUser;
     try {
       newUser = await db.transaction(async (tx) => {
+        let inviteId: string | null = null;
+        let invitedByUserId: string | null = null;
+        const resolvedInviteCode = pendingInviteCode ?? inviteCode ?? null;
+
+        if (inviteRequired) {
+          if (!resolvedInviteCode) {
+            throw new AppError(400, "Invite code is required");
+          }
+
+          const [invite] = await tx
+            .select()
+            .from(inviteCodes)
+            .where(eq(inviteCodes.code, resolvedInviteCode.toUpperCase()))
+            .limit(1);
+
+          if (!invite) {
+            throw new AppError(400, "Invalid invite code");
+          }
+
+          if (invite.status !== "available") {
+            throw new AppError(400, "Invite code has already been used");
+          }
+
+          if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
+            throw new AppError(400, "Invite code has expired");
+          }
+
+          inviteId = invite.id;
+          invitedByUserId = invite.createdBy;
+        }
+
         // Check if username already exists
         const [existing] = await tx
           .select({ id: users.id })
@@ -490,6 +532,17 @@ router.post(
               : {}),
           })
           .returning();
+
+        if (inviteId) {
+          await tx
+            .update(inviteCodes)
+            .set({
+              usedBy: created.id,
+              status: "used",
+              usedAt: new Date(),
+            })
+            .where(eq(inviteCodes.id, inviteId));
+        }
 
         return created;
       });
@@ -779,6 +832,8 @@ router.get(
         },
         onboardingCompletedAt: user.onboardingCompletedAt,
         createdAt: user.createdAt,
+        isManagedAccount: isSopsManagedOperatorAccount(user),
+        hasPassword: Boolean(user.passwordHash),
       },
     });
   }),

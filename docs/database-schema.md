@@ -87,6 +87,7 @@ Platform users. Runtime privilege is still encoded in `role`, and dedicated boot
 | avatar_url            | varchar(500)     |                                            |
 | role                  | user_role        | Default 'citizen'                          |
 | managed_by            | varchar(50)      | Nullable operator-account ownership marker |
+| managed_key           | varchar(100)     | Nullable stable reconciliation key         |
 | institution_type      | institution_type |                                            |
 | institution_name      | varchar(255)     |                                            |
 | municipality_id       | uuid             | FK municipalities                          |
@@ -105,6 +106,8 @@ Platform users. Runtime privilege is still encoded in `role`, and dedicated boot
 
 - `users_email_idx` on email
 - `users_municipality_idx` on municipality_id
+- `users_managed_by_idx` on managed_by
+- `users_managed_key_unique_idx` unique on (managed_by, managed_key)
 
 ### sessions
 

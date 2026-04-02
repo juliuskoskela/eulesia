@@ -163,6 +163,14 @@ describe("operator account helpers", () => {
     ).toBe("user-2");
   });
 
+  it("passes null through sanitizePublicUserSummary unchanged", () => {
+    expect(sanitizePublicUserSummary(null)).toBeNull();
+  });
+
+  it("passes undefined through sanitizePublicUserSummary unchanged", () => {
+    expect(sanitizePublicUserSummary(undefined)).toBeUndefined();
+  });
+
   it("scrubs public display names for SOPS-managed operator accounts", () => {
     expect(
       getPublicAccountName({

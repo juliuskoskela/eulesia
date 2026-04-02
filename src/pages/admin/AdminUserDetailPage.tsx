@@ -51,7 +51,7 @@ export function AdminUserDetailPage() {
     );
   }
 
-  const isSopsManagedAdmin = user.managedBy === "sops_admin";
+  const isSopsManagedAdmin = user.isManagedAccount === true;
 
   const handleRoleChange = (newRole: "citizen" | "institution") => {
     if (!id || newRole === user?.role) return;
