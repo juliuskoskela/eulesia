@@ -14,7 +14,10 @@ import { authMiddleware } from "../middleware/auth.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import type { AuthenticatedRequest } from "../types/index.js";
-import { sanitizePublicUserSummary } from "../utils/operatorAccounts.js";
+import {
+  getPublicUserId,
+  sanitizePublicUserSummary,
+} from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -219,6 +222,7 @@ router.get(
 
         return {
           ...full.thread,
+          authorId: getPublicUserId(full.author),
           tags: tagsByThread[bookmark.threadId] || [],
           author: sanitizePublicUserSummary(full.author),
           municipality: full.municipality,

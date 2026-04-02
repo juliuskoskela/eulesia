@@ -21,6 +21,7 @@ import { indexClub } from "../services/search/index.js";
 import type { AuthenticatedRequest } from "../types/index.js";
 import {
   canViewPublicUserProfile,
+  getPublicUserId,
   sanitizePublicUserSummary,
 } from "../utils/operatorAccounts.js";
 
@@ -525,6 +526,11 @@ router.get(
         })),
         threads: threadList.map(({ thread, author }) => ({
           ...thread,
+          authorId: shouldSanitizeClubUsers
+            ? getPublicUserId(author, {
+                preserveIdForUserId: req.user?.id,
+              })
+            : thread.authorId,
           userVote: threadVoteMap.get(thread.id) || 0,
           author: formatClubUserSummary(author, {
             publicView: shouldSanitizeClubUsers,
@@ -1150,6 +1156,11 @@ router.get(
       success: true,
       data: {
         ...threadData.thread,
+        authorId: shouldSanitizeClubUsers
+          ? getPublicUserId(threadData.author, {
+              preserveIdForUserId: req.user?.id,
+            })
+          : threadData.thread.authorId,
         userVote: threadUserVote,
         author: formatClubUserSummary(threadData.author, {
           publicView: shouldSanitizeClubUsers,
@@ -1162,7 +1173,11 @@ router.get(
               id: comment.id,
               threadId: comment.threadId,
               parentId: comment.parentId,
-              authorId: comment.authorId,
+              authorId: shouldSanitizeClubUsers
+                ? getPublicUserId(author, {
+                    preserveIdForUserId: req.user?.id,
+                  })
+                : comment.authorId,
               content: "",
               contentHtml: null,
               score: 0,
@@ -1174,6 +1189,11 @@ router.get(
           }
           return {
             ...comment,
+            authorId: shouldSanitizeClubUsers
+              ? getPublicUserId(author, {
+                  preserveIdForUserId: req.user?.id,
+                })
+              : comment.authorId,
             userVote: commentVoteMap.get(comment.id) || 0,
             author: formatClubUserSummary(author, {
               publicView: shouldSanitizeClubUsers,

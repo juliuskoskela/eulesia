@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MANAGED_OPERATOR_PUBLIC_NAME,
   canViewPublicUserProfile,
+  getPublicUserId,
   getPublicAccountName,
   isPubliclyDiscoverableAccount,
   isSopsManagedOperatorAccount,
@@ -134,6 +135,32 @@ describe("operator account helpers", () => {
         managedBy: null,
       }),
     ).toBe(true);
+  });
+
+  it("hides managed operator ids in public contexts unless explicitly preserved", () => {
+    expect(
+      getPublicUserId({
+        id: "user-1",
+        managedBy: "sops_admin",
+      }),
+    ).toBeNull();
+
+    expect(
+      getPublicUserId(
+        {
+          id: "user-1",
+          managedBy: "sops_admin",
+        },
+        { preserveIdForUserId: "user-1" },
+      ),
+    ).toBe("user-1");
+
+    expect(
+      getPublicUserId({
+        id: "user-2",
+        managedBy: null,
+      }),
+    ).toBe("user-2");
   });
 
   it("scrubs public display names for SOPS-managed operator accounts", () => {

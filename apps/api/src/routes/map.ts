@@ -14,7 +14,10 @@ import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import type { AuthenticatedRequest } from "../types/index.js";
-import { sanitizePublicUserSummary } from "../utils/operatorAccounts.js";
+import {
+  getPublicUserId,
+  sanitizePublicUserSummary,
+} from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -384,6 +387,7 @@ router.get(
           ...municipality,
           threads: recentThreads.map((t) => ({
             ...t.thread,
+            authorId: getPublicUserId(t.author),
             author: sanitizePublicUserSummary(t.author),
           })),
           clubs: municipalityClubs,
@@ -436,6 +440,7 @@ router.get(
           municipality: place.municipality,
           threads: placeThreads.map((t) => ({
             ...t.thread,
+            authorId: getPublicUserId(t.author),
             author: sanitizePublicUserSummary(t.author),
           })),
           clubs: placeClubs,
@@ -476,6 +481,7 @@ router.get(
         success: true,
         data: {
           ...thread.thread,
+          authorId: getPublicUserId(thread.author),
           tags: tags.map((t) => t.tag),
           author: sanitizePublicUserSummary(thread.author),
           municipality: thread.municipality,

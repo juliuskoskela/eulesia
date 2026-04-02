@@ -529,7 +529,13 @@ async function runMigrations() {
     await db.execute(
       sql`CREATE INDEX IF NOT EXISTS "waitlist_created_idx" ON "waitlist" ("created_at")`,
     );
-    // 0017: bootstrap-managed admin identity key
+    // 0017: bootstrap-managed admin identity metadata
+    await db.execute(
+      sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "managed_by" varchar(50)`,
+    );
+    await db.execute(
+      sql`CREATE INDEX IF NOT EXISTS "users_managed_by_idx" ON "users" ("managed_by")`,
+    );
     await db.execute(
       sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "managed_key" varchar(100)`,
     );

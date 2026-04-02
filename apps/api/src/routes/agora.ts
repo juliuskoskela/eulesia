@@ -27,6 +27,7 @@ import { io } from "../index.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
 import {
+  getPublicUserId,
   getPublicAccountName,
   sanitizePublicUserSummary,
 } from "../utils/operatorAccounts.js";
@@ -385,6 +386,7 @@ router.get(
       data: {
         items: filteredThreads.map(({ thread, author, municipality }) => ({
           ...thread,
+          authorId: getPublicUserId(author),
           tags: tagsByThread[thread.id] || [],
           author: sanitizePublicUserSummary(author),
           municipality,
@@ -566,6 +568,9 @@ router.get(
       success: true,
       data: {
         ...threadData.thread,
+        authorId: getPublicUserId(threadData.author, {
+          preserveIdForUserId: userId,
+        }),
         editorName,
         tags: tags.map((t) => t.tag),
         author: sanitizePublicUserSummary(threadData.author, {
@@ -582,7 +587,9 @@ router.get(
               id: comment.id,
               threadId: comment.threadId,
               parentId: comment.parentId,
-              authorId: comment.authorId,
+              authorId: getPublicUserId(author, {
+                preserveIdForUserId: userId,
+              }),
               content: "",
               contentHtml: null,
               score: 0,
@@ -595,6 +602,9 @@ router.get(
           }
           return {
             ...comment,
+            authorId: getPublicUserId(author, {
+              preserveIdForUserId: userId,
+            }),
             author: sanitizePublicUserSummary(author, {
               preserveIdForUserId: userId,
             }),
@@ -1625,6 +1635,7 @@ router.get(
         institution: topicInfo || null,
         items: threadList.map(({ thread, author, municipality }) => ({
           ...thread,
+          authorId: getPublicUserId(author),
           tags: tagsByThread[thread.id] || [],
           author: sanitizePublicUserSummary(author),
           municipality,

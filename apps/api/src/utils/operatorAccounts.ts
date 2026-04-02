@@ -50,6 +50,23 @@ export function canViewPublicUserProfile(
   return Boolean(account?.id) && !isSopsManagedOperatorAccount(account);
 }
 
+export function getPublicUserId(
+  account: Pick<PublicUserSummaryLike, "id" | "managedBy"> | null | undefined,
+  options?: SanitizePublicUserSummaryOptions,
+): string | null {
+  if (!account) {
+    return null;
+  }
+
+  if (isSopsManagedOperatorAccount(account)) {
+    return shouldPreservePublicUserSummaryId(account, options)
+      ? (account.id ?? null)
+      : null;
+  }
+
+  return account.id ?? null;
+}
+
 export function getPublicAccountName(
   account: Pick<PublicUserSummaryLike, "managedBy" | "name"> | null | undefined,
   fallback = "Unknown",
@@ -117,19 +134,17 @@ export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
   }
 
   const { managedBy: _managedBy, ...publicUser } = account;
-  const preserveId = shouldPreservePublicUserSummaryId(account, options);
-
   if (!isSopsManagedOperatorAccount(account)) {
     return {
       ...publicUser,
-      id: publicUser.id ?? null,
+      id: getPublicUserId(account, options),
       canViewProfile: canViewPublicUserProfile(account),
     } as SanitizedPublicUserSummary<T>;
   }
 
   return {
     ...publicUser,
-    id: preserveId ? (publicUser.id ?? null) : null,
+    id: getPublicUserId(account, options),
     canViewProfile: false,
     name: MANAGED_OPERATOR_PUBLIC_NAME,
     avatarUrl: null,

@@ -23,6 +23,7 @@ import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
 import {
   canViewPublicUserProfile,
+  getPublicUserId,
   isSopsManagedOperatorAccount,
   sanitizePublicUserSummary,
 } from "../utils/operatorAccounts.js";
@@ -360,7 +361,11 @@ router.get(
               return {
                 id: message.id,
                 roomId: message.roomId,
-                authorId: message.authorId,
+                authorId: shouldSanitizeUserSummaries
+                  ? getPublicUserId(author, {
+                      preserveIdForUserId: currentUserId,
+                    })
+                  : message.authorId,
                 content: "",
                 contentHtml: null,
                 createdAt: message.createdAt,
@@ -371,6 +376,11 @@ router.get(
             }
             return {
               ...message,
+              authorId: shouldSanitizeUserSummaries
+                ? getPublicUserId(author, {
+                    preserveIdForUserId: currentUserId,
+                  })
+                : message.authorId,
               author: formatUserSummary(author, {
                 publicView: shouldSanitizeUserSummaries,
                 preserveIdForUserId: currentUserId,
@@ -532,6 +542,7 @@ router.post(
 
     const broadcastMessageData = {
       ...message,
+      authorId: publicView ? getPublicUserId(author) : message.authorId,
       author: formatUserSummary(author, {
         publicView,
       }),
@@ -539,6 +550,11 @@ router.post(
 
     const responseMessageData = {
       ...message,
+      authorId: publicView
+        ? getPublicUserId(author, {
+            preserveIdForUserId: userId,
+          })
+        : message.authorId,
       author: formatUserSummary(author, {
         publicView,
         preserveIdForUserId: userId,
@@ -546,9 +562,13 @@ router.post(
     };
 
     // Broadcast to room via Socket.IO
-    io.to(`room:${roomId}`).emit("new_room_message", {
+    io.to(`room:${roomId}`).except(`user:${userId}`).emit("new_room_message", {
       roomId,
       message: broadcastMessageData,
+    });
+    io.to(`user:${userId}`).emit("new_room_message", {
+      roomId,
+      message: responseMessageData,
     });
 
     res.status(201).json({
