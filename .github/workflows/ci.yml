@@ -254,7 +254,8 @@ jobs:
 
             wait_for "Frontend" 30 "curl -sf http://localhost:5174 >/dev/null 2>&1"
 
-            # Run Playwright
+            # Install Playwright browser and run tests
+            npx playwright install chromium
             npx playwright test
           '
 
