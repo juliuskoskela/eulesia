@@ -46,6 +46,7 @@
             config.packages.ci-check
             config.packages.generate-idura-jwks
             inputs.nixos-anywhere.packages.${pkgs.system}.nixos-anywhere
+            playwrightBrowsers
           ];
 
         shellHook = ''
@@ -91,6 +92,7 @@
             pkgs.gnumake
             pkgs.gcc
             pkgs.nodePackages.node-gyp
+            playwrightBrowsers
           ];
         shellHook = ''
           export PLAYWRIGHT_BROWSERS_PATH="${playwrightBrowsers}"
