@@ -223,7 +223,7 @@ jobs:
 
             # Install deps and run migrations
             npm ci
-            npm run db:push --workspace=@eulesia/api
+            npx --workspace=@eulesia/api drizzle-kit push --force
 
             # Start API
             npm run dev --workspace=@eulesia/api &
