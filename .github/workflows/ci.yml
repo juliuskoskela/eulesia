@@ -188,7 +188,26 @@ jobs:
             API_PID=""
             WEB_PID=""
 
+            wait_for() {
+              local name="$1" max="$2"
+              shift 2
+              for i in $(seq 1 "$max"); do
+                if eval "$@"; then
+                  echo "$name is ready"
+                  return 0
+                fi
+                sleep 1
+              done
+              echo "::error::$name did not become ready in ${max}s"
+              return 1
+            }
+
             cleanup() {
+              echo "=== Debug: service health ==="
+              curl -sv "$API_URL/api/v1/health" 2>&1 || true
+              curl -sv "http://localhost:5174" 2>&1 | head -5 || true
+              curl -sv "$EULESIA_MEILI_URL/health" 2>&1 || true
+
               for pid in $WEB_PID $API_PID $MEILI_PID $PG_PID; do
                 [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
               done
@@ -204,10 +223,7 @@ jobs:
             postgres -D "$EULESIA_PGDATA_DIR" -F -h 127.0.0.1 -p "$EULESIA_PGPORT" -k "$EULESIA_DEV_STATE_DIR" &
             PG_PID=$!
 
-            for i in $(seq 1 30); do
-              pg_isready -h 127.0.0.1 -p "$EULESIA_PGPORT" >/dev/null 2>&1 && break
-              sleep 1
-            done
+            wait_for "PostgreSQL" 30 "pg_isready -h 127.0.0.1 -p $EULESIA_PGPORT >/dev/null 2>&1"
             createdb -h 127.0.0.1 -p "$EULESIA_PGPORT" -U "$EULESIA_DB_USER" "$EULESIA_DB_NAME"
 
             # Start Meilisearch
@@ -216,35 +232,30 @@ jobs:
               --no-analytics &
             MEILI_PID=$!
 
-            for i in $(seq 1 30); do
-              curl -sf "$EULESIA_MEILI_URL/health" >/dev/null 2>&1 && break
-              sleep 1
-            done
+            wait_for "Meilisearch" 30 "curl -sf $EULESIA_MEILI_URL/health >/dev/null 2>&1"
 
             # Install deps and run migrations
             npm ci
             npx --workspace=@eulesia/api drizzle-kit push --force
 
+            # Seed E2E invite code for test user registration
+            psql -h 127.0.0.1 -p "$EULESIA_PGPORT" -U "$EULESIA_DB_USER" -d "$EULESIA_DB_NAME" -c \
+              "INSERT INTO invite_codes (code, status) VALUES ('\''E2ETEST'\'', '\''available'\'')"
+
             # Start API
             npm run dev --workspace=@eulesia/api &
             API_PID=$!
 
-            for i in $(seq 1 30); do
-              curl -sf "$API_URL/api/v1/health" >/dev/null 2>&1 && break
-              sleep 1
-            done
+            wait_for "API" 30 "curl -sf $API_URL/api/v1/health >/dev/null 2>&1"
 
             # Start frontend on port 5174
             npx vite --port 5174 &
             WEB_PID=$!
 
-            for i in $(seq 1 15); do
-              curl -sf "http://localhost:5174" >/dev/null 2>&1 && break
-              sleep 1
-            done
+            wait_for "Frontend" 30 "curl -sf http://localhost:5174 >/dev/null 2>&1"
 
             # Run Playwright
-            npx playwright test --reporter=list,html
+            npx playwright test
           '
 
       - name: Upload Playwright report

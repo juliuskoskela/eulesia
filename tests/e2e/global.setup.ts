@@ -9,6 +9,7 @@ const TEST_USER = {
   username: "e2e_testuser",
   password: "testpass123",
   name: "E2E Test User",
+  inviteCode: process.env.E2E_INVITE_CODE || "E2ETEST",
 };
 
 const TEST_ADMIN = {
@@ -51,6 +52,7 @@ async function setupUserAuth(): Promise<void> {
         username: TEST_USER.username,
         password: TEST_USER.password,
         name: TEST_USER.name,
+        inviteCode: TEST_USER.inviteCode,
       },
     });
     if (!res.ok()) {
