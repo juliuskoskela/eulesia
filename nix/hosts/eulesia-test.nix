@@ -11,6 +11,12 @@
     ../modules/eulesia.nix
   ];
 
+  nix.gc = {
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 14d";
+  };
+
   networking = {
     hostName = "eulesia-test";
     useDHCP = lib.mkDefault true;
