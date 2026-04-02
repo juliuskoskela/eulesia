@@ -177,16 +177,25 @@ jobs:
 
             mkdir -p "$EULESIA_DEV_STATE_DIR" "$UPLOAD_DIR" "$EULESIA_MEILI_DATA_DIR"
 
+            PG_PID=""
+            MEILI_PID=""
+            API_PID=""
+            WEB_PID=""
+
             cleanup() {
-              kill $PG_PID $MEILI_PID $API_PID $WEB_PID 2>/dev/null || true
-              wait $PG_PID $MEILI_PID $API_PID $WEB_PID 2>/dev/null || true
+              for pid in $WEB_PID $API_PID $MEILI_PID $PG_PID; do
+                [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+              done
+              for pid in $WEB_PID $API_PID $MEILI_PID $PG_PID; do
+                [ -n "$pid" ] && wait "$pid" 2>/dev/null || true
+              done
               rm -rf "$EULESIA_DEV_STATE_DIR"
             }
             trap cleanup EXIT
 
             # Bootstrap PostgreSQL
             initdb --username="$EULESIA_DB_USER" --auth-local=trust --auth-host=trust --pgdata="$EULESIA_PGDATA_DIR" >/dev/null
-            postgres -D "$EULESIA_PGDATA_DIR" -F -h 127.0.0.1 -p "$EULESIA_PGPORT" &
+            postgres -D "$EULESIA_PGDATA_DIR" -F -h 127.0.0.1 -p "$EULESIA_PGPORT" -k "$EULESIA_DEV_STATE_DIR" &
             PG_PID=$!
 
             for i in $(seq 1 30); do
