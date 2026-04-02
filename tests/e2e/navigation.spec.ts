@@ -10,8 +10,10 @@ test.describe("Navigation", () => {
 
   test("protected routes redirect unauthenticated users", async ({ page }) => {
     await page.goto("/profile");
-    // Should redirect to login
-    await expect(page).toHaveURL(/^\/$|\/login/);
+    // App redirects unauthenticated users to "/" (login page)
+    await page.waitForURL("/");
+    // Verify login page content is visible
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
   });
 
   test("authenticated user can reach protected routes", async ({
