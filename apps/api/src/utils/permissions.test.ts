@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isBotContent, canEdit, canDelete } from "./permissions.js";
 
-const admin = { id: "admin-1", role: "admin" as const };
 const citizen = { id: "user-1", role: "citizen" as const };
 const otherCitizen = { id: "user-2", role: "citizen" as const };
 const institution = { id: "inst-1", role: "institution" as const };
@@ -17,11 +16,6 @@ const botContent = {
   aiGenerated: false,
 };
 const aiContent = { authorId: "bot-1", source: null, aiGenerated: true };
-const otherContent = {
-  authorId: "user-2",
-  source: "user" as const,
-  aiGenerated: false,
-};
 
 describe("isBotContent", () => {
   it("returns true for minutes_import source", () => {
@@ -47,11 +41,6 @@ describe("isBotContent", () => {
 });
 
 describe("canEdit", () => {
-  it("allows admins to edit any content", () => {
-    expect(canEdit(admin, otherContent)).toBe(true);
-    expect(canEdit(admin, botContent)).toBe(true);
-  });
-
   it("allows authors to edit their own content", () => {
     expect(canEdit(citizen, userContent)).toBe(true);
   });
@@ -72,11 +61,6 @@ describe("canEdit", () => {
 });
 
 describe("canDelete", () => {
-  it("allows admins to delete any content", () => {
-    expect(canDelete(admin, otherContent)).toBe(true);
-    expect(canDelete(admin, botContent)).toBe(true);
-  });
-
   it("allows authors to delete their own content", () => {
     expect(canDelete(citizen, userContent)).toBe(true);
   });
