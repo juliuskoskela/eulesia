@@ -20,6 +20,8 @@ export function isBotContent(content: ContentOwnership): boolean {
 
 /** Check if user can edit this content */
 export function canEdit(user: UserContext, content: ContentOwnership): boolean {
+  // Admins can edit any content
+  if (user.role === "admin") return true;
   // Authors can edit their own content
   if (content.authorId === user.id) return true;
   // Bot content can be edited by any logged-in user
@@ -32,6 +34,8 @@ export function canDelete(
   user: UserContext,
   content: ContentOwnership,
 ): boolean {
+  // Admins can delete any content
+  if (user.role === "admin") return true;
   // Authors can delete their own content
   if (content.authorId === user.id) return true;
   // Bot content cannot be deleted (only edited)
