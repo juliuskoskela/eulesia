@@ -568,7 +568,9 @@ router.get(
         ...threadData.thread,
         editorName,
         tags: tags.map((t) => t.tag),
-        author: sanitizePublicUserSummary(threadData.author),
+        author: sanitizePublicUserSummary(threadData.author, {
+          preserveIdForUserId: userId,
+        }),
         municipality: threadData.municipality,
         userVote: threadUserVote,
         isBookmarked,
@@ -593,7 +595,9 @@ router.get(
           }
           return {
             ...comment,
-            author: sanitizePublicUserSummary(author),
+            author: sanitizePublicUserSummary(author, {
+              preserveIdForUserId: userId,
+            }),
             userVote: userVotes[comment.id] || 0,
           };
         }),

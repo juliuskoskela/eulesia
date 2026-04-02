@@ -293,6 +293,7 @@ export const users = pgTable(
     avatarUrl: varchar("avatar_url", { length: 500 }),
     role: userRoleEnum("role").default("citizen"),
     managedBy: varchar("managed_by", { length: 50 }),
+    managedKey: varchar("managed_key", { length: 100 }),
     institutionType: institutionTypeEnum("institution_type"),
     institutionName: varchar("institution_name", { length: 255 }),
     businessId: varchar("business_id", { length: 50 }), // Y-tunnus (FI), org.nr (SE), etc.
@@ -339,6 +340,10 @@ export const users = pgTable(
     usernameIdx: index("users_username_idx").on(table.username),
     rpSubjectIdx: uniqueIndex("users_rp_subject_idx").on(table.rpSubject),
     managedByIdx: index("users_managed_by_idx").on(table.managedBy),
+    managedKeyUniqueIdx: uniqueIndex("users_managed_key_unique_idx").on(
+      table.managedBy,
+      table.managedKey,
+    ),
     municipalityIdx: index("users_municipality_idx").on(table.municipalityId),
     invitedByIdx: index("users_invited_by_idx").on(table.invitedBy),
   }),

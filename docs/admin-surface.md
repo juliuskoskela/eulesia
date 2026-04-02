@@ -114,11 +114,13 @@ Example:
 ```json
 [
   {
+    "managedKey": "ops_elli",
     "username": "ops_elli",
     "name": "Elli Esimerkki",
     "passwordHash": "$argon2id$..."
   },
   {
+    "managedKey": "ops_matti",
     "username": "ops_matti",
     "email": "ops.matti@example.invalid",
     "name": "Matti Malli",
@@ -129,6 +131,7 @@ Example:
 
 Notes:
 
+- `managedKey` is required and must stay stable for the lifetime of that managed operator identity
 - `passwordHash` is preferred over plaintext passwords
 - `passwordHash` is a seed password, not an always-authoritative password sync target
 - `email` is optional; omitting it keeps the account out of the magic-link flow entirely
@@ -151,6 +154,7 @@ This is the current operational procedure for managing bootstrap-managed admin a
    ```
 
 3. Add a new entry to `secrets/<env>/admin-accounts.json.enc` with `username`, optional `email`, `name`, and `passwordHash`.
+   Also assign a stable `managedKey` such as `ops_juliuskoskela`.
 4. Re-encrypt and commit the updated secret file.
 5. Deploy or rebuild the target host so `systemd.services.eulesia-api.preStart` runs the bootstrap sync.
 6. Give the operator the plaintext seed password through the normal secure out-of-band channel.
@@ -182,13 +186,14 @@ That recovery rebuild forces the seed password back onto the account and revokes
 
 The bootstrap owns these fields:
 
+- `managedKey`
 - `username`
 - `email`
 - `name`
 - `role = "admin"`
 - `managedBy = "sops_admin"`
 
-To change those fields, edit the secret entry and rebuild the host. In-app profile editing does not own them for bootstrap-managed accounts.
+To change those fields, edit the secret entry and rebuild the host. Keep `managedKey` stable when renaming `username` or `email`; it is the bootstrap reconciliation key. In-app profile editing does not own them for bootstrap-managed accounts.
 
 ### Deprovision an Admin Account
 

@@ -257,6 +257,35 @@ export function DMConversationPage() {
   }
 
   const { otherUser, messages } = conversationData;
+  const canLinkToOtherUserProfile =
+    Boolean(otherUser?.id) && (otherUser?.canViewProfile ?? true);
+  const otherUserHeader = otherUser ? (
+    <>
+      <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+        {otherUser.avatarUrl ? (
+          <img
+            src={otherUser.avatarUrl}
+            alt={otherUser.name}
+            className="w-full h-full rounded-full object-cover"
+          />
+        ) : (
+          <span className="text-white text-sm font-bold">
+            {getAvatarInitials(otherUser.name)}
+          </span>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h1 className="text-lg font-bold text-white truncate">
+          {otherUser.name}
+        </h1>
+        {otherUser.institutionName && (
+          <p className="text-sm text-white/70 truncate">
+            {otherUser.institutionName}
+          </p>
+        )}
+      </div>
+    </>
+  ) : null;
 
   return (
     <Layout>
@@ -282,35 +311,18 @@ export function DMConversationPage() {
             >
               <ArrowLeft className="w-5 h-5 text-white" />
             </button>
-            {otherUser && (
+            {otherUser && canLinkToOtherUserProfile && (
               <Link
                 to={`/user/${otherUser.id}`}
                 className="flex items-center gap-3 flex-1 min-w-0"
               >
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  {otherUser.avatarUrl ? (
-                    <img
-                      src={otherUser.avatarUrl}
-                      alt={otherUser.name}
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-white text-sm font-bold">
-                      {getAvatarInitials(otherUser.name)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-lg font-bold text-white truncate">
-                    {otherUser.name}
-                  </h1>
-                  {otherUser.institutionName && (
-                    <p className="text-sm text-white/70 truncate">
-                      {otherUser.institutionName}
-                    </p>
-                  )}
-                </div>
+                {otherUserHeader}
               </Link>
+            )}
+            {otherUser && !canLinkToOtherUserProfile && (
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                {otherUserHeader}
+              </div>
             )}
           </div>
         </div>

@@ -114,12 +114,14 @@ Example:
 ```json
 [
   {
+    "managedKey": "ops_elli",
     "username": "ops_elli",
     "email": "ops.elli@example.invalid",
     "name": "Elli Esimerkki",
     "passwordHash": "$argon2id$..."
   },
   {
+    "managedKey": "ops_matti",
     "username": "ops_matti",
     "email": "ops.matti@example.invalid",
     "name": "Matti Malli",
@@ -138,13 +140,16 @@ Why password hashes:
 
 The implemented schema is:
 
+- `managedKey`
 - `username`
 - optional `email`
 - `name`
 - `passwordHash`
 - optional `reseedPassword`
 
-Runtime operator ownership is not declared in the secret payload. It is applied by bootstrap as `users.managedBy = "sops_admin"`.
+`managedKey` is the immutable reconciliation key for that bootstrap-managed identity. Keep it stable when renaming `username` or `email`. Changing `managedKey` intentionally creates a different managed identity.
+
+Runtime operator ownership is still applied by bootstrap as `users.managedBy = "sops_admin"`.
 
 For the current operational runbook, see [Admin Surface](./admin-surface.md).
 
@@ -171,10 +176,11 @@ The bootstrap script should be idempotent and conservative.
 Recommended behavior:
 
 1. Match managed admin accounts by stable key:
-   - preferably `email`
-   - secondarily `username`
+   - first `managedKey`
+   - then legacy `email` / `username` matches while older rows are being backfilled
 2. If absent, create the account.
 3. If present, update only managed fields:
+   - `managedKey`
    - `email`
    - `username`
    - `name`

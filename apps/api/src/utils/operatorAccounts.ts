@@ -12,6 +12,7 @@ type PublicUserSummaryLike = OperatorAccountLike & {
   id?: string | null;
   name?: string | null;
   avatarUrl?: string | null;
+  canViewProfile?: boolean | null;
   role?: "citizen" | "institution" | "admin" | null;
   institutionType?: string | null;
   institutionName?: string | null;
@@ -20,9 +21,10 @@ type PublicUserSummaryLike = OperatorAccountLike & {
 
 type SanitizedPublicUserSummary<T extends PublicUserSummaryLike> = Omit<
   T,
-  "managedBy" | "id"
+  "managedBy" | "id" | "canViewProfile"
 > & {
   id: string | null;
+  canViewProfile: boolean;
 };
 
 type SanitizePublicUserSummaryOptions = {
@@ -40,6 +42,12 @@ export function isPubliclyDiscoverableAccount(
   account: OperatorAccountLike,
 ): boolean {
   return !isSopsManagedOperatorAccount(account);
+}
+
+export function canViewPublicUserProfile(
+  account: Pick<PublicUserSummaryLike, "id" | "managedBy"> | null | undefined,
+): boolean {
+  return Boolean(account?.id) && !isSopsManagedOperatorAccount(account);
 }
 
 export function getPublicAccountName(
@@ -115,12 +123,14 @@ export function sanitizePublicUserSummary<T extends PublicUserSummaryLike>(
     return {
       ...publicUser,
       id: publicUser.id ?? null,
+      canViewProfile: canViewPublicUserProfile(account),
     } as SanitizedPublicUserSummary<T>;
   }
 
   return {
     ...publicUser,
     id: preserveId ? (publicUser.id ?? null) : null,
+    canViewProfile: false,
     name: MANAGED_OPERATOR_PUBLIC_NAME,
     avatarUrl: null,
     role: "citizen",

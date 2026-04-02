@@ -6,6 +6,7 @@ export function transformAuthor(author: UserSummary) {
     name: author.name,
     role: author.role,
     verified: author.identityVerified ?? false,
+    canViewProfile: author.canViewProfile ?? Boolean(author.id),
     avatarUrl: author.avatarUrl,
     avatarInitials: author.name
       .split(" ")

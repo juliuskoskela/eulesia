@@ -10,6 +10,7 @@ export interface User {
   name: string;
   role: UserRole;
   verified: boolean;
+  canViewProfile?: boolean;
   municipality?: string;
   avatarUrl?: string;
   avatarInitials: string;

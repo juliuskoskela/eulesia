@@ -1,10 +1,11 @@
 import { readFile } from "fs/promises";
-import { eq, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { db, sessions, users } from "../db/index.js";
 import {
   parseBootstrapAdminAccounts,
   type BootstrapAdminAccount,
   resolveBootstrapAdminPassword,
+  selectExistingBootstrapAdmin,
 } from "../services/adminAccounts.js";
 import { INDEXES, deleteDocument } from "../services/search/meilisearch.js";
 import {
@@ -19,26 +20,23 @@ async function findExistingAccount(account: BootstrapAdminAccount) {
     .where(
       account.email
         ? or(
+            and(
+              eq(users.managedBy, SOPS_ADMIN_ACCOUNT_MANAGER),
+              eq(users.managedKey, account.managedKey),
+            ),
             eq(users.email, account.email),
             eq(users.username, account.username),
           )
-        : eq(users.username, account.username),
+        : or(
+            and(
+              eq(users.managedBy, SOPS_ADMIN_ACCOUNT_MANAGER),
+              eq(users.managedKey, account.managedKey),
+            ),
+            eq(users.username, account.username),
+          ),
     );
 
-  const emailMatch = account.email
-    ? matches.find((candidate) => candidate.email === account.email)
-    : undefined;
-  const usernameMatch = matches.find(
-    (candidate) => candidate.username === account.username,
-  );
-
-  if (emailMatch && usernameMatch && emailMatch.id !== usernameMatch.id) {
-    throw new Error(
-      `Bootstrap admin ${account.username} matches different existing users by email and username`,
-    );
-  }
-
-  return emailMatch ?? usernameMatch ?? null;
+  return selectExistingBootstrapAdmin(account, matches);
 }
 
 async function hideFromUserSearch(userId: string): Promise<void> {
@@ -57,6 +55,7 @@ async function upsertBootstrapAdmin(account: BootstrapAdminAccount) {
     name: account.name,
     role: "admin" as const,
     managedBy: SOPS_ADMIN_ACCOUNT_MANAGER,
+    managedKey: account.managedKey,
     institutionType: null,
     institutionName: null,
     municipalityId: null,

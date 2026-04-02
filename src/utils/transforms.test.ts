@@ -45,6 +45,7 @@ describe("transformAuthor", () => {
     expect(result.name).toBe("Maria Virtanen");
     expect(result.role).toBe("citizen");
     expect(result.verified).toBe(true);
+    expect(result.canViewProfile).toBe(true);
     expect(result.avatarInitials).toBe("MV");
     expect(result.avatarUrl).toBe("https://example.com/avatar.jpg");
   });
@@ -71,6 +72,15 @@ describe("transformAuthor", () => {
     expect(result.institutionType).toBe("municipality");
     expect(result.institutionName).toBe("Helsingin kaupunki");
     expect(result.avatarInitials).toBe("CO");
+  });
+
+  it("preserves an explicit non-linkable profile flag", () => {
+    const result = transformAuthor({
+      ...mockAuthor,
+      canViewProfile: false,
+    });
+
+    expect(result.canViewProfile).toBe(false);
   });
 });
 

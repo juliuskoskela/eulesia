@@ -62,6 +62,7 @@ function transformUser(user: UserSummary) {
     name: user.name,
     role: user.role,
     verified: user.identityVerified ?? false,
+    canViewProfile: user.canViewProfile ?? Boolean(user.id),
     avatarUrl: user.avatarUrl,
     avatarInitials: user.name
       .split(" ")
@@ -932,7 +933,7 @@ export function ClubViewPage() {
                   key={member.id ?? `member-${index}`}
                   className="relative flex items-center gap-1.5 px-2 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-full text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
                 >
-                  {member.id ? (
+                  {member.id && (member.canViewProfile ?? true) ? (
                     <Link
                       to={`/home/${member.id}`}
                       className="flex items-center gap-1.5"

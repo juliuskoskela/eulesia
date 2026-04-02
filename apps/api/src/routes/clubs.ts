@@ -19,7 +19,10 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { notify } from "../services/notify.js";
 import { indexClub } from "../services/search/index.js";
 import type { AuthenticatedRequest } from "../types/index.js";
-import { sanitizePublicUserSummary } from "../utils/operatorAccounts.js";
+import {
+  canViewPublicUserProfile,
+  sanitizePublicUserSummary,
+} from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -102,7 +105,10 @@ function formatClubUserSummary(
   }
 
   const { managedBy: _managedBy, ...privateUserSummary } = user;
-  return privateUserSummary;
+  return {
+    ...privateUserSummary,
+    canViewProfile: canViewPublicUserProfile(user),
+  };
 }
 
 // GET /clubs - List clubs (public + user's closed clubs)

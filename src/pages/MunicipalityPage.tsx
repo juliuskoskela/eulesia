@@ -23,7 +23,7 @@ function transformThread(thread: ApiThread) {
     municipalityId: thread.municipality?.id,
     municipalityName: thread.municipality?.name,
     tags: thread.tags,
-    authorId: thread.author.id ?? "",
+    authorId: thread.authorId ?? thread.author.id ?? "",
     content: thread.content,
     contentHtml: thread.contentHtml,
     createdAt: thread.createdAt,
@@ -43,6 +43,7 @@ function transformAuthor(author: UserSummary) {
     name: author.name,
     role: author.role,
     verified: author.identityVerified ?? false,
+    canViewProfile: author.canViewProfile ?? Boolean(author.id),
     avatarUrl: author.avatarUrl,
     avatarInitials: author.name
       .split(" ")

@@ -14,7 +14,7 @@ export function ActorBadge({
   size = "md",
 }: ActorBadgeProps) {
   const isInstitution = user.role === "institution";
-  const canLinkToProfile = Boolean(user.id);
+  const canLinkToProfile = Boolean(user.id) && (user.canViewProfile ?? true);
 
   const sizeClasses = {
     sm: "w-6 h-6 text-xs",

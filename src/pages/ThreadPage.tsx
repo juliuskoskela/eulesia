@@ -134,7 +134,8 @@ export function ThreadPage() {
   // Thread edit/delete
   const isBotThread =
     thread?.source === "minutes_import" || thread?.aiGenerated;
-  const isThreadAuthor = currentUser?.id === thread?.author?.id;
+  const isThreadAuthor =
+    currentUser?.id === (thread?.authorId ?? thread?.author?.id);
   const isAdmin = currentUser?.role === "admin";
   const canEditThread = isAdmin || isThreadAuthor || isBotThread;
   const canDeleteThread = isAdmin || isThreadAuthor;

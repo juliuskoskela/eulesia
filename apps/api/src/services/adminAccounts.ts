@@ -1,6 +1,13 @@
 import { z } from "zod";
+import { SOPS_ADMIN_ACCOUNT_MANAGER } from "../utils/operatorAccounts.js";
 
 export const bootstrapAdminAccountSchema = z.object({
+  managedKey: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-zA-Z0-9_-]+$/)
+    .transform((value) => value.toLowerCase()),
   username: z
     .string()
     .min(3)
@@ -19,6 +26,13 @@ export const bootstrapAdminAccountSchema = z.object({
 });
 
 export type BootstrapAdminAccount = z.infer<typeof bootstrapAdminAccountSchema>;
+export interface BootstrapAdminAccountMatch {
+  id: string;
+  email: string | null;
+  username: string;
+  managedBy: string | null;
+  managedKey: string | null;
+}
 
 interface ResolveBootstrapAdminPasswordInput {
   existingPasswordHash?: string | null;
@@ -56,6 +70,53 @@ export function resolveBootstrapAdminPassword({
   };
 }
 
+export function selectExistingBootstrapAdmin<
+  T extends BootstrapAdminAccountMatch,
+>(account: BootstrapAdminAccount, candidates: T[]): T | null {
+  const managedKeyMatches = candidates.filter(
+    (candidate) =>
+      candidate.managedBy === SOPS_ADMIN_ACCOUNT_MANAGER &&
+      candidate.managedKey === account.managedKey,
+  );
+  if (managedKeyMatches.length > 1) {
+    throw new Error(
+      `Multiple managed bootstrap admins already use key ${account.managedKey}`,
+    );
+  }
+
+  const managedKeyMatch = managedKeyMatches[0];
+  const emailMatch = account.email
+    ? candidates.find((candidate) => candidate.email === account.email)
+    : undefined;
+  const usernameMatch = candidates.find(
+    (candidate) => candidate.username === account.username,
+  );
+
+  if (managedKeyMatch) {
+    if (emailMatch && emailMatch.id !== managedKeyMatch.id) {
+      throw new Error(
+        `Bootstrap admin ${account.username} managed key ${account.managedKey} conflicts with existing email ${account.email}`,
+      );
+    }
+
+    if (usernameMatch && usernameMatch.id !== managedKeyMatch.id) {
+      throw new Error(
+        `Bootstrap admin ${account.username} managed key ${account.managedKey} conflicts with existing username ${account.username}`,
+      );
+    }
+
+    return managedKeyMatch;
+  }
+
+  if (emailMatch && usernameMatch && emailMatch.id !== usernameMatch.id) {
+    throw new Error(
+      `Bootstrap admin ${account.username} matches different existing users by email and username`,
+    );
+  }
+
+  return emailMatch ?? usernameMatch ?? null;
+}
+
 export function parseBootstrapAdminAccounts(
   raw: string,
 ): BootstrapAdminAccount[] {
@@ -70,10 +131,18 @@ export function parseBootstrapAdminAccounts(
   }
 
   const accounts = z.array(bootstrapAdminAccountSchema).parse(parsedJson);
+  const managedKeys = new Set<string>();
   const usernames = new Set<string>();
   const emails = new Set<string>();
 
   for (const account of accounts) {
+    if (managedKeys.has(account.managedKey)) {
+      throw new Error(
+        `Duplicate bootstrap admin managed key: ${account.managedKey}`,
+      );
+    }
+    managedKeys.add(account.managedKey);
+
     if (usernames.has(account.username)) {
       throw new Error(
         `Duplicate bootstrap admin username: ${account.username}`,

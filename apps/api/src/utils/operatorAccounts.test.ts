@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MANAGED_OPERATOR_PUBLIC_NAME,
+  canViewPublicUserProfile,
   getPublicAccountName,
   isPubliclyDiscoverableAccount,
   isSopsManagedOperatorAccount,
@@ -37,6 +38,7 @@ describe("operator account helpers", () => {
       }),
     ).toEqual({
       id: null,
+      canViewProfile: false,
       name: MANAGED_OPERATOR_PUBLIC_NAME,
       avatarUrl: null,
       role: "citizen",
@@ -63,6 +65,7 @@ describe("operator account helpers", () => {
       ),
     ).toEqual({
       id: "user-1",
+      canViewProfile: false,
       name: MANAGED_OPERATOR_PUBLIC_NAME,
       avatarUrl: null,
       role: "citizen",
@@ -89,6 +92,7 @@ describe("operator account helpers", () => {
       ),
     ).toEqual({
       id: "user-1",
+      canViewProfile: false,
       name: MANAGED_OPERATOR_PUBLIC_NAME,
       avatarUrl: null,
       role: "citizen",
@@ -109,10 +113,27 @@ describe("operator account helpers", () => {
       }),
     ).toEqual({
       id: "user-2",
+      canViewProfile: true,
       name: "Citizen User",
       avatarUrl: null,
       role: "citizen",
     });
+  });
+
+  it("marks managed operator accounts as non-linkable even when their id is preserved", () => {
+    expect(
+      canViewPublicUserProfile({
+        id: "user-1",
+        managedBy: "sops_admin",
+      }),
+    ).toBe(false);
+
+    expect(
+      canViewPublicUserProfile({
+        id: "user-2",
+        managedBy: null,
+      }),
+    ).toBe(true);
   });
 
   it("scrubs public display names for SOPS-managed operator accounts", () => {

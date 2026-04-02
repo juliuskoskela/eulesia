@@ -17,6 +17,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { io } from "../index.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
+import { canViewPublicUserProfile } from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -35,6 +36,7 @@ function formatUserSummary(user: typeof users.$inferSelect) {
     id: user.id,
     name: user.name,
     avatarUrl: user.avatarUrl,
+    canViewProfile: canViewPublicUserProfile(user),
     role: user.role,
     institutionType: user.institutionType,
     institutionName: user.institutionName,

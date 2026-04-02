@@ -84,4 +84,18 @@ describe("ActorBadge", () => {
     expect(screen.getByText("Eulesia Operator")).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
+
+  it("does not render a profile link when the profile is intentionally hidden", () => {
+    renderWithRouter(
+      <ActorBadge
+        user={{
+          ...mockCitizen,
+          canViewProfile: false,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Maria Virtanen")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
 });

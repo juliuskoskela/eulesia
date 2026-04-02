@@ -1317,6 +1317,7 @@ export interface Thread {
   scope: "local" | "national" | "european";
   tags: string[];
   author: UserSummary;
+  authorId?: string | null;
   municipality?: Municipality;
   institutionalContext?: InstitutionalContext;
   replyCount: number;
@@ -1413,6 +1414,7 @@ export interface UserSummary {
   id: string | null;
   name: string;
   avatarUrl?: string;
+  canViewProfile?: boolean;
   role: "citizen" | "institution" | "admin";
   institutionType?: string;
   institutionName?: string;
@@ -1449,6 +1451,7 @@ export interface ClubMember {
   id: string | null;
   name: string;
   avatarUrl?: string;
+  canViewProfile?: boolean;
   role: string;
 }
 

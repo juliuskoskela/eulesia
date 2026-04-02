@@ -86,6 +86,7 @@ Recommended shape:
 ```json
 [
   {
+    "managedKey": "ops_elli",
     "username": "ops_elli",
     "name": "Elli Esimerkki",
     "passwordHash": "$argon2id$..."
@@ -94,6 +95,8 @@ Recommended shape:
 ```
 
 Use pre-generated Argon2 password hashes. The runtime only needs the hash, so plaintext passwords do not need to live in the repo-managed secret set.
+
+`managedKey` is required and must remain stable for the lifetime of that managed operator identity. It is the immutable bootstrap reconciliation key, so username/email renames should keep the same `managedKey`.
 
 `email` is optional. If you omit it, the account remains password-only and cannot participate in the magic-link login flow.
 

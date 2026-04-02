@@ -22,6 +22,7 @@ import { io } from "../index.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
 import {
+  canViewPublicUserProfile,
   isSopsManagedOperatorAccount,
   sanitizePublicUserSummary,
 } from "../utils/operatorAccounts.js";
@@ -73,7 +74,10 @@ function formatUserSummary(
   }
 
   const { managedBy: _managedBy, ...privateUserSummary } = summary;
-  return privateUserSummary;
+  return {
+    ...privateUserSummary,
+    canViewProfile: canViewPublicUserProfile(summary),
+  };
 }
 
 // ============================================================
