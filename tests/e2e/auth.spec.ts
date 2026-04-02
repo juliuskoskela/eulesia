@@ -16,8 +16,8 @@ test.describe("Authentication", () => {
     await page.fill("#login-password", "wrongpassword");
     await page.locator('button[type="submit"]').click();
 
-    // Should stay on login page and show an error
-    await expect(page).toHaveURL(/^\/$|\/login/);
+    // Should stay on login page
+    await expect(page).toHaveURL(/\/($|login)/);
   });
 
   test("registration page renders", async ({ page }) => {
