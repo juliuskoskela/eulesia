@@ -46,6 +46,58 @@ describe("operator account helpers", () => {
     });
   });
 
+  it("preserves the id for managed accounts when explicitly requested", () => {
+    expect(
+      sanitizePublicUserSummary(
+        {
+          id: "user-1",
+          name: "Secret Admin",
+          avatarUrl: "https://example.com/avatar.png",
+          role: "admin" as const,
+          institutionType: "ministry",
+          institutionName: "Secret Ministry",
+          identityVerified: true,
+          managedBy: "sops_admin",
+        },
+        { preserveId: true },
+      ),
+    ).toEqual({
+      id: "user-1",
+      name: MANAGED_OPERATOR_PUBLIC_NAME,
+      avatarUrl: null,
+      role: "citizen",
+      institutionType: null,
+      institutionName: null,
+      identityVerified: false,
+    });
+  });
+
+  it("preserves the id for the current managed account without restoring the rest of the summary", () => {
+    expect(
+      sanitizePublicUserSummary(
+        {
+          id: "user-1",
+          name: "Secret Admin",
+          avatarUrl: "https://example.com/avatar.png",
+          role: "admin" as const,
+          institutionType: "ministry",
+          institutionName: "Secret Ministry",
+          identityVerified: true,
+          managedBy: "sops_admin",
+        },
+        { preserveIdForUserId: "user-1" },
+      ),
+    ).toEqual({
+      id: "user-1",
+      name: MANAGED_OPERATOR_PUBLIC_NAME,
+      avatarUrl: null,
+      role: "citizen",
+      institutionType: null,
+      institutionName: null,
+      identityVerified: false,
+    });
+  });
+
   it("keeps normal public summaries unchanged", () => {
     expect(
       sanitizePublicUserSummary({

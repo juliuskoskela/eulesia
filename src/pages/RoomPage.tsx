@@ -359,7 +359,9 @@ export function RoomPage() {
               <MessageCard
                 key={msg.id}
                 message={msg}
-                isOwnMessage={msg.author?.id === currentUser?.id}
+                isOwnMessage={
+                  (msg.authorId ?? msg.author?.id) === currentUser?.id
+                }
                 isOwnerOrAdmin={isOwner || currentUser?.role === "admin"}
                 currentUserId={currentUser?.id}
                 onEdit={(messageId, content) =>

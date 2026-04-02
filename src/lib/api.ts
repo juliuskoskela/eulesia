@@ -1398,6 +1398,7 @@ export interface Comment {
   content: string;
   contentHtml?: string;
   author: UserSummary | null;
+  authorId?: string | null;
   parentId?: string | null;
   score?: number;
   depth?: number;
@@ -1495,6 +1496,7 @@ export interface ClubThread {
   content: string;
   contentHtml?: string;
   author: UserSummary;
+  authorId?: string | null;
   isPinned: boolean;
   isLocked: boolean;
   replyCount: number;
@@ -1543,6 +1545,7 @@ export interface RoomMessage {
   content: string;
   contentHtml?: string;
   author: UserSummary | null;
+  authorId?: string | null;
   editedAt?: string | null;
   editedBy?: string | null;
   isHidden?: boolean;

@@ -53,7 +53,7 @@ const inviteSchema = z.object({
 // Helper to format user summary
 function formatUserSummary(
   user: typeof users.$inferSelect,
-  options?: { publicView?: boolean },
+  options?: { publicView?: boolean; preserveIdForUserId?: string | null },
 ) {
   const summary = {
     id: user.id,
@@ -67,7 +67,9 @@ function formatUserSummary(
   };
 
   if (options?.publicView) {
-    return sanitizePublicUserSummary(summary);
+    return sanitizePublicUserSummary(summary, {
+      preserveIdForUserId: options.preserveIdForUserId,
+    });
   }
 
   const { managedBy: _managedBy, ...privateUserSummary } = summary;
@@ -340,10 +342,12 @@ router.get(
         ...room,
         owner: formatUserSummary(owner, {
           publicView: shouldSanitizeUserSummaries,
+          preserveIdForUserId: currentUserId,
         }),
         members: members.map((member) =>
           formatUserSummary(member, {
             publicView: shouldSanitizeUserSummaries,
+            preserveIdForUserId: currentUserId,
           }),
         ),
         messages: messagesData
@@ -365,6 +369,7 @@ router.get(
               ...message,
               author: formatUserSummary(author, {
                 publicView: shouldSanitizeUserSummaries,
+                preserveIdForUserId: currentUserId,
               }),
               reactions: reactionsMap[message.id] || [],
             };
@@ -519,22 +524,32 @@ router.post(
       .where(eq(users.id, userId))
       .limit(1);
 
-    const messageData = {
+    const publicView = room.visibility === "public";
+
+    const broadcastMessageData = {
       ...message,
       author: formatUserSummary(author, {
-        publicView: room.visibility === "public",
+        publicView,
+      }),
+    };
+
+    const responseMessageData = {
+      ...message,
+      author: formatUserSummary(author, {
+        publicView,
+        preserveIdForUserId: userId,
       }),
     };
 
     // Broadcast to room via Socket.IO
     io.to(`room:${roomId}`).emit("new_room_message", {
       roomId,
-      message: messageData,
+      message: broadcastMessageData,
     });
 
     res.status(201).json({
       success: true,
-      data: messageData,
+      data: responseMessageData,
     });
   }),
 );

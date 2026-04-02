@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { transformAuthor, getAvatarInitials } from "./transforms";
-import type { UserSummary } from "../lib/api";
+import {
+  transformAuthor,
+  transformComment,
+  getAvatarInitials,
+} from "./transforms";
+import type { Comment, UserSummary } from "../lib/api";
 
 describe("getAvatarInitials", () => {
   it("returns first two initials uppercased", () => {
@@ -67,5 +71,23 @@ describe("transformAuthor", () => {
     expect(result.institutionType).toBe("municipality");
     expect(result.institutionName).toBe("Helsingin kaupunki");
     expect(result.avatarInitials).toBe("CO");
+  });
+});
+
+describe("transformComment", () => {
+  it("prefers the top-level authorId when the public author summary is scrubbed", () => {
+    const result = transformComment({
+      id: "comment-1",
+      authorId: "user-1",
+      content: "Managed operator comment",
+      author: {
+        id: null,
+        name: "Eulesia Operator",
+        role: "citizen",
+      },
+      createdAt: "2026-04-02T00:00:00.000Z",
+    } as Comment);
+
+    expect(result.authorId).toBe("user-1");
   });
 });

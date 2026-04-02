@@ -106,7 +106,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           },
         );
         // Clear typing for the user who sent the message
-        clearTypingUser("room", data.roomId, data.message.author?.id);
+        clearTypingUser(
+          "room",
+          data.roomId,
+          data.message.authorId ?? data.message.author?.id,
+        );
       },
     );
 

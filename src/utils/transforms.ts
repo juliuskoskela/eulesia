@@ -26,7 +26,7 @@ export function transformComment(comment: ApiComment) {
   return {
     id: comment.id,
     threadId: "",
-    authorId: comment.author?.id ?? "",
+    authorId: comment.authorId ?? comment.author?.id ?? "",
     parentId: comment.parentId,
     content: comment.content,
     contentHtml: comment.contentHtml,
