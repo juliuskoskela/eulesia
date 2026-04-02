@@ -91,7 +91,7 @@
             config.packages.ci-check
             pkgs.gnumake
             pkgs.gcc
-            pkgs.nodePackages.node-gyp
+            pkgs.node-gyp
             playwrightBrowsers
           ];
         shellHook = ''
