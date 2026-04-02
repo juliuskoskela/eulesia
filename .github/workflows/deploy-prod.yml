@@ -49,10 +49,15 @@ jobs:
           echo "Target: $EULESIA_PROD_TARGET_HOST"
 
       - name: Setup SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.EULESIA_DEPLOY_SSH_KEY }}
         run: |
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "${{ secrets.EULESIA_DEPLOY_SSH_KEY }}" > "$HOME/.ssh/id_ed25519"
+          echo "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
+
+          # Validate key format
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null || { echo "::error::Invalid SSH key"; exit 1; }
 
           ssh-keyscan -H -t ed25519,rsa "$EULESIA_PROD_TARGET_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
           test -s "$HOME/.ssh/known_hosts" || { echo "::error::ssh-keyscan produced no host keys for $EULESIA_PROD_TARGET_HOST"; exit 1; }
