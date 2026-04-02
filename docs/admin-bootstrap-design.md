@@ -1,257 +1,118 @@
 # Admin Bootstrap Design
 
-## Problem
+## Architecture
 
-Eulesia currently treats platform admin as a normal user role:
+Admin accounts are fully separated from regular users. They live in their own `admin_accounts` table and authenticate through their own `admin_sessions` table using a dedicated `admin_session` cookie.
 
-- `users.role` includes `"admin"` in [apps/api/src/db/schema.ts](../apps/api/src/db/schema.ts)
-- admin routes check `req.user.role === "admin"` in [apps/api/src/middleware/admin.ts](../apps/api/src/middleware/admin.ts)
-- the admin UI can promote any user to `"admin"` through [apps/api/src/routes/admin.ts](../apps/api/src/routes/admin.ts)
+This separation means:
 
-This has two problems:
+- admins are not visible in user queries, search, or public discovery
+- admin authentication and sessions are independent of the citizen/institution session system
+- the `users` table no longer carries `managed_by` or `managed_key` columns
+- moderation tables (`content_reports`, `moderation_actions`, `user_sanctions`, `moderation_appeals`, `waitlist`, `invite_codes`) reference admin IDs without foreign keys (FKs dropped to avoid cross-table constraints)
 
-1. Initial admin bootstrap is operationally unsafe.
-   Today the practical path is to get root access to the host and mutate Postgres directly.
-2. Admin privilege is not part of declared infrastructure state.
-   Nix + SOPS already bootstrap runtime secrets, but not privileged identities.
+## Bootstrap Flow
 
-## Current Constraints
+Admin accounts are bootstrapped from SOPS-managed structured secrets:
 
-- Runtime secret delivery is already standardized through SOPS + Nix into `/run/secrets/eulesia/*`:
-  - [docs/secrets.md](./secrets.md)
-  - [nix/hosts/lib/eulesia-secrets.nix](../nix/hosts/lib/eulesia-secrets.nix)
-  - [nix/modules/eulesia.nix](../nix/modules/eulesia.nix)
-- The API service already has a natural DB bootstrap hook:
-  - [nix/modules/eulesia.nix](../nix/modules/eulesia.nix) runs migrations in `systemd.services.eulesia-api.preStart`
-- Admin is currently coupled into several surfaces:
-  - backend route guard logic
-  - websocket authorization
-  - frontend route protection in [src/App.tsx](../src/App.tsx)
-  - admin user-management UI in [src/pages/admin/AdminUserDetailPage.tsx](../src/pages/admin/AdminUserDetailPage.tsx)
+- `secrets/test/admin-accounts.json.enc`
+- `secrets/prod/admin-accounts.json.enc`
 
-## Recommendation
+The NixOS module exposes:
 
-Use a two-phase approach.
+- `services.eulesia.auth.bootstrapAdminAccountsFile`
 
-### Phase 1: Dedicated Bootstrap-Managed Admin Accounts
+At runtime the file is decrypted to:
 
-This is the recommended next implementation.
+- `/run/secrets/eulesia/admin-accounts.json`
 
-Keep `users.role = "admin"` for now, but stop treating admin promotion as an in-app mutable status for arbitrary user accounts.
+The API service `preStart` runs two steps in order:
 
-Instead:
+1. `eulesia-api-migrate` -- applies startup migrations from `apps/api/src/db/startupMigrations.ts`
+2. `eulesia-api-bootstrap-admins` -- runs the idempotent bootstrap sync from `apps/api/src/scripts/bootstrap-admins.ts`
 
-1. Introduce dedicated admin login accounts that are bootstrapped from SOPS/Nix.
-2. Store their account definitions in an encrypted structured secret file such as:
-   - `secrets/test/admin-accounts.json.enc`
-   - `secrets/prod/admin-accounts.json.enc`
-3. Add a Nix option like:
-   - `services.eulesia.auth.bootstrapAdminAccountsFile`
-4. Decrypt that file into `/run/secrets/eulesia/admin-accounts.json`.
-5. Run an idempotent bootstrap step in API `preStart` after migrations:
-   - create missing admin accounts
-   - update managed admin profile fields
-   - seed missing passwords and preserve user-changed passwords by default
-   - allow an explicit one-shot password reseed for recovery
-   - ensure managed accounts keep `role = "admin"`
-   - ensure managed accounts are tagged as operator accounts
-6. Remove or narrow the in-app role-change path so it cannot mint new admins from arbitrary user accounts.
+## Bootstrap Behavior
 
-This gives us:
+The bootstrap script is idempotent and conservative:
 
-- declarative admin bootstrap
-- no manual `psql` mutation
-- reproducible host rebuilds
-- a clean “source of truth” for initial admin access
+1. Match managed admin accounts by stable key (`managedKey`), then by `email` or `username` for legacy migration.
+2. If absent, create the account in `admin_accounts` with the hashed seed password.
+3. If present, update managed fields: `username`, `email`, `name`, `managedKey`.
+4. Treat `password` as a seed password:
+   - apply it when creating the account
+   - apply it when the stored password hash is empty or null
+   - otherwise preserve the operator-changed password
+   - honor `reseedPassword: true` as a one-shot recovery flag
+5. Refuse to adopt an existing non-managed account (throws an error).
+6. Removal from the secret file does not delete or disable the account.
 
-### Phase 2: Split Platform Privilege from User Persona
+## Secret Shape
 
-This is cleaner architecturally, but it is a larger change.
-
-Instead of encoding admin inside `users.role`, introduce a separate privilege relation such as:
-
-- `platform_admins(user_id, managed_source, created_at, disabled_at, ...)`
-
-Then:
-
-- `users.role` becomes product-facing only, for example `citizen | institution`
-- auth/session loading attaches `isAdmin` separately
-- admin routes and frontend admin gating check `isAdmin`
-- admin account bootstrap manages membership in `platform_admins`
-
-This avoids conflating:
-
-- what kind of product account a user is
-- what platform-level operator powers they have
-
-It also makes it easier later to model:
-
-- moderators
-- operators
-- infra-managed staff accounts
-- emergency break-glass accounts
-
-## Why Phase 1 First
-
-Phase 1 solves the operational security problem without forcing a broad refactor across:
-
-- API route contracts
-- frontend auth types
-- search indexing
-- user profile rendering
-- moderation and sanction logic
-
-The unsafe part today is not mainly that admin is a role enum. The unsafe part is that privileged access is bootstrapped manually outside declarative infrastructure.
-
-Fix that first.
-
-## Proposed Secret Shape
-
-Use a structured SOPS file. Prefer password hashes over plaintext passwords.
-
-Example:
+`admin-accounts.json.enc` is a JSON array. The bootstrap expects **plaintext passwords**, which are hashed at runtime by the bootstrap script using Argon2.
 
 ```json
 [
   {
     "managedKey": "ops_elli",
     "username": "ops_elli",
-    "email": "ops.elli@example.invalid",
     "name": "Elli Esimerkki",
-    "passwordHash": "$argon2id$..."
+    "password": "replace-with-plaintext-password"
   },
   {
     "managedKey": "ops_matti",
     "username": "ops_matti",
     "email": "ops.matti@example.invalid",
     "name": "Matti Malli",
-    "passwordHash": "$argon2id$...",
+    "password": "replace-with-plaintext-password",
     "reseedPassword": true
   }
 ]
 ```
 
-Why password hashes:
+Field details:
 
-- the app only needs the hash
-- plaintext passwords do not need to live in repo-managed secrets
-- operators can generate and store the plaintext separately in a password manager
-- `reseedPassword: true` is an explicit one-shot recovery flag, not steady-state configuration
+- `managedKey` -- required, immutable reconciliation key. Keep stable when renaming `username` or `email`.
+- `username` -- required, 3-50 characters, alphanumeric plus underscore.
+- `email` -- optional. Omitting it keeps the account out of any email-based flows.
+- `name` -- required display name.
+- `password` -- required plaintext seed password. Hashed to Argon2 at bootstrap time.
+- `reseedPassword` -- optional one-shot recovery flag. Forces the seed password back onto the account and revokes admin sessions. Remove after recovery.
 
-The implemented schema is:
+## Admin Auth Endpoints
 
-- `managedKey`
-- `username`
-- optional `email`
-- `name`
-- `passwordHash`
-- optional `reseedPassword`
+Admin authentication uses a separate set of endpoints under `/api/v1/admin/auth`:
 
-`managedKey` is the immutable reconciliation key for that bootstrap-managed identity. Keep it stable when renaming `username` or `email`. Changing `managedKey` intentionally creates a different managed identity.
+- `POST /admin/auth/login` -- authenticate with username + password, sets `admin_session` cookie
+- `POST /admin/auth/logout` -- clears the admin session
+- `GET /admin/auth/me` -- returns the authenticated admin account
+- `POST /admin/auth/change-password` -- change the admin password
 
-Runtime operator ownership is still applied by bootstrap as `users.managedBy = "sops_admin"`.
+These endpoints operate against `admin_accounts` and `admin_sessions`, completely independent of the citizen auth flow.
 
-For the current operational runbook, see [Admin Surface](./admin-surface.md).
+## Frontend
 
-## Recommended Metadata Model For Phase 1
+The admin panel uses:
 
-Do not rely only on `users.role = "admin"` and do not overload `identityProvider` if we can avoid it.
+- `useAdminAuth` hook for authentication state
+- `AdminLoginPage` at `/admin/login`
+- Admin dashboard and management pages under `/admin/*`
 
-`identityProvider` already carries authentication or account provenance such as `ftn`, `magic_link`, `managed`, and `eulesia-bot`. Using it for infra ownership would blur two different concerns:
+The admin panel is served from a dedicated subdomain (`admin.eulesia.org` in production, `admin.test.eulesia.org` in test). See [Deployment](./deployment.md) for subdomain setup.
 
-- how this account authenticates or originated
-- whether this account is an infra-managed operator account
+## Cookie Domain
 
-For the first implementation, add one explicit marker for operator accounts, for example:
+Admin sessions use the `admin_session` cookie with a domain-scoped cookie:
 
-- `managedBy = "sops_admin"`
-- `accountClass = "operator"`
+- Production: `.eulesia.org` (via `services.eulesia.auth.cookieDomain`)
+- Test: `.test.eulesia.org`
 
-This marker is what bootstrap owns. `role = "admin"` remains the runtime privilege switch for now because it is already wired through backend, websocket, and frontend checks.
+This allows cross-subdomain session sharing between `admin.*` and the main app domain.
 
-## Bootstrap Behavior
+## Prior Design Phases
 
-The bootstrap script should be idempotent and conservative.
+The original design proposed two phases:
 
-Recommended behavior:
+1. **Phase 1** -- dedicated bootstrap-managed admin accounts in the `users` table with `managedBy = "sops_admin"`.
+2. **Phase 2** -- split admin into a separate table.
 
-1. Match managed admin accounts by stable key:
-   - first `managedKey`
-   - then legacy `email` / `username` matches while older rows are being backfilled
-2. If absent, create the account.
-3. If present, update only managed fields:
-   - `managedKey`
-   - `email`
-   - `username`
-   - `name`
-   - `role = "admin"`
-4. Treat `passwordHash` as a seed password:
-   - apply it when creating the account
-   - apply it when the stored password hash is empty or null
-   - otherwise preserve the user-changed password
-   - allow an explicit one-shot reseed flag for recovery
-5. Mark the account as managed by bootstrap.
-6. Do not delete accounts just because they were removed from the secret file.
-7. If we need declarative deprovisioning, support it explicitly with a field such as:
-   - `disabled: true`
-   - `locked: true`
-   - `active: false`
-
-Without an explicit marker and explicit disable flow, removing an account from the secret file would be ambiguous and risky.
-
-## Required Product Changes For Phase 1
-
-### Backend
-
-- Add bootstrap-admin config/env plumbing
-- add an idempotent bootstrap script or CLI to the API package
-- run it from `systemd.services.eulesia-api.preStart`
-- remove admin promotion from `PATCH /admin/users/:id/role`
-  - restrict that route to `citizen | institution`
-  - or remove it entirely if role changes are no longer needed there
-
-### Frontend
-
-- remove the “promote to admin” flow from the admin user detail page
-- leave admin dashboard access based on the authenticated user being an admin account
-
-### Search / Discovery
-
-Decide whether bootstrap admin accounts should appear in user search or public profile surfaces.
-
-Recommended default: they should not appear in user search or public discovery.
-
-If we follow that model, we should explicitly exclude them from:
-
-- search indexing
-- public user discovery
-- profile suggestion surfaces
-
-That can be done in phase 1 if we tag them distinctly with dedicated operator-account metadata.
-
-## Open Questions
-
-1. Should admin accounts be allowed to exist only as dedicated operator accounts, with no civic/social presence?
-2. Do we want declarative removal of managed admins, or only declarative creation/update in the first version?
-3. Do we want a later distinction between:
-   - platform admins
-   - moderators
-   - institution claim reviewers
-4. Should bootstrap admin accounts eventually require a second factor or FTN-backed step-up authentication?
-5. Do we want one break-glass admin account in addition to named personal operator accounts?
-
-## Suggested Next Implementation Scope
-
-Recommended next PR scope:
-
-1. Add `admin-accounts.json.enc` support in secrets + Nix.
-2. Add API bootstrap script and run it from `preStart`.
-3. Tag bootstrap-managed admin accounts distinctly.
-4. Remove in-app promotion to `"admin"`.
-5. Keep `users.role = "admin"` for now.
-
-Recommended later PR scope:
-
-1. Introduce `platform_admins`.
-2. Replace `role === "admin"` checks with `isAdmin`.
-3. Reduce `users.role` back to product persona only.
+Both phases are now complete. Admin accounts are fully separated from users in their own `admin_accounts` table with dedicated sessions, auth endpoints, and frontend routing.

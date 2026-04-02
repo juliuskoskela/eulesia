@@ -28,8 +28,6 @@ Authentication uses session cookies. Login methods currently include:
 - email magic links via `POST /auth/magic-link` and `GET /auth/verify/:token`
 - FTN-backed registration via the `/auth/ftn/*` flow when enabled
 
-Bootstrap-managed operator accounts are intended to use password login. They do not use the in-app admin promotion flow and may omit `email` entirely to stay out of magic-link login.
-
 ### POST `/auth/login`
 
 Login with username or email plus password.
@@ -38,7 +36,7 @@ Login with username or email plus password.
 
 ```json
 {
-  "username": "ops_elli",
+  "username": "myuser",
   "password": "secret"
 }
 ```
@@ -126,8 +124,6 @@ Update current user's profile.
 
 Change the current user's password.
 
-Bootstrap-managed operator accounts use this to rotate away from the SOPS seed password. Rebuilds preserve the user-set password unless an explicit reseed is requested.
-
 **Request:**
 
 ```json
@@ -143,9 +139,75 @@ Export all user data (GDPR compliance).
 
 ---
 
-## Admin
+## Admin Authentication
 
-All admin endpoints require an authenticated user whose `role` is `admin`.
+Admin accounts are separate from users and authenticate through dedicated endpoints. These use the `admin_session` cookie and operate against the `admin_accounts` / `admin_sessions` tables.
+
+### POST `/admin/auth/login`
+
+Login with admin username and password. Sets the `admin_session` cookie.
+
+**Request:**
+
+```json
+{
+  "username": "ops_elli",
+  "password": "secret"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "username": "ops_elli",
+    "email": null,
+    "name": "Elli Esimerkki"
+  }
+}
+```
+
+### POST `/admin/auth/logout`
+
+End the current admin session. Clears the `admin_session` cookie.
+
+### GET `/admin/auth/me`
+
+Get the current authenticated admin account. Requires a valid `admin_session` cookie.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "username": "ops_elli",
+    "email": null,
+    "name": "Elli Esimerkki"
+  }
+}
+```
+
+### POST `/admin/auth/change-password`
+
+Change the admin account password. Requires a valid `admin_session` cookie.
+
+**Request:**
+
+```json
+{
+  "currentPassword": "old-secret",
+  "newPassword": "new-secret"
+}
+```
+
+## Admin Management
+
+All admin management endpoints require `adminAuthMiddleware` (valid `admin_session` cookie).
 
 Key surfaces live under `/admin`, including:
 

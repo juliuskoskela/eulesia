@@ -5,6 +5,8 @@ Eulesia uses PostgreSQL with Drizzle ORM. This document describes the data model
 ## Entity Relationship Overview
 
 ```
+admin_accounts ──< admin_sessions
+
 municipalities
      │
      └──< users
@@ -14,12 +16,14 @@ municipalities
             │       └──< thread_tags
             ├──< clubs ──< club_threads ──< club_comments
             │     └──< club_members
-            ├──< rooms ──< room_messages
+            ├──< rooms ──< room_threads ──< room_comments
             │     ├──< room_members
             │     └──< room_invitations
             ├──< notifications
             └──< user_subscriptions
 ```
+
+Admin accounts are fully separated from users. Moderation tables (`content_reports`, `moderation_actions`, `user_sanctions`, `moderation_appeals`, `waitlist`, `invite_codes`) reference admin IDs by UUID without foreign key constraints to avoid cross-table FK dependencies.
 
 ## Enums
 
@@ -27,7 +31,7 @@ municipalities
 
 - `citizen` - Regular citizen user
 - `institution` - Institutional user (municipality, agency, ministry)
-- `admin` - Platform administrator
+- `admin` - Legacy enum value (admin accounts now use the separate `admin_accounts` table)
 
 ### institution_type
 
@@ -77,37 +81,39 @@ Geographic entities for scoping discussions.
 
 ### users
 
-Platform users. Runtime privilege is still encoded in `role`, and dedicated bootstrap-managed operator accounts are tagged separately through `managed_by`.
+Platform users (citizens and institutions). Admin accounts are in a separate `admin_accounts` table.
 
-| Column                | Type             | Constraints                                |
-| --------------------- | ---------------- | ------------------------------------------ |
-| id                    | uuid             | PK, default random                         |
-| email                 | varchar(255)     | UNIQUE                                     |
-| name                  | varchar(255)     | NOT NULL                                   |
-| avatar_url            | varchar(500)     |                                            |
-| role                  | user_role        | Default 'citizen'                          |
-| managed_by            | varchar(50)      | Nullable operator-account ownership marker |
-| managed_key           | varchar(100)     | Nullable stable reconciliation key         |
-| institution_type      | institution_type |                                            |
-| institution_name      | varchar(255)     |                                            |
-| municipality_id       | uuid             | FK municipalities                          |
-| identity_verified     | boolean          | Default false                              |
-| identity_provider     | varchar(50)      |                                            |
-| identity_level        | identity_level   | Default 'basic'                            |
-| notification_replies  | boolean          | Default true                               |
-| notification_mentions | boolean          | Default true                               |
-| notification_official | boolean          | Default true                               |
-| locale                | varchar(10)      | Default 'en'                               |
-| created_at            | timestamp        | Default now()                              |
-| updated_at            | timestamp        | Default now()                              |
-| last_seen_at          | timestamp        |                                            |
+| Column                | Type             | Constraints            |
+| --------------------- | ---------------- | ---------------------- |
+| id                    | uuid             | PK, default random     |
+| email                 | varchar(255)     | UNIQUE                 |
+| username              | varchar(50)      | UNIQUE, NOT NULL       |
+| password_hash         | varchar(255)     | Nullable               |
+| name                  | varchar(255)     | NOT NULL               |
+| avatar_url            | varchar(500)     |                        |
+| role                  | user_role        | Default 'citizen'      |
+| institution_type      | institution_type |                        |
+| institution_name      | varchar(255)     |                        |
+| municipality_id       | uuid             | FK municipalities      |
+| identity_verified     | boolean          | Default false          |
+| identity_provider     | varchar(50)      |                        |
+| identity_level        | identity_level   | Default 'basic'        |
+| rp_subject            | varchar(255)     | UNIQUE (FTN pseudonym) |
+| notification_replies  | boolean          | Default true           |
+| notification_mentions | boolean          | Default true           |
+| notification_official | boolean          | Default true           |
+| locale                | varchar(10)      | Default 'en'           |
+| deleted_at            | timestamp        |                        |
+| created_at            | timestamp        | Default now()          |
+| updated_at            | timestamp        | Default now()          |
+| last_seen_at          | timestamp        |                        |
 
 **Indexes:**
 
 - `users_email_idx` on email
+- `users_username_idx` on username
+- `users_rp_subject_idx` unique on rp_subject
 - `users_municipality_idx` on municipality_id
-- `users_managed_by_idx` on managed_by
-- `users_managed_key_unique_idx` unique on (managed_by, managed_key)
 
 ### sessions
 
@@ -127,6 +133,46 @@ User authentication sessions.
 
 - `sessions_user_idx` on user_id
 - `sessions_token_idx` on token_hash
+
+### admin_accounts
+
+Dedicated operator/admin accounts, fully separated from users. Bootstrapped from SOPS-managed secrets.
+
+| Column        | Type         | Constraints        |
+| ------------- | ------------ | ------------------ |
+| id            | uuid         | PK, default random |
+| username      | varchar(50)  | UNIQUE, NOT NULL   |
+| email         | varchar(255) | UNIQUE             |
+| password_hash | varchar(255) | NOT NULL           |
+| name          | varchar(255) | NOT NULL           |
+| managed_by    | varchar(50)  | NOT NULL           |
+| managed_key   | varchar(100) | NOT NULL           |
+| created_at    | timestamp    | Default now()      |
+| updated_at    | timestamp    | Default now()      |
+| last_seen_at  | timestamp    |                    |
+
+**Indexes:**
+
+- `admin_accounts_managed_key_unique_idx` unique on (managed_by, managed_key)
+
+### admin_sessions
+
+Admin authentication sessions, independent of user sessions. Uses `admin_session` cookie.
+
+| Column     | Type         | Constraints                |
+| ---------- | ------------ | -------------------------- |
+| id         | uuid         | PK, default random         |
+| admin_id   | uuid         | FK admin_accounts, CASCADE |
+| token_hash | varchar(255) | NOT NULL                   |
+| ip_address | inet         |                            |
+| user_agent | text         |                            |
+| expires_at | timestamp    | NOT NULL                   |
+| created_at | timestamp    | Default now()              |
+
+**Indexes:**
+
+- `admin_sessions_admin_idx` on admin_id
+- `admin_sessions_token_idx` on token_hash
 
 ### magic_links
 
@@ -377,7 +423,18 @@ User subscriptions to entities (threads, clubs, etc.).
 
 ## Migrations
 
-Use Drizzle Kit for migrations:
+Schema changes are managed through startup migrations in `apps/api/src/db/startupMigrations.ts`. These are idempotent SQL statements that run every time the API starts.
+
+In production and test environments, migrations run via a standalone script:
+
+1. `eulesia-api-migrate` -- a Nix-wrapped binary that runs `apps/api/src/scripts/run-startup-migrations.ts`
+2. `eulesia-api-bootstrap-admins` -- runs the admin account bootstrap from `apps/api/src/scripts/bootstrap-admins.ts`
+
+Both run in `systemd.services.eulesia-api.preStart` before the API service starts.
+
+Notable migration: **0019** creates `admin_accounts` and `admin_sessions`, migrates existing admin data from `users` (where `managed_by = 'sops_admin'`), drops foreign key constraints on moderation tables that previously referenced `users` for admin actor columns, deletes migrated admin rows from `users`, and drops the `managed_by` and `managed_key` columns from `users`.
+
+For local development, Drizzle Kit is still available:
 
 ```bash
 # Generate migration
@@ -396,3 +453,4 @@ npm run db:studio
 - UUIDs are generated using `gen_random_uuid()`
 - Content fields support Markdown, rendered to HTML for display
 - Cascade deletes are used where appropriate to maintain referential integrity
+- Moderation tables (`content_reports.assigned_to`, `moderation_actions.admin_user_id`, `user_sanctions.issued_by`/`revoked_by`, `moderation_appeals.responded_by`, `waitlist.approved_by`/`rejected_by`, `invite_codes.created_by`) store admin account UUIDs but without foreign key constraints since they reference `admin_accounts`, not `users`
