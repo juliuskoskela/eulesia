@@ -69,15 +69,13 @@ jobs:
             -i "$HOME/.ssh/id_ed25519" \
             root@"$EULESIA_PROD_TARGET_HOST" "echo 'SSH connection OK'"
 
-      - name: Deploy production system (deploy-rs with auto-rollback)
-        env:
-          SSH_AUTH_SOCK: ""
-          NIX_SSHOPTS: "-i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes"
+      - name: Build production system
+        run: nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
+
+      - name: Deploy production system
         run: |
-          if ! command -v deploy &> /dev/null; then
-            nix profile install github:serokell/deploy-rs
-          fi
-          deploy --skip-checks .#eulesia-prod -- --impure
+          export NIX_SSHOPTS="-i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes"
+          nix run .#rebuild-prod
 
       - name: Health checks
         run: |
