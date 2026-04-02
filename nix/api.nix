@@ -8,7 +8,7 @@ pkgs.buildNpmPackage {
   inherit src;
 
   nodejs = pkgs.nodejs_22;
-  npmDepsHash = "sha256-R87ScebRdFaS2a0++e0WPjr5Rh5L9gBapTTpmltbIaI=";
+  npmDepsHash = "sha256-dpRpXZAfeOelJuZkODRFkFnjCjIw3KncA8H8Xw5Wprg=";
   npmWorkspace = "apps/api";
   makeCacheWritable = true;
   npmRebuildFlags = ["--ignore-scripts"];

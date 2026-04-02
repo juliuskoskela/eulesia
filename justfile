@@ -30,6 +30,12 @@ lint:
 test:
     nix run .#test
 
+test-e2e:
+    npx playwright test
+
+test-e2e-ui:
+    npx playwright test --ui
+
 build:
     nix build .#build
 

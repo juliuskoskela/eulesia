@@ -25,6 +25,8 @@
       deadnix
       config.treefmt.build.wrapper
     ];
+
+    playwrightBrowsers = pkgs.playwright-driver.browsers;
   in {
     devShells = {
       default = pkgs.mkShell {
@@ -48,6 +50,9 @@
 
         shellHook = ''
           ${config.pre-commit.installationScript or ""}
+
+          export PLAYWRIGHT_BROWSERS_PATH="${playwrightBrowsers}"
+          export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
           cat <<'EOF'
           Eulesia development shell
@@ -84,7 +89,10 @@
             config.packages.test
             config.packages.ci-check
           ];
-        shellHook = "";
+        shellHook = ''
+          export PLAYWRIGHT_BROWSERS_PATH="${playwrightBrowsers}"
+          export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+        '';
       };
     };
   };
