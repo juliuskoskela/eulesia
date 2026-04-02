@@ -65,16 +65,14 @@ jobs:
           chmod 600 "$HOME/.ssh/known_hosts"
 
           # SSH config for nixos-rebuild and nix-copy-closure
-          cat > "$HOME/.ssh/config" << SSHEOF
-          Host $EULESIA_PROD_TARGET_HOST
-            User root
-            IdentityFile $HOME/.ssh/id_ed25519
-            StrictHostKeyChecking accept-new
-          SSHEOF
+          printf 'Host %s\n  User root\n  IdentityFile %s/.ssh/id_ed25519\n  StrictHostKeyChecking accept-new\n' \
+            "$EULESIA_PROD_TARGET_HOST" "$HOME" > "$HOME/.ssh/config"
           chmod 600 "$HOME/.ssh/config"
+          echo "SSH config:"
+          cat "$HOME/.ssh/config"
 
           # Verify SSH works
-          ssh root@"$EULESIA_PROD_TARGET_HOST" "echo 'SSH connection OK'"
+          ssh -v root@"$EULESIA_PROD_TARGET_HOST" "echo 'SSH connection OK'"
 
       - name: Build production system
         run: nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
