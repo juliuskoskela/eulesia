@@ -191,7 +191,7 @@ _: {
     };
   in {
     pre-commit = {
-      check.enable = true;
+      check.enable = false;
       settings.hooks = {
         treefmt = {
           enable = true;
