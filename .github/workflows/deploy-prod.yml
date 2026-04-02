@@ -56,23 +56,16 @@ jobs:
           echo "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
 
-          # Diagnostics
-          echo "Key file size: $(wc -c < "$HOME/.ssh/id_ed25519") bytes"
-          echo "Key line count: $(wc -l < "$HOME/.ssh/id_ed25519")"
-          echo "Key fingerprint:"
+          # Validate key
           ssh-keygen -l -f "$HOME/.ssh/id_ed25519" || { echo "::error::Invalid SSH key"; exit 1; }
-          echo "Key public:"
-          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" || { echo "::error::Cannot extract public key"; exit 1; }
 
           ssh-keyscan -H -t ed25519,rsa "$EULESIA_PROD_TARGET_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
-          echo "Known hosts entries: $(wc -l < "$HOME/.ssh/known_hosts")"
           test -s "$HOME/.ssh/known_hosts" || { echo "::error::ssh-keyscan produced no host keys"; exit 1; }
           chmod 600 "$HOME/.ssh/known_hosts"
 
-          echo "Attempting SSH with verbose output..."
-          ssh -vvv -o BatchMode=yes \
+          ssh -o BatchMode=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -o StrictHostKeyChecking=accept-new \
+            -o StrictHostKeyChecking=yes \
             -i "$HOME/.ssh/id_ed25519" \
             root@"$EULESIA_PROD_TARGET_HOST" "echo 'SSH connection OK'"
 
