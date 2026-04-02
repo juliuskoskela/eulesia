@@ -144,6 +144,12 @@ in {
       description = "API domain.";
     };
 
+    adminDomain = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Admin panel domain. When set, creates an nginx vhost that redirects / to /admin.";
+    };
+
     api = {
       listenAddress = mkOption {
         type = types.str;
@@ -488,56 +494,87 @@ in {
             ~*${ogBotRegex} 1;
           }
         '';
-        virtualHosts = {
-          ${cfg.apiDomain} = {
-            enableACME = cfg.tls.enable;
-            forceSSL = cfg.tls.enable;
-            locations = {
-              "/" = {
-                proxyPass = apiProxy;
-                proxyWebsockets = true;
+        virtualHosts =
+          {
+            ${cfg.apiDomain} = {
+              enableACME = cfg.tls.enable;
+              forceSSL = cfg.tls.enable;
+              locations = {
+                "/" = {
+                  proxyPass = apiProxy;
+                  proxyWebsockets = true;
+                };
               };
             };
-          };
 
-          ${cfg.appDomain} = {
-            root = cfg.frontendPackage;
-            enableACME = cfg.tls.enable;
-            forceSSL = cfg.tls.enable;
-            locations = {
-              "/" = {
-                extraConfig = ''
-                  try_files $uri $uri/ /index.html;
-                '';
+            ${cfg.appDomain} = {
+              root = cfg.frontendPackage;
+              enableACME = cfg.tls.enable;
+              forceSSL = cfg.tls.enable;
+              locations = {
+                "/" = {
+                  extraConfig = ''
+                    try_files $uri $uri/ /index.html;
+                  '';
+                };
+                "/api/" = {
+                  proxyPass = apiProxy;
+                  proxyWebsockets = true;
+                };
+                "/uploads/" = {
+                  proxyPass = apiProxy;
+                };
+                "/sitemap.xml" = {
+                  proxyPass = apiProxy;
+                };
+                "/.well-known/" = {
+                  proxyPass = apiProxy;
+                };
+                "/health" = {
+                  proxyPass = apiProxy;
+                };
+                "~ ^/(agora|clubs/|kunnat/|user/|aiheet)" = {
+                  extraConfig = ''
+                    if ($eulesia_og_bot) {
+                      proxy_pass ${apiProxy};
+                      break;
+                    }
+                    try_files $uri $uri/ /index.html;
+                  '';
+                };
               };
-              "/api/" = {
-                proxyPass = apiProxy;
-                proxyWebsockets = true;
-              };
-              "/uploads/" = {
-                proxyPass = apiProxy;
-              };
-              "/sitemap.xml" = {
-                proxyPass = apiProxy;
-              };
-              "/.well-known/" = {
-                proxyPass = apiProxy;
-              };
-              "/health" = {
-                proxyPass = apiProxy;
-              };
-              "~ ^/(agora|clubs/|kunnat/|user/|aiheet)" = {
-                extraConfig = ''
-                  if ($eulesia_og_bot) {
-                    proxy_pass ${apiProxy};
-                    break;
-                  }
-                  try_files $uri $uri/ /index.html;
-                '';
+            };
+          }
+          // optionalAttrs (cfg.adminDomain != null) {
+            ${cfg.adminDomain} = {
+              root = cfg.frontendPackage;
+              enableACME = cfg.tls.enable;
+              forceSSL = cfg.tls.enable;
+              locations = {
+                "= /" = {
+                  return = "302 https://${cfg.adminDomain}/admin";
+                };
+                "/" = {
+                  extraConfig = ''
+                    try_files $uri $uri/ /index.html;
+                  '';
+                };
+                "/api/" = {
+                  proxyPass = apiProxy;
+                  proxyWebsockets = true;
+                };
+                "/uploads/" = {
+                  proxyPass = apiProxy;
+                };
+                "/.well-known/" = {
+                  proxyPass = apiProxy;
+                };
+                "/health" = {
+                  proxyPass = apiProxy;
+                };
               };
             };
           };
-        };
       };
     };
 
@@ -547,74 +584,76 @@ in {
         "d ${cfg.uploadsDir} 0750 ${cfg.user} ${cfg.group} -"
       ];
 
-      services.eulesia-api = {
-        description = "Eulesia API";
-        wantedBy = ["multi-user.target"];
-        wants =
-          ["network-online.target"]
-          ++ optional (apiSecretFiles != []) "sops-install-secrets.service"
-          ++ optional cfg.database.createLocally "postgresql.service"
-          ++ optional cfg.meilisearch.createLocally "meilisearch.service";
-        after =
-          ["network-online.target"]
-          ++ optional (apiSecretFiles != []) "sops-install-secrets.service"
-          ++ optional cfg.database.createLocally "postgresql.service"
-          ++ optional cfg.meilisearch.createLocally "meilisearch.service";
-        unitConfig = optionalAttrs (apiSecretFiles != []) {
-          ConditionPathExists = apiSecretFiles;
+      services = {
+        eulesia-api = {
+          description = "Eulesia API";
+          wantedBy = ["multi-user.target"];
+          wants =
+            ["network-online.target"]
+            ++ optional (apiSecretFiles != []) "sops-install-secrets.service"
+            ++ optional cfg.database.createLocally "postgresql.service"
+            ++ optional cfg.meilisearch.createLocally "meilisearch.service";
+          after =
+            ["network-online.target"]
+            ++ optional (apiSecretFiles != []) "sops-install-secrets.service"
+            ++ optional cfg.database.createLocally "postgresql.service"
+            ++ optional cfg.meilisearch.createLocally "meilisearch.service";
+          unitConfig = optionalAttrs (apiSecretFiles != []) {
+            ConditionPathExists = apiSecretFiles;
+          };
+          preStart = ''
+            set -euo pipefail
+            ${apiEnvironment}
+            ${cfg.package}/bin/eulesia-api-migrate
+            ${cfg.package}/bin/eulesia-api-bootstrap-admins
+          '';
+          serviceConfig = {
+            Type = "simple";
+            User = cfg.user;
+            Group = cfg.group;
+            WorkingDirectory = cfg.stateDir;
+            Restart = "on-failure";
+            RestartSec = 5;
+            UMask = "0077";
+            ReadWritePaths = [
+              cfg.stateDir
+              cfg.uploadsDir
+            ];
+          };
+          script = ''
+            set -euo pipefail
+            ${apiEnvironment}
+            exec ${cfg.package}/bin/eulesia-api
+          '';
         };
-        preStart = ''
-          set -euo pipefail
-          ${apiEnvironment}
-          ${cfg.package}/bin/eulesia-api-migrate
-          ${cfg.package}/bin/eulesia-api-bootstrap-admins
-        '';
-        serviceConfig = {
-          Type = "simple";
-          User = cfg.user;
-          Group = cfg.group;
-          WorkingDirectory = cfg.stateDir;
-          Restart = "on-failure";
-          RestartSec = 5;
-          UMask = "0077";
-          ReadWritePaths = [
-            cfg.stateDir
-            cfg.uploadsDir
-          ];
-        };
-        script = ''
-          set -euo pipefail
-          ${apiEnvironment}
-          exec ${cfg.package}/bin/eulesia-api
-        '';
-      };
 
-      # One-shot service for importing municipal minutes
-      # Usage: systemctl start eulesia-import-minutes
-      # Or with args: systemctl start eulesia-import-minutes@"--municipality=Rautalampi --limit=1"
-      services.eulesia-import-minutes = {
-        description = "Eulesia Municipal Minutes Import";
-        after = ["eulesia-api.service"];
-        serviceConfig = {
-          Type = "oneshot";
-          User = cfg.user;
-          Group = cfg.group;
-          WorkingDirectory = cfg.stateDir;
-          UMask = "0077";
-          ReadWritePaths = [cfg.stateDir];
+        # One-shot service for importing municipal minutes
+        # Usage: systemctl start eulesia-import-minutes
+        # Or with args: systemctl start eulesia-import-minutes@"--municipality=Rautalampi --limit=1"
+        eulesia-import-minutes = {
+          description = "Eulesia Municipal Minutes Import";
+          after = ["eulesia-api.service"];
+          serviceConfig = {
+            Type = "oneshot";
+            User = cfg.user;
+            Group = cfg.group;
+            WorkingDirectory = cfg.stateDir;
+            UMask = "0077";
+            ReadWritePaths = [cfg.stateDir];
+          };
+          script = ''
+            set -euo pipefail
+            ${apiEnvironment}
+            ${cfg.package}/bin/eulesia-api-import-minutes "$@"
+          '';
         };
-        script = ''
-          set -euo pipefail
-          ${apiEnvironment}
-          ${cfg.package}/bin/eulesia-api-import-minutes "$@"
-        '';
-      };
 
-      services.meilisearch = mkIf cfg.meilisearch.createLocally {
-        wants = optional (cfg.meilisearch.masterKeyFile != null) "sops-install-secrets.service";
-        after = optional (cfg.meilisearch.masterKeyFile != null) "sops-install-secrets.service";
-        unitConfig = optionalAttrs (cfg.meilisearch.masterKeyFile != null) {
-          ConditionPathExists = toString cfg.meilisearch.masterKeyFile;
+        meilisearch = mkIf cfg.meilisearch.createLocally {
+          wants = optional (cfg.meilisearch.masterKeyFile != null) "sops-install-secrets.service";
+          after = optional (cfg.meilisearch.masterKeyFile != null) "sops-install-secrets.service";
+          unitConfig = optionalAttrs (cfg.meilisearch.masterKeyFile != null) {
+            ConditionPathExists = toString cfg.meilisearch.masterKeyFile;
+          };
         };
       };
     };

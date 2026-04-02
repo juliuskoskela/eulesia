@@ -1,14 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  ArrowLeft,
-  Building2,
-  ChevronDown,
-  Pencil,
-  Trash2,
-  History,
-} from "lucide-react";
+import { ArrowLeft, ChevronDown, Pencil, Trash2, History } from "lucide-react";
 import { Layout } from "../components/layout";
 import { SEOHead } from "../components/SEOHead";
 import {
@@ -136,9 +129,8 @@ export function ThreadPage() {
     thread?.source === "minutes_import" || thread?.aiGenerated;
   const isThreadAuthor =
     currentUser?.id === (thread?.authorId ?? thread?.author?.id);
-  const isAdmin = currentUser?.role === "admin";
-  const canEditThread = isAdmin || isThreadAuthor || isBotThread;
-  const canDeleteThread = isAdmin || isThreadAuthor;
+  const canEditThread = isThreadAuthor || isBotThread;
+  const canDeleteThread = isThreadAuthor;
 
   const handleStartEditThread = () => {
     if (!thread) return;
@@ -461,7 +453,8 @@ export function ThreadPage() {
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
                   target.style.height = "38px";
-                  target.style.height = Math.min(target.scrollHeight, 120) + "px";
+                  target.style.height =
+                    Math.min(target.scrollHeight, 120) + "px";
                 }}
               />
               {commentContent.trim() && (

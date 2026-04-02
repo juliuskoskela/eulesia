@@ -1092,6 +1092,22 @@ class ApiClient {
     });
   }
 
+  async generateAdminInvites(count: number): Promise<GeneratedAdminInvite[]> {
+    return this.request("/admin/invites/generate", {
+      method: "POST",
+      body: JSON.stringify({ count }),
+    });
+  }
+
+  async getAdminInvites(
+    status?: "available" | "used" | "revoked",
+  ): Promise<AdminInvite[]> {
+    const searchParams = new URLSearchParams();
+    if (status) searchParams.set("status", status);
+    const query = searchParams.toString();
+    return this.request(`/admin/invites${query ? `?${query}` : ""}`);
+  }
+
   // ─── User reports & appeals ──────────────────────────────
 
   async submitReport(data: SubmitReportData): Promise<ContentReportResponse> {
@@ -1332,7 +1348,7 @@ export interface User {
   name: string;
   verifiedName?: string;
   avatarUrl?: string;
-  role: "citizen" | "institution" | "admin";
+  role: "citizen" | "institution";
   institutionType?: "municipality" | "agency" | "ministry";
   institutionName?: string;
   municipality?: Municipality;
@@ -1345,6 +1361,7 @@ export interface User {
     locale: string;
   };
   onboardingCompletedAt?: string | null;
+  hasPassword?: boolean;
   createdAt: string;
 }
 
@@ -1436,10 +1453,9 @@ export interface AlgorithmDocumentation {
   }[];
 }
 
-export interface BookmarksResponse
-  extends PaginatedResponse<
-    Thread & { isBookmarked: true; bookmarkedAt: string }
-  > {}
+export type BookmarksResponse = PaginatedResponse<
+  Thread & { isBookmarked: true; bookmarkedAt: string }
+>;
 
 export interface Comment {
   id: string;
@@ -1462,7 +1478,7 @@ export interface UserSummary {
   name: string;
   avatarUrl?: string;
   canViewProfile?: boolean;
-  role: "citizen" | "institution" | "admin";
+  role: "citizen" | "institution";
   institutionType?: string;
   institutionName?: string;
   identityVerified?: boolean;
@@ -1561,7 +1577,7 @@ export interface ClubThreadWithComments extends ClubThread {
   comments: ClubComment[];
 }
 
-export interface ClubComment extends Comment {}
+export type ClubComment = Comment;
 
 // Home types
 export interface Room {
@@ -1922,7 +1938,7 @@ export interface SearchUserResult {
   id: string;
   name: string;
   username: string;
-  role: "citizen" | "institution" | "admin";
+  role: "citizen" | "institution";
   avatarUrl?: string;
   institutionType?: string;
   institutionName?: string;
@@ -2078,8 +2094,7 @@ export interface AdminUser {
   username: string;
   name: string;
   avatarUrl?: string;
-  role: "citizen" | "institution" | "admin";
-  managedBy?: string | null;
+  role: "citizen" | "institution";
   institutionType?: string;
   institutionName?: string;
   identityVerified: boolean;
@@ -2124,8 +2139,16 @@ export interface AdminReport {
 }
 
 export interface AdminReportDetail extends AdminReport {
-  content: any;
+  content: AdminReportContentPreview | null;
   assignedTo?: string;
+}
+
+export interface AdminReportContentPreview {
+  title?: string;
+  content?: string;
+  name?: string;
+  authorId?: string;
+  [key: string]: unknown;
 }
 
 export interface ModLogEntry {
@@ -2134,7 +2157,7 @@ export interface ModLogEntry {
   targetType: string;
   targetId: string;
   reason: string;
-  metadata: any;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
   adminName: string;
   adminUserId: string;
@@ -2229,6 +2252,18 @@ export interface SystemAnnouncement {
 export interface AdminAnnouncement extends SystemAnnouncement {
   active: boolean;
   createdByName: string | null;
+}
+
+export interface GeneratedAdminInvite {
+  id: string;
+  code: string;
+  createdAt: string;
+}
+
+export interface AdminInvite extends GeneratedAdminInvite {
+  status: "available" | "used" | "revoked";
+  usedAt: string | null;
+  usedBy: { name: string } | null;
 }
 
 // Institution management types

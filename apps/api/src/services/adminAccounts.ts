@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { SOPS_ADMIN_ACCOUNT_MANAGER } from "../utils/operatorAccounts.js";
+
+const SOPS_ADMIN_ACCOUNT_MANAGER = "sops_admin";
 
 export const bootstrapAdminAccountSchema = z.object({
   managedKey: z
@@ -21,7 +22,7 @@ export const bootstrapAdminAccountSchema = z.object({
     .optional()
     .nullable(),
   name: z.string().min(2).max(255),
-  passwordHash: z.string().min(1),
+  password: z.string().min(1),
   reseedPassword: z.boolean().optional().default(false),
 });
 
@@ -34,9 +35,11 @@ export interface BootstrapAdminAccountMatch {
   managedKey: string | null;
 }
 
+import { hashPassword } from "../utils/crypto.js";
+
 interface ResolveBootstrapAdminPasswordInput {
   existingPasswordHash?: string | null;
-  seedPasswordHash: string;
+  seedPassword: string;
   reseedPassword?: boolean;
 }
 
@@ -45,22 +48,15 @@ interface BootstrapAdminPasswordDecision {
   revokeSessions: boolean;
 }
 
-export function resolveBootstrapAdminPassword({
+export async function resolveBootstrapAdminPassword({
   existingPasswordHash,
-  seedPasswordHash,
+  seedPassword,
   reseedPassword = false,
-}: ResolveBootstrapAdminPasswordInput): BootstrapAdminPasswordDecision {
-  if (!existingPasswordHash) {
+}: ResolveBootstrapAdminPasswordInput): Promise<BootstrapAdminPasswordDecision> {
+  if (!existingPasswordHash || reseedPassword) {
     return {
-      passwordHash: seedPasswordHash,
+      passwordHash: await hashPassword(seedPassword),
       revokeSessions: true,
-    };
-  }
-
-  if (reseedPassword) {
-    return {
-      passwordHash: seedPasswordHash,
-      revokeSessions: existingPasswordHash !== seedPasswordHash,
     };
   }
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Shield,
-  KeyRound,
   Bell,
   BellRing,
   Eye,
@@ -32,12 +31,17 @@ import { useMySanctions } from "../hooks/useAdminApi";
 import { useGuide } from "../hooks/useGuide";
 import {
   useUpdateProfile,
-  useChangePassword,
   useExportData,
   useDeleteAccount,
 } from "../hooks/useApi";
 import { guides } from "../data/guides";
-import { api } from "../lib/api";
+import { api, type User } from "../lib/api";
+
+type CapacitorWindow = Window & {
+  Capacitor?: {
+    isNativePlatform?: () => boolean;
+  };
+};
 
 export function ProfilePage() {
   const { t } = useTranslation(["profile", "common", "auth"]);
@@ -46,7 +50,6 @@ export function ProfilePage() {
   const { data: mySanctions } = useMySanctions();
   const navigate = useNavigate();
   const updateProfileMutation = useUpdateProfile();
-  const changePasswordMutation = useChangePassword();
   const exportDataMutation = useExportData();
   const deleteAccountMutation = useDeleteAccount();
   // Institution Management - disabled temporarily
@@ -61,15 +64,9 @@ export function ProfilePage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(currentUser?.name || "");
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const { startGuide, hasCompletedGuide, resetAllGuides } = useGuide();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const [notificationSettings, setNotificationSettings] = useState({
     replies: currentUser?.settings?.notificationReplies ?? true,
@@ -82,10 +79,11 @@ export function ProfilePage() {
   const [pushSupported, setPushSupported] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
 
-  const isNative =
-    typeof window !== "undefined" &&
-    "Capacitor" in window &&
-    (window as any).Capacitor?.isNativePlatform?.();
+  const capacitor =
+    typeof window !== "undefined"
+      ? (window as CapacitorWindow).Capacitor
+      : undefined;
+  const isNative = !!capacitor?.isNativePlatform?.();
 
   const checkPushStatus = useCallback(async () => {
     if (isNative) {
@@ -117,6 +115,12 @@ export function ProfilePage() {
   useEffect(() => {
     checkPushStatus();
   }, [checkPushStatus]);
+
+  useEffect(() => {
+    if (editingName) {
+      nameInputRef.current?.focus();
+    }
+  }, [editingName]);
 
   const handlePushToggle = async () => {
     setPushLoading(true);
@@ -223,67 +227,14 @@ export function ProfilePage() {
     }
   };
 
-  const handlePasswordFieldChange = (
-    field: keyof typeof passwordForm,
-    value: string,
-  ) => {
-    setPasswordForm((prev) => ({ ...prev, [field]: value }));
-    setPasswordError(null);
-    setPasswordSuccess(null);
-  };
-
-  const getPasswordChangeError = (error: unknown) => {
-    const message = error instanceof Error ? error.message : "";
-
-    switch (message) {
-      case "Current password is incorrect":
-        return t("password.errors.currentPasswordIncorrect");
-      case "This account does not support password changes":
-        return t("password.errors.notSupported");
-      default:
-        return t("password.errors.updateFailed");
-    }
-  };
-
-  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setPasswordError(null);
-    setPasswordSuccess(null);
-
-    if (!passwordForm.currentPassword) {
-      setPasswordError(t("password.errors.currentRequired"));
-      return;
-    }
-
-    if (!passwordForm.newPassword) {
-      setPasswordError(t("password.errors.newRequired"));
-      return;
-    }
-
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordError(t("password.errors.tooShort"));
-      return;
-    }
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordError(t("password.errors.confirmMismatch"));
-      return;
-    }
-
-    try {
-      await changePasswordMutation.mutateAsync({
-        currentPassword: passwordForm.currentPassword,
-        newPassword: passwordForm.newPassword,
-      });
-      setPasswordForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-      setPasswordSuccess(t("password.success"));
-    } catch (error) {
-      setPasswordError(getPasswordChangeError(error));
-    }
+  const handleSaveDisplayName = () => {
+    const profileUpdate: Partial<User> = { name: nameInput };
+    updateProfileMutation.mutate(profileUpdate, {
+      onSuccess: () => {
+        void refreshUser();
+        setEditingName(false);
+      },
+    });
   };
 
   const handleAvatarClick = () => {
@@ -452,19 +403,14 @@ export function ProfilePage() {
             {editingName ? (
               <div className="flex items-center gap-2">
                 <input
+                  ref={nameInputRef}
                   type="text"
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   className="text-lg font-bold px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      updateProfileMutation.mutate({ name: nameInput } as any, {
-                        onSuccess: () => {
-                          refreshUser();
-                          setEditingName(false);
-                        },
-                      });
+                      handleSaveDisplayName();
                     }
                     if (e.key === "Escape") {
                       setNameInput(currentUser.name);
@@ -473,14 +419,7 @@ export function ProfilePage() {
                   }}
                 />
                 <button
-                  onClick={() => {
-                    updateProfileMutation.mutate({ name: nameInput } as any, {
-                      onSuccess: () => {
-                        refreshUser();
-                        setEditingName(false);
-                      },
-                    });
-                  }}
+                  onClick={handleSaveDisplayName}
                   className="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg"
                 >
                   {t("common:actions.save", { defaultValue: "Tallenna" })}
@@ -790,236 +729,6 @@ export function ProfilePage() {
           </div>
         </div>
         */}
-        {/* Invite Codes */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <Ticket className="w-4 h-4 text-green-600" />
-              {t("invites.title")}
-            </h2>
-          </div>
-          <div className="p-4 space-y-4">
-            {/* Create invite button */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {t("invites.remaining", { count: invitesRemaining })}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t("invites.shareInfo")}
-                </p>
-              </div>
-              <button
-                onClick={handleCreateInvite}
-                disabled={isCreatingInvite || invitesRemaining <= 0}
-                className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isCreatingInvite ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-                {t("invites.createCode")}
-              </button>
-            </div>
-
-            {/* List of invite codes */}
-            {isLoadingInvites ? (
-              <div className="flex justify-center py-4">
-                <div className="w-6 h-6 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin" />
-              </div>
-            ) : inviteCodes.length > 0 ? (
-              <div className="space-y-2">
-                {inviteCodes.map((code) => (
-                  <div
-                    key={code.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border ${
-                      code.status === "available"
-                        ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                        : code.status === "used"
-                          ? "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-800"
-                          : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                    }`}
-                  >
-                    <div>
-                      <p
-                        className={`font-mono text-sm ${code.status === "available" ? "text-green-700 dark:text-green-400" : "text-gray-500 dark:text-gray-400"}`}
-                      >
-                        {code.code}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {code.status === "available" && t("invites.available")}
-                        {code.status === "used" &&
-                          code.usedBy &&
-                          t("invites.usedBy", { name: code.usedBy.name })}
-                        {code.status === "revoked" && t("invites.revoked")}
-                      </p>
-                    </div>
-                    {code.status === "available" && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleCopyCode(code.code)}
-                          className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 rounded"
-                          title={t("common:actions.copyCode")}
-                        >
-                          {copiedCode === code.code ? (
-                            <Check className="w-4 h-4" />
-                          ) : (
-                            <Copy className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => handleRevokeInvite(code.id)}
-                          className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
-                          title={t("common:actions.revokeCode")}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                {t("invites.noCodesYet")}
-              </p>
-            )}
-
-            {/* People I've invited */}
-            {invitedUsers.length > 0 && (
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-3">
-                  <Users className="w-4 h-4 text-blue-600" />
-                  {t("invites.peopleInvited", { count: invitedUsers.length })}
-                </h3>
-                <div className="space-y-2">
-                  {invitedUsers.map((user) => (
-                    <div
-                      key={user.id}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <div className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center text-xs font-medium text-teal-700">
-                        {user.name.charAt(0)}
-                      </div>
-                      <span className="text-gray-700 dark:text-gray-300">
-                        {user.name}
-                      </span>
-                      <span className="text-gray-400 dark:text-gray-500 text-xs">
-                        @{user.username}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        {currentUser.isManagedAccount && currentUser.hasPassword && (
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-blue-600" />
-                {t("password.title")}
-              </h2>
-            </div>
-            <div className="p-4 space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="text-sm text-amber-900 font-medium">
-                  {t("password.seedTitle")}
-                </p>
-                <p className="text-xs text-amber-800 mt-1">
-                  {t("password.description")}
-                </p>
-              </div>
-
-              <form onSubmit={handlePasswordChange} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t("password.currentPassword")}
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    value={passwordForm.currentPassword}
-                    onChange={(e) =>
-                      handlePasswordFieldChange(
-                        "currentPassword",
-                        e.target.value,
-                      )
-                    }
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t("password.newPassword")}
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={6}
-                    value={passwordForm.newPassword}
-                    onChange={(e) =>
-                      handlePasswordFieldChange("newPassword", e.target.value)
-                    }
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t("password.confirmPassword")}
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={6}
-                    value={passwordForm.confirmPassword}
-                    onChange={(e) =>
-                      handlePasswordFieldChange(
-                        "confirmPassword",
-                        e.target.value,
-                      )
-                    }
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                {passwordError && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                    {passwordError}
-                  </div>
-                )}
-
-                {passwordSuccess && (
-                  <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-                    {passwordSuccess}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between gap-4 pt-2">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t("password.recovery")}
-                  </p>
-                  <button
-                    type="submit"
-                    disabled={changePasswordMutation.isPending}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {changePasswordMutation.isPending && (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    )}
-                    {changePasswordMutation.isPending
-                      ? t("password.changing")
-                      : t("password.changeButton")}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
         {/* Notification preferences */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">

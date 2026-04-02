@@ -21,11 +21,6 @@ import { renderMarkdown } from "../utils/markdown.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { notify } from "../services/notify.js";
 import type { AuthenticatedRequest } from "../types/index.js";
-import {
-  formatUserSummaryForResponse as formatUserSummary,
-  getPublicUserId,
-  isSopsManagedOperatorAccount,
-} from "../utils/operatorAccounts.js";
 
 const router = Router();
 
@@ -103,7 +98,7 @@ router.get(
           name: room.name,
           description: room.description,
         },
-        inviter: formatUserSummary(inviter),
+        inviter,
       })),
     });
   }),
@@ -246,7 +241,6 @@ router.get(
 
     const { room, owner } = roomData;
     const isOwner = currentUserId === owner.id;
-    const shouldSanitizeUserSummaries = room.visibility === "public";
 
     // Check access for private rooms
     if (room.visibility === "private" && !isOwner) {
@@ -290,7 +284,7 @@ router.get(
       .limit(50);
 
     // Get user's votes on threads
-    let threadVoteMap = new Map<string, number>();
+    const threadVoteMap = new Map<string, number>();
     if (currentUserId && threadList.length > 0) {
       const threadIds = threadList.map((t) => t.thread.id);
       const votes = await db
@@ -326,23 +320,12 @@ router.get(
       success: true,
       data: {
         ...room,
-        owner: formatUserSummary(owner, {
-          publicView: shouldSanitizeUserSummaries,
-          preserveIdForUserId: currentUserId,
-        }),
-        members: members.map((member) =>
-          formatUserSummary(member, {
-            publicView: shouldSanitizeUserSummaries,
-            preserveIdForUserId: currentUserId,
-          }),
-        ),
+        owner,
+        members,
         threads: threadList.map(({ thread, author }) => ({
           ...thread,
           userVote: threadVoteMap.get(thread.id) || 0,
-          author: formatUserSummary(author, {
-            publicView: shouldSanitizeUserSummaries,
-            preserveIdForUserId: currentUserId,
-          }),
+          author,
         })),
         isOwner,
         canPost:
@@ -530,9 +513,7 @@ router.get(
       })
       .from(roomThreads)
       .leftJoin(users, eq(roomThreads.authorId, users.id))
-      .where(
-        and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)),
-      )
+      .where(and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)))
       .limit(1);
 
     if (!threadData) {
@@ -573,7 +554,7 @@ router.get(
       .orderBy(roomComments.createdAt);
 
     // Get user's votes on comments
-    let commentVoteMap = new Map<string, number>();
+    const commentVoteMap = new Map<string, number>();
     if (currentUserId && commentList.length > 0) {
       const commentIds = commentList.map((c) => c.comment.id);
       const votes = await db
@@ -649,9 +630,7 @@ router.post(
     const [thread] = await db
       .select()
       .from(roomThreads)
-      .where(
-        and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)),
-      )
+      .where(and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)))
       .limit(1);
 
     if (!thread) {
@@ -744,9 +723,7 @@ router.post(
     const [thread] = await db
       .select()
       .from(roomThreads)
-      .where(
-        and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)),
-      )
+      .where(and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)))
       .limit(1);
 
     if (!thread) {
@@ -903,9 +880,7 @@ router.delete(
     const [thread] = await db
       .select()
       .from(roomThreads)
-      .where(
-        and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)),
-      )
+      .where(and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)))
       .limit(1);
 
     if (!thread) {
@@ -965,9 +940,7 @@ router.patch(
     const [thread] = await db
       .select()
       .from(roomThreads)
-      .where(
-        and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)),
-      )
+      .where(and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)))
       .limit(1);
 
     if (!thread) {
@@ -999,9 +972,7 @@ router.delete(
     const [thread] = await db
       .select()
       .from(roomThreads)
-      .where(
-        and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)),
-      )
+      .where(and(eq(roomThreads.id, threadId), eq(roomThreads.roomId, roomId)))
       .limit(1);
 
     if (!thread) {
@@ -1293,13 +1264,9 @@ router.get(
 
     const isOwnHome = currentUserId === userId;
 
-    if (isSopsManagedOperatorAccount(homeOwner) && !isOwnHome) {
-      throw new AppError(404, "User not found");
-    }
-
     // Get rooms (public ones, or all if viewing own home)
 
-    let roomsQuery = db
+    const roomsQuery = db
       .select({
         room: rooms,
         threadCount: sql<number>`(SELECT count(*)::int FROM room_threads WHERE room_id = ${rooms.id})`,
@@ -1381,7 +1348,7 @@ router.get(
     res.json({
       success: true,
       data: {
-        owner: formatUserSummary(homeOwner, { publicView: !isOwnHome }),
+        owner: homeOwner,
         rooms: accessibleRooms,
         recentActivity: {
           threads: recentThreads,
