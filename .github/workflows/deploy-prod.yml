@@ -1,0 +1,94 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false # Never cancel an in-progress production deploy
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, nix, mercury, eulesia]
+    timeout-minutes: 45
+    env:
+      EULESIA_PROD_TARGET_HOST: ${{ vars.EULESIA_PROD_TARGET_HOST }}
+      EULESIA_PROD_SSH_USER: root
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure Attic cache
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_AUTH_TOKEN }}
+          ATTIC_CACHE: ${{ secrets.ATTIC_CACHE_NAME }}
+          ATTIC_PUBKEY: ${{ secrets.ATTIC_PUBLIC_KEY }}
+        run: |
+          if [ -z "$ATTIC_TOKEN" ]; then
+            echo "Attic secrets not configured, skipping cache"
+            exit 0
+          fi
+          if ! command -v attic &> /dev/null; then
+            nix profile install github:zhaofengli/attic
+          fi
+          attic login mercury http://localhost:8088 "$ATTIC_TOKEN"
+          attic use "$ATTIC_CACHE"
+          mkdir -p ~/.config/nix
+          cat >> ~/.config/nix/nix.conf << EOF
+          substituters = https://cache.nixos.org http://localhost:8088/${ATTIC_CACHE}
+          trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= ${ATTIC_PUBKEY}
+          EOF
+
+      - name: Validate deploy configuration
+        run: |
+          if [ -z "$EULESIA_PROD_TARGET_HOST" ]; then
+            echo "Missing repository variable EULESIA_PROD_TARGET_HOST"
+            exit 1
+          fi
+          if [ -z "${{ secrets.EULESIA_PROD_SSH_KEY }}" ]; then
+            echo "Missing repository secret EULESIA_PROD_SSH_KEY"
+            exit 1
+          fi
+          if [ -z "${{ secrets.EULESIA_PROD_KNOWN_HOSTS }}" ]; then
+            echo "Missing repository secret EULESIA_PROD_KNOWN_HOSTS"
+            exit 1
+          fi
+
+      - name: Setup SSH
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "${{ secrets.EULESIA_PROD_SSH_KEY }}" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "${{ secrets.EULESIA_PROD_KNOWN_HOSTS }}" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Build production system
+        run: nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
+
+      - name: Deploy production system
+        run: |
+          export NIX_SSHOPTS="-i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+          nix run .#rebuild-prod
+
+      - name: Health checks
+        run: |
+          SSH="ssh -i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes root@$EULESIA_PROD_TARGET_HOST"
+          for _ in $(seq 1 30); do
+            if $SSH "curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/health" >/dev/null; then
+              break
+            fi
+            sleep 5
+          done
+          $SSH "curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/health"
+          $SSH "curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/auth/config" | tee /tmp/auth-config.json
+          jq -e '.registrationMode == "ftn-open"' /tmp/auth-config.json >/dev/null
+
+      - name: Generate deploy summary
+        if: always()
+        run: |
+          echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target:** $EULESIA_PROD_TARGET_HOST" >> $GITHUB_STEP_SUMMARY
