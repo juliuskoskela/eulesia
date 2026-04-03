@@ -14,6 +14,22 @@ pub mod users;
 pub mod votes;
 
 #[cfg(test)]
+mod blocks_test;
+#[cfg(test)]
+mod bookmarks_test;
+#[cfg(test)]
+mod comments_test;
+#[cfg(test)]
 mod conversations_test;
 #[cfg(test)]
+mod follows_test;
+#[cfg(test)]
+mod mutes_test;
+#[cfg(test)]
+mod tags_test;
+#[cfg(test)]
+mod threads_test;
+#[cfg(test)]
 mod users_test;
+#[cfg(test)]
+mod votes_test;
