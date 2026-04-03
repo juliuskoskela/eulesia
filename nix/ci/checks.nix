@@ -7,7 +7,7 @@
     ...
   }: let
     repoSrc = pkgs.lib.cleanSource ../../.;
-    pnpmDeps = config.packages.pnpmDeps;
+    inherit (config.packages) pnpmDeps;
     nativeBuildInputs = with pkgs; [
       nodejs_22
       pnpm_10

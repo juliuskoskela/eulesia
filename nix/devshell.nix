@@ -2,7 +2,6 @@
   perSystem = {
     config,
     pkgs,
-    system,
     ...
   }: let
     rustToolchain = pkgs.rust-bin.stable.latest.default.override {

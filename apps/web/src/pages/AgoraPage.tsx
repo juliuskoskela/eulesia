@@ -125,7 +125,7 @@ export function AgoraPage() {
   // Reset pagination when filters change
   useEffect(() => {
     // Filter changes intentionally restart pagination from page one.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setPage(1);
     setAllThreads([]);
   }, [feedScope, sortBy, topPeriod, selectedMunicipality, selectedTags]);
@@ -141,7 +141,7 @@ export function AgoraPage() {
     if (feedScopeInitialized) return;
     if (!currentUser) {
       // Unauthenticated: always show 'all' feed
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setFeedScope("all");
       setFeedScopeInitialized(true);
       return;
@@ -181,7 +181,6 @@ export function AgoraPage() {
       author: transformAuthor(item.author),
     }));
     if (page === 1) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAllThreads(newItems);
     } else {
       setAllThreads((prev) => {

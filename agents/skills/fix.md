@@ -24,6 +24,14 @@
 
    Or use local output from the last `/check` run.
 
+   For **Nix build/check failures**, use nix-mcp to extract errors:
+
+   ```
+   mcp__nix-mcp__list_logs()                          # find available log IDs
+   mcp__nix-mcp__build_errors(log_id="<log-id>")      # extract error lines with context
+   mcp__nix-mcp__get_log(log_id="<id>", grep="error") # search large logs
+   ```
+
 2. **Enter plan mode.** Analyze failures before making any changes.
    - Parse all error messages and warnings
    - Group failures into clusters by root cause

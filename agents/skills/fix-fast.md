@@ -28,6 +28,10 @@
    **Rust (v2 server):**
    - `cargo fmt` diff, unused variables/imports, clippy warnings, missing `use`, borrow checker with obvious fix
 
+   **Nix build/check:**
+   - Use `mcp__nix-mcp__build_errors(log_id)` to extract error lines from failed `build` or `flake_check`
+   - Format issues: `mcp__nix-mcp__fmt()` then re-check
+
 3. **Fix directly.** Apply the minimal change to resolve the issue.
 
    ```bash

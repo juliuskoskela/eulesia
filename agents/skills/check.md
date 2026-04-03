@@ -51,17 +51,37 @@ Run each step sequentially. **Exit on first failure.**
 
    ```bash
    just build
-   nix build .#server
+   ```
+
+   Then use `mcp__nix-mcp__build` to build the Nix server package:
+
+   ```
+   mcp__nix-mcp__build(installable=".#server")
+   ```
+
+   On failure, extract errors from the returned log ID:
+
+   ```
+   mcp__nix-mcp__build_errors(log_id="<log-id>")
    ```
 
 6. **Nix flake check** (runs all checks including server-clippy, server-test, server-fmt)
 
-   ```bash
-   nix flake check
    ```
+   mcp__nix-mcp__flake_check()
+   ```
+
+   On failure, extract errors from the returned log ID:
+
+   ```
+   mcp__nix-mcp__build_errors(log_id="<log-id>")
+   ```
+
+   Use `mcp__nix-mcp__get_log(log_id, grep="<pattern>")` to search large logs for specific errors.
 
 If any step fails, stop the pipeline and enter plan mode:
 
+- Use `build_errors` to extract actionable error lines before analyzing
 - Group related errors by root cause
 - Identify which files and modules are affected
 - Propose a fix strategy before making changes
@@ -91,7 +111,7 @@ When changes span multiple components, run all relevant checks.
 | Rust clippy warning | Fix the warning -- `--deny warnings` is enforced   |
 | Test failure        | Enter plan mode, identify failing tests and causes |
 | Build failure       | Enter plan mode, check for missing exports or deps |
-| Nix check failure   | Enter plan mode, inspect flake outputs             |
+| Nix check failure   | Run `build_errors(log_id)`, enter plan mode        |
 
 ## Output Format
 
