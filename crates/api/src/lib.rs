@@ -2,12 +2,12 @@ mod health;
 mod users;
 
 use axum::Router;
-use sqlx::PgPool;
+use sea_orm::DatabaseConnection;
 
 /// Application state shared across all handlers.
 #[derive(Clone)]
 pub struct AppState {
-    pub db: PgPool,
+    pub db: DatabaseConnection,
 }
 
 /// Create the full API router.

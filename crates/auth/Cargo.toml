@@ -10,5 +10,4 @@ workspace = true
 eulesia-common = { path = "../common" }
 axum = { workspace = true }
 serde = { workspace = true }
-sqlx = { workspace = true }
 uuid = { workspace = true }

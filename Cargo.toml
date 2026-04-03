@@ -11,18 +11,24 @@ members = [
 [workspace.dependencies]
 # Shared across crates
 anyhow = "1"
+async-trait = "0.1"
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
+sea-orm = { version = "1", features = [
+  "sqlx-postgres",
+  "runtime-tokio-rustls",
+  "with-chrono",
+  "with-json",
+  "with-uuid",
+  "macros",
+] }
+sea-orm-migration = { version = "1", features = [
+  "sqlx-postgres",
+  "runtime-tokio-rustls",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.8", features = [
-  "runtime-tokio-rustls",
-  "postgres",
-  "uuid",
-  "chrono",
-  "migrate",
-] }
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["trace", "cors"] }
@@ -39,6 +45,7 @@ nursery = { level = "warn", priority = -1 }
 # Relax some pedantic lints that are too noisy
 missing_errors_doc = "allow"
 module_name_repetitions = "allow"
+wildcard_imports = "allow"
 must_use_candidate = "allow"
 
 [profile.dev]
