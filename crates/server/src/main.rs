@@ -1,8 +1,8 @@
 mod config;
-mod error;
-mod router;
 
 use config::Config;
+use eulesia_api::AppState;
+use tower_http::trace::TraceLayer;
 use tracing::info;
 
 #[tokio::main]
@@ -10,10 +10,25 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
     init_logging(&config);
 
-    let addr = config.bind_addr();
-    let app = router::create_router();
+    info!(version = env!("CARGO_PKG_VERSION"), "starting eulesia-server");
 
-    info!(addr = %addr, "starting eulesia-server");
+    // Connect to database if URL provided
+    let db = if let Some(ref url) = config.database_url {
+        let pool = eulesia_db::connect(url).await?;
+        eulesia_db::migrate(&pool).await?;
+        pool
+    } else {
+        info!("no DATABASE_URL set, running without database");
+        // Create a dummy pool that will fail on use — fine for health-only mode
+        sqlx::PgPool::connect_lazy("postgresql://localhost/nonexistent")
+            .map_err(|e| anyhow::anyhow!("pool init: {e}"))?
+    };
+
+    let state = AppState { db };
+    let app = eulesia_api::router(state).layer(TraceLayer::new_for_http());
+
+    let addr = config.bind_addr();
+    info!(addr = %addr, "listening");
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app)
