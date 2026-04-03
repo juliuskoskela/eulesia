@@ -1,5 +1,20 @@
 {
   "nodes": {
+    "crane": {
+      "locked": {
+        "lastModified": 1774313767,
+        "narHash": "sha256-hy0XTQND6avzGEUFrJtYBBpFa/POiiaGBr2vpU6Y9tY=",
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "3d9df76e29656c679c744968b17fbaf28f0e923d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ipetkov",
+        "repo": "crane",
+        "type": "github"
+      }
+    },
     "deploy-rs": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -301,6 +316,7 @@
     },
     "root": {
       "inputs": {
+        "crane": "crane",
         "deploy-rs": "deploy-rs",
         "disko": "disko",
         "flake-parts": "flake-parts",
@@ -308,8 +324,29 @@
         "nixos-anywhere": "nixos-anywhere",
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks",
+        "rust-overlay": "rust-overlay",
         "sops-nix": "sops-nix",
         "treefmt-nix": "treefmt-nix_2"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1775099554,
+        "narHash": "sha256-3xBsGnGDLOFtnPZ1D3j2LU19wpAlYefRKTlkv648rU0=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "8d6387ed6d8e6e6672fd3ed4b61b59d44b124d99",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
       }
     },
     "sops-nix": {
