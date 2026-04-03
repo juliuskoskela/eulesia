@@ -1,6 +1,7 @@
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
+use sea_orm::{ConnectionTrait, Statement};
 use serde::Serialize;
 
 use crate::AppState;
@@ -26,7 +27,14 @@ struct ReadyResponse {
 }
 
 async fn ready(State(state): State<AppState>) -> Result<Json<ReadyResponse>, ApiError> {
-    let db_ok = sqlx::query("SELECT 1").execute(&state.db).await.is_ok();
+    let db_ok = state
+        .db
+        .execute(Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT 1",
+        ))
+        .await
+        .is_ok();
 
     let status = if db_ok { "ready" } else { "degraded" };
 

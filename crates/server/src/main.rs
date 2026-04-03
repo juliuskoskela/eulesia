@@ -15,16 +15,15 @@ async fn main() -> anyhow::Result<()> {
         "starting eulesia-server"
     );
 
-    // Connect to database if URL provided
     let db = if let Some(ref url) = config.database_url {
-        let pool = eulesia_db::connect(url).await?;
-        eulesia_db::migrate(&pool).await?;
-        pool
+        let conn = eulesia_db::connect(url).await?;
+        eulesia_db::migrate(&conn).await?;
+        conn
     } else {
         info!("no DATABASE_URL set, running without database");
-        // Create a dummy pool that will fail on use — fine for health-only mode
-        sqlx::PgPool::connect_lazy("postgresql://localhost/nonexistent")
-            .map_err(|e| anyhow::anyhow!("pool init: {e}"))?
+        sea_orm::Database::connect("sqlite::memory:")
+            .await
+            .map_err(|e| anyhow::anyhow!("fallback db: {e}"))?
     };
 
     let state = AppState { db };

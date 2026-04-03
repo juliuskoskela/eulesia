@@ -1,12 +1,22 @@
 [package]
 name = "eulesia-db"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [lints]
 workspace = true
 
 [dependencies]
 eulesia-common = { path = "../common" }
-sqlx = { workspace = true }
+async-trait = { workspace = true }
+sea-orm = { workspace = true }
+sea-orm-migration = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+sea-orm = { workspace = true, features = ["mock"] }

@@ -1,5 +1,4 @@
 {
-  pkgs,
   craneLib,
   src,
 }: let

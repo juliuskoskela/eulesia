@@ -7,14 +7,7 @@ import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores([
-    "dist",
-    "apps/api/dist",
-    "android",
-    "ios",
-    "node_modules",
-    "apps/api/node_modules",
-  ]),
+  globalIgnores(["dist", "android", "ios", "node_modules"]),
   {
     files: [
       "src/**/*.{ts,tsx}",
@@ -51,26 +44,6 @@ export default defineConfig([
       "react-hooks/purity": "warn",
       "react-hooks/set-state-in-effect": "warn",
       "react-refresh/only-export-components": "warn",
-    },
-  },
-  {
-    files: ["apps/api/**/*.ts"],
-    extends: [js.configs.recommended, tseslint.configs.recommended],
-    languageOptions: {
-      ecmaVersion: "latest",
-      globals: globals.node,
-    },
-    rules: {
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-        },
-      ],
-      "no-case-declarations": "warn",
-      "prefer-const": "warn",
     },
   },
 ]);

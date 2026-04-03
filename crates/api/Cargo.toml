@@ -9,10 +9,11 @@ workspace = true
 [dependencies]
 eulesia-common = { path = "../common" }
 eulesia-auth = { path = "../auth" }
+eulesia-db = { path = "../db" }
 axum = { workspace = true }
+sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlx = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
