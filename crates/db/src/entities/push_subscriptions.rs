@@ -2,18 +2,15 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "devices")]
+#[sea_orm(table_name = "push_subscriptions")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub user_id: Uuid,
-    pub display_name: Option<String>,
-    pub platform: String,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub identity_key: Vec<u8>,
-    pub last_seen_at: Option<DateTimeWithTimeZone>,
-    pub revoked_at: Option<DateTimeWithTimeZone>,
-    pub fcm_token: Option<String>,
+    pub endpoint: String,
+    pub p256dh: String,
+    pub auth: String,
+    pub user_agent: Option<String>,
     pub created_at: DateTimeWithTimeZone,
 }
 
@@ -25,10 +22,6 @@ pub enum Relation {
         to = "super::users::Column::Id"
     )]
     User,
-    #[sea_orm(has_many = "super::device_signed_pre_keys::Entity")]
-    SignedPreKeys,
-    #[sea_orm(has_many = "super::one_time_pre_keys::Entity")]
-    OneTimePreKeys,
 }
 
 impl Related<super::users::Entity> for Entity {

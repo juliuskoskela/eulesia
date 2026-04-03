@@ -556,12 +556,82 @@ All IDs generated in Rust via `uuid::Uuid::now_v7()`. Database columns have no D
 
 ---
 
-## Future: Not in v1 Migrations
+## Notifications
 
-These are architecturally reserved but not implemented yet:
+Outbox-driven notification delivery across four channels (in-app, WebSocket,
+Web Push, FCM). See `docs/v2-migration-scope.md` for the full architecture.
+
+### notifications
+
+Persistent notification history per user.
+
+```sql
+CREATE TABLE notifications (
+    id              uuid PRIMARY KEY,
+    user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    event_type      varchar(50) NOT NULL,
+    title           varchar(255) NOT NULL,
+    body            text,
+    link            varchar(500),
+    read            boolean NOT NULL DEFAULT false,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+
+    CHECK (event_type IN (
+        'reply', 'thread_reply', 'mention', 'direct_message',
+        'room_invite', 'club_invitation', 'club_invitation_accepted',
+        'sanction', 'sanction_revoked', 'appeal_response',
+        'follow', 'system'
+    ))
+);
+
+CREATE INDEX idx_notifications_user_unread ON notifications (user_id, created_at);
+CREATE INDEX idx_notifications_user_unread_partial ON notifications (user_id) WHERE read = false;
+```
+
+### push_subscriptions
+
+Web Push VAPID endpoints (per-browser).
+
+```sql
+CREATE TABLE push_subscriptions (
+    id              uuid PRIMARY KEY,
+    user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint        text NOT NULL UNIQUE,
+    p256dh          text NOT NULL,
+    auth            text NOT NULL,
+    user_agent      text,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_push_subs_user ON push_subscriptions (user_id);
+```
+
+### devices.fcm_token
+
+FCM device token added as a nullable column on the existing `devices` table.
+A device is a device — the same entity handles E2EE keys and push delivery.
+
+```sql
+ALTER TABLE devices ADD COLUMN fcm_token varchar(500);
+```
+
+### Delivery flow
+
+Notification events are written to the `outbox` table (already in schema).
+A background worker processes them:
+
+1. INSERT into `notifications` (persistent history)
+2. WebSocket push to connected device sessions
+3. Web Push POST to VAPID endpoints from `push_subscriptions`
+4. FCM HTTP v1 POST using `devices.fcm_token`
+5. Mark outbox entry completed (or retry with backoff)
+
+---
+
+## Future: Not Yet Implemented
+
+These are architecturally reserved:
 
 - **`conversation_devices`** — per-device group membership for E2EE key entitlement
 - **`message_receipts`** — richer read/delivery receipt semantics
-- **Public content tables** — threads, comments, votes (migrated from v1 when ready)
-- **Moderation tables** — reports, sanctions, appeals (migrated from v1)
 - **Table partitioning** — `messages` by `server_ts` when exceeding ~100M rows

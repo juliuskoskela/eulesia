@@ -48,6 +48,7 @@ mod tests {
             identity_key: vec![1, 2, 3],
             last_seen_at: None,
             revoked_at: None,
+            fcm_token: None,
             created_at: now(),
         }
     }

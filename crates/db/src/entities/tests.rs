@@ -289,9 +289,21 @@ mod tests {
         assert_related!(moderation_appeals::Entity, moderation_actions::Entity);
     }
 
+    // ── Notifications ──
+
+    #[test]
+    fn notifications_belongs_to_user() {
+        assert_related!(notifications::Entity, users::Entity);
+    }
+
+    #[test]
+    fn push_subscriptions_belongs_to_user() {
+        assert_related!(push_subscriptions::Entity, users::Entity);
+    }
+
     // ── Table name verification ──
 
-    /// Verify all 24 entities map to the expected PostgreSQL table names.
+    /// Verify all 26 entities map to the expected PostgreSQL table names.
     #[test]
     fn all_entities_have_correct_table_names() {
         use sea_orm::sea_query::Iden;
@@ -321,6 +333,8 @@ mod tests {
             (&domain_events::Entity, "domain_events"),
             (&outbox::Entity, "outbox"),
             (&media::Entity, "media"),
+            (&notifications::Entity, "notifications"),
+            (&push_subscriptions::Entity, "push_subscriptions"),
         ];
 
         for (entity, expected) in cases {

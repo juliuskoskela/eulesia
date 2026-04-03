@@ -40,6 +40,10 @@ pub mod locations;
 pub mod municipalities;
 pub mod places;
 
+// Notifications
+pub mod notifications;
+pub mod push_subscriptions;
+
 // Events
 pub mod domain_events;
 pub mod outbox;

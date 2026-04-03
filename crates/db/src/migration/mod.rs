@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20260403_000001_initial;
 mod m20260403_000002_content_moderation_geo;
+mod m20260403_000003_notifications;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20260403_000001_initial::Migration),
             Box::new(m20260403_000002_content_moderation_geo::Migration),
+            Box::new(m20260403_000003_notifications::Migration),
         ]
     }
 }
