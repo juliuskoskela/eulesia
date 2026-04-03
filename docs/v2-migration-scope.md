@@ -31,6 +31,16 @@ them natively once the API handlers are implemented.
 | Link previews | Express route + OG scraping                                          | axum handler                                                                                  |
 | Admin panel   | Separate admin auth + routes                                         | Same API, role-gated endpoints                                                                |
 
+### Phase 3 — v1 features to carry forward (not yet designed)
+
+| Feature               | v1 implementation                               | Notes                       |
+| --------------------- | ----------------------------------------------- | --------------------------- |
+| Waitlist/invite codes | Gated registration with approval workflow       | Schema needed, low priority |
+| EUDI Wallet           | Custom OIDC integration for EU Digital Identity | Part of epic-03 (identity)  |
+| Trending/discovery    | CVS score calculation, cron-based cache refresh | Part of epic-09 (search)    |
+| Rate limiting         | Express middleware, per-endpoint                | axum Tower middleware       |
+| OG tags / sitemap     | Express routes for SEO bots                     | axum handlers               |
+
 ### What stays Node (initially)
 
 | Component                      | Reason                                                                                                                                |
