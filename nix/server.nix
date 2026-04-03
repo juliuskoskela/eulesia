@@ -1,6 +1,7 @@
 {
   craneLib,
   src,
+  ...
 }: let
   commonArgs = {
     inherit src;
