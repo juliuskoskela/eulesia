@@ -9,7 +9,7 @@ use crate::AppState;
 use eulesia_auth::error::AuthError;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{Id, new_id};
+use eulesia_common::types::{Id, Platform, new_id};
 use eulesia_db::entities::{device_signed_pre_keys, devices, one_time_pre_keys};
 use eulesia_db::repo::devices::DeviceRepo;
 use eulesia_db::repo::pre_keys::PreKeyRepo;
@@ -19,7 +19,7 @@ const MAX_DEVICES_PER_USER: u64 = 10;
 #[derive(Deserialize)]
 struct CreateDeviceRequest {
     display_name: Option<String>,
-    platform: String,
+    platform: Platform,
     identity_key: String,
     signed_pre_key: SignedPreKeyUpload,
 }
@@ -105,11 +105,6 @@ async fn create_device(
     auth: AuthUser,
     Json(req): Json<CreateDeviceRequest>,
 ) -> Result<Json<DeviceResponse>, ApiError> {
-    // Validate platform
-    if !matches!(req.platform.as_str(), "web" | "android" | "ios" | "desktop") {
-        return Err(ApiError::BadRequest("invalid platform".into()));
-    }
-
     // Decode keys
     let identity_key = decode_base64(&req.identity_key, "identity_key")?;
     if identity_key.is_empty() {
@@ -121,7 +116,7 @@ async fn create_device(
     let spk_sig = decode_base64(&req.signed_pre_key.signature, "signed_pre_key.signature")?;
 
     // Check device limit
-    let count = DeviceRepo::count_active_for_user(&state.db, auth.user_id)
+    let count = DeviceRepo::count_active_for_user(&state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
     if count >= MAX_DEVICES_PER_USER {
@@ -136,9 +131,9 @@ async fn create_device(
         &state.db,
         devices::ActiveModel {
             id: Set(device_id),
-            user_id: Set(auth.user_id),
+            user_id: Set(auth.user_id.0),
             display_name: Set(req.display_name),
-            platform: Set(req.platform),
+            platform: Set(req.platform.to_string()),
             identity_key: Set(identity_key),
             created_at: Set(now),
             ..Default::default()
@@ -170,7 +165,7 @@ async fn list_devices(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Vec<DeviceResponse>>, ApiError> {
-    let devices = DeviceRepo::list_active_for_user(&state.db, auth.user_id)
+    let devices = DeviceRepo::list_active_for_user(&state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
@@ -185,7 +180,7 @@ async fn revoke_device(
     Path(device_id): Path<Id>,
 ) -> Result<(), ApiError> {
     // Verify ownership
-    DeviceRepo::find_by_id_and_user(&state.db, device_id, auth.user_id)
+    DeviceRepo::find_by_id_and_user(&state.db, device_id, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("device not found".into()))?;
@@ -204,7 +199,7 @@ async fn upload_pre_keys(
     Json(req): Json<UploadPreKeysRequest>,
 ) -> Result<Json<UploadPreKeysResponse>, ApiError> {
     // Verify ownership
-    DeviceRepo::find_by_id_and_user(&state.db, device_id, auth.user_id)
+    DeviceRepo::find_by_id_and_user(&state.db, device_id, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("device not found".into()))?;

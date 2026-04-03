@@ -26,8 +26,12 @@ pub enum AuthError {
     #[error("device limit exceeded")]
     DeviceLimitExceeded,
 
-    #[error("database error")]
-    Database(#[from] sea_orm::DbErr),
+    #[error("database error: {context}")]
+    Database {
+        context: &'static str,
+        #[source]
+        source: sea_orm::DbErr,
+    },
 
     #[error("password hashing failed")]
     HashingFailed,
@@ -45,7 +49,7 @@ impl From<AuthError> for ApiError {
                 ApiError::BadRequest(reason)
             }
             AuthError::DeviceLimitExceeded => ApiError::BadRequest("device limit exceeded".into()),
-            AuthError::Database(e) => ApiError::Database(e.to_string()),
+            AuthError::Database { source, .. } => ApiError::Database(source.to_string()),
             AuthError::HashingFailed => ApiError::Internal("password hashing failed".into()),
         }
     }

@@ -65,6 +65,20 @@ impl OutboxRepo {
         Ok(())
     }
 
+    pub async fn mark_dead(db: &DatabaseConnection, id: Uuid, error: &str) -> Result<(), DbErr> {
+        outbox::Entity::update_many()
+            .filter(outbox::Column::Id.eq(id))
+            .col_expr(outbox::Column::Status, Expr::value("dead"))
+            .col_expr(outbox::Column::LastError, Expr::value(error))
+            .col_expr(
+                outbox::Column::ProcessedAt,
+                Expr::current_timestamp().into(),
+            )
+            .exec(db)
+            .await?;
+        Ok(())
+    }
+
     pub async fn cleanup_completed(
         db: &DatabaseConnection,
         older_than: DateTimeWithTimeZone,

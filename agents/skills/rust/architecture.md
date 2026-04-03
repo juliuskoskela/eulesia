@@ -98,6 +98,66 @@ let rows = sqlx::query("...")
     .map_err(|e| UserError::Database { context: "list_active_users", source: e })?;
 ```
 
+## Sea-ORM patterns
+
+The project uses sea-orm with PostgreSQL. Follow these patterns:
+
+**Repository layer**: Static methods on unit structs. Takes `&DatabaseConnection`,
+returns `Result<T, DbErr>`. Repos are in `crates/db/src/repo/`.
+
+```rust
+pub struct UserRepo;
+
+impl UserRepo {
+    pub async fn find_by_id(
+        db: &DatabaseConnection,
+        id: Uuid,
+    ) -> Result<Option<users::Model>, DbErr> {
+        users::Entity::find_by_id(id).one(db).await
+    }
+}
+```
+
+**ActiveModel construction**: Use `Set` for explicit values, `..Default::default()`
+for DB defaults. Always generate IDs in Rust via `new_id()`.
+
+```rust
+users::ActiveModel {
+    id: Set(new_id()),
+    username: Set(username),
+    created_at: Set(now),
+    ..Default::default()  // DB defaults for optional fields
+}
+```
+
+**Testing**: Use `MockDatabase` for unit tests. It validates Rust logic
+(filter chains, error mapping) but not SQL correctness. Pattern:
+
+```rust
+let db = MockDatabase::new(DatabaseBackend::Postgres)
+    .append_query_results([[model.clone()]])
+    .into_connection();
+let result = Repo::find_by_id(&db, id).await.unwrap();
+```
+
+**Never `#[from]` broad error types**: `DbErr` and `sqlx::Error` are too broad
+for automatic conversion. Always use explicit `map_err` with a context string:
+
+```rust
+// BAD: loses context
+#[error("database error")]
+Database(#[from] sea_orm::DbErr),
+
+// GOOD: preserves call-site context
+#[error("database error: {context}")]
+Database { context: &'static str, #[source] source: sea_orm::DbErr },
+
+// At call sites:
+UserRepo::find_by_id(db, id)
+    .await
+    .map_err(|e| AuthError::Database { context: "find user", source: e })?;
+```
+
 ## Trait design
 
 ### When to use traits

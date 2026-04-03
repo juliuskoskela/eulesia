@@ -9,6 +9,7 @@ use eulesia_db::repo::outbox::OutboxRepo;
 use eulesia_db::repo::sessions::SessionRepo;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5);
+const MAX_ATTEMPTS: i16 = 5;
 
 pub async fn run(db: Arc<DatabaseConnection>, cancel: CancellationToken) {
     info!("outbox worker started");
@@ -43,10 +44,15 @@ async fn process_batch(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
             }
             Err(e) => {
                 warn!(event_id = %event.id, error = %e, "outbox event failed");
-                let backoff = backoff_seconds(event.attempt_count);
-                let next_at =
-                    chrono::Utc::now().fixed_offset() + chrono::Duration::seconds(backoff);
-                OutboxRepo::mark_failed(db, event.id, &e.to_string(), next_at).await?;
+                if event.attempt_count >= MAX_ATTEMPTS {
+                    warn!(event_id = %event.id, "event exceeded max attempts, moving to dead letter");
+                    OutboxRepo::mark_dead(db, event.id, &e.to_string()).await?;
+                } else {
+                    let backoff = backoff_seconds(event.attempt_count);
+                    let next_at =
+                        chrono::Utc::now().fixed_offset() + chrono::Duration::seconds(backoff);
+                    OutboxRepo::mark_failed(db, event.id, &e.to_string(), next_at).await?;
+                }
             }
         }
     }

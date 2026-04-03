@@ -3,7 +3,7 @@ use sea_orm::{ActiveValue::Set, DatabaseConnection};
 use serde::Deserialize;
 use tracing::info;
 
-use eulesia_common::types::{Id, new_id};
+use eulesia_common::types::{SessionId, UserId, new_id};
 use eulesia_db::entities::{sessions, users};
 use eulesia_db::repo::sessions::SessionRepo;
 use eulesia_db::repo::users::UserRepo;
@@ -41,7 +41,11 @@ impl AuthService {
 
         // Check uniqueness
         if UserRepo::find_by_username(db, &req.username)
-            .await?
+            .await
+            .map_err(|e| AuthError::Database {
+                context: "find user by username",
+                source: e,
+            })?
             .is_some()
         {
             return Err(AuthError::UsernameTaken(req.username));
@@ -73,12 +77,17 @@ impl AuthService {
                 ..Default::default()
             },
         )
-        .await?;
+        .await
+        .map_err(|e| AuthError::Database {
+            context: "create user",
+            source: e,
+        })?;
 
         info!(user_id = %user.id, username = %user.username, "user registered");
 
         // Create session
-        let token = create_session(db, user.id, ip, user_agent, session_max_age_days).await?;
+        let token =
+            create_session(db, UserId(user.id), ip, user_agent, session_max_age_days).await?;
 
         Ok((user, token))
     }
@@ -91,7 +100,11 @@ impl AuthService {
         session_max_age_days: u32,
     ) -> Result<(users::Model, SessionToken), AuthError> {
         let user = UserRepo::find_by_username(db, &req.username)
-            .await?
+            .await
+            .map_err(|e| AuthError::Database {
+                context: "find user by username",
+                source: e,
+            })?
             .ok_or(AuthError::InvalidCredentials)?;
 
         let stored_hash = user
@@ -112,7 +125,8 @@ impl AuthService {
 
         info!(user_id = %user.id, "user logged in");
 
-        let token = create_session(db, user.id, ip, user_agent, session_max_age_days).await?;
+        let token =
+            create_session(db, UserId(user.id), ip, user_agent, session_max_age_days).await?;
 
         Ok((user, token))
     }
@@ -125,7 +139,11 @@ impl AuthService {
         let hash = token_obj.hash();
 
         let session = SessionRepo::find_by_token_hash(db, &hash)
-            .await?
+            .await
+            .map_err(|e| AuthError::Database {
+                context: "find session by token",
+                source: e,
+            })?
             .ok_or(AuthError::InvalidCredentials)?;
 
         let now = Utc::now().fixed_offset();
@@ -134,7 +152,11 @@ impl AuthService {
         }
 
         let user = UserRepo::find_by_id(db, session.user_id)
-            .await?
+            .await
+            .map_err(|e| AuthError::Database {
+                context: "find user by id",
+                source: e,
+            })?
             .ok_or(AuthError::UserNotFound)?;
 
         // Update last_used_at (best-effort, don't fail validation on it)
@@ -143,15 +165,23 @@ impl AuthService {
         Ok((session, user))
     }
 
-    pub async fn revoke_session(db: &DatabaseConnection, session_id: Id) -> Result<(), AuthError> {
-        SessionRepo::revoke(db, session_id).await?;
+    pub async fn revoke_session(
+        db: &DatabaseConnection,
+        session_id: SessionId,
+    ) -> Result<(), AuthError> {
+        SessionRepo::revoke(db, session_id.0)
+            .await
+            .map_err(|e| AuthError::Database {
+                context: "revoke session",
+                source: e,
+            })?;
         Ok(())
     }
 }
 
 async fn create_session(
     db: &DatabaseConnection,
-    user_id: Id,
+    user_id: UserId,
     ip: Option<String>,
     user_agent: Option<String>,
     max_age_days: u32,
@@ -164,7 +194,7 @@ async fn create_session(
         db,
         sessions::ActiveModel {
             id: Set(new_id()),
-            user_id: Set(user_id),
+            user_id: Set(user_id.0),
             token_hash: Set(token.hash()),
             ip_address: Set(ip),
             user_agent: Set(user_agent),
@@ -173,7 +203,11 @@ async fn create_session(
             ..Default::default()
         },
     )
-    .await?;
+    .await
+    .map_err(|e| AuthError::Database {
+        context: "create session",
+        source: e,
+    })?;
 
     Ok(token)
 }

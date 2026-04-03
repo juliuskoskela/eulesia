@@ -1,15 +1,15 @@
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::Id;
+use eulesia_common::types::{DeviceId, SessionId, UserId};
 use serde::Serialize;
 
 /// Authenticated user context extracted from request.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuthUser {
-    pub user_id: Id,
-    pub device_id: Option<Id>,
-    pub session_id: Id,
+    pub user_id: UserId,
+    pub device_id: Option<DeviceId>,
+    pub session_id: SessionId,
 }
 
 /// Extractor that requires authentication.

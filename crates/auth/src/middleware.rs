@@ -1,5 +1,6 @@
 use axum::{body::Body, extract::State, http::Request, middleware::Next, response::Response};
 use axum_extra::extract::CookieJar;
+use eulesia_common::types::{DeviceId, SessionId, UserId};
 
 use crate::service::AuthService;
 use crate::session::AuthUser;
@@ -19,9 +20,9 @@ pub async fn auth_middleware(
     if let Some(token) = token {
         if let Ok((session, _user)) = AuthService::validate_session(&db, &token).await {
             req.extensions_mut().insert(AuthUser {
-                user_id: session.user_id,
-                device_id: session.device_id,
-                session_id: session.id,
+                user_id: UserId(session.user_id),
+                device_id: session.device_id.map(DeviceId),
+                session_id: SessionId(session.id),
             });
         }
     }

@@ -5,7 +5,7 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use serde::Serialize;
 
-use crate::AppState;
+use crate::{AppConfig, AppState};
 use eulesia_auth::service::{AuthService, LoginRequest, RegisterRequest};
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
@@ -40,6 +40,29 @@ impl From<eulesia_db::entities::users::Model> for UserProfile {
     }
 }
 
+fn auth_response(
+    user: eulesia_db::entities::users::Model,
+    token: &eulesia_auth::token::SessionToken,
+    config: &AppConfig,
+    jar: CookieJar,
+) -> (CookieJar, Json<AuthResponse>) {
+    let expires_at = (chrono::Utc::now()
+        + chrono::Duration::days(i64::from(config.session_max_age_days)))
+    .to_rfc3339();
+
+    let cookie = build_session_cookie(token.as_str(), config);
+    let jar = jar.add(cookie);
+
+    (
+        jar,
+        Json(AuthResponse {
+            user: UserProfile::from(user),
+            token: token.as_str().to_string(),
+            expires_at,
+        }),
+    )
+}
+
 async fn register(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -55,21 +78,7 @@ async fn register(
     .await
     .map_err(ApiError::from)?;
 
-    let expires_at = (chrono::Utc::now()
-        + chrono::Duration::days(i64::from(state.config.session_max_age_days)))
-    .to_rfc3339();
-
-    let cookie = build_session_cookie(token.as_str(), &state.config);
-    let jar = jar.add(cookie);
-
-    Ok((
-        jar,
-        Json(AuthResponse {
-            user: UserProfile::from(user),
-            token: token.as_str().to_string(),
-            expires_at,
-        }),
-    ))
+    Ok(auth_response(user, &token, &state.config, jar))
 }
 
 async fn login(
@@ -87,21 +96,7 @@ async fn login(
     .await
     .map_err(ApiError::from)?;
 
-    let expires_at = (chrono::Utc::now()
-        + chrono::Duration::days(i64::from(state.config.session_max_age_days)))
-    .to_rfc3339();
-
-    let cookie = build_session_cookie(token.as_str(), &state.config);
-    let jar = jar.add(cookie);
-
-    Ok((
-        jar,
-        Json(AuthResponse {
-            user: UserProfile::from(user),
-            token: token.as_str().to_string(),
-            expires_at,
-        }),
-    ))
+    Ok(auth_response(user, &token, &state.config, jar))
 }
 
 async fn logout(
@@ -118,7 +113,7 @@ async fn logout(
 }
 
 async fn me(State(state): State<AppState>, auth: AuthUser) -> Result<Json<UserProfile>, ApiError> {
-    let user = UserRepo::find_by_id(&state.db, auth.user_id)
+    let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;

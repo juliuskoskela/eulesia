@@ -10,6 +10,123 @@ pub fn new_id() -> Id {
     Uuid::now_v7()
 }
 
+// ---------------------------------------------------------------------------
+// Strongly-typed ID newtypes
+// ---------------------------------------------------------------------------
+
+/// Strongly-typed user identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct UserId(pub Uuid);
+
+impl From<Uuid> for UserId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<UserId> for Uuid {
+    fn from(id: UserId) -> Self {
+        id.0
+    }
+}
+
+impl std::fmt::Display for UserId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Strongly-typed device identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct DeviceId(pub Uuid);
+
+impl From<Uuid> for DeviceId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<DeviceId> for Uuid {
+    fn from(id: DeviceId) -> Self {
+        id.0
+    }
+}
+
+impl std::fmt::Display for DeviceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Strongly-typed session identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SessionId(pub Uuid);
+
+impl From<Uuid> for SessionId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<SessionId> for Uuid {
+    fn from(id: SessionId) -> Self {
+        id.0
+    }
+}
+
+impl std::fmt::Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Platform enum
+// ---------------------------------------------------------------------------
+
+/// Device platform — closed set matching the DB CHECK constraint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    Web,
+    Android,
+    Ios,
+    Desktop,
+}
+
+impl Platform {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Web => "web",
+            Self::Android => "android",
+            Self::Ios => "ios",
+            Self::Desktop => "desktop",
+        }
+    }
+}
+
+impl std::fmt::Display for Platform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for Platform {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "web" => Ok(Self::Web),
+            "android" => Ok(Self::Android),
+            "ios" => Ok(Self::Ios),
+            "desktop" => Ok(Self::Desktop),
+            other => Err(format!("invalid platform: {other}")),
+        }
+    }
+}
+
 /// Standard timestamp type.
 pub type Timestamp = DateTime<Utc>;
 
