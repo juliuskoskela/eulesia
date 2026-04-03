@@ -1,13 +1,24 @@
 [package]
 name = "eulesia-auth"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [lints]
 workspace = true
 
 [dependencies]
 eulesia-common = { path = "../common" }
+eulesia-db = { path = "../db" }
+argon2 = { workspace = true }
 axum = { workspace = true }
+axum-extra = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+rand = { workspace = true }
+sea-orm = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }

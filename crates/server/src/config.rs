@@ -22,6 +22,26 @@ pub struct Config {
     /// Database connection URL
     #[arg(long, env = "DATABASE_URL")]
     pub database_url: Option<String>,
+
+    /// Frontend origin for CORS
+    #[arg(
+        long,
+        env = "EULESIA_FRONTEND_ORIGIN",
+        default_value = "http://localhost:5173"
+    )]
+    pub frontend_origin: String,
+
+    /// Cookie domain
+    #[arg(long, env = "EULESIA_COOKIE_DOMAIN")]
+    pub cookie_domain: Option<String>,
+
+    /// Set Secure flag on cookies
+    #[arg(long, env = "EULESIA_COOKIE_SECURE")]
+    pub cookie_secure: bool,
+
+    /// Session max age in days
+    #[arg(long, env = "EULESIA_SESSION_MAX_AGE_DAYS", default_value_t = 30)]
+    pub session_max_age_days: u32,
 }
 
 impl Config {

@@ -5,6 +5,7 @@ members = [
   "crates/db",
   "crates/auth",
   "crates/api",
+  "crates/jobs",
   "crates/server",
 ]
 
@@ -34,6 +35,14 @@ tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["trace", "cors"] }
 tracing = "0.1"
 uuid = { version = "1", features = ["v7", "serde"] }
+argon2 = "0.5"
+rand = "0.9"
+sha2 = "0.10"
+base64 = "0.22"
+axum-extra = { version = "0.10", features = ["cookie"] }
+tower = "0.5"
+time = "0.3"
+tokio-util = { version = "0.7", features = ["rt"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
