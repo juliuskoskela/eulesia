@@ -1,7 +1,11 @@
 mod config;
 
+use std::sync::Arc;
+
 use config::Config;
-use eulesia_api::AppState;
+use eulesia_api::{AppConfig, AppState};
+use tokio_util::sync::CancellationToken;
+use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
@@ -15,28 +19,57 @@ async fn main() -> anyhow::Result<()> {
         "starting eulesia-server"
     );
 
-    let db = if let Some(ref url) = config.database_url {
-        let conn = eulesia_db::connect(url).await?;
-        eulesia_db::migrate(&conn).await?;
-        conn
-    } else {
-        info!("no DATABASE_URL set, running without database");
-        sea_orm::Database::connect("sqlite::memory:")
-            .await
-            .map_err(|e| anyhow::anyhow!("fallback db: {e}"))?
+    let database_url = config
+        .database_url
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("DATABASE_URL is required"))?;
+
+    let db = eulesia_db::connect(database_url).await?;
+    eulesia_db::migrate(&db).await?;
+
+    let db = Arc::new(db);
+
+    let app_config = AppConfig {
+        cookie_domain: config.cookie_domain.clone(),
+        cookie_secure: config.cookie_secure,
+        session_max_age_days: config.session_max_age_days,
+        frontend_origin: config.frontend_origin.clone(),
     };
 
     let state = AppState {
-        db: std::sync::Arc::new(db),
+        db: Arc::clone(&db),
+        config: Arc::new(app_config),
     };
-    let app = eulesia_api::router(state).layer(TraceLayer::new_for_http());
+
+    let cors = CorsLayer::new()
+        .allow_origin(
+            config
+                .frontend_origin
+                .parse::<axum::http::HeaderValue>()
+                .expect("invalid EULESIA_FRONTEND_ORIGIN"),
+        )
+        .allow_methods(AllowMethods::mirror_request())
+        .allow_headers(AllowHeaders::mirror_request())
+        .allow_credentials(true);
+
+    let app = eulesia_api::router(state)
+        .layer(cors)
+        .layer(TraceLayer::new_for_http());
+
+    // Spawn outbox worker
+    let cancel = CancellationToken::new();
+    let worker_cancel = cancel.clone();
+    let worker_db = Arc::clone(&db);
+    tokio::spawn(async move {
+        eulesia_jobs::outbox_worker::run(worker_db, worker_cancel).await;
+    });
 
     let addr = config.bind_addr();
     info!(addr = %addr, "listening");
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown_signal(cancel))
         .await?;
 
     info!("server stopped");
@@ -62,7 +95,7 @@ fn init_logging(config: &Config) {
     }
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(cancel: CancellationToken) {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -84,4 +117,7 @@ async fn shutdown_signal() {
         () = ctrl_c => info!("received ctrl+c"),
         () = terminate => info!("received SIGTERM"),
     }
+
+    info!("cancelling background workers");
+    cancel.cancel();
 }

@@ -264,10 +264,12 @@
       };
     };
 
-    # v2 Rust server — disabled until eulesia_v2 database is provisioned
+    # v2 Rust server — verified working, disabled until v1 migration begins
     eulesia-server = {
       enable = false;
       package = eulesiaPackages.server;
+      frontendOrigin = "https://test.eulesia.org";
+      cookieDomain = ".test.eulesia.org";
     };
   };
 

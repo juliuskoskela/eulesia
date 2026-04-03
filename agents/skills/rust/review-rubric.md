@@ -21,6 +21,7 @@ Score 1–10 on each axis, weight by relevance to the module's role.
 - Error variants name domain failure modes, not implementation details
 - Sufficient context to diagnose without a debugger
 - `?` propagation doesn't erase important context (use `.map_err()`)
+- Never `#[from]` on `DbErr`, `sqlx::Error`, or other broad infrastructure errors — always add context at the call site
 
 ### Ownership & borrowing (weight: high)
 
@@ -122,6 +123,15 @@ let user = sqlx::query("...")
     .fetch_one(&pool)
     .await
     .map_err(|e| UserError::Database { context: "find_by_id", source: e })?;
+```
+
+### `#[from]` on broad errors
+
+```rust
+// BAD: Database(#[from] sea_orm::DbErr) erases call-site context.
+// Every DB error looks identical in logs.
+
+// GOOD: explicit map_err with context at every call site.
 ```
 
 ### `async` for CPU-bound work

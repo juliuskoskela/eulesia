@@ -34,15 +34,31 @@ Always read the relevant reference file before responding. Multiple may apply.
 
 ```
 crates/
-├── common/     Shared types (Id, Timestamp, Paginated), error types
-├── db/         sqlx connection pool, migrations, query functions
-├── auth/       Authentication, sessions, device verification
+├── common/     Shared types (Id, UserId, DeviceId, Platform), error types
+├── db/         sea-orm entities, migrations, repository layer
+├── auth/       Authentication, sessions, password hashing, middleware
 ├── api/        axum route handlers, request/response types
+├── jobs/       Background workers (outbox processor)
 └── server/     Binary: config, logging, startup, graceful shutdown
 ```
 
 Dependencies flow inward: `server` → `api` → `auth`/`db` → `common`.
 `common` has zero IO dependencies.
+
+### Auth middleware
+
+Session tokens extracted from `Authorization: Bearer` header or `session`
+cookie. The middleware populates `AuthUser` in request extensions.
+Routes that require auth use the `AuthUser` extractor (returns 401 if missing).
+Routes that don't need auth simply don't extract it.
+
+```rust
+// Requires auth — 401 if no session
+async fn me(auth: AuthUser, State(state): State<AppState>) -> Result<...>
+
+// No auth required — middleware passes through
+async fn health() -> Json<HealthResponse>
+```
 
 ### Lint policy
 

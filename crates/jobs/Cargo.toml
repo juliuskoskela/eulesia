@@ -1,5 +1,5 @@
 [package]
-name = "eulesia-common"
+name = "eulesia-jobs"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,9 +7,11 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-axum = { workspace = true }
+eulesia-db = { path = "../db" }
+sea-orm = { workspace = true }
 chrono = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
