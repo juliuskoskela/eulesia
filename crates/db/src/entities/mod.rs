@@ -43,3 +43,6 @@ pub mod places;
 // Events
 pub mod domain_events;
 pub mod outbox;
+
+#[cfg(test)]
+mod tests;
