@@ -16,14 +16,14 @@ pkgs.stdenv.mkDerivation {
 
   buildPhase = ''
     runHook preBuild
-    pnpm run build
+    pnpm --filter @eulesia/web run build
     runHook postBuild
   '';
 
   installPhase = ''
     runHook preInstall
     mkdir -p $out
-    cp -r dist/* $out/
+    cp -r apps/web/dist/* $out/
     runHook postInstall
   '';
 }

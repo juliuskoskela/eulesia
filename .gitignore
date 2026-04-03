@@ -10,14 +10,10 @@
 # === Directories ===
 !agents/
 !agents/**
-!android/
-!android/**
 !apps/
 !apps/**
 !crates/
 !crates/**
-!assets/
-!assets/**
 !.claude/
 !.claude/**
 !.codex/
@@ -26,20 +22,10 @@
 !.github/**
 !docs/
 !docs/**
-!icons/
-!icons/**
-!ios/
-!ios/**
 !nix/
 !nix/**
-!public/
-!public/**
 !secrets/
 !secrets/**
-!scripts/
-!scripts/**
-!src/
-!src/**
 !tests/
 !tests/**
 
@@ -53,20 +39,12 @@
 !/.sops.yaml
 !/LICENSE
 !/README.md
-!/capacitor.config.ts
-!/eslint.config.js
 !/flake.lock
 !/flake.nix
-!/index.html
 !/justfile
 !/package.json
 !/pnpm-lock.yaml
 !/pnpm-workspace.yaml
-!/tsconfig.app.json
-!/tsconfig.json
-!/tsconfig.node.json
-!/vite.config.ts
-!/vitest.config.ts
 !/playwright.config.ts
 
 # === Exclusions (re-ignore in whitelisted dirs) ===
