@@ -10,7 +10,10 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
     init_logging(&config);
 
-    info!(version = env!("CARGO_PKG_VERSION"), "starting eulesia-server");
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        "starting eulesia-server"
+    );
 
     // Connect to database if URL provided
     let db = if let Some(ref url) = config.database_url {
@@ -40,10 +43,10 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn init_logging(config: &Config) {
-    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&config.log_level));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level));
 
     if config.log_json {
         tracing_subscriber::registry()

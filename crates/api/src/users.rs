@@ -17,10 +17,7 @@ struct UserProfile {
     avatar_url: Option<String>,
 }
 
-async fn me(
-    auth: AuthUser,
-    State(state): State<AppState>,
-) -> Result<Json<UserProfile>, ApiError> {
+async fn me(auth: AuthUser, State(state): State<AppState>) -> Result<Json<UserProfile>, ApiError> {
     let row = sqlx::query("SELECT id, username, name, avatar_url FROM users WHERE id = $1")
         .bind(auth.user_id)
         .fetch_optional(&state.db)

@@ -71,13 +71,13 @@ If any step fails, stop the pipeline and enter plan mode:
 
 Detect which components are affected by uncommitted or staged changes:
 
-| Path pattern | Component | Toolchain |
-|---|---|---|
-| `crates/**` | v2 Rust server | `cargo build`, `cargo test`, `cargo clippy` |
-| `apps/api/**` | v1 Node API | `pnpm --filter @eulesia/api run check` |
-| `src/**` | Frontend | `pnpm run lint:web && pnpm run typecheck:web` |
-| `nix/**` | Nix infra | `nix flake check` |
-| `tests/e2e/**` | E2E tests | `pnpm exec playwright test` |
+| Path pattern   | Component      | Toolchain                                     |
+| -------------- | -------------- | --------------------------------------------- |
+| `crates/**`    | v2 Rust server | `cargo build`, `cargo test`, `cargo clippy`   |
+| `apps/api/**`  | v1 Node API    | `pnpm --filter @eulesia/api run check`        |
+| `src/**`       | Frontend       | `pnpm run lint:web && pnpm run typecheck:web` |
+| `nix/**`       | Nix infra      | `nix flake check`                             |
+| `tests/e2e/**` | E2E tests      | `pnpm exec playwright test`                   |
 
 When changes span multiple components, run all relevant checks.
 

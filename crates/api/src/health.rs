@@ -26,10 +26,7 @@ struct ReadyResponse {
 }
 
 async fn ready(State(state): State<AppState>) -> Result<Json<ReadyResponse>, ApiError> {
-    let db_ok = sqlx::query("SELECT 1")
-        .execute(&state.db)
-        .await
-        .is_ok();
+    let db_ok = sqlx::query("SELECT 1").execute(&state.db).await.is_ok();
 
     let status = if db_ok { "ready" } else { "degraded" };
 

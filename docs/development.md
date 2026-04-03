@@ -26,14 +26,14 @@ eulesia/
 
 ### Two backends during transition
 
-| | v1 (Node/Express) | v2 (Rust/axum) |
-|---|---|---|
-| **Location** | `apps/api/` | `crates/server/` |
-| **Port** | 3001 | 3002 |
-| **API prefix** | `/api/v1/` | `/api/v2/` |
-| **Build** | `pnpm --filter @eulesia/api run build` | `cargo build -p eulesia-server` |
-| **Test** | `pnpm --filter @eulesia/api run test:run` | `cargo test -p eulesia-server` |
-| **Nix build** | `nix build .#api` | `nix build .#server` |
+|                | v1 (Node/Express)                         | v2 (Rust/axum)                  |
+| -------------- | ----------------------------------------- | ------------------------------- |
+| **Location**   | `apps/api/`                               | `crates/server/`                |
+| **Port**       | 3001                                      | 3002                            |
+| **API prefix** | `/api/v1/`                                | `/api/v2/`                      |
+| **Build**      | `pnpm --filter @eulesia/api run build`    | `cargo build -p eulesia-server` |
+| **Test**       | `pnpm --filter @eulesia/api run test:run` | `cargo test -p eulesia-server`  |
+| **Nix build**  | `nix build .#api`                         | `nix build .#server`            |
 
 Both run simultaneously. Endpoints migrate from v1 → v2 incrementally.
 
@@ -41,16 +41,16 @@ Both run simultaneously. Endpoints migrate from v1 → v2 incrementally.
 
 Claude Code skills for common workflows, defined in `agents/skills/`:
 
-| Skill       | Purpose                                        |
-| ----------- | ---------------------------------------------- |
-| `/impl`     | Implement a feature or change                  |
-| `/check`    | Run quality checks                             |
-| `/fix`      | Fix an issue with full diagnostics             |
-| `/fix-fast` | Quick fix without full analysis                |
-| `/resolve`  | Resolve a failing check or test                |
-| `/ship`     | Prepare changes for merge                      |
-| `/plan`     | Create an implementation plan                  |
-| `/review`   | Review code changes                            |
+| Skill       | Purpose                            |
+| ----------- | ---------------------------------- |
+| `/impl`     | Implement a feature or change      |
+| `/check`    | Run quality checks                 |
+| `/fix`      | Fix an issue with full diagnostics |
+| `/fix-fast` | Quick fix without full analysis    |
+| `/resolve`  | Resolve a failing check or test    |
+| `/ship`     | Prepare changes for merge          |
+| `/plan`     | Create an implementation plan      |
+| `/review`   | Review code changes                |
 
 Skills are context-aware: they detect whether changes are in `crates/` (Rust) or `apps/`/`src/` (JS/TS) and run the appropriate toolchain.
 

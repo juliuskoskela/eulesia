@@ -82,15 +82,15 @@ The client is the **authority for cryptographic operations and private content r
 
 These cross the boundary and need coordinated design:
 
-| Concern | Server | Client |
-|---------|--------|--------|
-| **Device registration** | Stores public keys, serves pre-key bundles | Generates keys, uploads, manages local store |
-| **Session establishment** | Relays key exchange messages | Runs X3DH / session protocol |
-| **Group membership** | Tracks members, enforces roles | Distributes group keys on membership change |
-| **Delivery receipts** | Confirms storage (plaintext metadata) | Sends encrypted read receipts |
-| **Typing indicators** | Relays ephemeral signals | Sends/displays typing state |
-| **Push notifications** | Sends push with encrypted payload | Decrypts and displays |
-| **Recovery** | Validates recovery token | Generates recovery key, encrypts key backup |
+| Concern                   | Server                                     | Client                                       |
+| ------------------------- | ------------------------------------------ | -------------------------------------------- |
+| **Device registration**   | Stores public keys, serves pre-key bundles | Generates keys, uploads, manages local store |
+| **Session establishment** | Relays key exchange messages               | Runs X3DH / session protocol                 |
+| **Group membership**      | Tracks members, enforces roles             | Distributes group keys on membership change  |
+| **Delivery receipts**     | Confirms storage (plaintext metadata)      | Sends encrypted read receipts                |
+| **Typing indicators**     | Relays ephemeral signals                   | Sends/displays typing state                  |
+| **Push notifications**    | Sends push with encrypted payload          | Decrypts and displays                        |
+| **Recovery**              | Validates recovery token                   | Generates recovery key, encrypts key backup  |
 
 ## API Surface
 
@@ -184,17 +184,17 @@ Client → Generate identity key + signed pre-key + one-time pre-keys
 
 ## Technology Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Server | Rust, axum, tokio |
-| Database | PostgreSQL 16, sqlx (compile-time checked queries) |
-| Search | Meilisearch |
-| Realtime | WebSocket via axum |
-| Client | React 19, TypeScript, Vite |
-| E2EE | TBD: libsignal-protocol / openmls / vodozemac |
-| Mobile | Capacitor (iOS/Android) |
-| Deployment | NixOS, systemd, Traefik |
-| CI | GitHub Actions, Nix flake checks |
+| Layer      | Technology                                         |
+| ---------- | -------------------------------------------------- |
+| Server     | Rust, axum, tokio                                  |
+| Database   | PostgreSQL 16, sqlx (compile-time checked queries) |
+| Search     | Meilisearch                                        |
+| Realtime   | WebSocket via axum                                 |
+| Client     | React 19, TypeScript, Vite                         |
+| E2EE       | TBD: libsignal-protocol / openmls / vodozemac      |
+| Mobile     | Capacitor (iOS/Android)                            |
+| Deployment | NixOS, systemd, Traefik                            |
+| CI         | GitHub Actions, Nix flake checks                   |
 
 ## Deployment Model
 
