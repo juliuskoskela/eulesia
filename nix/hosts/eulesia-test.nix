@@ -264,8 +264,9 @@
       };
     };
 
+    # v2 Rust server — verified working, disabled until v1 migration begins
     eulesia-server = {
-      enable = true;
+      enable = false;
       package = eulesiaPackages.server;
       frontendOrigin = "https://test.eulesia.org";
       cookieDomain = ".test.eulesia.org";

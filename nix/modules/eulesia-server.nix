@@ -108,13 +108,33 @@ in {
       ];
     };
 
+    # Pre-create citext extension (requires superuser) and grant schema
+    # access to the application user.
+    systemd.services.eulesia-server-db-setup = mkIf cfg.database.createLocally {
+      description = "Eulesia v2 database setup (extensions + permissions)";
+      wantedBy = ["multi-user.target"];
+      after = ["postgresql.service"];
+      requires = ["postgresql.service"];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = "postgres";
+      };
+      script = ''
+        psql -d ${cfg.database.name} -c "CREATE EXTENSION IF NOT EXISTS citext;"
+        psql -d ${cfg.database.name} -c "GRANT ALL ON SCHEMA public TO ${cfg.user};"
+      '';
+    };
+
     systemd.services.eulesia-server = {
       description = "Eulesia v2 API Server";
       wantedBy = ["multi-user.target"];
       wants = ["network-online.target"];
       after =
         ["network-online.target"]
-        ++ optional cfg.database.createLocally "postgresql.service";
+        ++ optional cfg.database.createLocally "eulesia-server-db-setup.service";
+      requires =
+        optional cfg.database.createLocally "eulesia-server-db-setup.service";
 
       environment =
         {
