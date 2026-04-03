@@ -59,9 +59,9 @@ _: {
       }
 
       ensure_dependencies() {
-        if [ ! -f node_modules/.package-lock.json ] || ! cmp -s package-lock.json node_modules/.package-lock.json >/dev/null 2>&1; then
-          echo "Installing npm dependencies..."
-          npm ci
+        if [ ! -d "node_modules" ] || [ "pnpm-lock.yaml" -nt "node_modules/.pnpm/lock.yaml" ]; then
+          echo "Installing pnpm dependencies..."
+          pnpm install --frozen-lockfile
         fi
       }
 
@@ -153,20 +153,20 @@ _: {
 
     devWeb = pkgs.writeShellApplication {
       name = "eulesia-dev-web";
-      runtimeInputs = [nodejs];
+      runtimeInputs = [nodejs pkgs.pnpm_10];
       text = ''
         set -euo pipefail
         ${shellFunctions}
         configure_dev_env
         ensure_dependencies
 
-        exec npm run dev -- --host 0.0.0.0
+        exec pnpm run dev -- --host 0.0.0.0
       '';
     };
 
     dbMigrate = pkgs.writeShellApplication {
       name = "eulesia-db-migrate";
-      runtimeInputs = [nodejs postgres pkgs.curl];
+      runtimeInputs = [nodejs pkgs.pnpm_10 postgres pkgs.curl];
       text = ''
         set -euo pipefail
         ${shellFunctions}
@@ -174,13 +174,13 @@ _: {
         ensure_dependencies
         wait_for_postgres
 
-        exec npm run db:push --workspace=@eulesia/api
+        exec pnpm --filter @eulesia/api run db:push
       '';
     };
 
     devApi = pkgs.writeShellApplication {
       name = "eulesia-dev-api";
-      runtimeInputs = [nodejs postgres pkgs.curl dbMigrate];
+      runtimeInputs = [nodejs pkgs.pnpm_10 postgres pkgs.curl dbMigrate];
       text = ''
         set -euo pipefail
         ${shellFunctions}
@@ -191,7 +191,7 @@ _: {
         mkdir -p "$UPLOAD_DIR"
         ${dbMigrate}/bin/eulesia-db-migrate
 
-        exec npm run dev --workspace=@eulesia/api
+        exec pnpm --filter @eulesia/api run dev
       '';
     };
 

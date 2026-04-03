@@ -1,19 +1,17 @@
 {
   pkgs,
   src,
+  pnpmDeps,
 }:
-pkgs.buildNpmPackage {
+pkgs.stdenv.mkDerivation {
   pname = "eulesia-api";
   version = "1.0.0";
-  inherit src;
-
-  nodejs = pkgs.nodejs_22;
-  npmDepsHash = "sha256-y3LBC+9reH+R9ZxPH1jtZT7ltF2dW9YREoIZt3KwF7k=";
-  npmWorkspace = "apps/api";
-  makeCacheWritable = true;
-  npmRebuildFlags = ["--ignore-scripts"];
+  inherit src pnpmDeps;
 
   nativeBuildInputs = with pkgs; [
+    nodejs_22
+    pnpm_10
+    pnpmConfigHook
     python3
     pkg-config
   ];
@@ -23,7 +21,11 @@ pkgs.buildNpmPackage {
     libargon2
   ];
 
-  npmBuildScript = "build";
+  buildPhase = ''
+    runHook preBuild
+    pnpm --filter @eulesia/api run build
+    runHook postBuild
+  '';
 
   installPhase = ''
     runHook preInstall

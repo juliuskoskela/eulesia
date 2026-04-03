@@ -12,7 +12,7 @@ _: {
         dir="$PWD"
 
         while [ "$dir" != "/" ]; do
-          if [ -f "$dir/flake.nix" ] && [ -f "$dir/package-lock.json" ]; then
+          if [ -f "$dir/flake.nix" ] && [ -f "$dir/pnpm-lock.yaml" ]; then
             printf '%s\n' "$dir"
             return 0
           fi
@@ -31,13 +31,9 @@ _: {
       cd "$repo_root"
 
       ensure_dependencies() {
-        local lockfile_snapshot
-        lockfile_snapshot="node_modules/.eulesia-package-lock.json"
-
-        if [ ! -f "$lockfile_snapshot" ] || ! cmp -s package-lock.json "$lockfile_snapshot" >/dev/null 2>&1; then
-          echo "Installing npm dependencies..."
-          npm ci
-          cp package-lock.json "$lockfile_snapshot"
+        if [ ! -d "node_modules" ] || [ "pnpm-lock.yaml" -nt "node_modules/.pnpm/lock.yaml" ]; then
+          echo "Installing pnpm dependencies..."
+          pnpm install --frozen-lockfile
         fi
       }
     '';
@@ -88,6 +84,7 @@ _: {
       name = "lint-frontend";
       runtimeInputs = with pkgs; [
         nodejs
+        pnpm_10
         python3
         pkg-config
         vips
@@ -97,9 +94,9 @@ _: {
         set -euo pipefail
         ${shellFunctions}
         ensure_dependencies
-        npm run lint:web:fix
-        npm run lint:web
-        npm run typecheck:web
+        pnpm run lint:web:fix
+        pnpm run lint:web
+        pnpm run typecheck:web
       '';
     };
 
@@ -107,6 +104,7 @@ _: {
       name = "lint-api";
       runtimeInputs = with pkgs; [
         nodejs
+        pnpm_10
         python3
         pkg-config
         vips
@@ -116,9 +114,9 @@ _: {
         set -euo pipefail
         ${shellFunctions}
         ensure_dependencies
-        npm run lint:api:fix
-        npm run lint:api
-        npm run typecheck:api
+        pnpm run lint:api:fix
+        pnpm run lint:api
+        pnpm run typecheck:api
       '';
     };
 
@@ -137,6 +135,7 @@ _: {
       name = "test-frontend";
       runtimeInputs = with pkgs; [
         nodejs
+        pnpm_10
         python3
         pkg-config
         vips
@@ -146,7 +145,7 @@ _: {
         set -euo pipefail
         ${shellFunctions}
         ensure_dependencies
-        npm run test:web:run
+        pnpm run test:web:run
       '';
     };
 
@@ -154,6 +153,7 @@ _: {
       name = "test-api";
       runtimeInputs = with pkgs; [
         nodejs
+        pnpm_10
         python3
         pkg-config
         vips
@@ -163,7 +163,7 @@ _: {
         set -euo pipefail
         ${shellFunctions}
         ensure_dependencies
-        npm run test:api:run
+        pnpm run test:api:run
       '';
     };
 

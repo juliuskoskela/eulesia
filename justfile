@@ -31,10 +31,10 @@ test:
     nix run .#test
 
 test-e2e:
-    npx playwright test
+    pnpm exec playwright test
 
 test-e2e-ui:
-    npx playwright test --ui
+    pnpm exec playwright test --ui
 
 build:
     nix build .#build

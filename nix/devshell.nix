@@ -6,6 +6,7 @@
   }: let
     commonPackages = with pkgs; [
       nodejs_22
+      pnpm_10
       just
       process-compose
       git
@@ -91,7 +92,6 @@
             config.packages.ci-check
             pkgs.gnumake
             pkgs.gcc
-            pkgs.node-gyp
             playwrightBrowsers
           ];
         shellHook = ''
