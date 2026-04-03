@@ -39,18 +39,15 @@ pub enum AuthError {
 
 impl From<AuthError> for ApiError {
     fn from(err: AuthError) -> Self {
+        use AuthError as E;
         match err {
-            AuthError::InvalidCredentials
-            | AuthError::SessionExpired
-            | AuthError::SessionRevoked => ApiError::Unauthorized,
-            AuthError::UserNotFound => ApiError::NotFound("user not found".into()),
-            AuthError::UsernameTaken(u) => ApiError::Conflict(format!("username taken: {u}")),
-            AuthError::WeakPassword { reason } | AuthError::InvalidUsername { reason } => {
-                ApiError::BadRequest(reason)
-            }
-            AuthError::DeviceLimitExceeded => ApiError::BadRequest("device limit exceeded".into()),
-            AuthError::Database { source, .. } => ApiError::Database(source.to_string()),
-            AuthError::HashingFailed => ApiError::Internal("password hashing failed".into()),
+            E::InvalidCredentials | E::SessionExpired | E::SessionRevoked => Self::Unauthorized,
+            E::UserNotFound => Self::NotFound("user not found".into()),
+            E::UsernameTaken(u) => Self::Conflict(format!("username taken: {u}")),
+            E::WeakPassword { reason } | E::InvalidUsername { reason } => Self::BadRequest(reason),
+            E::DeviceLimitExceeded => Self::BadRequest("device limit exceeded".into()),
+            E::Database { source, .. } => Self::Database(source.to_string()),
+            E::HashingFailed => Self::Internal("password hashing failed".into()),
         }
     }
 }

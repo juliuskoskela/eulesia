@@ -98,7 +98,7 @@ pub enum Platform {
 }
 
 impl Platform {
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Web => "web",
             Self::Android => "android",

@@ -12,7 +12,7 @@ impl MigrationName for Migration {
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::large_stack_frames)]
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Extensions
         manager

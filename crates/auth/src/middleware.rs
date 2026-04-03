@@ -5,10 +5,12 @@ use eulesia_common::types::{DeviceId, SessionId, UserId};
 use crate::service::AuthService;
 use crate::session::AuthUser;
 
-/// Middleware that extracts a session token from the request and populates
-/// `AuthUser` in the request extensions. If no token is found or the session
-/// is invalid, the request proceeds without `AuthUser` -- routes that require
-/// auth use the `AuthUser` extractor which returns 401.
+/// Session authentication middleware.
+///
+/// Extracts a session token from the request and populates `AuthUser` in
+/// request extensions. If no token is found or the session is invalid, the
+/// request proceeds without `AuthUser` — routes that require auth use the
+/// `AuthUser` extractor which returns 401.
 pub async fn auth_middleware(
     State(db): State<std::sync::Arc<sea_orm::DatabaseConnection>>,
     jar: CookieJar,
