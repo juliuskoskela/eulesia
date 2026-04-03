@@ -38,7 +38,7 @@ export default defineConfig({
   webServer: process.env.CI
     ? undefined
     : {
-        command: "pnpm run dev",
+        command: "pnpm --filter @eulesia/web run dev",
         url: "http://localhost:5173",
         reuseExistingServer: true,
         timeout: 30_000,

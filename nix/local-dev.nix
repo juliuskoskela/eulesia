@@ -160,7 +160,7 @@ _: {
         configure_dev_env
         ensure_dependencies
 
-        exec pnpm run dev -- --host 0.0.0.0
+        exec pnpm --filter @eulesia/web run dev -- --host 0.0.0.0
       '';
     };
 

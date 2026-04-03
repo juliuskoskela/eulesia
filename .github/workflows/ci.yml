@@ -249,7 +249,7 @@ jobs:
             wait_for "API" 30 "curl -sf $API_URL/api/v1/health >/dev/null 2>&1"
 
             # Start frontend on port 5174
-            pnpm exec vite --port 5174 &
+            pnpm --filter @eulesia/web exec vite --port 5174 &
             WEB_PID=$!
 
             wait_for "Frontend" 30 "curl -sf http://localhost:5174 >/dev/null 2>&1"

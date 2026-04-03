@@ -35,6 +35,7 @@ pkgs.stdenv.mkDerivation {
     cp -r apps/api/src $out/share/eulesia-api/src
     cp -r node_modules $out/share/eulesia-api/node_modules
     rm -f $out/share/eulesia-api/node_modules/@eulesia/api
+    rm -f $out/share/eulesia-api/node_modules/@eulesia/web
     cp apps/api/package.json $out/share/eulesia-api/package.json
     cp apps/api/drizzle.config.ts $out/share/eulesia-api/drizzle.config.ts
     cp apps/api/tsconfig.json $out/share/eulesia-api/tsconfig.json
