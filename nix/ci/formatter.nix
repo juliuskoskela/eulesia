@@ -23,8 +23,7 @@ _: {
             "apps/api/dist/*"
             "result*"
             "flake.lock"
-            "package-lock.json"
-            "apps/api/package-lock.json"
+            "pnpm-lock.yaml"
           ];
         };
       };
