@@ -1,0 +1,21 @@
+[package]
+name = "eulesia-api"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+eulesia-common = { path = "../common" }
+eulesia-auth = { path = "../auth" }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+axum-test = "17"
+tokio = { workspace = true }

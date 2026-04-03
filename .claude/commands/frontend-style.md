@@ -1,0 +1,1 @@
+../../agents/skills/frontend/SKILL.md

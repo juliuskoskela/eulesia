@@ -21,21 +21,23 @@
    ```
 
 2. **Classify the failure.** Is it one of these obvious categories?
-   - **Formatting:** whitespace, trailing commas, import order
-   - **Missing imports:** unresolved references to known modules
-   - **Unused variables/imports:** lint warnings about dead code
-   - **Simple type errors:** missing property, wrong argument type with clear fix
-   - **Missing exports:** newly created symbol not re-exported
+
+   **TypeScript (frontend, v1 API):**
+   - Formatting, missing imports, unused variables, simple type errors, missing exports
+
+   **Rust (v2 server):**
+   - `cargo fmt` diff, unused variables/imports, clippy warnings, missing `use`, borrow checker with obvious fix
 
 3. **Fix directly.** Apply the minimal change to resolve the issue.
 
    ```bash
-   # Formatting
+   # Formatting (all)
    just fmt
 
-   # Then re-check
-   just lint
-   npm run typecheck
+   # Then re-check per component
+   just lint                   # JS/TS linters
+   pnpm run typecheck          # TypeScript
+   cargo clippy -- -D warnings # Rust
    ```
 
 4. **Re-run the full check pipeline.**

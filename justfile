@@ -45,6 +45,21 @@ build-api:
 build-web:
     nix build .#frontend
 
+build-server:
+    nix build .#server
+
+server-dev:
+    cargo run -p eulesia-server
+
+server-test:
+    cargo test --workspace
+
+server-clippy:
+    cargo clippy --all-targets -- --deny warnings
+
+server-fmt:
+    cargo fmt --all --check
+
 ci-check:
     nix run .#ci-check
 

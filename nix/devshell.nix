@@ -2,8 +2,12 @@
   perSystem = {
     config,
     pkgs,
+    system,
     ...
   }: let
+    rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+      extensions = ["rust-src" "rust-analyzer"];
+    };
     commonPackages = with pkgs; [
       nodejs_22
       pnpm_10
@@ -22,6 +26,7 @@
       pkg-config
       vips
       libargon2
+      rustToolchain
       statix
       deadnix
       config.treefmt.build.wrapper

@@ -10,6 +10,7 @@ _: {
       programs = {
         alejandra.enable = true;
         prettier.enable = true;
+        rustfmt.enable = true;
         shfmt.enable = true;
       };
 
@@ -23,6 +24,7 @@ _: {
             "apps/api/dist/*"
             "result*"
             "flake.lock"
+            "Cargo.lock"
             "pnpm-lock.yaml"
           ];
         };

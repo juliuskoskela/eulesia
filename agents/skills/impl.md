@@ -41,9 +41,20 @@
    git checkout -b <prefix>/<short-slug>
    ```
 
-5. **Implement the change.** Write code, tests, and update documentation as needed. Keep commits atomic and well-messaged.
+5. **Identify target component(s).** Determine which part of the codebase is affected:
 
-6. **Run the full quality gate.**
+   | Component        | Location    | Build                                         | Test                                      |
+   | ---------------- | ----------- | --------------------------------------------- | ----------------------------------------- |
+   | v2 Server (Rust) | `crates/`   | `cargo build`                                 | `cargo test`                              |
+   | v1 API (Node)    | `apps/api/` | `pnpm --filter @eulesia/api run build`        | `pnpm --filter @eulesia/api run test:run` |
+   | Frontend         | `src/`      | `pnpm run build`                              | `pnpm run test:web:run`                   |
+   | Nix infra        | `nix/`      | `nix build .#server` / `.#api` / `.#frontend` | `nix flake check`                         |
+
+   See [Architecture](docs/architecture.md) for server/client scope boundaries.
+
+6. **Implement the change.** Write code, tests, and update documentation as needed. Keep commits atomic and well-messaged.
+
+7. **Run the full quality gate.**
 
    ```bash
    just ci-check
@@ -51,7 +62,7 @@
 
    If any step fails, run `/fix-fast` for obvious issues or `/fix` for deeper problems.
 
-7. **Open a draft PR to upstream.**
+8. **Open a draft PR to upstream.**
 
    ```bash
    git push -u origin <branch>

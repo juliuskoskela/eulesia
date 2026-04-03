@@ -9,6 +9,7 @@
     ./lib/hetzner-cloud-hardware.nix
     ./eulesia-test-disks.nix
     ../modules/eulesia.nix
+    ../modules/eulesia-server.nix
   ];
 
   nix.gc = {
@@ -261,6 +262,11 @@
         APP_URL = "https://test.eulesia.org";
         API_URL = "https://test.eulesia.org";
       };
+    };
+
+    eulesia-server = {
+      enable = true;
+      package = eulesiaPackages.server;
     };
   };
 
