@@ -19,16 +19,13 @@ async fn main() -> anyhow::Result<()> {
         "starting eulesia-server"
     );
 
-    let db = if let Some(ref url) = config.database_url {
-        let conn = eulesia_db::connect(url).await?;
-        eulesia_db::migrate(&conn).await?;
-        conn
-    } else {
-        info!("no DATABASE_URL set, running without database");
-        sea_orm::Database::connect("sqlite::memory:")
-            .await
-            .map_err(|e| anyhow::anyhow!("fallback db: {e}"))?
-    };
+    let database_url = config
+        .database_url
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("DATABASE_URL is required"))?;
+
+    let db = eulesia_db::connect(database_url).await?;
+    eulesia_db::migrate(&db).await?;
 
     let db = Arc::new(db);
 

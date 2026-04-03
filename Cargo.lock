@@ -835,7 +835,6 @@ dependencies = [
  "eulesia-common",
  "eulesia-db",
  "eulesia-jobs",
- "sea-orm",
  "tokio",
  "tokio-util",
  "tower",

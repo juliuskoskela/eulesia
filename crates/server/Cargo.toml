@@ -19,7 +19,6 @@ eulesia-jobs = { path = "../jobs" }
 anyhow = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true }
-sea-orm = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tower = { workspace = true }

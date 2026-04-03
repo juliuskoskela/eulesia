@@ -49,24 +49,92 @@ in {
       default = true;
       description = "Output logs as JSON.";
     };
+
+    database = {
+      createLocally = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Provision a PostgreSQL database locally for the v2 server.";
+      };
+
+      name = mkOption {
+        type = types.str;
+        default = "eulesia_v2";
+        description = "Database name for the v2 server.";
+      };
+
+      url = mkOption {
+        type = types.str;
+        default = "postgresql:///${cfg.database.name}";
+        description = "Database connection string.";
+      };
+    };
+
+    frontendOrigin = mkOption {
+      type = types.str;
+      default = "https://${config.services.eulesia.appDomain or "localhost"}";
+      description = "Frontend origin for CORS.";
+    };
+
+    cookieDomain = mkOption {
+      type = types.nullOr types.str;
+      default = config.services.eulesia.auth.cookieDomain or null;
+      description = "Cookie domain for session cookies.";
+    };
+
+    cookieSecure = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Set Secure flag on session cookies.";
+    };
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = !(cfg.database.createLocally && cfg.user != (config.services.eulesia.user or "eulesia"));
+        message = "Local PostgreSQL expects eulesia-server user to match for peer auth.";
+      }
+    ];
+
+    services.postgresql = mkIf cfg.database.createLocally {
+      enable = true;
+      ensureDatabases = [cfg.database.name];
+      ensureUsers = [
+        {
+          name = cfg.user;
+          ensureDBOwnership = true;
+        }
+      ];
+    };
+
     systemd.services.eulesia-server = {
       description = "Eulesia v2 API Server";
       wantedBy = ["multi-user.target"];
       wants = ["network-online.target"];
-      after = ["network-online.target"];
+      after =
+        ["network-online.target"]
+        ++ optional cfg.database.createLocally "postgresql.service";
 
-      environment = {
-        EULESIA_HOST = cfg.host;
-        EULESIA_PORT = toString cfg.port;
-        EULESIA_LOG_LEVEL = cfg.logLevel;
-        EULESIA_LOG_JSON =
-          if cfg.logJson
-          then "true"
-          else "";
-      };
+      environment =
+        {
+          DATABASE_URL = cfg.database.url;
+          EULESIA_HOST = cfg.host;
+          EULESIA_PORT = toString cfg.port;
+          EULESIA_LOG_LEVEL = cfg.logLevel;
+          EULESIA_LOG_JSON =
+            if cfg.logJson
+            then "true"
+            else "";
+          EULESIA_FRONTEND_ORIGIN = cfg.frontendOrigin;
+          EULESIA_COOKIE_SECURE =
+            if cfg.cookieSecure
+            then "true"
+            else "";
+        }
+        // optionalAttrs (cfg.cookieDomain != null) {
+          EULESIA_COOKIE_DOMAIN = cfg.cookieDomain;
+        };
 
       serviceConfig = {
         Type = "simple";
