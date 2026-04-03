@@ -47,6 +47,7 @@ Dependencies flow inward: `server` → `api` → `auth`/`db` → `common`.
 ### Lint policy
 
 Workspace-level lints enforced in `Cargo.toml`:
+
 - `clippy::all` = deny
 - `clippy::pedantic` = warn
 - `clippy::nursery` = warn
@@ -104,6 +105,7 @@ pub enum DeviceError {
 ```
 
 **Rules**:
+
 - `thiserror` for library crates, `anyhow` only in the server binary
 - Error variants name the failure mode, not the implementation detail
 - Include enough context to diagnose without a debugger

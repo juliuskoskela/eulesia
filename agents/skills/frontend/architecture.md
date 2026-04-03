@@ -32,6 +32,7 @@ src/
 ```
 
 **Rules**:
+
 - `pages/` has one file per route — thin, delegates to components
 - `components/` split by domain (`agora/`, `clubs/`) and generic (`ui/`)
 - `hooks/` for reusable stateful logic
@@ -58,7 +59,7 @@ export interface Thread {
   createdAt: string;
 }
 
-export type Scope = 'local' | 'national' | 'european';
+export type Scope = "local" | "national" | "european";
 ```
 
 ### Branded types for IDs
@@ -69,9 +70,9 @@ Prevent mixing up IDs of different entities:
 declare const brand: unique symbol;
 type Brand<T, B extends string> = T & { readonly [brand]: B };
 
-export type ThreadId = Brand<string, 'ThreadId'>;
-export type UserId = Brand<string, 'UserId'>;
-export type ClubId = Brand<string, 'ClubId'>;
+export type ThreadId = Brand<string, "ThreadId">;
+export type UserId = Brand<string, "UserId">;
+export type ClubId = Brand<string, "ClubId">;
 ```
 
 ### Utility types
@@ -87,17 +88,17 @@ type Paginated<T> = {
 
 // Async state for UI
 type AsyncState<T> =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; data: T }
-  | { status: 'error'; error: AppError };
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: T }
+  | { status: "error"; error: AppError };
 
 // API error
 type AppError = {
   code: string;
   message: string;
   detail?: string;
-  recovery?: 'retry' | 'refresh' | 'login';
+  recovery?: "retry" | "refresh" | "login";
 };
 ```
 
@@ -113,15 +114,15 @@ type AppError = {
 
 ### What goes where
 
-| State | Location | Example |
-|-------|----------|---------|
-| View filters | URL params | `?scope=local&sort=newest` |
-| Active tab | URL params | `?tab=threads` |
-| Pagination | URL params | `?page=3` |
-| Modal open/closed | Component `useState` | `const [show, setShow] = useState(false)` |
-| Form field values | Component `useState` | `const [title, setTitle] = useState('')` |
-| Authenticated user | Context | `useAuth()` |
-| Thread list cache | React Query | `useQuery(['threads', scope])` |
+| State              | Location             | Example                                   |
+| ------------------ | -------------------- | ----------------------------------------- |
+| View filters       | URL params           | `?scope=local&sort=newest`                |
+| Active tab         | URL params           | `?tab=threads`                            |
+| Pagination         | URL params           | `?page=3`                                 |
+| Modal open/closed  | Component `useState` | `const [show, setShow] = useState(false)` |
+| Form field values  | Component `useState` | `const [title, setTitle] = useState('')`  |
+| Authenticated user | Context              | `useAuth()`                               |
+| Thread list cache  | React Query          | `useQuery(['threads', scope])`            |
 
 ## API client design
 
@@ -132,19 +133,22 @@ All API calls go through `src/lib/api.ts`:
 ```typescript
 // lib/api.ts — central, typed, handles auth
 export const api = {
-  async getThreads(scope: Scope, params?: PaginationParams): Promise<Paginated<Thread>> {
+  async getThreads(
+    scope: Scope,
+    params?: PaginationParams,
+  ): Promise<Paginated<Thread>> {
     const res = await fetch(buildApiUrl(`/api/v1/threads?scope=${scope}&...`), {
-      credentials: 'include',
+      credentials: "include",
     });
     if (!res.ok) throw await parseApiError(res);
     return res.json();
   },
 
   async createThread(data: CreateThread): Promise<Thread> {
-    const res = await fetch(buildApiUrl('/api/v1/threads'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+    const res = await fetch(buildApiUrl("/api/v1/threads"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(data),
     });
     if (!res.ok) throw await parseApiError(res);
@@ -163,22 +167,26 @@ async function parseApiError(res: Response): Promise<AppError> {
       code: body.code ?? `http_${res.status}`,
       message: body.message ?? res.statusText,
       detail: body.detail,
-      recovery: res.status === 401 ? 'login' : res.status >= 500 ? 'retry' : undefined,
+      recovery:
+        res.status === 401 ? "login" : res.status >= 500 ? "retry" : undefined,
     };
   } catch {
-    return { code: `http_${res.status}`, message: res.statusText || 'Request failed' };
+    return {
+      code: `http_${res.status}`,
+      message: res.statusText || "Request failed",
+    };
   }
 }
 ```
 
 ## Testing strategy
 
-| Layer | Test type | Tools | What to verify |
-|-------|-----------|-------|---------------|
-| Types/utils | Unit | Vitest | Input → output, edge cases |
-| Hooks | Unit | Vitest + renderHook | State transitions, API calls |
-| Components | Component | Vitest + testing-library/react | Renders correctly, handles events |
-| Pages | E2E | Playwright | User flows, auth, navigation |
+| Layer       | Test type | Tools                          | What to verify                    |
+| ----------- | --------- | ------------------------------ | --------------------------------- |
+| Types/utils | Unit      | Vitest                         | Input → output, edge cases        |
+| Hooks       | Unit      | Vitest + renderHook            | State transitions, API calls      |
+| Components  | Component | Vitest + testing-library/react | Renders correctly, handles events |
+| Pages       | E2E       | Playwright                     | User flows, auth, navigation      |
 
 ### Component testing principle
 

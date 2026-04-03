@@ -106,7 +106,9 @@ Split into page (data loading), container (state), presenter (rendering).
 
 ```typescript
 // BAD: useEffect + fetch for data that belongs in a page/hook
-useEffect(() => { fetch('/api/...').then(/* */); }, []);
+useEffect(() => {
+  fetch("/api/...").then(/* */);
+}, []);
 
 // GOOD: data loaded in page component or custom hook, passed as props
 ```
@@ -115,8 +117,10 @@ useEffect(() => { fetch('/api/...').then(/* */); }, []);
 
 ```typescript
 // BAD: magic strings
-dispatch({ type: 'UPDATE', payload: value });
+dispatch({ type: "UPDATE", payload: value });
 
 // GOOD: typed callback props
-interface Props { onUpdate: (value: ThreadUpdate) => void; }
+interface Props {
+  onUpdate: (value: ThreadUpdate) => void;
+}
 ```

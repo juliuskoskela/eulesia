@@ -17,6 +17,7 @@ crates/
 ```
 
 **Rules**:
+
 - `common` has zero IO dependencies (no `tokio`, no `sqlx`, no `reqwest`)
 - Domain types flow downward: `common` → `db`/`auth` → `api`
 - IO types don't flow upward: `api` doesn't export connection pools

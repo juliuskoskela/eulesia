@@ -10,39 +10,46 @@ patterns for the Eulesia frontend.
 ```typescript
 // Primitive state
 const [count, setCount] = useState(0);
-const [title, setTitle] = useState('');
+const [title, setTitle] = useState("");
 
 // Object/array state
 const [threads, setThreads] = useState<Thread[]>([]);
-const [filters, setFilters] = useState({ scope: 'local' as Scope, sort: 'newest' });
+const [filters, setFilters] = useState({
+  scope: "local" as Scope,
+  sort: "newest",
+});
 
 // Updating objects: spread to create new reference
-setFilters(prev => ({ ...prev, scope: 'national' }));
+setFilters((prev) => ({ ...prev, scope: "national" }));
 ```
 
 ### useMemo: computed values
 
 ```typescript
 const [threads, setThreads] = useState<Thread[]>([]);
-const [searchQuery, setSearchQuery] = useState('');
+const [searchQuery, setSearchQuery] = useState("");
 
 // Simple derived
 const count = useMemo(() => threads.length, [threads]);
 
 // Derived with computation
 const filtered = useMemo(
-  () => threads.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase())),
-  [threads, searchQuery]
+  () =>
+    threads.filter((t) =>
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()),
+    ),
+  [threads, searchQuery],
 );
 
 // Derived chain
 const totalScore = useMemo(
   () => filtered.reduce((sum, t) => sum + t.score, 0),
-  [filtered]
+  [filtered],
 );
 ```
 
 **Rules**:
+
 - Use `useMemo` for any computation that depends on state/props
 - Don't use `useEffect` + `setState` for derived values
 - Dependency arrays must be complete and correct
@@ -53,7 +60,7 @@ const totalScore = useMemo(
 // GOOD: external subscription
 useEffect(() => {
   const ws = new WebSocket(wsUrl);
-  ws.onmessage = (e) => setMessages(prev => [...prev, JSON.parse(e.data)]);
+  ws.onmessage = (e) => setMessages((prev) => [...prev, JSON.parse(e.data)]);
   return () => ws.close();
 }, [wsUrl]);
 
@@ -65,7 +72,10 @@ useEffect(() => {
 // GOOD: debounced URL update
 useEffect(() => {
   const timeout = setTimeout(() => {
-    setSearchParams(prev => { prev.set('q', query); return prev; });
+    setSearchParams((prev) => {
+      prev.set("q", query);
+      return prev;
+    });
   }, 300);
   return () => clearTimeout(timeout);
 }, [query]);
@@ -79,13 +89,16 @@ useEffect(() => {
 ```typescript
 // hooks/useThreads.ts
 function useThreads(scope: Scope) {
-  const [state, setState] = useState<AsyncState<Thread[]>>({ status: 'loading' });
+  const [state, setState] = useState<AsyncState<Thread[]>>({
+    status: "loading",
+  });
 
   useEffect(() => {
-    setState({ status: 'loading' });
-    api.getThreads(scope)
-      .then(data => setState({ status: 'success', data: data.data }))
-      .catch(err => setState({ status: 'error', error: toAppError(err) }));
+    setState({ status: "loading" });
+    api
+      .getThreads(scope)
+      .then((data) => setState({ status: "success", data: data.data }))
+      .catch((err) => setState({ status: "error", error: toAppError(err) }));
   }, [scope]);
 
   return state;
@@ -105,12 +118,18 @@ interface ThreadCardProps {
   compact?: boolean;
 }
 
-function ThreadCard({ thread, onVote, onComment, compact = false }: ThreadCardProps) {
+function ThreadCard({
+  thread,
+  onVote,
+  onComment,
+  compact = false,
+}: ThreadCardProps) {
   // ...
 }
 ```
 
 **Rules**:
+
 - Always type props (no untyped destructuring)
 - Default values in the parameter destructuring
 - Callbacks specify exact parameter and return types
@@ -172,11 +191,22 @@ function DataList<T>({ items, renderItem, emptyMessage }: DataListProps<T>) {
 ```typescript
 function handleKeyDown(e: React.KeyboardEvent) {
   switch (e.key) {
-    case 'ArrowDown': e.preventDefault(); focusNext(); break;
-    case 'ArrowUp': e.preventDefault(); focusPrevious(); break;
-    case 'Escape': close(); break;
-    case 'Enter':
-    case ' ': e.preventDefault(); selectCurrent(); break;
+    case "ArrowDown":
+      e.preventDefault();
+      focusNext();
+      break;
+    case "ArrowUp":
+      e.preventDefault();
+      focusPrevious();
+      break;
+    case "Escape":
+      close();
+      break;
+    case "Enter":
+    case " ":
+      e.preventDefault();
+      selectCurrent();
+      break;
   }
 }
 ```
@@ -185,20 +215,24 @@ function handleKeyDown(e: React.KeyboardEvent) {
 
 ```tsx
 // Always communicate state to screen readers
-{state.status === 'loading' && (
-  <div role="status" aria-live="polite">
-    <Spinner />
-    <span className="sr-only">{t('loading')}</span>
-  </div>
-)}
-{state.status === 'error' && (
-  <div role="alert">
-    <p>{state.error.message}</p>
-    {state.error.recovery === 'retry' && (
-      <button onClick={retry}>{t('tryAgain')}</button>
-    )}
-  </div>
-)}
+{
+  state.status === "loading" && (
+    <div role="status" aria-live="polite">
+      <Spinner />
+      <span className="sr-only">{t("loading")}</span>
+    </div>
+  );
+}
+{
+  state.status === "error" && (
+    <div role="alert">
+      <p>{state.error.message}</p>
+      {state.error.recovery === "retry" && (
+        <button onClick={retry}>{t("tryAgain")}</button>
+      )}
+    </div>
+  );
+}
 ```
 
 ### Focus management
@@ -208,7 +242,7 @@ function handleKeyDown(e: React.KeyboardEvent) {
 useEffect(() => {
   if (open && dialogRef.current) {
     const first = dialogRef.current.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
     first?.focus();
   }
@@ -220,8 +254,8 @@ useEffect(() => {
 ### Debounced inputs
 
 ```typescript
-const [rawQuery, setRawQuery] = useState('');
-const [debouncedQuery, setDebouncedQuery] = useState('');
+const [rawQuery, setRawQuery] = useState("");
+const [debouncedQuery, setDebouncedQuery] = useState("");
 
 useEffect(() => {
   const timeout = setTimeout(() => setDebouncedQuery(rawQuery), 300);
@@ -229,7 +263,10 @@ useEffect(() => {
 }, [rawQuery]);
 
 // Use debouncedQuery for expensive operations
-const results = useMemo(() => search(items, debouncedQuery), [items, debouncedQuery]);
+const results = useMemo(
+  () => search(items, debouncedQuery),
+  [items, debouncedQuery],
+);
 ```
 
 ### Lazy loading components
@@ -252,10 +289,13 @@ Use for heavy components (maps, charts, editors) not needed on initial render.
 
 ```typescript
 // Stable callback for child components that use React.memo
-const handleVote = useCallback(async (threadId: string, value: 1 | -1) => {
-  await api.voteThread(threadId, value);
-  refetch();
-}, [refetch]);
+const handleVote = useCallback(
+  async (threadId: string, value: 1 | -1) => {
+    await api.voteThread(threadId, value);
+    refetch();
+  },
+  [refetch],
+);
 ```
 
 ## Conditional CSS with Tailwind

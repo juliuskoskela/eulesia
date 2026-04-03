@@ -74,10 +74,10 @@ type ApiState = {
 
 // GOOD: exactly 4 states, each with only the data that exists
 type ApiState<T> =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; data: T }
-  | { status: 'error'; error: AppError; retryable: boolean };
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: T }
+  | { status: "error"; error: AppError; retryable: boolean };
 ```
 
 ### 2. Derive state, don't sync it
@@ -91,14 +91,14 @@ const [threads, setThreads] = useState<Thread[]>([]);
 const [filteredCount, setFilteredCount] = useState(0);
 
 useEffect(() => {
-  setFilteredCount(threads.filter(t => t.scope === scope).length);
+  setFilteredCount(threads.filter((t) => t.scope === scope).length);
 }, [threads, scope]);
 
 // GOOD: derived — always correct
 const [threads, setThreads] = useState<Thread[]>([]);
 const filteredCount = useMemo(
-  () => threads.filter(t => t.scope === scope).length,
-  [threads, scope]
+  () => threads.filter((t) => t.scope === scope).length,
+  [threads, scope],
 );
 ```
 
@@ -118,7 +118,7 @@ interface Props {
 interface Props {
   thread: Thread;
   onVote: (threadId: string, value: 1 | -1) => Promise<void>;
-  scope: 'local' | 'national' | 'european';
+  scope: "local" | "national" | "european";
 }
 ```
 
@@ -130,9 +130,9 @@ All user-facing strings go through i18n.
 ```typescript
 type AppError = {
   code: string;
-  message: string;       // user-facing, via i18n
-  detail?: string;       // technical, for debugging
-  recovery?: 'retry' | 'refresh' | 'login';
+  message: string; // user-facing, via i18n
+  detail?: string; // technical, for debugging
+  recovery?: "retry" | "refresh" | "login";
 };
 ```
 
@@ -146,7 +146,7 @@ global state. Data fetching lives in hooks or page-level components.
 function ThreadList() {
   const [threads, setThreads] = useState([]);
   useEffect(() => {
-    fetch('/api/v1/threads').then(/* ... */);
+    fetch("/api/v1/threads").then(/* ... */);
   }, []);
   return /* render */;
 }

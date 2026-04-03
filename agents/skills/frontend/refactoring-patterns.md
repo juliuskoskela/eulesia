@@ -20,10 +20,10 @@ interface ThreadState {
 
 // AFTER
 type ThreadState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; thread: Thread }
-  | { status: 'error'; error: AppError; retryable: boolean };
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; thread: Thread }
+  | { status: "error"; error: AppError; retryable: boolean };
 ```
 
 ## Pattern 2: Extract data fetching from components
@@ -75,17 +75,24 @@ function AgoraPage() {
 ```typescript
 // BEFORE
 const [threads, setThreads] = useState<Thread[]>([]);
-const [searchQuery, setSearchQuery] = useState('');
+const [searchQuery, setSearchQuery] = useState("");
 const [filtered, setFiltered] = useState<Thread[]>([]);
 
 useEffect(() => {
-  setFiltered(threads.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase())));
+  setFiltered(
+    threads.filter((t) =>
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()),
+    ),
+  );
 }, [threads, searchQuery]);
 
 // AFTER
 const filtered = useMemo(
-  () => threads.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase())),
-  [threads, searchQuery]
+  () =>
+    threads.filter((t) =>
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()),
+    ),
+  [threads, searchQuery],
 );
 ```
 
@@ -118,17 +125,24 @@ function useForm<T>(config: {
   const [submitting, setSubmitting] = useState(false);
 
   const updateField = <K extends keyof T>(field: K, value: T[K]) => {
-    setValues(prev => ({ ...prev, [field]: value }));
+    setValues((prev) => ({ ...prev, [field]: value }));
     setErrors({});
   };
 
   const submit = async () => {
     const fieldErrors = config.validate(values);
-    if (Object.keys(fieldErrors).length > 0) { setErrors(fieldErrors); return; }
+    if (Object.keys(fieldErrors).length > 0) {
+      setErrors(fieldErrors);
+      return;
+    }
     setSubmitting(true);
-    try { await config.onSubmit(values); }
-    catch (e) { setErrors({ _form: toAppError(e).message } as any); }
-    finally { setSubmitting(false); }
+    try {
+      await config.onSubmit(values);
+    } catch (e) {
+      setErrors({ _form: toAppError(e).message } as any);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return { values, errors, submitting, updateField, submit };
@@ -143,16 +157,19 @@ Component state (filters, sort order, tabs, pagination) lost on refresh.
 
 ```typescript
 // BEFORE: state in component, lost on refresh
-const [scope, setScope] = useState<Scope>('local');
-const [sort, setSort] = useState('newest');
+const [scope, setScope] = useState<Scope>("local");
+const [sort, setSort] = useState("newest");
 
 // AFTER: state in URL, preserved
 const [searchParams, setSearchParams] = useSearchParams();
-const scope = (searchParams.get('scope') ?? 'local') as Scope;
-const sort = searchParams.get('sort') ?? 'newest';
+const scope = (searchParams.get("scope") ?? "local") as Scope;
+const sort = searchParams.get("sort") ?? "newest";
 
 function setScope(s: Scope) {
-  setSearchParams(prev => { prev.set('scope', s); return prev; });
+  setSearchParams((prev) => {
+    prev.set("scope", s);
+    return prev;
+  });
 }
 ```
 
