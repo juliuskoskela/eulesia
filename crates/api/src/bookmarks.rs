@@ -40,6 +40,14 @@ async fn add_bookmark(
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("thread not found".into()))?;
 
+    // Idempotent: if already bookmarked, treat as no-op.
+    if BookmarkRepo::is_bookmarked(&state.db, auth.user_id.0, req.thread_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+    {
+        return Ok(());
+    }
+
     let now = chrono::Utc::now().fixed_offset();
     BookmarkRepo::create(
         &state.db,

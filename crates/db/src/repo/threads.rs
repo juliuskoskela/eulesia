@@ -31,6 +31,7 @@ impl ThreadRepo {
         scope: Option<&str>,
         municipality_id: Option<Uuid>,
         author_id: Option<Uuid>,
+        thread_ids: Option<&[Uuid]>,
         excluded_author_ids: &[Uuid],
         sort: &str,
         offset: u64,
@@ -48,6 +49,12 @@ impl ThreadRepo {
         }
         if let Some(aid) = author_id {
             query = query.filter(threads::Column::AuthorId.eq(aid));
+        }
+        if let Some(ids) = thread_ids {
+            if ids.is_empty() {
+                return Ok((vec![], 0));
+            }
+            query = query.filter(threads::Column::Id.is_in(ids.to_vec()));
         }
         if !excluded_author_ids.is_empty() {
             query = query.filter(threads::Column::AuthorId.is_not_in(excluded_author_ids.to_vec()));

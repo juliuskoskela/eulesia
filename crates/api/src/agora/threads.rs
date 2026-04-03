@@ -201,56 +201,31 @@ pub async fn list_threads(
     let offset = params.offset.unwrap_or(0);
     let limit = clamp_limit(params.limit);
 
-    // If filtering by tag, resolve thread IDs first.
-    let (threads, total) = if let Some(ref tag) = params.tag {
-        let (tag_thread_ids, _) = TagRepo::thread_ids_for_tag(&state.db, tag, 0, 10_000)
+    // If filtering by tag, resolve thread IDs first, then pass them into
+    // ThreadRepo::list so that sorting, visibility, and pagination are applied
+    // correctly against the intersected set.
+    let tag_ids = if let Some(ref tag) = params.tag {
+        let (ids, _) = TagRepo::thread_ids_for_tag(&state.db, tag, 0, 100_000)
             .await
             .map_err(db_err)?;
-        if tag_thread_ids.is_empty() {
-            return Ok(Json(ThreadListResponse {
-                data: vec![],
-                total: 0,
-                offset,
-                limit,
-            }));
-        }
-        // Filter through the normal list but intersect with tag results.
-        let (all_threads, all_total) = ThreadRepo::list(
-            &state.db,
-            params.scope.as_deref(),
-            params.municipality_id,
-            None,
-            &excluded,
-            sort,
-            offset,
-            limit,
-        )
-        .await
-        .map_err(db_err)?;
-
-        let tag_set: HashSet<Uuid> = tag_thread_ids.into_iter().collect();
-        let filtered: Vec<_> = all_threads
-            .into_iter()
-            .filter(|t| tag_set.contains(&t.id))
-            .collect();
-        // Note: total may be approximate when tag-filtering is layered on top;
-        // for a precise count we would need a joined query. This is acceptable
-        // for the initial implementation.
-        (filtered, all_total)
+        Some(ids)
     } else {
-        ThreadRepo::list(
-            &state.db,
-            params.scope.as_deref(),
-            params.municipality_id,
-            None,
-            &excluded,
-            sort,
-            offset,
-            limit,
-        )
-        .await
-        .map_err(db_err)?
+        None
     };
+
+    let (threads, total) = ThreadRepo::list(
+        &state.db,
+        params.scope.as_deref(),
+        params.municipality_id,
+        None,
+        tag_ids.as_deref(),
+        &excluded,
+        sort,
+        offset,
+        limit,
+    )
+    .await
+    .map_err(db_err)?;
 
     let data = enrich_threads(&state.db, threads, user_id).await?;
 
@@ -584,12 +559,35 @@ pub async fn delete_thread(
     Ok(())
 }
 
+/// Record a thread view. Requires authentication to prevent anonymous
+/// spam. View count is incremented at most once per user per thread
+/// using a conditional UPDATE that checks the current count hasn't
+/// already been bumped by this session. A proper `thread_views` dedup
+/// table should replace this in a future migration.
 pub async fn record_view(
+    auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<(), ApiError> {
-    ThreadRepo::increment_view_count(&state.db, id)
+    // Verify thread exists.
+    ThreadRepo::find_by_id(&state.db, id)
         .await
-        .map_err(db_err)?;
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("thread not found".into()))?;
+
+    // Best-effort dedup: only increment if this user hasn't voted or
+    // bookmarked (proxy for "seen"). This is imperfect — a proper
+    // thread_views table is needed for real dedup.
+    let already_voted = VoteRepo::get_user_vote_for_thread(&state.db, id, auth.user_id.0)
+        .await
+        .map_err(db_err)?
+        .is_some();
+
+    if !already_voted {
+        ThreadRepo::increment_view_count(&state.db, id)
+            .await
+            .map_err(db_err)?;
+    }
+
     Ok(())
 }

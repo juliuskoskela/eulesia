@@ -47,11 +47,14 @@ async fn follow_user(
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
 
-    // Check not blocked
-    if BlockRepo::is_blocked(&state.db, target_id, auth.user_id.0)
+    // Check not blocked in either direction.
+    let target_blocked_caller = BlockRepo::is_blocked(&state.db, target_id, auth.user_id.0)
         .await
-        .map_err(|e| ApiError::Database(e.to_string()))?
-    {
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    let caller_blocked_target = BlockRepo::is_blocked(&state.db, auth.user_id.0, target_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    if target_blocked_caller || caller_blocked_target {
         return Err(ApiError::Forbidden);
     }
 

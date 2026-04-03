@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use uuid::Uuid;
@@ -14,7 +12,7 @@ use eulesia_db::repo::threads::ThreadRepo;
 use super::threads::enrich_threads;
 use super::types::{TagWithCount, ThreadListParams, ThreadListResponse};
 
-#[allow(clippy::needless_pass_by_value)] // used as fn pointer in map_err
+#[allow(clippy::needless_pass_by_value)]
 fn db_err(e: sea_orm::DbErr) -> ApiError {
     ApiError::Database(e.to_string())
 }
@@ -45,60 +43,45 @@ pub async fn get_tag_threads(
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(20).min(100);
 
-    // Get thread IDs for this tag.
-    let (thread_ids, total) = TagRepo::thread_ids_for_tag(&state.db, &tag, offset, limit)
+    // Get ALL thread IDs for this tag (unpaginated).
+    let (tag_thread_ids, _) = TagRepo::thread_ids_for_tag(&state.db, &tag, 0, 100_000)
         .await
         .map_err(db_err)?;
 
-    if thread_ids.is_empty() {
-        return Ok(Json(ThreadListResponse {
-            data: vec![],
-            total,
-            offset,
-            limit,
-        }));
-    }
-
     // Compute block exclusions.
     let excluded: Vec<Uuid> = if let Some(uid) = user_id {
-        let blocked = BlockRepo::blocked_by_user(&state.db, uid)
-            .await
-            .map_err(db_err)?;
-        let blocked_by = BlockRepo::users_who_blocked(&state.db, uid)
-            .await
-            .map_err(db_err)?;
-
-        let mut set: HashSet<Uuid> = HashSet::new();
-        set.extend(blocked);
-        set.extend(blocked_by);
+        let mut set = std::collections::HashSet::new();
+        set.extend(
+            BlockRepo::blocked_by_user(&state.db, uid)
+                .await
+                .map_err(db_err)?,
+        );
+        set.extend(
+            BlockRepo::users_who_blocked(&state.db, uid)
+                .await
+                .map_err(db_err)?,
+        );
         set.into_iter().collect()
     } else {
         vec![]
     };
 
-    // Fetch the actual thread models. We use ThreadRepo::list scoped to these
-    // IDs by fetching them individually (they are already paginated by the tag
-    // query). A simpler approach: just fetch all and filter out blocked authors.
+    // Pass tag thread IDs into ThreadRepo::list so sorting, visibility filters,
+    // and pagination are applied correctly against the intersected set.
     let sort = params.sort.as_deref().unwrap_or("recent");
-    let (all_threads, _) = ThreadRepo::list(
+    let (threads, total) = ThreadRepo::list(
         &state.db,
         params.scope.as_deref(),
         params.municipality_id,
         None,
+        Some(&tag_thread_ids),
         &excluded,
         sort,
-        0,
-        10_000, // We already paginated via tag query
+        offset,
+        limit,
     )
     .await
     .map_err(db_err)?;
-
-    // Intersect with tag thread IDs.
-    let tag_set: HashSet<Uuid> = thread_ids.into_iter().collect();
-    let threads: Vec<_> = all_threads
-        .into_iter()
-        .filter(|t| tag_set.contains(&t.id))
-        .collect();
 
     let data = enrich_threads(&state.db, threads, user_id).await?;
 
