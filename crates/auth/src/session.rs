@@ -28,3 +28,18 @@ where
             .ok_or(ApiError::Unauthorized)
     }
 }
+
+/// Extractor that optionally provides authentication.
+/// Returns `None` if no valid session, never fails.
+pub struct OptionalAuth(pub Option<AuthUser>);
+
+impl<S> FromRequestParts<S> for OptionalAuth
+where
+    S: Send + Sync,
+{
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(Self(parts.extensions.get::<AuthUser>().cloned()))
+    }
+}

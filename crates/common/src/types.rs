@@ -83,6 +83,52 @@ impl std::fmt::Display for SessionId {
     }
 }
 
+/// Strongly-typed thread identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ThreadId(pub Uuid);
+
+impl From<Uuid> for ThreadId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<ThreadId> for Uuid {
+    fn from(id: ThreadId) -> Self {
+        id.0
+    }
+}
+
+impl std::fmt::Display for ThreadId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Strongly-typed comment identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CommentId(pub Uuid);
+
+impl From<Uuid> for CommentId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<CommentId> for Uuid {
+    fn from(id: CommentId) -> Self {
+        id.0
+    }
+}
+
+impl std::fmt::Display for CommentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Platform enum
 // ---------------------------------------------------------------------------

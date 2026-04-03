@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 time = { workspace = true }
 tower = { workspace = true }
 tracing = { workspace = true }
+tokio = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
