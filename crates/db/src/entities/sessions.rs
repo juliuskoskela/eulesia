@@ -39,4 +39,10 @@ impl Related<super::users::Entity> for Entity {
     }
 }
 
+impl Related<super::devices::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Device.def()
+    }
+}
+
 impl ActiveModelBehavior for ActiveModel {}

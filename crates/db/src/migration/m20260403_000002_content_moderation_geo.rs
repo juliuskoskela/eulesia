@@ -565,6 +565,63 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // ── Additional FK constraints ──
+        manager
+            .get_connection()
+            .execute_unprepared(
+                "
+                ALTER TABLE comments ADD CONSTRAINT fk_comments_parent FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE SET NULL;
+                ALTER TABLE locations ADD CONSTRAINT fk_locations_parent FOREIGN KEY (parent_id) REFERENCES locations(id);
+                ALTER TABLE threads ADD CONSTRAINT fk_threads_location FOREIGN KEY (location_id) REFERENCES locations(id);
+                ALTER TABLE places ADD CONSTRAINT fk_places_created_by FOREIGN KEY (created_by) REFERENCES users(id);
+                ALTER TABLE content_reports ADD CONSTRAINT fk_reports_assigned FOREIGN KEY (assigned_to) REFERENCES users(id);
+                ALTER TABLE moderation_actions ADD CONSTRAINT fk_mod_actions_admin FOREIGN KEY (admin_id) REFERENCES users(id);
+                ALTER TABLE user_sanctions ADD CONSTRAINT fk_sanctions_issued_by FOREIGN KEY (issued_by) REFERENCES users(id);
+                ALTER TABLE user_sanctions ADD CONSTRAINT fk_sanctions_revoked_by FOREIGN KEY (revoked_by) REFERENCES users(id) ON DELETE SET NULL;
+                ALTER TABLE moderation_appeals ADD CONSTRAINT fk_appeals_sanction FOREIGN KEY (sanction_id) REFERENCES user_sanctions(id);
+                ALTER TABLE moderation_appeals ADD CONSTRAINT fk_appeals_report FOREIGN KEY (report_id) REFERENCES content_reports(id);
+                ALTER TABLE moderation_appeals ADD CONSTRAINT fk_appeals_action FOREIGN KEY (action_id) REFERENCES moderation_actions(id);
+                ALTER TABLE moderation_appeals ADD CONSTRAINT fk_appeals_responded_by FOREIGN KEY (responded_by) REFERENCES users(id);
+                ",
+            )
+            .await?;
+
+        // ── Additional indexes ──
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_locations_parent")
+                    .table(Locations::Table)
+                    .col(Locations::ParentId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_reports_assigned")
+                    .table(ContentReports::Table)
+                    .col(ContentReports::AssignedTo)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_sanctions_user_expires")
+                    .table(UserSanctions::Table)
+                    .col(UserSanctions::UserId)
+                    .col(UserSanctions::ExpiresAt)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .get_connection()
+            .execute_unprepared(
+                "CREATE INDEX idx_threads_municipality_created ON threads (municipality_id, created_at DESC)",
+            )
+            .await?;
+
         Ok(())
     }
 

@@ -38,6 +38,12 @@ pub enum Relation {
     Votes,
 }
 
+impl Related<super::users::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Author.def()
+    }
+}
+
 impl Related<super::threads::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Thread.def()

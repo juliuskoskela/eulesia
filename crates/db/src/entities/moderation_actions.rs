@@ -24,6 +24,18 @@ pub enum Relation {
         to = "super::content_reports::Column::Id"
     )]
     Report,
+    #[sea_orm(
+        belongs_to = "super::users::Entity",
+        from = "Column::AdminId",
+        to = "super::users::Column::Id"
+    )]
+    Admin,
+}
+
+impl Related<super::users::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Admin.def()
+    }
 }
 
 impl Related<super::content_reports::Entity> for Entity {

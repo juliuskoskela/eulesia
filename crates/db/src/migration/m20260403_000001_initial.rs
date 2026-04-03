@@ -813,6 +813,109 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        // ── citext columns ──
+        manager
+            .get_connection()
+            .execute_unprepared(
+                "
+                ALTER TABLE users ALTER COLUMN username TYPE citext;
+                ALTER TABLE users ALTER COLUMN email TYPE citext;
+                ",
+            )
+            .await?;
+
+        // ── Additional FK constraints ──
+        manager
+            .get_connection()
+            .execute_unprepared(
+                "
+                ALTER TABLE sessions ADD CONSTRAINT fk_sessions_device FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE SET NULL;
+                ALTER TABLE direct_conversations ADD CONSTRAINT fk_direct_conv_user_a FOREIGN KEY (user_a_id) REFERENCES users(id);
+                ALTER TABLE direct_conversations ADD CONSTRAINT fk_direct_conv_user_b FOREIGN KEY (user_b_id) REFERENCES users(id);
+                ALTER TABLE conversations ADD CONSTRAINT fk_conv_creator FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE SET NULL;
+                ALTER TABLE message_redactions ADD CONSTRAINT fk_redaction_user FOREIGN KEY (redacted_by) REFERENCES users(id);
+                ALTER TABLE membership_events ADD CONSTRAINT fk_mevt_user FOREIGN KEY (user_id) REFERENCES users(id);
+                ALTER TABLE membership_events ADD CONSTRAINT fk_mevt_actor FOREIGN KEY (actor_id) REFERENCES users(id);
+                ALTER TABLE conversation_epochs ADD CONSTRAINT fk_epoch_rotated_by FOREIGN KEY (rotated_by) REFERENCES users(id) ON DELETE SET NULL;
+                ALTER TABLE memberships ADD CONSTRAINT fk_memberships_removed_by FOREIGN KEY (removed_by) REFERENCES users(id) ON DELETE SET NULL;
+                ALTER TABLE media ADD CONSTRAINT fk_media_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL;
+                ",
+            )
+            .await?;
+
+        // ── Additional CHECK constraints ──
+        manager
+            .get_connection()
+            .execute_unprepared(
+                "
+                ALTER TABLE conversation_epochs ADD CONSTRAINT chk_epoch_non_negative CHECK (epoch >= 0);
+                ALTER TABLE membership_events ADD CONSTRAINT chk_mevt_epoch_non_negative CHECK (epoch >= 0);
+                ",
+            )
+            .await?;
+
+        // ── Additional indexes ──
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_messages_sender")
+                    .table(Messages::Table)
+                    .col(Messages::SenderId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_sessions_expires")
+                    .table(Sessions::Table)
+                    .col(Sessions::ExpiresAt)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_follows_follower")
+                    .table(Follows::Table)
+                    .col(Follows::FollowerId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_blocks_blocker")
+                    .table(Blocks::Table)
+                    .col(Blocks::BlockerId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_mutes_user")
+                    .table(Mutes::Table)
+                    .col(Mutes::UserId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_mutes_muted")
+                    .table(Mutes::Table)
+                    .col(Mutes::MutedId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .get_connection()
+            .execute_unprepared(
+                "CREATE INDEX idx_spk_device_current ON device_signed_pre_keys (device_id, created_at DESC) WHERE superseded_at IS NULL",
+            )
+            .await?;
+
         Ok(())
     }
 

@@ -26,11 +26,47 @@ pub enum Relation {
         to = "super::users::Column::Id"
     )]
     User,
+    #[sea_orm(
+        belongs_to = "super::user_sanctions::Entity",
+        from = "Column::SanctionId",
+        to = "super::user_sanctions::Column::Id"
+    )]
+    Sanction,
+    #[sea_orm(
+        belongs_to = "super::content_reports::Entity",
+        from = "Column::ReportId",
+        to = "super::content_reports::Column::Id"
+    )]
+    Report,
+    #[sea_orm(
+        belongs_to = "super::moderation_actions::Entity",
+        from = "Column::ActionId",
+        to = "super::moderation_actions::Column::Id"
+    )]
+    Action,
 }
 
 impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::User.def()
+    }
+}
+
+impl Related<super::user_sanctions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Sanction.def()
+    }
+}
+
+impl Related<super::content_reports::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Report.def()
+    }
+}
+
+impl Related<super::moderation_actions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Action.def()
     }
 }
 

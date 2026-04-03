@@ -20,11 +20,23 @@ pub enum Relation {
         to = "super::threads::Column::Id"
     )]
     Thread,
+    #[sea_orm(
+        belongs_to = "super::users::Entity",
+        from = "Column::UserId",
+        to = "super::users::Column::Id"
+    )]
+    User,
 }
 
 impl Related<super::threads::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Thread.def()
+    }
+}
+
+impl Related<super::users::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::User.def()
     }
 }
 

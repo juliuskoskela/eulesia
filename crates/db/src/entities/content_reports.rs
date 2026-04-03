@@ -31,6 +31,12 @@ pub enum Relation {
     Actions,
 }
 
+impl Related<super::users::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Reporter.def()
+    }
+}
+
 impl Related<super::moderation_actions::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Actions.def()

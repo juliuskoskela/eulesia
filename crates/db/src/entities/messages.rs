@@ -42,4 +42,22 @@ impl Related<super::conversations::Entity> for Entity {
     }
 }
 
+impl Related<super::users::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Sender.def()
+    }
+}
+
+impl Related<super::message_redactions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Redaction.def()
+    }
+}
+
+impl Related<super::message_device_queue::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::DeviceQueue.def()
+    }
+}
+
 impl ActiveModelBehavior for ActiveModel {}
