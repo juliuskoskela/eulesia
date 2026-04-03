@@ -57,26 +57,24 @@
           export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
           cat <<'EOF'
-          Eulesia development shell
-          ========================
 
-          Primary workflow:
-            just dev
-            just lint
-            just test
-            just build
+          Eulesia Development Shell
+          ═════════════════════════
 
-          Useful commands:
-            nix run .#db-migrate
-            nix run .#db-reset
-            just bootstrap-test
-            just get-test-age-key
-            just rebuild-test
-            just vm-run
-            just vm-deploy
-            nix build .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
-            nix build .#nixosConfigurations.eulesia-test-bootstrap.config.system.build.toplevel
-            nix build .#nixosConfigurations.eulesia-test.config.system.build.toplevel
+          Dev workflow        Deploy & infra
+          ──────────────      ──────────────────────
+          just dev            just rebuild-test
+          just lint           just rebuild-prod
+          just test           just deploy-test
+          just build          just bootstrap-test
+
+          E2E testing         Database
+          ──────────────      ──────────────────────
+          just test-e2e       just db-migrate
+          just test-e2e-ui    just db-reset
+
+          Tools: node ${pkgs.nodejs_22.version} | pnpm ${pkgs.pnpm_10.version} | pg ${pkgs.postgresql_16.version}
+
           EOF
         '';
       };

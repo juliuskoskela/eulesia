@@ -42,6 +42,7 @@
 !tests/**
 
 # === Root Files (anchored with /) ===
+!/.envrc
 !/.gitignore
 !/.npmrc
 !/.env.production
