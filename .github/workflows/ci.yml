@@ -235,27 +235,27 @@ jobs:
             wait_for "Meilisearch" 30 "curl -sf $EULESIA_MEILI_URL/health >/dev/null 2>&1"
 
             # Install deps and run migrations
-            npm ci
-            npx --workspace=@eulesia/api drizzle-kit push --force
+            pnpm install --frozen-lockfile
+            pnpm --filter @eulesia/api exec drizzle-kit push --force
 
             # Seed E2E invite code for test user registration
             psql -h 127.0.0.1 -p "$EULESIA_PGPORT" -U "$EULESIA_DB_USER" -d "$EULESIA_DB_NAME" -c \
               "INSERT INTO invite_codes (code, status) VALUES ('\''E2ETEST'\'', '\''available'\'')"
 
             # Start API
-            npm run dev --workspace=@eulesia/api &
+            pnpm --filter @eulesia/api run dev &
             API_PID=$!
 
             wait_for "API" 30 "curl -sf $API_URL/api/v1/health >/dev/null 2>&1"
 
             # Start frontend on port 5174
-            npx vite --port 5174 &
+            pnpm exec vite --port 5174 &
             WEB_PID=$!
 
             wait_for "Frontend" 30 "curl -sf http://localhost:5174 >/dev/null 2>&1"
 
             # Run Playwright tests (browsers provided by Nix)
-            npx playwright test
+            pnpm exec playwright test
           '
 
       - name: Upload Playwright report

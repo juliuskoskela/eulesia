@@ -2,12 +2,20 @@ _: {
   perSystem = {pkgs, ...}: let
     repoSrc = pkgs.lib.cleanSource ../.;
     generateIduraJwks = import ./generate-idura-jwks.nix {inherit pkgs;};
+
+    pnpmDeps = pkgs.fetchPnpmDeps {
+      pname = "eulesia";
+      src = repoSrc;
+      hash = "sha256-NMMHriQJ5YwbjzuVPt2fA1Ugx/CKu6ISr4jox87Dpd0=";
+      fetcherVersion = 3;
+    };
+
     frontend = import ./frontend.nix {
-      inherit pkgs;
+      inherit pkgs pnpmDeps;
       src = repoSrc;
     };
     api = import ./api.nix {
-      inherit pkgs;
+      inherit pkgs pnpmDeps;
       src = repoSrc;
     };
     fullBuild = pkgs.runCommand "eulesia-build" {} ''
@@ -17,7 +25,7 @@ _: {
     '';
   in {
     packages = {
-      inherit frontend api;
+      inherit frontend api pnpmDeps;
       build = fullBuild;
       generate-idura-jwks = generateIduraJwks;
       default = fullBuild;

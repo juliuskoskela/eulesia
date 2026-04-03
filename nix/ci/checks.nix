@@ -7,9 +7,11 @@
     ...
   }: let
     repoSrc = pkgs.lib.cleanSource ../../.;
-    nodejs = pkgs.nodejs_22;
-    npmDepsHash = "sha256-y3LBC+9reH+R9ZxPH1jtZT7ltF2dW9YREoIZt3KwF7k=";
+    pnpmDeps = config.packages.pnpmDeps;
     nativeBuildInputs = with pkgs; [
+      nodejs_22
+      pnpm_10
+      pnpmConfigHook
       python3
       pkg-config
     ];
@@ -19,29 +21,32 @@
     ];
 
     mkFrontendCheck = name: script:
-      pkgs.buildNpmPackage {
+      pkgs.stdenv.mkDerivation {
         pname = name;
         version = "1.0.0";
         src = repoSrc;
-        inherit nodejs npmDepsHash nativeBuildInputs buildInputs;
-        makeCacheWritable = true;
-        npmRebuildFlags = ["--ignore-scripts"];
-        npmBuildScript = script;
+        inherit nativeBuildInputs buildInputs pnpmDeps;
+        buildPhase = ''
+          runHook preBuild
+          pnpm run ${script}
+          runHook postBuild
+        '';
         installPhase = ''
           mkdir -p $out
         '';
       };
 
     mkApiCheck = name: script:
-      pkgs.buildNpmPackage {
+      pkgs.stdenv.mkDerivation {
         pname = name;
         version = "1.0.0";
         src = repoSrc;
-        inherit nodejs npmDepsHash nativeBuildInputs buildInputs;
-        npmWorkspace = "apps/api";
-        makeCacheWritable = true;
-        npmRebuildFlags = ["--ignore-scripts"];
-        npmBuildScript = script;
+        inherit nativeBuildInputs buildInputs pnpmDeps;
+        buildPhase = ''
+          runHook preBuild
+          pnpm --filter @eulesia/api run ${script}
+          runHook postBuild
+        '';
         installPhase = ''
           mkdir -p $out
         '';

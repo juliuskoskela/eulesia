@@ -22,8 +22,6 @@
 !.codex/**
 !.github/
 !.github/**
-!docker/
-!docker/**
 !docs/
 !docs/**
 !icons/
@@ -44,6 +42,7 @@
 !tests/**
 
 # === Root Files (anchored with /) ===
+!/.envrc
 !/.gitignore
 !/.npmrc
 !/.env.production
@@ -56,8 +55,9 @@
 !/flake.nix
 !/index.html
 !/justfile
-!/package-lock.json
 !/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
 !/tsconfig.app.json
 !/tsconfig.json
 !/tsconfig.node.json
