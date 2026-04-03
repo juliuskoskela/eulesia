@@ -1,5 +1,6 @@
 pub mod entities;
 pub mod migration;
+pub mod repo;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use std::time::Duration;

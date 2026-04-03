@@ -1,7 +1,6 @@
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
-use sea_orm::EntityTrait;
 use serde::Serialize;
 
 use crate::AppState;
@@ -9,6 +8,7 @@ use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
 use eulesia_common::types::Id;
 use eulesia_db::entities::users;
+use eulesia_db::repo::users::UserRepo;
 
 #[derive(Serialize)]
 struct UserProfile {
@@ -30,8 +30,7 @@ impl From<users::Model> for UserProfile {
 }
 
 async fn me(auth: AuthUser, State(state): State<AppState>) -> Result<Json<UserProfile>, ApiError> {
-    let user = users::Entity::find_by_id(auth.user_id)
-        .one(&state.db)
+    let user = UserRepo::find_by_id(&state.db, auth.user_id)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
