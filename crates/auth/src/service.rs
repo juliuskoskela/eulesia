@@ -3,7 +3,7 @@ use sea_orm::{ActiveValue::Set, DatabaseConnection};
 use serde::Deserialize;
 use tracing::info;
 
-use eulesia_common::types::{SessionId, UserId, new_id};
+use eulesia_common::types::{DeviceId, SessionId, UserId, new_id};
 use eulesia_db::entities::{sessions, users};
 use eulesia_db::repo::sessions::SessionRepo;
 use eulesia_db::repo::users::UserRepo;
@@ -39,7 +39,7 @@ impl AuthService {
         validate_username(&req.username)?;
         password::validate_password_strength(&req.password)?;
 
-        // Check uniqueness
+        // Check username uniqueness
         if UserRepo::find_by_username(db, &req.username)
             .await
             .map_err(|e| AuthError::Database {
@@ -51,6 +51,20 @@ impl AuthService {
             return Err(AuthError::UsernameTaken(req.username));
         }
 
+        // Check email uniqueness
+        if let Some(ref email) = req.email {
+            if UserRepo::find_by_email(db, email)
+                .await
+                .map_err(|e| AuthError::Database {
+                    context: "check email uniqueness",
+                    source: e,
+                })?
+                .is_some()
+            {
+                return Err(AuthError::EmailTaken(email.clone()));
+            }
+        }
+
         // Hash password (CPU-intensive)
         let password_str = req.password.clone();
         let hash = tokio::task::spawn_blocking(move || password::hash_password(&password_str))
@@ -60,6 +74,7 @@ impl AuthService {
         // Create user
         let user_id = new_id();
         let now = Utc::now().fixed_offset();
+        let username = req.username.clone();
         let user = UserRepo::create(
             db,
             users::ActiveModel {
@@ -78,16 +93,30 @@ impl AuthService {
             },
         )
         .await
-        .map_err(|e| AuthError::Database {
-            context: "create user",
-            source: e,
+        .map_err(|e| {
+            // Catch unique constraint violations (race condition after pre-check)
+            let msg = e.to_string();
+            if msg.contains("unique") || msg.contains("duplicate") {
+                return AuthError::UsernameTaken(username.clone());
+            }
+            AuthError::Database {
+                context: "create user",
+                source: e,
+            }
         })?;
 
         info!(user_id = %user.id, username = %user.username, "user registered");
 
         // Create session
-        let token =
-            create_session(db, UserId(user.id), ip, user_agent, session_max_age_days).await?;
+        let token = create_session(
+            db,
+            UserId(user.id),
+            None,
+            ip,
+            user_agent,
+            session_max_age_days,
+        )
+        .await?;
 
         Ok((user, token))
     }
@@ -125,8 +154,15 @@ impl AuthService {
 
         info!(user_id = %user.id, "user logged in");
 
-        let token =
-            create_session(db, UserId(user.id), ip, user_agent, session_max_age_days).await?;
+        let token = create_session(
+            db,
+            UserId(user.id),
+            None,
+            ip,
+            user_agent,
+            session_max_age_days,
+        )
+        .await?;
 
         Ok((user, token))
     }
@@ -182,6 +218,7 @@ impl AuthService {
 async fn create_session(
     db: &DatabaseConnection,
     user_id: UserId,
+    device_id: Option<DeviceId>,
     ip: Option<String>,
     user_agent: Option<String>,
     max_age_days: u32,
@@ -195,6 +232,7 @@ async fn create_session(
         sessions::ActiveModel {
             id: Set(new_id()),
             user_id: Set(user_id.0),
+            device_id: Set(device_id.map(|d| d.0)),
             token_hash: Set(token.hash()),
             ip_address: Set(ip),
             user_agent: Set(user_agent),

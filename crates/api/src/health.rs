@@ -36,11 +36,13 @@ async fn ready(State(state): State<AppState>) -> Result<Json<ReadyResponse>, Api
         .await
         .is_ok();
 
-    let status = if db_ok { "ready" } else { "degraded" };
+    if !db_ok {
+        return Err(ApiError::Internal("database not ready".into()));
+    }
 
     Ok(Json(ReadyResponse {
-        status,
-        database: db_ok,
+        status: "ready",
+        database: true,
     }))
 }
 

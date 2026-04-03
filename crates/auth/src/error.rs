@@ -17,6 +17,9 @@ pub enum AuthError {
     #[error("username already taken: {0}")]
     UsernameTaken(String),
 
+    #[error("email already taken: {0}")]
+    EmailTaken(String),
+
     #[error("password too weak: {reason}")]
     WeakPassword { reason: String },
 
@@ -44,6 +47,7 @@ impl From<AuthError> for ApiError {
             E::InvalidCredentials | E::SessionExpired | E::SessionRevoked => Self::Unauthorized,
             E::UserNotFound => Self::NotFound("user not found".into()),
             E::UsernameTaken(u) => Self::Conflict(format!("username taken: {u}")),
+            E::EmailTaken(e) => Self::Conflict(format!("email taken: {e}")),
             E::WeakPassword { reason } | E::InvalidUsername { reason } => Self::BadRequest(reason),
             E::DeviceLimitExceeded => Self::BadRequest("device limit exceeded".into()),
             E::Database { source, .. } => Self::Database(source.to_string()),

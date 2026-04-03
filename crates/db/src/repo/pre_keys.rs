@@ -3,12 +3,13 @@ use sea_orm::*;
 use uuid::Uuid;
 
 use crate::entities::{device_signed_pre_keys, one_time_pre_keys};
+use sea_orm::{DatabaseBackend, Statement};
 
 pub struct PreKeyRepo;
 
 impl PreKeyRepo {
     pub async fn upload_signed_pre_key(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         model: device_signed_pre_keys::ActiveModel,
     ) -> Result<device_signed_pre_keys::Model, DbErr> {
         model.insert(db).await
@@ -25,7 +26,10 @@ impl PreKeyRepo {
             .await
     }
 
-    pub async fn supersede_current(db: &DatabaseConnection, device_id: Uuid) -> Result<(), DbErr> {
+    pub async fn supersede_current(
+        db: &impl ConnectionTrait,
+        device_id: Uuid,
+    ) -> Result<(), DbErr> {
         device_signed_pre_keys::Entity::update_many()
             .filter(device_signed_pre_keys::Column::DeviceId.eq(device_id))
             .filter(device_signed_pre_keys::Column::SupersededAt.is_null())
@@ -56,26 +60,26 @@ impl PreKeyRepo {
         db: &DatabaseConnection,
         device_id: Uuid,
     ) -> Result<Option<one_time_pre_keys::Model>, DbErr> {
-        let key = one_time_pre_keys::Entity::find()
-            .filter(one_time_pre_keys::Column::DeviceId.eq(device_id))
-            .filter(one_time_pre_keys::Column::ConsumedAt.is_null())
-            .order_by_asc(one_time_pre_keys::Column::UploadedAt)
-            .one(db)
-            .await?;
+        // Atomic: UPDATE one row WHERE consumed_at IS NULL, set consumed_at, RETURNING the row.
+        // This prevents two concurrent requests from consuming the same key.
+        let result = one_time_pre_keys::Model::find_by_statement(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE one_time_pre_keys
+              SET consumed_at = now()
+              WHERE id = (
+                  SELECT id FROM one_time_pre_keys
+                  WHERE device_id = $1 AND consumed_at IS NULL
+                  ORDER BY uploaded_at ASC
+                  LIMIT 1
+                  FOR UPDATE SKIP LOCKED
+              )
+              RETURNING *",
+            [device_id.into()],
+        ))
+        .one(db)
+        .await?;
 
-        if let Some(ref k) = key {
-            one_time_pre_keys::Entity::update_many()
-                .filter(one_time_pre_keys::Column::Id.eq(k.id))
-                .filter(one_time_pre_keys::Column::ConsumedAt.is_null())
-                .col_expr(
-                    one_time_pre_keys::Column::ConsumedAt,
-                    Expr::current_timestamp().into(),
-                )
-                .exec(db)
-                .await?;
-        }
-
-        Ok(key)
+        Ok(result)
     }
 
     pub async fn count_available_keys(
