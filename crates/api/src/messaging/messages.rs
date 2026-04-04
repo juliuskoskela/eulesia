@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -128,15 +130,12 @@ pub async fn send(
         let members = MembershipRepo::list_active(&txn, conversation_id)
             .await
             .map_err(db_err)?;
-        let mut valid_devices = std::collections::HashSet::new();
-        for m in &members {
-            let devs = DeviceRepo::list_active_for_user(&state.db, m.user_id)
-                .await
-                .map_err(db_err)?;
-            for d in devs {
-                valid_devices.insert(d.id);
-            }
-        }
+        let member_user_ids: Vec<Uuid> = members.iter().map(|m| m.user_id).collect();
+        let all_devs = DeviceRepo::list_active_for_users(&txn, &member_user_ids)
+            .await
+            .map_err(db_err)?;
+        let valid_devices: std::collections::HashSet<Uuid> =
+            all_devs.iter().map(|d| d.id).collect();
         for target_id in device_cts.keys() {
             if !valid_devices.contains(target_id) {
                 return Err(ApiError::BadRequest(format!(
@@ -165,6 +164,10 @@ pub async fn send(
         // Fan out per-device ciphertexts.
         let mut entries = Vec::new();
         for (target_device_id, ct_b64) in device_cts {
+            // Skip sender's current device — they already have the message.
+            if *target_device_id == device_id {
+                continue;
+            }
             let ct = decode_base64(ct_b64, "device_ciphertexts")?;
             entries.push(message_device_queue::ActiveModel {
                 message_id: Set(msg_id),
@@ -223,27 +226,26 @@ pub async fn send(
             .await
             .map_err(db_err)?;
 
-        let mut entries = Vec::new();
-        for member in &active_members {
-            let devices = DeviceRepo::list_active_for_user(&state.db, member.user_id)
-                .await
-                .map_err(db_err)?;
+        let member_user_ids: Vec<Uuid> = active_members.iter().map(|m| m.user_id).collect();
+        let all_devices = DeviceRepo::list_active_for_users(&txn, &member_user_ids)
+            .await
+            .map_err(db_err)?;
 
-            for dev in devices {
-                // Skip the sender's current device.
-                if dev.id == device_id {
-                    continue;
-                }
-                entries.push(message_device_queue::ActiveModel {
-                    message_id: Set(msg_id),
-                    device_id: Set(dev.id),
-                    ciphertext: Set(ct.clone()),
-                    enqueued_at: Set(now),
-                    delivered_at: Set(None),
-                    failed_at: Set(None),
-                    attempt_count: Set(0),
-                });
+        let mut entries = Vec::new();
+        for dev in &all_devices {
+            // Skip the sender's current device.
+            if dev.id == device_id {
+                continue;
             }
+            entries.push(message_device_queue::ActiveModel {
+                message_id: Set(msg_id),
+                device_id: Set(dev.id),
+                ciphertext: Set(ct.clone()),
+                enqueued_at: Set(now),
+                delivered_at: Set(None),
+                failed_at: Set(None),
+                attempt_count: Set(0),
+            });
         }
 
         MessageRepo::create_queue_entries(&txn, entries)
@@ -278,7 +280,7 @@ pub async fn list_messages(
     Query(params): Query<MessageCursorParams>,
 ) -> Result<Json<Vec<MessageResponse>>, ApiError> {
     // Verify conversation exists.
-    ConversationRepo::find_by_id(&state.db, conversation_id)
+    let conv = ConversationRepo::find_by_id(&state.db, conversation_id)
         .await
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
@@ -295,17 +297,42 @@ pub async fn list_messages(
         .await
         .map_err(db_err)?;
 
+    // For DMs, serve device-specific ciphertext from the queue.
+    let device_id = auth.device_id.map(|d| d.0);
+    let msg_ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
+
+    let device_ct_map: HashMap<Uuid, Vec<u8>> = if conv.r#type == "direct" {
+        if let Some(did) = device_id {
+            let entries = MessageRepo::get_device_ciphertexts(&*state.db, &msg_ids, did)
+                .await
+                .map_err(db_err)?;
+            entries
+                .into_iter()
+                .map(|e| (e.message_id, e.ciphertext))
+                .collect()
+        } else {
+            HashMap::new()
+        }
+    } else {
+        HashMap::new()
+    };
+
     let items = msgs
         .into_iter()
-        .map(|m| MessageResponse {
-            id: m.id,
-            conversation_id: m.conversation_id,
-            sender_id: m.sender_id,
-            sender_device_id: m.sender_device_id,
-            epoch: m.epoch,
-            ciphertext: STANDARD.encode(&m.ciphertext),
-            message_type: m.message_type,
-            server_ts: m.server_ts.to_rfc3339(),
+        .map(|m| {
+            let ct = device_ct_map
+                .get(&m.id)
+                .map_or_else(|| STANDARD.encode(&m.ciphertext), |ct| STANDARD.encode(ct));
+            MessageResponse {
+                id: m.id,
+                conversation_id: m.conversation_id,
+                sender_id: m.sender_id,
+                sender_device_id: m.sender_device_id,
+                epoch: m.epoch,
+                ciphertext: ct,
+                message_type: m.message_type,
+                server_ts: m.server_ts.to_rfc3339(),
+            }
         })
         .collect();
 

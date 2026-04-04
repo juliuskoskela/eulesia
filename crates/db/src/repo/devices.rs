@@ -34,13 +34,27 @@ impl DeviceRepo {
     }
 
     pub async fn list_active_for_user(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         user_id: Uuid,
     ) -> Result<Vec<devices::Model>, DbErr> {
         devices::Entity::find()
             .filter(devices::Column::UserId.eq(user_id))
             .filter(devices::Column::RevokedAt.is_null())
             .order_by_desc(devices::Column::CreatedAt)
+            .all(db)
+            .await
+    }
+
+    pub async fn list_active_for_users(
+        db: &impl ConnectionTrait,
+        user_ids: &[Uuid],
+    ) -> Result<Vec<devices::Model>, DbErr> {
+        if user_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        devices::Entity::find()
+            .filter(devices::Column::UserId.is_in(user_ids.to_vec()))
+            .filter(devices::Column::RevokedAt.is_null())
             .all(db)
             .await
     }

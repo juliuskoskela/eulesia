@@ -180,19 +180,6 @@ pub async fn remove_member(
             .map_err(db_err)?
             .ok_or_else(|| ApiError::NotFound("member not found".into()))?;
 
-    // Prevent removing the last admin — would leave the group unmanageable.
-    if target_membership.role == "owner" {
-        let all_members = MembershipRepo::list_active(&*state.db, conversation_id)
-            .await
-            .map_err(db_err)?;
-        let admin_count = all_members.iter().filter(|m| m.role == "owner").count();
-        if admin_count <= 1 {
-            return Err(ApiError::BadRequest(
-                "cannot remove the last admin — promote another member first".into(),
-            ));
-        }
-    }
-
     let now = chrono::Utc::now().fixed_offset();
 
     let txn = state
@@ -200,6 +187,18 @@ pub async fn remove_member(
         .begin()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    // Prevent removing the last owner — check inside the transaction to avoid
+    // TOCTOU races where two concurrent demotions both see count==2.
+    if target_membership.role == "owner" {
+        let all_members = MembershipRepo::list_active(&txn, conversation_id)
+            .await
+            .map_err(db_err)?;
+        let owner_count = all_members.iter().filter(|m| m.role == "owner").count();
+        if owner_count <= 1 {
+            return Err(ApiError::BadRequest("cannot remove the last owner".into()));
+        }
+    }
 
     // Increment epoch.
     let new_epoch = EpochRepo::increment(&txn, conversation_id)
@@ -300,29 +299,34 @@ pub async fn update_role(
             .map_err(db_err)?
             .ok_or_else(|| ApiError::NotFound("member not found".into()))?;
 
-    // Prevent demoting the last admin to member.
+    let now = chrono::Utc::now().fixed_offset();
+
+    let txn = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    // Prevent demoting the last owner — check inside the transaction to avoid
+    // TOCTOU races where two concurrent demotions both see count==2.
     if target_membership.role == "owner" && req.role == "member" {
-        let all_members = MembershipRepo::list_active(&*state.db, conversation_id)
+        let all_members = MembershipRepo::list_active(&txn, conversation_id)
             .await
             .map_err(db_err)?;
-        let admin_count = all_members.iter().filter(|m| m.role == "owner").count();
-        if admin_count <= 1 {
-            return Err(ApiError::BadRequest(
-                "cannot demote the last admin — promote another member first".into(),
-            ));
+        let owner_count = all_members.iter().filter(|m| m.role == "owner").count();
+        if owner_count <= 1 {
+            return Err(ApiError::BadRequest("cannot demote the last owner".into()));
         }
     }
 
-    let now = chrono::Utc::now().fixed_offset();
-
     // Update role.
-    MembershipRepo::update_role(&*state.db, target_membership.id, &req.role)
+    MembershipRepo::update_role(&txn, target_membership.id, &req.role)
         .await
         .map_err(db_err)?;
 
     // Create membership event.
     MembershipRepo::create_event(
-        &*state.db,
+        &txn,
         membership_events::ActiveModel {
             id: Set(new_id()),
             conversation_id: Set(conversation_id),
@@ -336,6 +340,10 @@ pub async fn update_role(
     )
     .await
     .map_err(db_err)?;
+
+    txn.commit()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
 
     Ok(Json(MemberSummary {
         user_id: target_user_id,

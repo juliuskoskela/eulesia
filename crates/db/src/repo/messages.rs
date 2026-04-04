@@ -45,6 +45,21 @@ impl MessageRepo {
         Ok(())
     }
 
+    pub async fn get_device_ciphertexts(
+        db: &impl ConnectionTrait,
+        message_ids: &[Uuid],
+        device_id: Uuid,
+    ) -> Result<Vec<message_device_queue::Model>, DbErr> {
+        if message_ids.is_empty() {
+            return Ok(vec![]);
+        }
+        message_device_queue::Entity::find()
+            .filter(message_device_queue::Column::MessageId.is_in(message_ids.to_vec()))
+            .filter(message_device_queue::Column::DeviceId.eq(device_id))
+            .all(db)
+            .await
+    }
+
     pub async fn acknowledge_many(
         db: &impl ConnectionTrait,
         acks: &[(Uuid, Uuid)],
