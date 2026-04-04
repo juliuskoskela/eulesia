@@ -21,6 +21,18 @@ pub async fn auth_middleware(
 
     if let Some(token) = token {
         if let Ok((session, _user)) = AuthService::validate_session(&db, &token).await {
+            // If session is bound to a device, verify device is not revoked.
+            if let Some(device_id) = session.device_id {
+                let device =
+                    eulesia_db::repo::devices::DeviceRepo::find_by_id(&db, device_id).await;
+                if let Ok(Some(d)) = device {
+                    if d.revoked_at.is_some() {
+                        // Device revoked — don't populate AuthUser
+                        return next.run(req).await;
+                    }
+                }
+            }
+
             req.extensions_mut().insert(AuthUser {
                 user_id: UserId(session.user_id),
                 device_id: session.device_id.map(DeviceId),

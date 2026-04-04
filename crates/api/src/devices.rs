@@ -3,6 +3,7 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sea_orm::ActiveValue::Set;
+use sea_orm::TransactionTrait;
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -13,6 +14,7 @@ use eulesia_common::types::{Id, Platform, new_id};
 use eulesia_db::entities::{device_signed_pre_keys, devices, one_time_pre_keys};
 use eulesia_db::repo::devices::DeviceRepo;
 use eulesia_db::repo::pre_keys::PreKeyRepo;
+use eulesia_db::repo::sessions::SessionRepo;
 
 const MAX_DEVICES_PER_USER: u64 = 10;
 
@@ -126,9 +128,15 @@ async fn create_device(
     let device_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
-    // Create device
+    // Wrap device + initial SPK creation in a transaction
+    let txn = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
     let device = DeviceRepo::create(
-        &state.db,
+        &txn,
         devices::ActiveModel {
             id: Set(device_id),
             user_id: Set(auth.user_id.0),
@@ -142,9 +150,8 @@ async fn create_device(
     .await
     .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    // Create initial signed pre-key
     PreKeyRepo::upload_signed_pre_key(
-        &state.db,
+        &txn,
         device_signed_pre_keys::ActiveModel {
             id: Set(new_id()),
             device_id: Set(device_id),
@@ -157,6 +164,10 @@ async fn create_device(
     )
     .await
     .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    txn.commit()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
 
     Ok(Json(DeviceResponse::from(device)))
 }
@@ -189,6 +200,11 @@ async fn revoke_device(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
+    // Revoke all sessions bound to this device
+    SessionRepo::revoke_device_sessions(&state.db, device_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
     Ok(())
 }
 
@@ -204,18 +220,23 @@ async fn upload_pre_keys(
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("device not found".into()))?;
 
-    // Upload new signed pre-key if provided
+    // Upload new signed pre-key if provided (supersede + insert in a transaction)
     if let Some(spk) = req.signed_pre_key {
         let spk_data = decode_base64(&spk.key_data, "signed_pre_key.key_data")?;
         let spk_sig = decode_base64(&spk.signature, "signed_pre_key.signature")?;
 
-        // Supersede current
-        PreKeyRepo::supersede_current(&state.db, device_id)
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+
+        PreKeyRepo::supersede_current(&txn, device_id)
             .await
             .map_err(|e| ApiError::Database(e.to_string()))?;
 
         PreKeyRepo::upload_signed_pre_key(
-            &state.db,
+            &txn,
             device_signed_pre_keys::ActiveModel {
                 id: Set(new_id()),
                 device_id: Set(device_id),
@@ -228,6 +249,10 @@ async fn upload_pre_keys(
         )
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+
+        txn.commit()
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
     }
 
     // Upload one-time keys

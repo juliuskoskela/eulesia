@@ -8,7 +8,7 @@ pub struct DeviceRepo;
 
 impl DeviceRepo {
     pub async fn create(
-        db: &DatabaseConnection,
+        db: &impl ConnectionTrait,
         model: devices::ActiveModel,
     ) -> Result<devices::Model, DbErr> {
         model.insert(db).await

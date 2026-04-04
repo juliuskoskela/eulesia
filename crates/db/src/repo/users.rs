@@ -71,4 +71,18 @@ impl UserRepo {
             .one(db)
             .await
     }
+
+    pub async fn find_by_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+    ) -> Result<Vec<users::Model>, DbErr> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        users::Entity::find()
+            .filter(users::Column::Id.is_in(ids.to_vec()))
+            .filter(users::Column::DeletedAt.is_null())
+            .all(db)
+            .await
+    }
 }

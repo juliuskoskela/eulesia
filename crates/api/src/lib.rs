@@ -1,6 +1,9 @@
+mod agora;
 mod auth_routes;
+mod bookmarks;
 mod devices;
 mod health;
+mod social;
 mod users;
 
 use std::ops::Deref;
@@ -40,6 +43,9 @@ pub fn router(state: AppState) -> Router {
         .merge(auth_routes::routes())
         .merge(devices::routes())
         .merge(users::routes())
+        .merge(social::routes())
+        .merge(bookmarks::routes())
+        .merge(agora::routes())
         .layer(from_fn_with_state(state.db.clone(), auth_middleware));
 
     Router::new().nest("/api/v2", api).with_state(state)
