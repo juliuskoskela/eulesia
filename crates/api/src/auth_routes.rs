@@ -14,14 +14,6 @@ use eulesia_db::repo::users::UserRepo;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AuthResponse {
-    user: UserProfile,
-    token: String,
-    expires_at: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 struct UserProfile {
     id: Id,
     username: String,
@@ -77,29 +69,18 @@ fn auth_response(
     token: &eulesia_auth::token::SessionToken,
     config: &AppConfig,
     jar: CookieJar,
-) -> (CookieJar, Json<AuthResponse>) {
-    let expires_at = (chrono::Utc::now()
-        + chrono::Duration::days(i64::from(config.session_max_age_days)))
-    .to_rfc3339();
-
+) -> (CookieJar, Json<UserProfile>) {
     let cookie = build_session_cookie(token.as_str(), config);
     let jar = jar.add(cookie);
 
-    (
-        jar,
-        Json(AuthResponse {
-            user: UserProfile::from(user),
-            token: token.as_str().to_string(),
-            expires_at,
-        }),
-    )
+    (jar, Json(UserProfile::from(user)))
 }
 
 async fn register(
     State(state): State<AppState>,
     jar: CookieJar,
     Json(req): Json<RegisterRequest>,
-) -> Result<(CookieJar, Json<AuthResponse>), ApiError> {
+) -> Result<(CookieJar, Json<UserProfile>), ApiError> {
     let (user, token) = AuthService::register(
         &state.db,
         req,
@@ -117,7 +98,7 @@ async fn login(
     State(state): State<AppState>,
     jar: CookieJar,
     Json(req): Json<LoginRequest>,
-) -> Result<(CookieJar, Json<AuthResponse>), ApiError> {
+) -> Result<(CookieJar, Json<UserProfile>), ApiError> {
     let (user, token) = AuthService::login(
         &state.db,
         req,

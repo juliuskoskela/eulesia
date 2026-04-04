@@ -5,15 +5,25 @@ use axum::response::{IntoResponse, Response};
 use http_body_util::BodyExt;
 use serde_json::Value;
 
-/// Middleware that wraps all JSON responses in the format the frontend expects:
+/// Middleware that wraps JSON responses in the format the frontend expects:
 ///
 /// - 2xx: `{ "success": true, "data": <original_body> }`
 /// - 4xx/5xx: `{ "success": false, "error": <error_message> }`
+///
+/// Preserves all original headers (Set-Cookie, etc.) and skips non-JSON
+/// responses and health endpoints.
 pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
+    // Skip wrapping for health endpoints — they have their own contract.
+    let skip = req.uri().path().ends_with("/health") || req.uri().path().ends_with("/ready");
+
     let response = next.run(req).await;
+
+    if skip {
+        return response;
+    }
+
     let status = response.status();
 
-    // Only wrap JSON responses from our API handlers.
     let is_json = response
         .headers()
         .get("content-type")
@@ -24,7 +34,8 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
         return response;
     }
 
-    let (parts, body) = response.into_parts();
+    // Preserve original headers (Set-Cookie, cache-control, etc.).
+    let (mut parts, body) = response.into_parts();
     let bytes = match body.collect().await {
         Ok(b) => b.to_bytes(),
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -34,7 +45,6 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
         let data: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
         serde_json::json!({ "success": true, "data": data })
     } else {
-        // Error responses already have { "error": "..." } — extract the message.
         let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
         let error = body
             .get("error")
@@ -45,10 +55,14 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
 
     let json_bytes = serde_json::to_vec(&wrapped).unwrap_or_default();
 
-    let mut response = Response::new(Body::from(json_bytes));
-    *response.status_mut() = parts.status;
-    response
-        .headers_mut()
+    // Replace body but keep all original headers (including Set-Cookie).
+    parts
+        .headers
         .insert("content-type", "application/json".parse().unwrap());
-    response
+    parts.headers.insert(
+        "content-length",
+        json_bytes.len().to_string().parse().unwrap(),
+    );
+
+    Response::from_parts(parts, Body::from(json_bytes))
 }
