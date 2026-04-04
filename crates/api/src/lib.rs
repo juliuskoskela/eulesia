@@ -1,15 +1,20 @@
 mod agora;
+mod announcements;
 mod auth_routes;
 mod bookmarks;
 mod devices;
 pub mod ftn;
 mod health;
+mod link_preview;
+mod locations;
+mod map;
 mod messaging;
 mod moderation;
 mod notifications;
 mod response_wrapper;
 mod search;
 mod social;
+mod subscriptions;
 mod uploads;
 mod users;
 
@@ -52,12 +57,17 @@ pub struct AppConfig {
 pub fn router(state: AppState) -> Router {
     let api = Router::new()
         .merge(health::routes())
+        .merge(announcements::routes())
         .merge(auth_routes::routes())
         .merge(ftn::routes())
+        .merge(link_preview::routes())
+        .merge(locations::routes())
+        .merge(map::routes())
         .merge(devices::routes())
         .merge(users::routes())
         .merge(social::routes())
         .merge(bookmarks::routes())
+        .merge(subscriptions::routes())
         .merge(agora::routes())
         .merge(messaging::routes())
         .merge(moderation::routes())

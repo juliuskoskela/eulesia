@@ -48,6 +48,9 @@ pub mod places;
 pub mod notifications;
 pub mod push_subscriptions;
 
+// Subscriptions
+pub mod user_subscriptions;
+
 // Events
 pub mod domain_events;
 pub mod outbox;

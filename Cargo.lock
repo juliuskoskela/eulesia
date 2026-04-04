@@ -835,6 +835,7 @@ dependencies = [
  "josekit",
  "jsonwebtoken",
  "rand 0.9.2",
+ "regex",
  "reqwest",
  "sea-orm",
  "serde",

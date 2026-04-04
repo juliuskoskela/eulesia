@@ -1,7 +1,7 @@
 mod comments;
 mod tags;
 pub mod threads;
-mod types;
+pub mod types;
 mod votes;
 
 use axum::Router;

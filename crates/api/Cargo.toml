@@ -20,6 +20,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 josekit = { workspace = true }
 jsonwebtoken = { workspace = true }
+regex = { workspace = true }
 reqwest = { workspace = true }
 sha2 = { workspace = true }
 rand = { workspace = true }
