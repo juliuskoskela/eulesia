@@ -81,6 +81,13 @@ struct CreatePlaceRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CategoryCount {
+    pub category: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MunicipalityResponse {
     pub id: Uuid,
     pub name: String,
@@ -300,6 +307,39 @@ async fn create_place(
     Ok(Json(place_to_response(place)))
 }
 
+/// GET /map/places/categories — list place categories with counts.
+async fn place_categories(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<CategoryCount>>, ApiError> {
+    let db: &sea_orm::DatabaseConnection = &state.db;
+    let sql = r#"
+        SELECT category, COUNT(*) AS count
+        FROM places
+        WHERE category IS NOT NULL
+        GROUP BY category
+        ORDER BY count DESC
+    "#;
+
+    let stmt = Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql.to_string());
+    let rows = db
+        .query_all(stmt)
+        .await
+        .map_err(|e| ApiError::Database(format!("place categories query: {e}")))?;
+
+    let mut categories = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let category: String = row
+            .try_get("", "category")
+            .map_err(|e| ApiError::Database(format!("parse category: {e}")))?;
+        let count: i64 = row
+            .try_get("", "count")
+            .map_err(|e| ApiError::Database(format!("parse count: {e}")))?;
+        categories.push(CategoryCount { category, count });
+    }
+
+    Ok(Json(categories))
+}
+
 /// GET /map/municipalities
 async fn list_municipalities(
     State(state): State<AppState>,
@@ -322,6 +362,7 @@ async fn list_municipalities(
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/map/points", get(get_map_points))
+        .route("/map/places/categories", get(place_categories))
         .route("/map/places", get(list_places).post(create_place))
         .route("/map/municipalities", get(list_municipalities))
 }

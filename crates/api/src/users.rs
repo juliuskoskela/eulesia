@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::{AuthUser, OptionalAuth};
 use eulesia_common::error::ApiError;
+use eulesia_db::repo::sessions::SessionRepo;
 use eulesia_db::repo::users::UserRepo;
 
 // ---------------------------------------------------------------------------
@@ -204,12 +205,59 @@ async fn update_settings(
 }
 
 // ---------------------------------------------------------------------------
+// DELETE /users/me — soft-delete account (GDPR)
+// ---------------------------------------------------------------------------
+
+/// DELETE /users/me — anonymize and soft-delete the authenticated user.
+async fn delete_my_account(
+    auth: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
+        .await
+        .map_err(|e| ApiError::Database(format!("find user: {e}")))?
+        .ok_or(ApiError::Unauthorized)?;
+
+    if user.deleted_at.is_some() {
+        return Err(ApiError::NotFound("user not found".into()));
+    }
+
+    let now = chrono::Utc::now().fixed_offset();
+    let anonymized_email = format!("deleted_{}@deleted.eulesia.eu", auth.user_id.0);
+
+    let am = eulesia_db::entities::users::ActiveModel {
+        id: Set(auth.user_id.0),
+        name: Set("[Poistettu käyttäjä]".into()),
+        email: Set(Some(anonymized_email)),
+        avatar_url: Set(None),
+        bio: Set(None),
+        deleted_at: Set(Some(now)),
+        updated_at: Set(now),
+        ..Default::default()
+    };
+
+    UserRepo::update(&state.db, am)
+        .await
+        .map_err(|e| ApiError::Database(format!("soft-delete user: {e}")))?;
+
+    // Revoke all active sessions.
+    SessionRepo::revoke_all_for_user(&state.db, auth.user_id.0)
+        .await
+        .map_err(|e| ApiError::Database(format!("revoke sessions: {e}")))?;
+
+    Ok(Json(serde_json::json!({ "deleted": true })))
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/users/{id}", get(get_user_profile))
-        .route("/users/me", axum::routing::patch(update_my_profile))
+        .route(
+            "/users/me",
+            axum::routing::patch(update_my_profile).delete(delete_my_account),
+        )
         .route("/users/settings", get(get_settings).patch(update_settings))
 }

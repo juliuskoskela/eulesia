@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::middleware::{from_fn, from_fn_with_state};
+use axum::routing::{get, post};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 
@@ -74,6 +75,17 @@ pub fn router(state: AppState) -> Router {
         .merge(notifications::routes())
         .merge(search::routes())
         .merge(uploads::routes())
+        // DM route aliases — frontend calls /dm/* but v2 uses /conversations/*.
+        .route(
+            "/dm",
+            get(messaging::conversations::list).post(messaging::conversations::create),
+        )
+        .route("/dm/{id}", get(messaging::conversations::get))
+        .route(
+            "/dm/{id}/messages",
+            post(messaging::messages::send).get(messaging::messages::list_messages),
+        )
+        .route("/dm/{id}/read", post(messaging::messages::mark_read))
         .layer(from_fn_with_state(state.db.clone(), auth_middleware))
         .layer(from_fn(response_wrapper::wrap_response));
 

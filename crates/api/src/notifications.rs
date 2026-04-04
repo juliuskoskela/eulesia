@@ -182,6 +182,28 @@ async fn push_unsubscribe(
 }
 
 // ---------------------------------------------------------------------------
+// VAPID public key
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VapidPublicKeyResponse {
+    enabled: bool,
+    vapid_public_key: Option<String>,
+}
+
+/// GET /notifications/push/vapid-public-key — return the VAPID public key for Web Push.
+async fn vapid_public_key() -> Json<VapidPublicKeyResponse> {
+    let key = std::env::var("VAPID_PUBLIC_KEY")
+        .ok()
+        .filter(|k| !k.is_empty());
+    Json(VapidPublicKeyResponse {
+        enabled: key.is_some(),
+        vapid_public_key: key,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -195,5 +217,9 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/notifications/push/subscribe",
             post(push_subscribe).delete(push_unsubscribe),
+        )
+        .route(
+            "/notifications/push/vapid-public-key",
+            get(vapid_public_key),
         )
 }

@@ -225,6 +225,62 @@ async fn get_location(
     Ok(Json(model_to_response(location)))
 }
 
+/// GET /locations/osm/{osmType}/{osmId} — OSM lookup.
+///
+/// Tries local DB first (by osm_id + osm_type), falls back to Nominatim reverse lookup.
+async fn osm_lookup(
+    State(state): State<AppState>,
+    Path((osm_type, osm_id)): Path<(String, i64)>,
+) -> Result<Json<LocationResponse>, ApiError> {
+    // Try local DB first.
+    let local = locations::Entity::find()
+        .filter(locations::Column::OsmId.eq(osm_id))
+        .filter(locations::Column::OsmType.eq(&osm_type))
+        .one(&*state.db)
+        .await
+        .map_err(|e| ApiError::Database(format!("osm lookup: {e}")))?;
+
+    if let Some(location) = local {
+        return Ok(Json(model_to_response(location)));
+    }
+
+    // Fall back to Nominatim reverse lookup.
+    let url = format!(
+        "https://nominatim.openstreetmap.org/lookup?format=jsonv2&osm_ids={}{}",
+        match osm_type.as_str() {
+            "node" | "N" => "N",
+            "way" | "W" => "W",
+            "relation" | "R" => "R",
+            _ => return Err(ApiError::BadRequest("invalid osm_type".into())),
+        },
+        osm_id,
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| ApiError::Internal(format!("http client: {e}")))?;
+
+    let resp = client
+        .get(&url)
+        .header("User-Agent", "Eulesia/1.0")
+        .send()
+        .await
+        .map_err(|e| ApiError::Internal(format!("nominatim request: {e}")))?;
+
+    let results: Vec<NominatimResult> = resp
+        .json()
+        .await
+        .map_err(|e| ApiError::Internal(format!("nominatim parse: {e}")))?;
+
+    let location = results
+        .into_iter()
+        .find_map(nominatim_to_response)
+        .ok_or_else(|| ApiError::NotFound("location not found in OSM".into()))?;
+
+    Ok(Json(location))
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -232,5 +288,6 @@ async fn get_location(
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/locations/search", get(search_locations))
+        .route("/locations/osm/{osm_type}/{osm_id}", get(osm_lookup))
         .route("/locations/{id}", get(get_location))
 }

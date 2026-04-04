@@ -1,7 +1,7 @@
-mod conversations;
+pub mod conversations;
 mod delivery;
-mod members;
-mod messages;
+pub mod members;
+pub mod messages;
 pub mod types;
 
 use axum::Router;
