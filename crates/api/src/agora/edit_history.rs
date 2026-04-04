@@ -9,7 +9,7 @@ use eulesia_common::error::ApiError;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct EditHistoryEntry {
+pub struct EditHistoryEntry {
     id: Uuid,
     content_type: String,
     content_id: Uuid,

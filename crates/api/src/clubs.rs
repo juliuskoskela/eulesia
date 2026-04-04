@@ -1358,7 +1358,7 @@ async fn delete_club_thread(
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
     let platform_role: Result<UserRole, _> = user.role.parse();
-    let is_platform_mod = platform_role.map_or(false, |r| r.is_moderator());
+    let is_platform_mod = platform_role.is_ok_and(|r| r.is_moderator());
 
     if !is_author && !is_club_mod && !is_platform_mod {
         return Err(ApiError::Forbidden);
@@ -1528,7 +1528,7 @@ async fn delete_club_comment(
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
     let platform_role: Result<UserRole, _> = user.role.parse();
-    let is_platform_mod = platform_role.map_or(false, |r| r.is_moderator());
+    let is_platform_mod = platform_role.is_ok_and(|r| r.is_moderator());
 
     if !is_author && !is_club_mod && !is_platform_mod {
         return Err(ApiError::Forbidden);
