@@ -14,49 +14,83 @@
 
 ## Workflow
 
-1. **Fetch review comments.**
+1. **Fetch review comments.** Use these exact commands to pull all comment types:
 
    ```bash
+   # PR-level review comments (inline code comments from reviewers)
+   gh api repos/Eulesia/eulesia/pulls/<pr-number>/comments \
+     --jq '.[] | {id: .id, path: .path, line: .line, body: .body}'
+
+   # PR review summaries (approve/request-changes bodies)
+   gh api repos/Eulesia/eulesia/pulls/<pr-number>/reviews \
+     --jq '.[] | {id: .id, state: .state, body: .body}'
+
+   # PR conversation comments (non-inline discussion)
    gh pr view <pr-number> --repo Eulesia/eulesia --comments
-   gh api repos/Eulesia/eulesia/pulls/<pr-number>/comments
-   gh api repos/Eulesia/eulesia/pulls/<pr-number>/reviews
    ```
+
+   All three must be checked — reviewers use different comment types.
 
 2. **Normalize comments into a task list.** For each comment:
    - Extract the request or concern
-   - Identify the file and line
-   - Classify: code change, question, nit, blocking, suggestion
-   - Group by theme (e.g., "error handling", "naming", "testing")
+   - Identify the file and line (from `path` + `line` fields)
+   - Classify: blocking, code-change, suggestion, nit, question
+   - Assign a number for tracking
 
-3. **Implement by theme.** Address grouped comments together for coherent changes.
+3. **Implement fixes.** Address each comment individually.
    - Blocking comments first
    - Code changes second
    - Nits and suggestions last
-   - Answer questions as PR comment replies where no code change is needed
+   - Questions: reply inline, no code change needed
 
-4. **Re-run checks.**
+4. **Reply to each comment individually.** After fixing, reply to every
+   review comment with what was done:
 
    ```bash
-   just ci-check
+   # Reply to an inline review comment
+   gh api repos/Eulesia/eulesia/pulls/<pr-number>/comments/<comment-id>/replies \
+     -f body="Fixed in <commit-hash>: <one-line description of fix>"
+
+   # Reply to a PR conversation comment
+   gh pr comment <pr-number> --repo Eulesia/eulesia \
+     --body "Re: <quoted concern> — Fixed: <description>"
    ```
 
-5. **Push updates.**
+   For deferred items, reply explaining why and when it will be addressed.
+
+5. **Re-run checks.**
+
+   ```bash
+   cargo clippy --all-targets -- -D warnings
+   cargo test --workspace
+   ```
+
+6. **Push updates.**
 
    ```bash
    git add -A && git commit -m "fix: address review feedback"
    git push
    ```
 
-6. **Summarize as a PR comment.** Post a reply summarizing what was addressed.
+7. **Post summary comment.** After all individual replies are posted,
+   add one summary comment listing everything:
 
    ```bash
    gh pr comment <pr-number> --repo Eulesia/eulesia --body "$(cat <<'EOF'
    ## Review feedback addressed
 
-   <themed summary of changes>
+   | # | Comment | Status |
+   |---|---------|--------|
+   | 1 | <one-line summary> | Fixed in <hash> |
+   | 2 | <one-line summary> | Fixed in <hash> |
+   | 3 | <one-line summary> | Deferred — <reason> |
 
-   ### Outstanding items
-   - <anything not addressed and why>
+   ### Deferred items
+   - <item>: <why deferred, when it will be addressed>
+
+   ### Checks
+   - `cargo test`: <N> tests pass
+   - `cargo clippy`: clean
    EOF
    )"
    ```
@@ -70,6 +104,7 @@
 | Comment about missing tests                     | Write the tests                              |
 | Comment about naming/style                      | Apply the suggestion                         |
 | Contradictory comments from different reviewers | Flag and ask for clarification               |
+| Comment already fixed in a prior commit         | Reply citing the commit hash                 |
 
 ## Output Format
 
@@ -78,19 +113,18 @@
 
 ### Comments Addressed
 
-| # | Theme | Type | File | Status |
-|---|-------|------|------|--------|
-| 1 | <theme> | <blocking/suggestion/nit> | <file> | <done/skipped/needs-discussion> |
+| # | Comment | Type | File | Status |
+|---|---------|------|------|--------|
+| 1 | <summary> | blocking | <file:line> | Fixed in <hash> |
+| 2 | <summary> | suggestion | <file:line> | Fixed in <hash> |
+| 3 | <summary> | nit | <file:line> | Deferred |
 
-### Changes Made
+### Deferred
 
-- <commit-message-style summary per theme>
-
-### Outstanding
-
-- <items not addressed and reason>
+- <item>: <reason and timeline>
 
 ### Checks
 
-- CI: <passing/failing>
+- Tests: <count> pass
+- Clippy: clean
 ```

@@ -176,7 +176,7 @@ async fn list_devices(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Vec<DeviceResponse>>, ApiError> {
-    let devices = DeviceRepo::list_active_for_user(&state.db, auth.user_id.0)
+    let devices = DeviceRepo::list_active_for_user(&*state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 

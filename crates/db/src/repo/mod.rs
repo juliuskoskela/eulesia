@@ -3,7 +3,10 @@ pub mod bookmarks;
 pub mod comments;
 pub mod conversations;
 pub mod devices;
+pub mod epochs;
 pub mod follows;
+pub mod memberships;
+pub mod messages;
 pub mod mutes;
 pub mod outbox;
 pub mod pre_keys;
@@ -23,11 +26,27 @@ mod comments_test;
 #[cfg(test)]
 mod conversations_test;
 #[cfg(test)]
+mod devices_test;
+#[cfg(test)]
+mod epochs_test;
+#[cfg(test)]
 mod follows_test;
+#[cfg(test)]
+mod memberships_test;
+#[cfg(test)]
+mod messages_test;
 #[cfg(test)]
 mod mutes_test;
 #[cfg(test)]
+mod outbox_test;
+#[cfg(test)]
+mod pre_keys_test;
+#[cfg(test)]
+mod sessions_test;
+#[cfg(test)]
 mod tags_test;
+#[cfg(test)]
+mod thread_views_test;
 #[cfg(test)]
 mod threads_test;
 #[cfg(test)]

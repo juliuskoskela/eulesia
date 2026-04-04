@@ -1,0 +1,116 @@
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+// ---------------------------------------------------------------------------
+// Request types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct CreateConversationRequest {
+    pub conversation_type: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub members: Vec<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateConversationRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SendMessageRequest {
+    pub message_type: String,
+    pub ciphertext: Option<String>,
+    pub device_ciphertexts: Option<HashMap<Uuid, String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InviteMemberRequest {
+    pub user_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateRoleRequest {
+    pub role: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AcknowledgeRequest {
+    pub deliveries: Vec<DeliveryAck>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeliveryAck {
+    pub message_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MessageCursorParams {
+    pub before: Option<Uuid>,
+    pub limit: Option<u64>,
+}
+
+// ---------------------------------------------------------------------------
+// Response types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+pub struct ConversationResponse {
+    pub id: Uuid,
+    pub conversation_type: String,
+    pub encryption: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub creator_id: Option<Uuid>,
+    pub current_epoch: i64,
+    pub members: Vec<MemberSummary>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConversationListItem {
+    pub id: Uuid,
+    pub conversation_type: String,
+    pub name: Option<String>,
+    pub current_epoch: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MemberSummary {
+    pub user_id: Uuid,
+    pub role: String,
+    pub joined_epoch: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MessageResponse {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub sender_id: Uuid,
+    pub sender_device_id: Uuid,
+    pub epoch: i64,
+    pub ciphertext: String,
+    pub message_type: String,
+    pub server_ts: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PendingDelivery {
+    pub message_id: Uuid,
+    pub ciphertext: String,
+    pub enqueued_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EpochResponse {
+    pub epoch: i64,
+    pub rotated_by: Option<Uuid>,
+    pub reason: String,
+    pub created_at: String,
+}
