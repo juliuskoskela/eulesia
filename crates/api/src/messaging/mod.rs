@@ -2,7 +2,7 @@ mod conversations;
 mod delivery;
 mod members;
 mod messages;
-mod types;
+pub mod types;
 
 use axum::Router;
 use axum::routing::{delete, get, post};
@@ -25,6 +25,11 @@ pub fn routes() -> Router<AppState> {
             "/conversations/{id}/messages",
             post(messages::send).get(messages::list_messages),
         )
+        .route(
+            "/conversations/{id}/messages/{message_id}",
+            axum::routing::patch(messages::edit_message).delete(messages::delete_message),
+        )
+        .route("/conversations/{id}/read", post(messages::mark_read))
         .route(
             "/conversations/{id}/members",
             post(members::invite).get(members::list_members),

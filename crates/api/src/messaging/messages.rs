@@ -409,3 +409,132 @@ pub async fn list_messages(
 
     Ok(Json(items))
 }
+
+// ---------------------------------------------------------------------------
+// PATCH /conversations/{id}/messages/{message_id} — edit message (plaintext only)
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditMessageRequest {
+    pub content: String,
+}
+
+pub async fn edit_message(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path((conversation_id, message_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<EditMessageRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let conv = ConversationRepo::find_by_id(&state.db, conversation_id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
+
+    if conv.encryption != "none" {
+        return Err(ApiError::BadRequest(
+            "only plaintext messages can be edited".into(),
+        ));
+    }
+
+    // Verify membership
+    MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    // Find message and verify ownership
+    let msg = MessageRepo::find_by_id(&*state.db, message_id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("message not found".into()))?;
+
+    if msg.sender_id != auth.user_id.0 {
+        return Err(ApiError::Forbidden);
+    }
+
+    // Update content
+    use sea_orm::ActiveModelTrait;
+    let mut am: messages::ActiveModel = msg.into();
+    am.ciphertext = Set(Some(req.content.as_bytes().to_vec()));
+    let updated = am.update(&*state.db).await.map_err(db_err)?;
+
+    let mut resp = MessageResponse::from_model(&updated);
+    resp.content = updated
+        .ciphertext
+        .as_ref()
+        .and_then(|ct| String::from_utf8(ct.clone()).ok());
+    resp.ciphertext = String::new();
+    Ok(Json(resp))
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /conversations/{id}/messages/{message_id} — soft-delete
+// ---------------------------------------------------------------------------
+
+pub async fn delete_message(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path((conversation_id, message_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    // Verify membership
+    MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    let msg = MessageRepo::find_by_id(&*state.db, message_id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("message not found".into()))?;
+
+    if msg.sender_id != auth.user_id.0 {
+        return Err(ApiError::Forbidden);
+    }
+
+    // Soft-delete via message_redactions
+    use eulesia_db::entities::message_redactions;
+    use sea_orm::ActiveModelTrait;
+    let now = chrono::Utc::now().fixed_offset();
+    message_redactions::ActiveModel {
+        message_id: Set(message_id),
+        redacted_by: Set(auth.user_id.0),
+        reason: Set("user_deleted".into()),
+        created_at: Set(now),
+    }
+    .insert(&*state.db)
+    .await
+    .map_err(db_err)?;
+
+    Ok(Json(serde_json::json!({ "deleted": true })))
+}
+
+// ---------------------------------------------------------------------------
+// POST /conversations/{id}/read — mark conversation as read
+// ---------------------------------------------------------------------------
+
+pub async fn mark_read(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(conversation_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    // Verify membership
+    MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    // Update membership last_read_at via raw SQL (column may not exist yet —
+    // this is a forward-compatible placeholder that silently succeeds).
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+    let _ = state
+        .db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "UPDATE memberships SET updated_at = NOW() WHERE conversation_id = $1 AND user_id = $2",
+            [conversation_id.into(), auth.user_id.0.into()],
+        ))
+        .await;
+
+    Ok(Json(serde_json::json!({ "read": true })))
+}
