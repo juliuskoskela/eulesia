@@ -318,7 +318,7 @@ fn author_map(users: Vec<eulesia_db::entities::users::Model>) -> HashMap<Uuid, A
 // Club CRUD
 // ---------------------------------------------------------------------------
 
-async fn create_club(
+pub async fn create_club(
     auth: AuthUser,
     State(state): State<AppState>,
     Json(req): Json<CreateClubRequest>,
@@ -470,7 +470,7 @@ async fn list_clubs(
     }))
 }
 
-async fn get_club(
+pub async fn get_club(
     opt_auth: OptionalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -497,7 +497,7 @@ async fn get_club(
     Ok(Json(club_to_response(club, member_role)))
 }
 
-async fn update_club(
+pub async fn update_club(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -559,7 +559,7 @@ async fn update_club(
     Ok(Json(club_to_response(updated, member.map(|m| m.role))))
 }
 
-async fn delete_club(
+pub async fn delete_club(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -591,7 +591,7 @@ async fn delete_club(
 // Membership
 // ---------------------------------------------------------------------------
 
-async fn join_club(
+pub async fn join_club(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -637,7 +637,7 @@ async fn join_club(
     Ok(Json(serde_json::json!({ "role": "member" })))
 }
 
-async fn leave_club(
+pub async fn leave_club(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -723,7 +723,7 @@ async fn change_member_role(
     Ok(Json(serde_json::json!({ "role": req.role })))
 }
 
-async fn kick_member(
+pub async fn kick_member(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(path): Path<MemberPath>,
@@ -767,7 +767,7 @@ async fn kick_member(
 // Invitations
 // ---------------------------------------------------------------------------
 
-async fn invite_user(
+pub async fn invite_user(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(club_id): Path<Uuid>,
@@ -936,7 +936,7 @@ async fn my_invitations(
     Ok(Json(items))
 }
 
-async fn accept_invitation(
+pub async fn accept_invitation(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(inv_id): Path<Uuid>,
@@ -990,7 +990,7 @@ async fn accept_invitation(
     Ok(Json(serde_json::json!({ "status": "accepted" })))
 }
 
-async fn decline_invitation(
+pub async fn decline_invitation(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(inv_id): Path<Uuid>,
@@ -1022,7 +1022,7 @@ async fn decline_invitation(
 // Club threads
 // ---------------------------------------------------------------------------
 
-async fn create_club_thread(
+pub async fn create_club_thread(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(club_id): Path<Uuid>,
@@ -1182,7 +1182,7 @@ async fn verify_club_thread(
 }
 
 #[allow(clippy::too_many_lines)]
-async fn get_club_thread(
+pub async fn get_club_thread(
     opt_auth: OptionalAuth,
     State(state): State<AppState>,
     Path(path): Path<ClubThreadPath>,

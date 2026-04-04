@@ -211,14 +211,15 @@ async fn vapid_public_key() -> Json<VapidPublicKeyResponse> {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DeviceTokenRequest {
-    device_id: Uuid,
-    fcm_token: String,
+    token: String,
+    platform: String,
+    device_id: Option<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RemoveDeviceTokenRequest {
-    device_id: Uuid,
+struct DeleteDeviceTokenRequest {
+    token: String,
 }
 
 /// POST /notifications/push/device-token -- store FCM token for a device.
@@ -227,24 +228,43 @@ async fn store_device_token(
     State(state): State<AppState>,
     Json(req): Json<DeviceTokenRequest>,
 ) -> Result<(), ApiError> {
-    if req.fcm_token.trim().is_empty() {
-        return Err(ApiError::BadRequest("fcm_token must not be empty".into()));
+    if req.token.trim().is_empty() {
+        return Err(ApiError::BadRequest("token must not be empty".into()));
     }
 
-    // Upsert: update the fcm_token column on the device, verifying ownership.
-    let result = state
-        .execute(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            r"UPDATE devices SET fcm_token = $1
-              WHERE id = $2 AND user_id = $3 AND revoked_at IS NULL",
-            [
-                req.fcm_token.into(),
-                req.device_id.into(),
-                auth.user_id.0.into(),
-            ],
-        ))
-        .await
-        .map_err(|e| ApiError::Database(format!("store device token: {e}")))?;
+    // Upsert: set fcm_token on any active device owned by this user.
+    // If device_id is provided, target that specific device; otherwise update the
+    // most-recently-created active device (best effort for clients that don't
+    // track a stable device identifier).
+    let result = if let Some(ref device_id) = req.device_id {
+        state
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                r"UPDATE devices SET fcm_token = $1
+                  WHERE id::text = $2 AND user_id = $3 AND revoked_at IS NULL",
+                [
+                    req.token.clone().into(),
+                    device_id.clone().into(),
+                    auth.user_id.0.into(),
+                ],
+            ))
+            .await
+            .map_err(|e| ApiError::Database(format!("store device token: {e}")))?
+    } else {
+        state
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                r"UPDATE devices SET fcm_token = $1
+                  WHERE id = (
+                    SELECT id FROM devices
+                    WHERE user_id = $2 AND revoked_at IS NULL
+                    ORDER BY created_at DESC LIMIT 1
+                  )",
+                [req.token.clone().into(), auth.user_id.0.into()],
+            ))
+            .await
+            .map_err(|e| ApiError::Database(format!("store device token: {e}")))?
+    };
 
     if result.rows_affected() == 0 {
         return Err(ApiError::NotFound("device not found".into()));
@@ -257,14 +277,14 @@ async fn store_device_token(
 async fn remove_device_token(
     auth: AuthUser,
     State(state): State<AppState>,
-    Json(req): Json<RemoveDeviceTokenRequest>,
+    Json(req): Json<DeleteDeviceTokenRequest>,
 ) -> Result<(), ApiError> {
     state
         .execute(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             r"UPDATE devices SET fcm_token = NULL
-              WHERE id = $1 AND user_id = $2",
-            [req.device_id.into(), auth.user_id.0.into()],
+              WHERE fcm_token = $1 AND user_id = $2",
+            [req.token.into(), auth.user_id.0.into()],
         ))
         .await
         .map_err(|e| ApiError::Database(format!("remove device token: {e}")))?;

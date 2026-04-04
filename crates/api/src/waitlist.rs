@@ -67,6 +67,17 @@ struct AdminListParams {
     limit: i64,
     #[serde(default)]
     offset: i64,
+    page: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WaitlistListResponse {
+    #[serde(rename = "items")]
+    data: Vec<WaitlistEntryResponse>,
+    total: i64,
+    limit: i64,
+    page: i64,
 }
 
 const fn default_limit() -> i64 {
@@ -90,8 +101,23 @@ struct BulkApproveRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ApproveResponse {
+    code: String,
+    email: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct BulkApproveResponse {
-    approved: usize,
+    results: Vec<BulkApproveResult>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BulkApproveResult {
+    code: String,
+    email: String,
+    status: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -183,11 +209,38 @@ async fn admin_list(
     auth: AuthUser,
     State(state): State<AppState>,
     Query(params): Query<AdminListParams>,
-) -> Result<Json<Vec<WaitlistEntryResponse>>, ApiError> {
+) -> Result<Json<WaitlistListResponse>, ApiError> {
     require_moderator(&state.db, auth.user_id.0).await?;
 
     let limit = params.limit.min(100);
-    let offset = params.offset;
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = if params.page.is_some() {
+        (page - 1) * limit
+    } else {
+        params.offset
+    };
+
+    // Count total records.
+    let (count_sql, count_values): (String, Vec<sea_orm::Value>) =
+        if let Some(ref status) = params.status {
+            (
+                "SELECT COUNT(*)::bigint FROM waitlist WHERE status = $1".into(),
+                vec![status.clone().into()],
+            )
+        } else {
+            ("SELECT COUNT(*)::bigint FROM waitlist".into(), vec![])
+        };
+
+    let total: i64 = state
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            &count_sql,
+            count_values,
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("count waitlist: {e}")))?
+        .and_then(|row| row.try_get_by_index(0).ok())
+        .unwrap_or(0);
 
     let (sql, values): (String, Vec<sea_orm::Value>) = if let Some(ref status) = params.status {
         (
@@ -214,7 +267,7 @@ async fn admin_list(
         .await
         .map_err(|e| ApiError::Database(format!("admin list waitlist: {e}")))?;
 
-    let results = rows
+    let data = rows
         .iter()
         .filter_map(|row| {
             Some(WaitlistEntryResponse {
@@ -236,7 +289,12 @@ async fn admin_list(
         })
         .collect();
 
-    Ok(Json(results))
+    Ok(Json(WaitlistListResponse {
+        data,
+        total,
+        limit,
+        page,
+    }))
 }
 
 /// GET /waitlist/admin/stats -- counts by status (moderator only).
@@ -282,7 +340,7 @@ async fn approve_entry(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<WaitlistEntryResponse>, ApiError> {
+) -> Result<Json<ApproveResponse>, ApiError> {
     require_moderator(&state.db, auth.user_id.0).await?;
 
     let invite_code = generate_invite_code();
@@ -308,45 +366,24 @@ async fn approve_entry(
         return Err(ApiError::NotFound("entry not found or not pending".into()));
     }
 
-    // Fetch the updated entry.
+    // Fetch the email for the response.
     let row = state
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            r"SELECT id, email, name, status, invite_code, created_at, approved_at, approved_by
-              FROM waitlist WHERE id = $1",
+            "SELECT email FROM waitlist WHERE id = $1",
             [id.into()],
         ))
         .await
         .map_err(|e| ApiError::Database(format!("fetch approved entry: {e}")))?
         .ok_or_else(|| ApiError::NotFound("entry not found".into()))?;
 
-    Ok(Json(WaitlistEntryResponse {
-        id: row
-            .try_get_by_index(0)
-            .map_err(|e| ApiError::Database(e.to_string()))?,
-        email: row
-            .try_get_by_index(1)
-            .map_err(|e| ApiError::Database(e.to_string()))?,
-        name: row
-            .try_get_by_index(2)
-            .map_err(|e| ApiError::Database(e.to_string()))?,
-        status: row
-            .try_get_by_index(3)
-            .map_err(|e| ApiError::Database(e.to_string()))?,
-        invite_code: row
-            .try_get_by_index(4)
-            .map_err(|e| ApiError::Database(e.to_string()))?,
-        created_at: row
-            .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(5)
-            .map_err(|e| ApiError::Database(e.to_string()))?
-            .to_rfc3339(),
-        approved_at: row
-            .try_get_by_index::<Option<chrono::DateTime<chrono::FixedOffset>>>(6)
-            .map_err(|e| ApiError::Database(e.to_string()))?
-            .map(|t| t.to_rfc3339()),
-        approved_by: row
-            .try_get_by_index(7)
-            .map_err(|e| ApiError::Database(e.to_string()))?,
+    let email: String = row
+        .try_get_by_index(0)
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    Ok(Json(ApproveResponse {
+        code: invite_code,
+        email,
     }))
 }
 
@@ -383,14 +420,36 @@ async fn bulk_approve(
     require_moderator(&state.db, auth.user_id.0).await?;
 
     if req.ids.is_empty() {
-        return Ok(Json(BulkApproveResponse { approved: 0 }));
+        return Ok(Json(BulkApproveResponse { results: vec![] }));
     }
 
     let now = chrono::Utc::now().fixed_offset();
-    let mut approved = 0usize;
+    let mut results = Vec::with_capacity(req.ids.len());
 
     for id in &req.ids {
         let invite_code = generate_invite_code();
+
+        // Fetch email before updating so we can include it in the response.
+        let email_row = state
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "SELECT email FROM waitlist WHERE id = $1",
+                [(*id).into()],
+            ))
+            .await
+            .map_err(|e| ApiError::Database(format!("bulk approve fetch: {e}")))?;
+
+        let email: String = match email_row.and_then(|r| r.try_get_by_index(0).ok()) {
+            Some(e) => e,
+            None => {
+                results.push(BulkApproveResult {
+                    code: String::new(),
+                    email: String::new(),
+                    status: "not_found".into(),
+                });
+                continue;
+            }
+        };
 
         let result = state
             .db
@@ -400,7 +459,7 @@ async fn bulk_approve(
                   SET status = 'approved', invite_code = $1, approved_at = $2, approved_by = $3
                   WHERE id = $4 AND status = 'pending'",
                 [
-                    invite_code.into(),
+                    invite_code.clone().into(),
                     now.into(),
                     auth.user_id.0.into(),
                     (*id).into(),
@@ -409,12 +468,20 @@ async fn bulk_approve(
             .await
             .map_err(|e| ApiError::Database(format!("bulk approve: {e}")))?;
 
-        if result.rows_affected() > 0 {
-            approved += 1;
-        }
+        let status = if result.rows_affected() > 0 {
+            "approved"
+        } else {
+            "skipped"
+        };
+
+        results.push(BulkApproveResult {
+            code: invite_code,
+            email,
+            status: status.into(),
+        });
     }
 
-    Ok(Json(BulkApproveResponse { approved }))
+    Ok(Json(BulkApproveResponse { results }))
 }
 
 // ---------------------------------------------------------------------------

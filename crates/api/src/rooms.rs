@@ -4,7 +4,7 @@
 //! frontend-expected route aliases, querying the clubs tables directly.
 
 use axum::extract::State;
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
@@ -121,11 +121,33 @@ async fn room_invitations(
 }
 
 pub fn routes() -> Router<AppState> {
+    use crate::clubs;
+
     Router::new()
-        .route("/home/rooms", get(list_rooms))
+        .route("/home/rooms", get(list_rooms).post(clubs::create_club))
+        .route(
+            "/home/rooms/{id}",
+            get(clubs::get_club)
+                .patch(clubs::update_club)
+                .delete(clubs::delete_club),
+        )
+        .route("/home/rooms/{id}/threads", post(clubs::create_club_thread))
+        .route(
+            "/home/rooms/{id}/threads/{threadId}",
+            get(clubs::get_club_thread),
+        )
+        .route(
+            "/home/rooms/{id}/members/{userId}",
+            delete(clubs::kick_member),
+        )
+        .route("/home/rooms/{id}/invite", post(clubs::invite_user))
+        .route(
+            "/home/invitations/{id}/accept",
+            post(clubs::accept_invitation),
+        )
+        .route(
+            "/home/invitations/{id}/decline",
+            post(clubs::decline_invitation),
+        )
         .route("/home/invitations", get(room_invitations))
-    // Room CRUD, threads, members, and invitation actions use the
-    // /clubs/* endpoints — clubs and rooms share the same data model.
-    // The frontend can call /clubs/{id}/* for room operations since
-    // the club handlers work for both public and private clubs.
 }

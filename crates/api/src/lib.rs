@@ -2,7 +2,7 @@ mod agora;
 mod announcements;
 mod auth_routes;
 mod bookmarks;
-mod clubs;
+pub mod clubs;
 mod devices;
 mod discover;
 pub mod ftn;
