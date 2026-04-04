@@ -91,6 +91,13 @@ async fn create_direct(
 
     let other = req.members[0];
 
+    // Cannot DM yourself.
+    if caller == other {
+        return Err(ApiError::BadRequest(
+            "cannot create a direct conversation with yourself".into(),
+        ));
+    }
+
     // Verify the other user exists.
     UserRepo::find_by_id(&state.db, other)
         .await
@@ -102,12 +109,74 @@ async fn create_direct(
         .await
         .map_err(db_err)?
     {
+        // Verify both users still have active memberships. If not, reactivate.
         let members = ConversationRepo::active_members(&state.db, existing.id)
+            .await
+            .map_err(db_err)?;
+        let caller_active = members.iter().any(|m| m.user_id == caller);
+        let other_active = members.iter().any(|m| m.user_id == other);
+
+        if caller_active && other_active {
+            return Ok(Json(conversation_response(
+                &existing,
+                members_from_models(&members),
+            )));
+        }
+
+        // Reactivate: re-add missing members and bump epoch.
+        let txn = state
+            .db
+            .begin()
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+        let new_epoch = EpochRepo::increment(&txn, existing.id)
+            .await
+            .map_err(db_err)?;
+        let now = chrono::Utc::now().fixed_offset();
+
+        for &uid in &[caller, other] {
+            if !members.iter().any(|m| m.user_id == uid) {
+                MembershipRepo::create(
+                    &txn,
+                    eulesia_db::entities::memberships::ActiveModel {
+                        id: Set(new_id()),
+                        conversation_id: Set(existing.id),
+                        user_id: Set(uid),
+                        role: Set("member".into()),
+                        joined_epoch: Set(new_epoch),
+                        left_at: Set(None),
+                        removed_by: Set(None),
+                        created_at: Set(now),
+                    },
+                )
+                .await
+                .map_err(db_err)?;
+            }
+        }
+
+        EpochRepo::create(
+            &txn,
+            eulesia_db::entities::conversation_epochs::ActiveModel {
+                conversation_id: Set(existing.id),
+                epoch: Set(new_epoch),
+                rotated_by: Set(Some(caller)),
+                reason: Set("member_added".into()),
+                created_at: Set(now),
+            },
+        )
+        .await
+        .map_err(db_err)?;
+
+        txn.commit()
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+
+        let refreshed_members = ConversationRepo::active_members(&state.db, existing.id)
             .await
             .map_err(db_err)?;
         return Ok(Json(conversation_response(
             &existing,
-            members_from_models(&members),
+            members_from_models(&refreshed_members),
         )));
     }
 

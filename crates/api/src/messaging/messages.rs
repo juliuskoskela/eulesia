@@ -26,10 +26,14 @@ fn db_err(e: sea_orm::DbErr) -> ApiError {
 }
 
 fn decode_base64(input: &str, field: &str) -> Result<Vec<u8>, ApiError> {
-    STANDARD
+    let bytes = STANDARD
         .decode(input)
         .or_else(|_| base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(input))
-        .map_err(|_| ApiError::BadRequest(format!("invalid base64 in {field}")))
+        .map_err(|_| ApiError::BadRequest(format!("invalid base64 in {field}")))?;
+    if bytes.is_empty() {
+        return Err(ApiError::BadRequest(format!("{field} must not be empty")));
+    }
+    Ok(bytes)
 }
 
 // ---------------------------------------------------------------------------
@@ -61,7 +65,6 @@ pub async fn send(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    let current_epoch = conv.current_epoch;
     let msg_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
@@ -70,6 +73,23 @@ pub async fn send(
         .begin()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    // Lock the conversation row and read epoch inside the transaction to
+    // prevent race conditions with concurrent epoch rotations.
+    let current_epoch = {
+        use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+        let row = txn
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "SELECT current_epoch FROM conversations WHERE id = $1 FOR UPDATE",
+                [conversation_id.into()],
+            ))
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
+        row.try_get_by_index::<i64>(0)
+            .map_err(|e| ApiError::Internal(e.to_string()))?
+    };
 
     if conv.r#type.as_str() == "direct" {
         // DM: device_ciphertexts required.
@@ -83,9 +103,15 @@ pub async fn send(
             ));
         }
 
-        // For DMs, real ciphertext lives in message_device_queue (per-device).
-        // Store a sentinel in messages.ciphertext to satisfy NOT NULL + nonempty.
-        let sentinel = vec![0u8];
+        // For DMs, store the sender's own device ciphertext as the canonical
+        // messages.ciphertext (gives sender history access). Other devices get
+        // their per-device ciphertext from message_device_queue.
+        let sender_ct = device_cts
+            .get(&device_id)
+            .ok_or_else(|| {
+                ApiError::BadRequest("device_ciphertexts must include the sender's device".into())
+            })
+            .and_then(|b64| decode_base64(b64, "device_ciphertexts[sender]"))?;
 
         // Validate target devices: only allow active devices belonging to
         // conversation participants.
@@ -118,7 +144,7 @@ pub async fn send(
                 sender_id: Set(caller),
                 sender_device_id: Set(device_id),
                 epoch: Set(current_epoch),
-                ciphertext: Set(sentinel),
+                ciphertext: Set(sender_ct),
                 message_type: Set(req.message_type.clone()),
                 server_ts: Set(now),
             },
