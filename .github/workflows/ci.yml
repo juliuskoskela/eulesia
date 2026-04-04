@@ -105,6 +105,29 @@ jobs:
           echo "check_status=${CHECK_STATUS}" >> "$GITHUB_OUTPUT"
 
           if [ "$CHECK_STATUS" = "failure" ]; then
+            echo ""
+            echo "::group::Error details from check.log"
+            # Print lines around errors for full visibility
+            grep -i -A 5 'error\|FAIL\|panicked\|^E ' check.log || true
+            echo "::endgroup::"
+
+            echo ""
+            echo "::group::Last 100 lines of build log"
+            tail -100 check.log
+            echo "::endgroup::"
+
+            # Also try to extract Nix build errors from the log store
+            echo ""
+            echo "::group::Failed derivation logs"
+            for drv in $(grep -oP '/nix/store/[^ ]*\.drv' check.log | sort -u); do
+              if nix log "$drv" 2>/dev/null | tail -50 | grep -qi 'error\|fail'; then
+                echo "=== $drv ==="
+                nix log "$drv" 2>/dev/null | tail -80
+                echo ""
+              fi
+            done
+            echo "::endgroup::"
+
             exit 1
           fi
 
@@ -203,10 +226,19 @@ jobs:
             }
 
             cleanup() {
-              echo "=== Debug: service health ==="
-              curl -sv "$API_URL/api/v1/health" 2>&1 || true
-              curl -sv "http://localhost:5174" 2>&1 | head -5 || true
-              curl -sv "$EULESIA_MEILI_URL/health" 2>&1 || true
+              echo ""
+              echo "::group::Cleanup — service health and logs"
+              echo "=== Service health ==="
+              curl -sf "$API_URL/api/v1/health" 2>&1 && echo " API: OK" || echo " API: DOWN"
+              curl -sf "http://localhost:5174" >/dev/null 2>&1 && echo " Web: OK" || echo " Web: DOWN"
+              curl -sf "$EULESIA_MEILI_URL/health" >/dev/null 2>&1 && echo " Meili: OK" || echo " Meili: DOWN"
+
+              if [ -f "$EULESIA_DEV_STATE_DIR/api.log" ]; then
+                echo ""
+                echo "=== API errors (grep) ==="
+                grep -i 'error\|panic\|fatal\|WARN' "$EULESIA_DEV_STATE_DIR/api.log" | tail -30 || echo "(none)"
+              fi
+              echo "::endgroup::"
 
               for pid in $WEB_PID $API_PID $MEILI_PID $PG_PID; do
                 [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
@@ -242,20 +274,39 @@ jobs:
             psql -h 127.0.0.1 -p "$EULESIA_PGPORT" -U "$EULESIA_DB_USER" -d "$EULESIA_DB_NAME" -c \
               "INSERT INTO invite_codes (code, status) VALUES ('\''E2ETEST'\'', '\''available'\'')"
 
-            # Start API
-            pnpm --filter @eulesia/api run dev &
+            # Start API (capture logs for debugging)
+            pnpm --filter @eulesia/api run dev > "$EULESIA_DEV_STATE_DIR/api.log" 2>&1 &
             API_PID=$!
 
             wait_for "API" 30 "curl -sf $API_URL/api/v1/health >/dev/null 2>&1"
 
-            # Start frontend on port 5174
-            pnpm --filter @eulesia/web exec vite --port 5174 &
+            # Start frontend on port 5174 (capture logs)
+            pnpm --filter @eulesia/web exec vite --port 5174 > "$EULESIA_DEV_STATE_DIR/web.log" 2>&1 &
             WEB_PID=$!
 
             wait_for "Frontend" 30 "curl -sf http://localhost:5174 >/dev/null 2>&1"
 
             # Run Playwright tests (browsers provided by Nix)
-            pnpm exec playwright test
+            TEST_EXIT=0
+            pnpm exec playwright test || TEST_EXIT=$?
+
+            if [ "$TEST_EXIT" -ne 0 ]; then
+              echo ""
+              echo "::error::Playwright tests failed with exit code $TEST_EXIT"
+              echo ""
+              echo "::group::API server logs (last 100 lines)"
+              tail -100 "$EULESIA_DEV_STATE_DIR/api.log" 2>/dev/null || echo "(no API log)"
+              echo "::endgroup::"
+              echo ""
+              echo "::group::Frontend server logs (last 50 lines)"
+              tail -50 "$EULESIA_DEV_STATE_DIR/web.log" 2>/dev/null || echo "(no web log)"
+              echo "::endgroup::"
+              echo ""
+              echo "::group::PostgreSQL logs"
+              cat "$EULESIA_PGDATA_DIR/log/"*.log 2>/dev/null || echo "(no PG logs)"
+              echo "::endgroup::"
+              exit $TEST_EXIT
+            fi
           '
 
       - name: Upload Playwright report
