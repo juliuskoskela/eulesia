@@ -111,6 +111,7 @@ pub struct MunicipalityResponse {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Decimal to f64 via string — acceptable for lat/lon precision.
 fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> f64 {
     d.to_string().parse().unwrap_or(0.0)
 }

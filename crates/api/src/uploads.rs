@@ -143,7 +143,9 @@ async fn delete_avatar(
     if let Some(ref old_url) = user.avatar_url {
         if let Some(old_name) = old_url.rsplit('/').next() {
             let old_path = upload_dir().join("avatars").join(old_name);
-            let _ = fs::remove_file(&old_path).await;
+            if let Err(e) = fs::remove_file(&old_path).await {
+                warn!(error = %e, "failed to delete old avatar file");
+            }
         }
     }
 

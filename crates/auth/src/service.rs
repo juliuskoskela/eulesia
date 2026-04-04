@@ -131,7 +131,7 @@ impl AuthService {
             email: Set(req.email),
             password_hash: Set(Some(hash)),
             name: Set(req.name),
-            role: Set(UserRole::Citizen.as_str().to_string()),
+            role: Set(UserRole::Citizen.to_string()),
             identity_verified: Set(is_ftn),
             identity_level: Set(if is_ftn { "substantial" } else { "basic" }.to_string()),
             locale: Set("fi".to_string()),

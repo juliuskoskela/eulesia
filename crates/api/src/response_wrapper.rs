@@ -56,12 +56,19 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
     let json_bytes = serde_json::to_vec(&wrapped).unwrap_or_default();
 
     // Replace body but keep all original headers (including Set-Cookie).
-    parts
-        .headers
-        .insert("content-type", "application/json".parse().unwrap());
+    parts.headers.insert(
+        "content-type",
+        "application/json"
+            .parse()
+            .expect("valid content-type header"),
+    );
     parts.headers.insert(
         "content-length",
-        json_bytes.len().to_string().parse().unwrap(),
+        json_bytes
+            .len()
+            .to_string()
+            .parse()
+            .expect("valid content-length"),
     );
 
     Response::from_parts(parts, Body::from(json_bytes))

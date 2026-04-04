@@ -76,6 +76,7 @@ fn model_to_response(m: locations::Model) -> LocationResponse {
         admin_level: m.admin_level,
         location_type: m.r#type.unwrap_or_else(|| "unknown".into()),
         country: m.country,
+        // Decimal to f64 via string — acceptable for lat/lon precision
         latitude: m.latitude.map(|d| d.to_string().parse().unwrap_or(0.0)),
         longitude: m.longitude.map(|d| d.to_string().parse().unwrap_or(0.0)),
         source: "cache".into(),
