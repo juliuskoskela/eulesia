@@ -83,13 +83,31 @@ pub async fn send(
             ));
         }
 
-        // Decode sender's device ciphertext for storage. If the sender's
-        // device is in the map, use that; otherwise use the first entry.
-        let sender_ct_b64 = device_cts
-            .get(&device_id)
-            .or_else(|| device_cts.values().next())
-            .ok_or_else(|| ApiError::BadRequest("device_ciphertexts must not be empty".into()))?;
-        let sender_ct = decode_base64(sender_ct_b64, "device_ciphertexts")?;
+        // For DMs, real ciphertext lives in message_device_queue (per-device).
+        // Store a sentinel in messages.ciphertext to satisfy NOT NULL + nonempty.
+        let sentinel = vec![0u8];
+
+        // Validate target devices: only allow active devices belonging to
+        // conversation participants.
+        let members = MembershipRepo::list_active(&txn, conversation_id)
+            .await
+            .map_err(db_err)?;
+        let mut valid_devices = std::collections::HashSet::new();
+        for m in &members {
+            let devs = DeviceRepo::list_active_for_user(&state.db, m.user_id)
+                .await
+                .map_err(db_err)?;
+            for d in devs {
+                valid_devices.insert(d.id);
+            }
+        }
+        for target_id in device_cts.keys() {
+            if !valid_devices.contains(target_id) {
+                return Err(ApiError::BadRequest(format!(
+                    "invalid or revoked device: {target_id}"
+                )));
+            }
+        }
 
         // Store message.
         let msg = MessageRepo::create(
@@ -100,7 +118,7 @@ pub async fn send(
                 sender_id: Set(caller),
                 sender_device_id: Set(device_id),
                 epoch: Set(current_epoch),
-                ciphertext: Set(sender_ct),
+                ciphertext: Set(sentinel),
                 message_type: Set(req.message_type.clone()),
                 server_ts: Set(now),
             },

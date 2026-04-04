@@ -222,19 +222,16 @@ pub async fn remove_member(
     .await
     .map_err(db_err)?;
 
-    // Create epoch record.
-    let reason = if is_leaving {
-        "member_left"
-    } else {
-        "member_removed"
-    };
+    // Create epoch record. The DB CHECK constraint only allows specific reasons.
+    // Both leave and kick are "member_removed" — the distinction is in the
+    // membership_events table (event_type = "left" vs "removed").
     EpochRepo::create(
         &txn,
         conversation_epochs::ActiveModel {
             conversation_id: Set(conversation_id),
             epoch: Set(new_epoch),
             rotated_by: Set(Some(caller)),
-            reason: Set(reason.into()),
+            reason: Set("member_removed".into()),
             created_at: Set(now),
         },
     )

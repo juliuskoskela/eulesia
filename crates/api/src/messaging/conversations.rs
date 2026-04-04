@@ -298,8 +298,15 @@ async fn create_group(
     .await
     .map_err(db_err)?;
 
-    // Invite initial members.
-    for &member_id in &req.members {
+    // Invite initial members — deduplicate and exclude the creator.
+    let unique_members: std::collections::BTreeSet<Uuid> = req
+        .members
+        .iter()
+        .copied()
+        .filter(|&id| id != caller)
+        .collect();
+
+    for member_id in unique_members {
         // Verify user exists.
         UserRepo::find_by_id(&state.db, member_id)
             .await
