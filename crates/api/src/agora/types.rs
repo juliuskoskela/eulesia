@@ -6,6 +6,7 @@ use uuid::Uuid;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateThreadRequest {
     pub title: String,
     pub content: String,
@@ -23,16 +24,21 @@ pub struct UpdateThreadRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ThreadListParams {
+    #[serde(alias = "feedScope")]
     pub scope: Option<String>,
     pub municipality_id: Option<Uuid>,
+    #[serde(alias = "tags")]
     pub tag: Option<String>,
+    #[serde(alias = "sortBy")]
     pub sort: Option<String>,
     pub offset: Option<u64>,
     pub limit: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateCommentRequest {
     pub content: String,
     pub parent_id: Option<Uuid>,
@@ -49,6 +55,7 @@ pub struct VoteRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommentListParams {
     pub sort: Option<String>,
     pub offset: Option<u64>,
@@ -60,6 +67,7 @@ pub struct CommentListParams {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ThreadResponse {
     pub id: Uuid,
     pub title: String,
@@ -80,7 +88,9 @@ pub struct ThreadResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ThreadListResponse {
+    #[serde(rename = "items")]
     pub data: Vec<ThreadResponse>,
     pub total: u64,
     pub offset: u64,
@@ -88,6 +98,7 @@ pub struct ThreadListResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommentResponse {
     pub id: Uuid,
     pub thread_id: Uuid,
@@ -103,6 +114,7 @@ pub struct CommentResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthorSummary {
     pub id: Uuid,
     pub username: String,
@@ -118,6 +130,7 @@ pub struct TagWithCount {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VoteResponse {
     pub score: i32,
     pub user_vote: i16,

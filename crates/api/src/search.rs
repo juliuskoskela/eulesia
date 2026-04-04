@@ -11,6 +11,7 @@ use eulesia_common::error::ApiError;
 use crate::AppState;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SearchParams {
     q: String,
     r#type: Option<String>, // "threads" | "users"
@@ -18,6 +19,7 @@ struct SearchParams {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SearchResult {
     threads: Vec<serde_json::Value>,
     users: Vec<serde_json::Value>,

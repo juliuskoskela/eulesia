@@ -8,6 +8,7 @@ use crate::AppState;
 use eulesia_common::error::ApiError;
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct HealthResponse {
     status: &'static str,
     version: &'static str,
@@ -21,6 +22,7 @@ async fn health() -> Json<HealthResponse> {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ReadyResponse {
     status: &'static str,
     database: bool,

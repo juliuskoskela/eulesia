@@ -13,18 +13,22 @@ use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::threads::ThreadRepo;
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct BookmarkResponse {
     thread_id: Uuid,
     created_at: String,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct BookmarkListResponse {
+    #[serde(rename = "items")]
     data: Vec<BookmarkResponse>,
     total: u64,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AddBookmarkRequest {
     thread_id: Uuid,
 }

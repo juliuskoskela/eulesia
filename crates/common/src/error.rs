@@ -28,6 +28,7 @@ pub enum ApiError {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ErrorResponse {
     error: String,
 }

@@ -19,6 +19,7 @@ use eulesia_db::repo::sessions::SessionRepo;
 const MAX_DEVICES_PER_USER: u64 = 10;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CreateDeviceRequest {
     display_name: Option<String>,
     platform: Platform,
@@ -27,6 +28,7 @@ struct CreateDeviceRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SignedPreKeyUpload {
     key_id: i64,
     key_data: String,
@@ -34,23 +36,27 @@ struct SignedPreKeyUpload {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct UploadPreKeysRequest {
     signed_pre_key: Option<SignedPreKeyUpload>,
     one_time_keys: Vec<PreKeyUpload>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PreKeyUpload {
     key_id: i64,
     key_data: String,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PreKeyBundleQuery {
     user_id: Id,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DeviceResponse {
     id: Id,
     display_name: Option<String>,
@@ -70,6 +76,7 @@ impl From<devices::Model> for DeviceResponse {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct PreKeyBundleResponse {
     device_id: Id,
     identity_key: String,
@@ -78,6 +85,7 @@ struct PreKeyBundleResponse {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SignedPreKeyResponse {
     key_id: i64,
     key_data: String,
@@ -85,12 +93,14 @@ struct SignedPreKeyResponse {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct PreKeyResponse {
     key_id: i64,
     key_data: String,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct UploadPreKeysResponse {
     keys_remaining: u64,
 }

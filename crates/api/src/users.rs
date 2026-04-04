@@ -16,6 +16,7 @@ use eulesia_db::repo::users::UserRepo;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserProfileResponse {
     pub id: Uuid,
     pub username: String,
@@ -28,6 +29,7 @@ pub struct UserProfileResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateProfileRequest {
     pub name: Option<String>,
     pub bio: Option<String>,

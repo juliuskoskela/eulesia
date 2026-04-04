@@ -13,6 +13,7 @@ use eulesia_common::types::Id;
 use eulesia_db::repo::users::UserRepo;
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AuthResponse {
     user: UserProfile,
     token: String,
@@ -20,12 +21,23 @@ struct AuthResponse {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct UserProfile {
     id: Id,
     username: String,
+    email: Option<String>,
     name: String,
     avatar_url: Option<String>,
+    bio: Option<String>,
     role: String,
+    institution_type: Option<String>,
+    institution_name: Option<String>,
+    identity_verified: bool,
+    identity_level: String,
+    verified_name: Option<String>,
+    municipality_id: Option<Id>,
+    locale: String,
+    created_at: String,
 }
 
 impl From<eulesia_db::entities::users::Model> for UserProfile {
@@ -33,9 +45,19 @@ impl From<eulesia_db::entities::users::Model> for UserProfile {
         Self {
             id: u.id,
             username: u.username,
+            email: u.email,
             name: u.name,
             avatar_url: u.avatar_url,
+            bio: u.bio,
             role: u.role,
+            institution_type: u.institution_type,
+            institution_name: u.institution_name,
+            identity_verified: u.identity_verified,
+            identity_level: u.identity_level,
+            verified_name: u.verified_name,
+            municipality_id: u.municipality_id,
+            locale: u.locale,
+            created_at: u.created_at.to_rfc3339(),
         }
     }
 }

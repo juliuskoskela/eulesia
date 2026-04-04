@@ -6,6 +6,7 @@ mod health;
 mod messaging;
 mod moderation;
 mod notifications;
+mod response_wrapper;
 mod search;
 mod social;
 mod users;
@@ -14,7 +15,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::middleware::from_fn_with_state;
+use axum::middleware::{from_fn, from_fn_with_state};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 
@@ -58,12 +59,14 @@ pub fn router(state: AppState) -> Router {
         .merge(moderation::routes())
         .merge(notifications::routes())
         .merge(search::routes())
-        .layer(from_fn_with_state(state.db.clone(), auth_middleware));
+        .layer(from_fn_with_state(state.db.clone(), auth_middleware))
+        .layer(from_fn(response_wrapper::wrap_response));
 
-    // WS route is outside the /api/v2 nest (no auth middleware -- handled in the handler)
+    // WS route is outside the API nest (no auth middleware -- handled in the handler)
     let ws_state = (state.db.clone(), state.ws_registry.clone());
 
     Router::new()
+        .nest("/api/v1", api.clone())
         .nest("/api/v2", api)
         .route(
             "/ws/v2",

@@ -13,6 +13,7 @@ eulesia-db = { path = "../db" }
 eulesia-search = { path = "../search" }
 eulesia-ws = { path = "../ws" }
 axum = { workspace = true }
+http-body-util = "0.1"
 axum-extra = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }

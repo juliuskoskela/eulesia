@@ -15,6 +15,7 @@ use eulesia_db::repo::mutes::MuteRepo;
 use eulesia_db::repo::users::UserRepo;
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct UserSummary {
     id: Uuid,
     username: String,
@@ -23,7 +24,9 @@ struct UserSummary {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct FollowListResponse {
+    #[serde(rename = "items")]
     data: Vec<UserSummary>,
     total: u64,
 }

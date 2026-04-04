@@ -7,6 +7,7 @@ use uuid::Uuid;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateReportRequest {
     pub content_type: String,
     pub content_id: Uuid,
@@ -15,12 +16,14 @@ pub struct CreateReportRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateReportRequest {
     pub status: Option<ReportStatus>,
     pub assigned_to: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReportListParams {
     pub status: Option<ReportStatus>,
     pub offset: Option<u64>,
@@ -28,6 +31,7 @@ pub struct ReportListParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateSanctionRequest {
     pub user_id: Uuid,
     pub sanction_type: SanctionType,
@@ -36,18 +40,21 @@ pub struct CreateSanctionRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SanctionListParams {
     pub offset: Option<u64>,
     pub limit: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateAppealRequest {
     pub sanction_id: Uuid,
     pub reason: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppealListParams {
     pub status: Option<AppealStatus>,
     pub offset: Option<u64>,
@@ -55,6 +62,7 @@ pub struct AppealListParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RespondAppealRequest {
     pub admin_response: String,
     pub status: AppealStatus,
@@ -65,6 +73,7 @@ pub struct RespondAppealRequest {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReportResponse {
     pub id: Uuid,
     pub reporter_id: Uuid,
@@ -79,7 +88,9 @@ pub struct ReportResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReportListResponse {
+    #[serde(rename = "items")]
     pub data: Vec<ReportResponse>,
     pub total: u64,
     pub offset: u64,
@@ -87,6 +98,7 @@ pub struct ReportListResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SanctionResponse {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -100,7 +112,9 @@ pub struct SanctionResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SanctionListResponse {
+    #[serde(rename = "items")]
     pub data: Vec<SanctionResponse>,
     pub total: u64,
     pub offset: u64,
@@ -108,6 +122,7 @@ pub struct SanctionListResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppealResponse {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -123,7 +138,9 @@ pub struct AppealResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppealListResponse {
+    #[serde(rename = "items")]
     pub data: Vec<AppealResponse>,
     pub total: u64,
     pub offset: u64,

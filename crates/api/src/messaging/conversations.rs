@@ -202,11 +202,18 @@ async fn create_direct(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
+    let encryption = req.encryption.as_deref().unwrap_or("e2ee");
+    if encryption != "e2ee" && encryption != "none" {
+        return Err(ApiError::BadRequest(
+            "encryption must be 'e2ee' or 'none'".into(),
+        ));
+    }
+
     // Create conversation.
     let conv = conversations::ActiveModel {
         id: Set(conv_id),
         r#type: Set("direct".into()),
-        encryption: Set("e2ee".into()),
+        encryption: Set(encryption.into()),
         name: Set(None),
         description: Set(None),
         avatar_url: Set(None),
@@ -330,10 +337,17 @@ async fn create_group(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
+    let encryption = req.encryption.as_deref().unwrap_or("e2ee");
+    if encryption != "e2ee" && encryption != "none" {
+        return Err(ApiError::BadRequest(
+            "encryption must be 'e2ee' or 'none'".into(),
+        ));
+    }
+
     let conv = conversations::ActiveModel {
         id: Set(conv_id),
         r#type: Set("group".into()),
-        encryption: Set("e2ee".into()),
+        encryption: Set(encryption.into()),
         name: Set(req.name.clone()),
         description: Set(req.description.clone()),
         avatar_url: Set(None),

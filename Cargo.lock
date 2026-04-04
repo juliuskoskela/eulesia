@@ -813,6 +813,7 @@ dependencies = [
  "eulesia-db",
  "eulesia-search",
  "eulesia-ws",
+ "http-body-util",
  "sea-orm",
  "serde",
  "serde_json",
