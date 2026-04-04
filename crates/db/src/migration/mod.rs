@@ -8,6 +8,7 @@ mod m20260404_000005_fix_role_constraints;
 mod m20260404_000006_plaintext_messaging;
 mod m20260404_000007_auth_ftn_magiclink;
 mod m20260405_000008_subscriptions;
+mod m20260405_000009_clubs_institutions_waitlist;
 
 pub struct Migrator;
 
@@ -23,6 +24,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260404_000006_plaintext_messaging::Migration),
             Box::new(m20260404_000007_auth_ftn_magiclink::Migration),
             Box::new(m20260405_000008_subscriptions::Migration),
+            Box::new(m20260405_000009_clubs_institutions_waitlist::Migration),
         ]
     }
 }

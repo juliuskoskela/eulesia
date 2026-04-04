@@ -1,4 +1,5 @@
 mod comments;
+mod edit_history;
 mod tags;
 pub mod threads;
 pub mod types;
@@ -34,4 +35,8 @@ pub fn routes() -> Router<AppState> {
         .route("/agora/comments/{id}/vote", post(votes::vote_comment))
         .route("/agora/tags", get(tags::list_tags))
         .route("/agora/tags/{tag}", get(tags::get_tag_threads))
+        .route(
+            "/agora/threads/{id}/edit-history",
+            get(edit_history::get_edit_history),
+        )
 }

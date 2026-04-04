@@ -1,0 +1,432 @@
+use axum::extract::{Path, Query, State};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::AppState;
+use eulesia_auth::session::AuthUser;
+use eulesia_common::error::ApiError;
+use eulesia_common::types::{UserRole, new_id};
+use eulesia_db::repo::users::UserRepo;
+
+// ---------------------------------------------------------------------------
+// Moderator check (reuse pattern from moderation module)
+// ---------------------------------------------------------------------------
+
+async fn require_moderator(
+    db: &sea_orm::DatabaseConnection,
+    user_id: Uuid,
+) -> Result<(), ApiError> {
+    let user = UserRepo::find_by_id(db, user_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .ok_or(ApiError::Unauthorized)?;
+
+    let role: UserRole = user
+        .role
+        .parse()
+        .map_err(|e: String| ApiError::Internal(e))?;
+
+    if !role.is_moderator() {
+        return Err(ApiError::Forbidden);
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Request / response types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JoinWaitlistRequest {
+    email: String,
+    name: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WaitlistEntryResponse {
+    id: Uuid,
+    email: String,
+    name: Option<String>,
+    status: String,
+    invite_code: Option<String>,
+    created_at: String,
+    approved_at: Option<String>,
+    approved_by: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminListParams {
+    status: Option<String>,
+    #[serde(default = "default_limit")]
+    limit: i64,
+    #[serde(default)]
+    offset: i64,
+}
+
+fn default_limit() -> i64 {
+    20
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WaitlistStatsResponse {
+    pending: i64,
+    approved: i64,
+    rejected: i64,
+    total: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BulkApproveRequest {
+    ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BulkApproveResponse {
+    approved: usize,
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn validate_email(email: &str) -> Result<(), ApiError> {
+    if !email.contains('@') || !email.contains('.') || email.len() < 5 {
+        return Err(ApiError::BadRequest("invalid email address".into()));
+    }
+    Ok(())
+}
+
+fn generate_invite_code() -> String {
+    use rand::Rng;
+    let mut rng = rand::rng();
+    let code: String = (0..12)
+        .map(|_| {
+            let idx = rng.random_range(0..36);
+            if idx < 10 {
+                (b'0' + idx) as char
+            } else {
+                (b'a' + idx - 10) as char
+            }
+        })
+        .collect();
+    code
+}
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
+/// POST /waitlist/join -- public endpoint (no auth required, but the route is
+/// behind the auth middleware so we accept `AuthUser` anyway; the frontend
+/// can call this after initial signup).
+async fn join_waitlist(
+    State(state): State<AppState>,
+    Json(req): Json<JoinWaitlistRequest>,
+) -> Result<Json<WaitlistEntryResponse>, ApiError> {
+    validate_email(&req.email)?;
+
+    let id = new_id();
+    let now = chrono::Utc::now().fixed_offset();
+
+    // Check if email already on waitlist.
+    let existing = state
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT id FROM waitlist WHERE email = $1",
+            [req.email.clone().into()],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("check waitlist: {e}")))?;
+
+    if existing.is_some() {
+        return Err(ApiError::Conflict("email already on waitlist".into()));
+    }
+
+    state
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"INSERT INTO waitlist (id, email, name, status, created_at)
+              VALUES ($1, $2, $3, 'pending', $4)",
+            [
+                id.into(),
+                req.email.clone().into(),
+                req.name.clone().unwrap_or_default().into(),
+                now.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("insert waitlist: {e}")))?;
+
+    Ok(Json(WaitlistEntryResponse {
+        id,
+        email: req.email,
+        name: req.name,
+        status: "pending".into(),
+        invite_code: None,
+        created_at: now.to_rfc3339(),
+        approved_at: None,
+        approved_by: None,
+    }))
+}
+
+/// GET /waitlist/admin -- list entries (moderator only).
+async fn admin_list(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Query(params): Query<AdminListParams>,
+) -> Result<Json<Vec<WaitlistEntryResponse>>, ApiError> {
+    require_moderator(&state.db, auth.user_id.0).await?;
+
+    let limit = params.limit.min(100);
+    let offset = params.offset;
+
+    let (sql, values): (String, Vec<sea_orm::Value>) = if let Some(ref status) = params.status {
+        (
+            r"SELECT id, email, name, status, invite_code, created_at, approved_at, approved_by
+              FROM waitlist WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3"
+                .into(),
+            vec![status.clone().into(), limit.into(), offset.into()],
+        )
+    } else {
+        (
+            r"SELECT id, email, name, status, invite_code, created_at, approved_at, approved_by
+              FROM waitlist ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+                .into(),
+            vec![limit.into(), offset.into()],
+        )
+    };
+
+    let rows = state
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            &sql,
+            values,
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("admin list waitlist: {e}")))?;
+
+    let results = rows
+        .iter()
+        .filter_map(|row| {
+            Some(WaitlistEntryResponse {
+                id: row.try_get_by_index(0).ok()?,
+                email: row.try_get_by_index(1).ok()?,
+                name: row.try_get_by_index(2).ok()?,
+                status: row.try_get_by_index(3).ok()?,
+                invite_code: row.try_get_by_index(4).ok()?,
+                created_at: row
+                    .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(5)
+                    .ok()?
+                    .to_rfc3339(),
+                approved_at: row
+                    .try_get_by_index::<Option<chrono::DateTime<chrono::FixedOffset>>>(6)
+                    .ok()?
+                    .map(|t| t.to_rfc3339()),
+                approved_by: row.try_get_by_index(7).ok()?,
+            })
+        })
+        .collect();
+
+    Ok(Json(results))
+}
+
+/// GET /waitlist/admin/stats -- counts by status (moderator only).
+async fn admin_stats(
+    auth: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<WaitlistStatsResponse>, ApiError> {
+    require_moderator(&state.db, auth.user_id.0).await?;
+
+    let row = state
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT
+                COUNT(*) FILTER (WHERE status = 'pending')::bigint AS pending,
+                COUNT(*) FILTER (WHERE status = 'approved')::bigint AS approved,
+                COUNT(*) FILTER (WHERE status = 'rejected')::bigint AS rejected,
+                COUNT(*)::bigint AS total
+              FROM waitlist",
+            [],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("waitlist stats: {e}")))?
+        .ok_or_else(|| ApiError::Internal("stats query returned no rows".into()))?;
+
+    Ok(Json(WaitlistStatsResponse {
+        pending: row
+            .try_get_by_index(0)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+        approved: row
+            .try_get_by_index(1)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+        rejected: row
+            .try_get_by_index(2)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+        total: row
+            .try_get_by_index(3)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+    }))
+}
+
+/// POST /waitlist/admin/{id}/approve -- approve an entry (moderator).
+async fn approve_entry(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<WaitlistEntryResponse>, ApiError> {
+    require_moderator(&state.db, auth.user_id.0).await?;
+
+    let invite_code = generate_invite_code();
+    let now = chrono::Utc::now().fixed_offset();
+
+    let result = state
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE waitlist
+              SET status = 'approved', invite_code = $1, approved_at = $2, approved_by = $3
+              WHERE id = $4 AND status = 'pending'",
+            [
+                invite_code.clone().into(),
+                now.into(),
+                auth.user_id.0.into(),
+                id.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("approve entry: {e}")))?;
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound("entry not found or not pending".into()));
+    }
+
+    // Fetch the updated entry.
+    let row = state
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT id, email, name, status, invite_code, created_at, approved_at, approved_by
+              FROM waitlist WHERE id = $1",
+            [id.into()],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("fetch approved entry: {e}")))?
+        .ok_or_else(|| ApiError::NotFound("entry not found".into()))?;
+
+    Ok(Json(WaitlistEntryResponse {
+        id: row
+            .try_get_by_index(0)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+        email: row
+            .try_get_by_index(1)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+        name: row
+            .try_get_by_index(2)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+        status: row
+            .try_get_by_index(3)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+        invite_code: row
+            .try_get_by_index(4)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+        created_at: row
+            .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(5)
+            .map_err(|e| ApiError::Database(e.to_string()))?
+            .to_rfc3339(),
+        approved_at: row
+            .try_get_by_index::<Option<chrono::DateTime<chrono::FixedOffset>>>(6)
+            .map_err(|e| ApiError::Database(e.to_string()))?
+            .map(|t| t.to_rfc3339()),
+        approved_by: row
+            .try_get_by_index(7)
+            .map_err(|e| ApiError::Database(e.to_string()))?,
+    }))
+}
+
+/// POST /waitlist/admin/{id}/reject -- reject an entry (moderator).
+async fn reject_entry(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<(), ApiError> {
+    require_moderator(&state.db, auth.user_id.0).await?;
+
+    let result = state
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE waitlist SET status = 'rejected' WHERE id = $1 AND status = 'pending'",
+            [id.into()],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("reject entry: {e}")))?;
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound("entry not found or not pending".into()));
+    }
+
+    Ok(())
+}
+
+/// POST /waitlist/admin/bulk-approve -- approve multiple entries (moderator).
+async fn bulk_approve(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<BulkApproveRequest>,
+) -> Result<Json<BulkApproveResponse>, ApiError> {
+    require_moderator(&state.db, auth.user_id.0).await?;
+
+    if req.ids.is_empty() {
+        return Ok(Json(BulkApproveResponse { approved: 0 }));
+    }
+
+    let now = chrono::Utc::now().fixed_offset();
+    let mut approved = 0usize;
+
+    for id in &req.ids {
+        let invite_code = generate_invite_code();
+
+        let result = state
+            .db
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                r"UPDATE waitlist
+                  SET status = 'approved', invite_code = $1, approved_at = $2, approved_by = $3
+                  WHERE id = $4 AND status = 'pending'",
+                [
+                    invite_code.into(),
+                    now.into(),
+                    auth.user_id.0.into(),
+                    (*id).into(),
+                ],
+            ))
+            .await
+            .map_err(|e| ApiError::Database(format!("bulk approve: {e}")))?;
+
+        if result.rows_affected() > 0 {
+            approved += 1;
+        }
+    }
+
+    Ok(Json(BulkApproveResponse { approved }))
+}
+
+// ---------------------------------------------------------------------------
+// Router
+// ---------------------------------------------------------------------------
+
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/waitlist/join", post(join_waitlist))
+        .route("/waitlist/admin", get(admin_list))
+        .route("/waitlist/admin/stats", get(admin_stats))
+        .route("/waitlist/admin/{id}/approve", post(approve_entry))
+        .route("/waitlist/admin/{id}/reject", post(reject_entry))
+        .route("/waitlist/admin/bulk-approve", post(bulk_approve))
+}

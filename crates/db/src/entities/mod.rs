@@ -33,8 +33,19 @@ pub mod thread_views;
 pub mod thread_votes;
 pub mod threads;
 
+// Clubs
+pub mod club_invitations;
+pub mod club_members;
+pub mod clubs;
+
+// Institutions
+pub mod institution_claims;
+pub mod institution_managers;
+pub mod institution_topics;
+
 // Moderation
 pub mod content_reports;
+pub mod edit_history;
 pub mod moderation_actions;
 pub mod moderation_appeals;
 pub mod user_sanctions;
@@ -50,6 +61,9 @@ pub mod push_subscriptions;
 
 // Subscriptions
 pub mod user_subscriptions;
+
+// Waitlist
+pub mod waitlist;
 
 // Events
 pub mod domain_events;

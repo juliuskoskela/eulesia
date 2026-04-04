@@ -2,6 +2,7 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use sea_orm::ActiveValue::Set;
+use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -204,6 +205,74 @@ async fn vapid_public_key() -> Json<VapidPublicKeyResponse> {
 }
 
 // ---------------------------------------------------------------------------
+// Push device tokens (FCM)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeviceTokenRequest {
+    device_id: Uuid,
+    fcm_token: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoveDeviceTokenRequest {
+    device_id: Uuid,
+}
+
+/// POST /notifications/push/device-token -- store FCM token for a device.
+async fn store_device_token(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<DeviceTokenRequest>,
+) -> Result<(), ApiError> {
+    if req.fcm_token.trim().is_empty() {
+        return Err(ApiError::BadRequest("fcm_token must not be empty".into()));
+    }
+
+    // Upsert: update the fcm_token column on the device, verifying ownership.
+    let result = state
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE devices SET fcm_token = $1
+              WHERE id = $2 AND user_id = $3 AND revoked_at IS NULL",
+            [
+                req.fcm_token.into(),
+                req.device_id.into(),
+                auth.user_id.0.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("store device token: {e}")))?;
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound("device not found".into()));
+    }
+
+    Ok(())
+}
+
+/// DELETE /notifications/push/device-token -- clear FCM token for a device.
+async fn remove_device_token(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<RemoveDeviceTokenRequest>,
+) -> Result<(), ApiError> {
+    state
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE devices SET fcm_token = NULL
+              WHERE id = $1 AND user_id = $2",
+            [req.device_id.into(), auth.user_id.0.into()],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("remove device token: {e}")))?;
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -221,5 +290,9 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/notifications/push/vapid-public-key",
             get(vapid_public_key),
+        )
+        .route(
+            "/notifications/push/device-token",
+            post(store_device_token).delete(remove_device_token),
         )
 }

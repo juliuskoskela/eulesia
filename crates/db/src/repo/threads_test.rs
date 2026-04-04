@@ -40,6 +40,7 @@ mod tests {
             ai_model: None,
             language: Some("en".to_string()),
             is_hidden: false,
+            club_id: None,
             deleted_at: None,
             created_at: now(),
             updated_at: now(),

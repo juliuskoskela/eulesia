@@ -2,9 +2,12 @@ mod agora;
 mod announcements;
 mod auth_routes;
 mod bookmarks;
+mod clubs;
 mod devices;
+mod discover;
 pub mod ftn;
 mod health;
+mod institutions;
 mod link_preview;
 mod locations;
 mod map;
@@ -12,11 +15,13 @@ mod messaging;
 mod moderation;
 mod notifications;
 mod response_wrapper;
+mod rooms;
 mod search;
 mod social;
 mod subscriptions;
 mod uploads;
 mod users;
+mod waitlist;
 
 use std::ops::Deref;
 use std::sync::Arc;
@@ -75,6 +80,13 @@ pub fn router(state: AppState) -> Router {
         .merge(notifications::routes())
         .merge(search::routes())
         .merge(uploads::routes())
+        .merge(clubs::routes())
+        .merge(rooms::routes())
+        .merge(discover::routes())
+        .merge(institutions::routes())
+        .merge(waitlist::routes())
+        // Alias: /reports/my-sanctions -> same handler as /moderation/my-sanctions
+        .route("/reports/my-sanctions", get(moderation::my_sanctions))
         // DM route aliases — frontend calls /dm/* but v2 uses /conversations/*.
         .route(
             "/dm",
