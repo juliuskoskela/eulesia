@@ -49,20 +49,29 @@ impl MessageRepo {
         db: &impl ConnectionTrait,
         acks: &[(Uuid, Uuid)],
     ) -> Result<u64, DbErr> {
-        let mut total = 0u64;
-        for (message_id, device_id) in acks {
-            let result = message_device_queue::Entity::update_many()
-                .filter(message_device_queue::Column::MessageId.eq(*message_id))
-                .filter(message_device_queue::Column::DeviceId.eq(*device_id))
-                .filter(message_device_queue::Column::DeliveredAt.is_null())
-                .col_expr(
-                    message_device_queue::Column::DeliveredAt,
-                    Expr::current_timestamp().into(),
-                )
-                .exec(db)
-                .await?;
-            total += result.rows_affected;
+        if acks.is_empty() {
+            return Ok(0);
         }
-        Ok(total)
+
+        let mut ack_filter = Condition::any();
+        for (message_id, device_id) in acks {
+            ack_filter = ack_filter.add(
+                Condition::all()
+                    .add(message_device_queue::Column::MessageId.eq(*message_id))
+                    .add(message_device_queue::Column::DeviceId.eq(*device_id)),
+            );
+        }
+
+        let result = message_device_queue::Entity::update_many()
+            .filter(message_device_queue::Column::DeliveredAt.is_null())
+            .filter(ack_filter)
+            .col_expr(
+                message_device_queue::Column::DeliveredAt,
+                Expr::current_timestamp().into(),
+            )
+            .exec(db)
+            .await?;
+
+        Ok(result.rows_affected)
     }
 }

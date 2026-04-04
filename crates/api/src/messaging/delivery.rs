@@ -72,6 +72,17 @@ pub async fn acknowledge(
     State(state): State<AppState>,
     Json(req): Json<AcknowledgeRequest>,
 ) -> Result<Json<AcknowledgeResponse>, ApiError> {
+    const MAX_ACK_BATCH: usize = 500;
+
+    if req.deliveries.is_empty() {
+        return Err(ApiError::BadRequest("deliveries must not be empty".into()));
+    }
+    if req.deliveries.len() > MAX_ACK_BATCH {
+        return Err(ApiError::BadRequest(format!(
+            "too many deliveries in batch (max {MAX_ACK_BATCH})"
+        )));
+    }
+
     let device_id = auth
         .device_id
         .ok_or_else(|| {

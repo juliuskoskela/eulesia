@@ -104,80 +104,83 @@ async fn create_direct(
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("target user not found".into()))?;
 
-    // Check for existing DM.
+    // Check for existing DM (find_direct does not filter deleted_at).
     if let Some(existing) = ConversationRepo::find_direct(&state.db, caller, other)
         .await
         .map_err(db_err)?
     {
-        // Verify both users still have active memberships. If not, reactivate.
-        let members = ConversationRepo::active_members(&state.db, existing.id)
-            .await
-            .map_err(db_err)?;
-        let caller_active = members.iter().any(|m| m.user_id == caller);
-        let other_active = members.iter().any(|m| m.user_id == other);
-
-        if caller_active && other_active {
-            return Ok(Json(conversation_response(
-                &existing,
-                members_from_models(&members),
-            )));
-        }
-
-        // Reactivate: re-add missing members and bump epoch.
-        let txn = state
-            .db
-            .begin()
-            .await
-            .map_err(|e| ApiError::Database(e.to_string()))?;
-        let new_epoch = EpochRepo::increment(&txn, existing.id)
-            .await
-            .map_err(db_err)?;
-        let now = chrono::Utc::now().fixed_offset();
-
-        for &uid in &[caller, other] {
-            if !members.iter().any(|m| m.user_id == uid) {
-                MembershipRepo::create(
-                    &txn,
-                    eulesia_db::entities::memberships::ActiveModel {
-                        id: Set(new_id()),
-                        conversation_id: Set(existing.id),
-                        user_id: Set(uid),
-                        role: Set("member".into()),
-                        joined_epoch: Set(new_epoch),
-                        left_at: Set(None),
-                        removed_by: Set(None),
-                        created_at: Set(now),
-                    },
-                )
+        // Skip soft-deleted conversations — fall through to create a new one.
+        if existing.deleted_at.is_none() {
+            // Verify both users still have active memberships. If not, reactivate.
+            let members = ConversationRepo::active_members(&state.db, existing.id)
                 .await
                 .map_err(db_err)?;
+            let caller_active = members.iter().any(|m| m.user_id == caller);
+            let other_active = members.iter().any(|m| m.user_id == other);
+
+            if caller_active && other_active {
+                return Ok(Json(conversation_response(
+                    &existing,
+                    members_from_models(&members),
+                )));
             }
-        }
 
-        EpochRepo::create(
-            &txn,
-            eulesia_db::entities::conversation_epochs::ActiveModel {
-                conversation_id: Set(existing.id),
-                epoch: Set(new_epoch),
-                rotated_by: Set(Some(caller)),
-                reason: Set("member_added".into()),
-                created_at: Set(now),
-            },
-        )
-        .await
-        .map_err(db_err)?;
+            // Reactivate: re-add missing members and bump epoch.
+            let txn = state
+                .db
+                .begin()
+                .await
+                .map_err(|e| ApiError::Database(e.to_string()))?;
+            let new_epoch = EpochRepo::increment(&txn, existing.id)
+                .await
+                .map_err(db_err)?;
+            let now = chrono::Utc::now().fixed_offset();
 
-        txn.commit()
-            .await
-            .map_err(|e| ApiError::Database(e.to_string()))?;
+            for &uid in &[caller, other] {
+                if !members.iter().any(|m| m.user_id == uid) {
+                    MembershipRepo::create(
+                        &txn,
+                        eulesia_db::entities::memberships::ActiveModel {
+                            id: Set(new_id()),
+                            conversation_id: Set(existing.id),
+                            user_id: Set(uid),
+                            role: Set("member".into()),
+                            joined_epoch: Set(new_epoch),
+                            left_at: Set(None),
+                            removed_by: Set(None),
+                            created_at: Set(now),
+                        },
+                    )
+                    .await
+                    .map_err(db_err)?;
+                }
+            }
 
-        let refreshed_members = ConversationRepo::active_members(&state.db, existing.id)
+            EpochRepo::create(
+                &txn,
+                eulesia_db::entities::conversation_epochs::ActiveModel {
+                    conversation_id: Set(existing.id),
+                    epoch: Set(new_epoch),
+                    rotated_by: Set(Some(caller)),
+                    reason: Set("member_added".into()),
+                    created_at: Set(now),
+                },
+            )
             .await
             .map_err(db_err)?;
-        return Ok(Json(conversation_response(
-            &existing,
-            members_from_models(&refreshed_members),
-        )));
+
+            txn.commit()
+                .await
+                .map_err(|e| ApiError::Database(e.to_string()))?;
+
+            let refreshed_members = ConversationRepo::active_members(&state.db, existing.id)
+                .await
+                .map_err(db_err)?;
+            return Ok(Json(conversation_response(
+                &existing,
+                members_from_models(&refreshed_members),
+            )));
+        }
     }
 
     let conv_id = new_id();
@@ -273,9 +276,29 @@ async fn create_direct(
     .await
     .map_err(db_err)?;
 
-    txn.commit()
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?;
+    match txn.commit().await {
+        Ok(()) => {}
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("unique") || msg.contains("duplicate") {
+                // Race condition: another request created the same DM.
+                // Fetch and return the existing conversation.
+                if let Some(existing) = ConversationRepo::find_direct(&state.db, caller, other)
+                    .await
+                    .map_err(db_err)?
+                {
+                    let members = ConversationRepo::active_members(&state.db, existing.id)
+                        .await
+                        .map_err(db_err)?;
+                    return Ok(Json(conversation_response(
+                        &existing,
+                        members_from_models(&members),
+                    )));
+                }
+            }
+            return Err(ApiError::Database(msg));
+        }
+    }
 
     let members = ConversationRepo::active_members(&state.db, conv_id)
         .await
@@ -441,21 +464,21 @@ pub async fn list(
         .await
         .map_err(db_err)?;
 
-    let mut items = Vec::with_capacity(memberships.len());
-    for m in memberships {
-        if let Some(conv) = ConversationRepo::find_by_id(&state.db, m.conversation_id)
-            .await
-            .map_err(db_err)?
-        {
-            items.push(ConversationListItem {
-                id: conv.id,
-                conversation_type: conv.r#type,
-                name: conv.name,
-                current_epoch: conv.current_epoch,
-                created_at: conv.created_at.to_rfc3339(),
-            });
-        }
-    }
+    let conv_ids: Vec<uuid::Uuid> = memberships.iter().map(|m| m.conversation_id).collect();
+    let conversations = ConversationRepo::find_by_ids(&state.db, &conv_ids)
+        .await
+        .map_err(db_err)?;
+
+    let items = conversations
+        .into_iter()
+        .map(|conv| ConversationListItem {
+            id: conv.id,
+            conversation_type: conv.r#type,
+            name: conv.name,
+            current_epoch: conv.current_epoch,
+            created_at: conv.created_at.to_rfc3339(),
+        })
+        .collect();
 
     Ok(Json(items))
 }

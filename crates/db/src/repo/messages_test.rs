@@ -52,17 +52,12 @@ mod tests {
 
     #[tokio::test]
     async fn acknowledge_many_returns_count() {
+        // Bulk UPDATE: single query returning total rows affected.
         let db = MockDatabase::new(DatabaseBackend::Postgres)
-            .append_exec_results([
-                MockExecResult {
-                    last_insert_id: 0,
-                    rows_affected: 1,
-                },
-                MockExecResult {
-                    last_insert_id: 0,
-                    rows_affected: 1,
-                },
-            ])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 2,
+            }])
             .into_connection();
 
         let acks = vec![

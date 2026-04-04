@@ -46,6 +46,20 @@ impl ConversationRepo {
         }
     }
 
+    pub async fn find_by_ids(
+        db: &DatabaseConnection,
+        ids: &[Uuid],
+    ) -> Result<Vec<conversations::Model>, DbErr> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        conversations::Entity::find()
+            .filter(conversations::Column::Id.is_in(ids.to_vec()))
+            .filter(conversations::Column::DeletedAt.is_null())
+            .all(db)
+            .await
+    }
+
     pub async fn active_members(
         db: &DatabaseConnection,
         conversation_id: Uuid,

@@ -264,8 +264,8 @@ pub async fn update_role(
         ));
     }
 
-    // Verify conversation exists.
-    ConversationRepo::find_by_id(&state.db, conversation_id)
+    // Verify conversation exists and get current epoch.
+    let conv = ConversationRepo::find_by_id(&state.db, conversation_id)
         .await
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
@@ -302,7 +302,7 @@ pub async fn update_role(
             conversation_id: Set(conversation_id),
             user_id: Set(target_user_id),
             event_type: Set("role_changed".into()),
-            epoch: Set(target_membership.joined_epoch),
+            epoch: Set(conv.current_epoch),
             actor_id: Set(Some(caller)),
             metadata: Set(None),
             created_at: Set(now),

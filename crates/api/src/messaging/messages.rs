@@ -19,6 +19,7 @@ use super::types::{MessageCursorParams, MessageResponse, SendMessageRequest};
 
 const DEFAULT_LIMIT: u64 = 50;
 const MAX_LIMIT: u64 = 100;
+const VALID_MESSAGE_TYPES: &[&str] = &["text", "media", "system", "reaction", "redaction"];
 
 #[allow(clippy::needless_pass_by_value)]
 fn db_err(e: sea_orm::DbErr) -> ApiError {
@@ -52,6 +53,14 @@ pub async fn send(
         .device_id
         .ok_or_else(|| ApiError::BadRequest("device_id required for sending messages".into()))?
         .0;
+
+    if !VALID_MESSAGE_TYPES.contains(&req.message_type.as_str()) {
+        return Err(ApiError::BadRequest(format!(
+            "invalid message_type: {}. Must be one of: {}",
+            req.message_type,
+            VALID_MESSAGE_TYPES.join(", ")
+        )));
+    }
 
     // Verify conversation exists.
     let conv = ConversationRepo::find_by_id(&state.db, conversation_id)
