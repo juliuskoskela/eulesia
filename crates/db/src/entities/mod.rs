@@ -1,6 +1,9 @@
 // Identity
 pub mod device_signed_pre_keys;
 pub mod devices;
+pub mod ftn_oidc_state;
+pub mod ftn_pending_registrations;
+pub mod magic_links;
 pub mod one_time_pre_keys;
 pub mod sessions;
 pub mod users;

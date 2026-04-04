@@ -34,9 +34,14 @@ struct UserProfile {
     institution_name: Option<String>,
     identity_verified: bool,
     identity_level: String,
+    identity_provider: Option<String>,
     verified_name: Option<String>,
     municipality_id: Option<Id>,
     locale: String,
+    notification_replies: bool,
+    notification_mentions: bool,
+    notification_official: bool,
+    onboarding_completed_at: Option<String>,
     created_at: String,
 }
 
@@ -54,9 +59,14 @@ impl From<eulesia_db::entities::users::Model> for UserProfile {
             institution_name: u.institution_name,
             identity_verified: u.identity_verified,
             identity_level: u.identity_level,
+            identity_provider: u.identity_provider,
             verified_name: u.verified_name,
             municipality_id: u.municipality_id,
             locale: u.locale,
+            notification_replies: u.notification_replies,
+            notification_mentions: u.notification_mentions,
+            notification_official: u.notification_official,
+            onboarding_completed_at: u.onboarding_completed_at.map(|t| t.to_rfc3339()),
             created_at: u.created_at.to_rfc3339(),
         }
     }
