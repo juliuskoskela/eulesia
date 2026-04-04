@@ -12,10 +12,21 @@ eulesia-auth = { path = "../auth" }
 eulesia-db = { path = "../db" }
 eulesia-search = { path = "../search" }
 eulesia-ws = { path = "../ws" }
+argon2 = { workspace = true }
 axum = { workspace = true }
+http-body-util = "0.1"
 axum-extra = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+josekit = { workspace = true }
+jsonwebtoken = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+hex = "0.4"
+image = "0.25"
+urlencoding = "2"
 sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

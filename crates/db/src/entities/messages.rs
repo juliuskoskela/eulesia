@@ -8,10 +8,10 @@ pub struct Model {
     pub id: Uuid,
     pub conversation_id: Uuid,
     pub sender_id: Uuid,
-    pub sender_device_id: Uuid,
+    pub sender_device_id: Option<Uuid>,
     pub epoch: i64,
-    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
-    pub ciphertext: Vec<u8>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub ciphertext: Option<Vec<u8>>,
     pub message_type: String,
     pub server_ts: DateTimeWithTimeZone,
 }

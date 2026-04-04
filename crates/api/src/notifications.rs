@@ -17,6 +17,7 @@ use eulesia_db::repo::push_subscriptions::PushSubscriptionRepo;
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct NotificationResponse {
     id: Uuid,
     event_type: String,
@@ -42,17 +43,21 @@ impl From<eulesia_db::entities::notifications::Model> for NotificationResponse {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct NotificationListResponse {
+    #[serde(rename = "items")]
     data: Vec<NotificationResponse>,
     total: u64,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct UnreadCountResponse {
     count: u64,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct MarkAllReadResponse {
     updated: u64,
 }
@@ -62,6 +67,7 @@ struct MarkAllReadResponse {
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PushSubscribeRequest {
     endpoint: String,
     p256dh: String,
@@ -69,6 +75,7 @@ struct PushSubscribeRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PushUnsubscribeRequest {
     endpoint: String,
 }
@@ -175,6 +182,28 @@ async fn push_unsubscribe(
 }
 
 // ---------------------------------------------------------------------------
+// VAPID public key
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VapidPublicKeyResponse {
+    enabled: bool,
+    vapid_public_key: Option<String>,
+}
+
+/// GET /notifications/push/vapid-public-key — return the VAPID public key for Web Push.
+async fn vapid_public_key() -> Json<VapidPublicKeyResponse> {
+    let key = std::env::var("VAPID_PUBLIC_KEY")
+        .ok()
+        .filter(|k| !k.is_empty());
+    Json(VapidPublicKeyResponse {
+        enabled: key.is_some(),
+        vapid_public_key: key,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -188,5 +217,9 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/notifications/push/subscribe",
             post(push_subscribe).delete(push_unsubscribe),
+        )
+        .route(
+            "/notifications/push/vapid-public-key",
+            get(vapid_public_key),
         )
 }

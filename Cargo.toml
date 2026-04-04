@@ -16,7 +16,7 @@ members = [
 # Shared across crates
 anyhow = "1"
 async-trait = "0.1"
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 sea-orm = { version = "1", features = [
@@ -46,6 +46,9 @@ axum-extra = { version = "0.10", features = ["cookie"] }
 tower = "0.5"
 time = "0.3"
 tokio-util = { version = "0.7", features = ["rt"] }
+jsonwebtoken = "9"
+josekit = "0.8"
+regex = "1"
 reqwest = { version = "0.12", features = ["json"] }
 dashmap = "6"
 meilisearch-sdk = "0.28"

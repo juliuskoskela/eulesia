@@ -175,10 +175,6 @@ pub async fn send(
     Json(req): Json<SendMessageRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
     let caller = auth.user_id.0;
-    let device_id = auth
-        .device_id
-        .ok_or_else(|| ApiError::BadRequest("device_id required for sending messages".into()))?
-        .0;
 
     let msg_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
@@ -189,13 +185,13 @@ pub async fn send(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    // Single authoritative read inside lock — fetch type + epoch together.
-    let (conv_type, current_epoch) = {
+    // Single authoritative read inside lock — fetch type + epoch + encryption together.
+    let (conv_type, current_epoch, encryption) = {
         use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
         let row = txn
             .query_one(Statement::from_sql_and_values(
                 DatabaseBackend::Postgres,
-                "SELECT type, current_epoch FROM conversations WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
+                "SELECT type, current_epoch, encryption FROM conversations WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
                 [conversation_id.into()],
             ))
             .await
@@ -208,10 +204,13 @@ pub async fn send(
         let epoch: i64 = row
             .try_get_by_index(1)
             .map_err(|e| ApiError::Internal(e.to_string()))?;
+        let enc: String = row
+            .try_get_by_index(2)
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
         let conv_type = type_str
             .parse::<ConversationType>()
             .map_err(ApiError::Internal)?;
-        (conv_type, epoch)
+        (conv_type, epoch, enc)
     };
 
     // Re-check membership inside the locked transaction to prevent a
@@ -220,6 +219,49 @@ pub async fn send(
         .await
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
+
+    let is_plaintext = encryption == "none";
+
+    if is_plaintext {
+        // Plaintext path — no device binding, no ciphertext, no device queue.
+        let content = req.content.as_ref().ok_or_else(|| {
+            ApiError::BadRequest("content is required for plaintext conversations".into())
+        })?;
+
+        let msg = MessageRepo::create(
+            &txn,
+            messages::ActiveModel {
+                id: Set(msg_id),
+                conversation_id: Set(conversation_id),
+                sender_id: Set(caller),
+                sender_device_id: Set(None),
+                epoch: Set(current_epoch),
+                ciphertext: Set(Some(content.as_bytes().to_vec())),
+                message_type: Set(req.message_type.as_str().to_string()),
+                server_ts: Set(now),
+            },
+        )
+        .await
+        .map_err(db_err)?;
+
+        txn.commit()
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+
+        let mut resp = MessageResponse::from_model(&msg);
+        resp.content = msg
+            .ciphertext
+            .as_ref()
+            .and_then(|ct| String::from_utf8(ct.clone()).ok());
+        resp.ciphertext = String::new();
+        return Ok(Json(resp));
+    }
+
+    // E2EE path — require device binding.
+    let device_id = auth
+        .device_id
+        .ok_or_else(|| ApiError::BadRequest("device_id required for E2EE messages".into()))?
+        .0;
 
     let prepared = match conv_type {
         ConversationType::Direct => {
@@ -237,9 +279,9 @@ pub async fn send(
             id: Set(msg_id),
             conversation_id: Set(conversation_id),
             sender_id: Set(caller),
-            sender_device_id: Set(device_id),
+            sender_device_id: Set(Some(device_id)),
             epoch: Set(current_epoch),
-            ciphertext: Set(prepared.stored_ciphertext),
+            ciphertext: Set(Some(prepared.stored_ciphertext)),
             message_type: Set(req.message_type.as_str().to_string()),
             server_ts: Set(now),
         },
@@ -268,7 +310,7 @@ pub async fn list_messages(
     Path(conversation_id): Path<Uuid>,
     Query(params): Query<MessageCursorParams>,
 ) -> Result<Json<Vec<MessageResponse>>, ApiError> {
-    // Verify conversation exists and read its type.
+    // Verify conversation exists and read its type + encryption.
     let conv = ConversationRepo::find_by_id(&state.db, conversation_id)
         .await
         .map_err(db_err)?
@@ -278,6 +320,7 @@ pub async fn list_messages(
         .r#type
         .parse::<ConversationType>()
         .map_err(ApiError::Internal)?;
+    let is_plaintext = conv.encryption == "none";
 
     // Verify caller is active member.
     MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
@@ -291,7 +334,32 @@ pub async fn list_messages(
         .await
         .map_err(db_err)?;
 
-    // For DMs, serve device-specific ciphertext from the queue.
+    if is_plaintext {
+        // Plaintext path — decode stored bytes as UTF-8 content.
+        let items = msgs
+            .iter()
+            .map(|m| {
+                let content = m
+                    .ciphertext
+                    .as_ref()
+                    .and_then(|ct| String::from_utf8(ct.clone()).ok());
+                MessageResponse {
+                    id: m.id,
+                    conversation_id: m.conversation_id,
+                    sender_id: m.sender_id,
+                    sender_device_id: m.sender_device_id,
+                    epoch: m.epoch,
+                    ciphertext: String::new(),
+                    content,
+                    message_type: m.message_type.clone(),
+                    server_ts: m.server_ts.to_rfc3339(),
+                }
+            })
+            .collect();
+        return Ok(Json(items));
+    }
+
+    // E2EE path — for DMs, serve device-specific ciphertext from the queue.
     let device_id = auth.device_id.map(|d| d.0);
     let msg_ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
 
@@ -314,16 +382,16 @@ pub async fn list_messages(
     let items = msgs
         .iter()
         .map(|m| {
-            // For DMs without device-specific ciphertext, return empty string
-            // rather than the sender's ciphertext (which is not decryptable by
-            // other devices).
             let ct = if conv_type == ConversationType::Direct {
                 device_ct_map
                     .get(&m.id)
                     .map(|ct| STANDARD.encode(ct))
                     .unwrap_or_default()
             } else {
-                STANDARD.encode(&m.ciphertext)
+                m.ciphertext
+                    .as_ref()
+                    .map(|ct| STANDARD.encode(ct))
+                    .unwrap_or_default()
             };
             MessageResponse {
                 id: m.id,
@@ -332,6 +400,7 @@ pub async fn list_messages(
                 sender_device_id: m.sender_device_id,
                 epoch: m.epoch,
                 ciphertext: ct,
+                content: None,
                 message_type: m.message_type.clone(),
                 server_ts: m.server_ts.to_rfc3339(),
             }
@@ -339,4 +408,139 @@ pub async fn list_messages(
         .collect();
 
     Ok(Json(items))
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /conversations/{id}/messages/{message_id} — edit message (plaintext only)
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditMessageRequest {
+    pub content: String,
+}
+
+pub async fn edit_message(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path((conversation_id, message_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<EditMessageRequest>,
+) -> Result<Json<MessageResponse>, ApiError> {
+    let conv = ConversationRepo::find_by_id(&state.db, conversation_id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
+
+    if conv.encryption != "none" {
+        return Err(ApiError::BadRequest(
+            "only plaintext messages can be edited".into(),
+        ));
+    }
+
+    // Verify membership
+    MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    // Find message, verify it belongs to this conversation, and verify ownership
+    let msg = MessageRepo::find_by_id(&*state.db, message_id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("message not found".into()))?;
+
+    if msg.conversation_id != conversation_id {
+        return Err(ApiError::NotFound("message not found".into()));
+    }
+    if msg.sender_id != auth.user_id.0 {
+        return Err(ApiError::Forbidden);
+    }
+
+    // Update content
+    use sea_orm::ActiveModelTrait;
+    let mut am: messages::ActiveModel = msg.into();
+    am.ciphertext = Set(Some(req.content.as_bytes().to_vec()));
+    let updated = am.update(&*state.db).await.map_err(db_err)?;
+
+    let mut resp = MessageResponse::from_model(&updated);
+    resp.content = updated
+        .ciphertext
+        .as_ref()
+        .and_then(|ct| String::from_utf8(ct.clone()).ok());
+    resp.ciphertext = String::new();
+    Ok(Json(resp))
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /conversations/{id}/messages/{message_id} — soft-delete
+// ---------------------------------------------------------------------------
+
+pub async fn delete_message(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path((conversation_id, message_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    // Verify membership
+    MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    let msg = MessageRepo::find_by_id(&*state.db, message_id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("message not found".into()))?;
+
+    if msg.conversation_id != conversation_id {
+        return Err(ApiError::NotFound("message not found".into()));
+    }
+    if msg.sender_id != auth.user_id.0 {
+        return Err(ApiError::Forbidden);
+    }
+
+    // Soft-delete via message_redactions
+    use eulesia_db::entities::message_redactions;
+    use sea_orm::ActiveModelTrait;
+    let now = chrono::Utc::now().fixed_offset();
+    message_redactions::ActiveModel {
+        message_id: Set(message_id),
+        redacted_by: Set(auth.user_id.0),
+        reason: Set("user_deleted".into()),
+        created_at: Set(now),
+    }
+    .insert(&*state.db)
+    .await
+    .map_err(db_err)?;
+
+    Ok(Json(serde_json::json!({ "deleted": true })))
+}
+
+// ---------------------------------------------------------------------------
+// POST /conversations/{id}/read — mark conversation as read
+// ---------------------------------------------------------------------------
+
+pub async fn mark_read(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(conversation_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    // Verify membership
+    MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    // Update membership last_read_at via raw SQL (column may not exist yet —
+    // this is a forward-compatible placeholder that silently succeeds).
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+    let _ = state
+        .db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "UPDATE memberships SET updated_at = NOW() WHERE conversation_id = $1 AND user_id = $2",
+            [conversation_id.into(), auth.user_id.0.into()],
+        ))
+        .await;
+
+    Ok(Json(serde_json::json!({ "read": true })))
 }

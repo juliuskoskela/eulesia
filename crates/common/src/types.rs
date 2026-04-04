@@ -560,7 +560,9 @@ pub type Timestamp = DateTime<Utc>;
 
 /// Standard paginated response wrapper.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Paginated<T> {
+    #[serde(rename = "items")]
     pub data: Vec<T>,
     pub total: i64,
     pub offset: i64,
@@ -569,6 +571,7 @@ pub struct Paginated<T> {
 
 /// Pagination query parameters.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PaginationParams {
     #[serde(default = "default_offset")]
     pub offset: i64,

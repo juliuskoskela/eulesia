@@ -20,11 +20,13 @@ fn db_err(e: sea_orm::DbErr) -> ApiError {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QueueParams {
     pub limit: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AcknowledgeResponse {
     pub acknowledged: u64,
 }

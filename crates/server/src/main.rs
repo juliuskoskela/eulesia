@@ -53,11 +53,17 @@ async fn main() -> anyhow::Result<()> {
 
     let ws_registry = eulesia_ws::registry::ConnectionRegistry::new();
 
+    let ftn_config = eulesia_api::ftn::FtnConfig::from_env().map(Arc::new);
+    if ftn_config.is_some() {
+        info!("FTN (Idura) authentication enabled");
+    }
+
     let state = AppState {
         db: Arc::clone(&db),
         config: Arc::new(app_config),
         search_client: search_client.clone(),
         ws_registry,
+        ftn_config,
     };
 
     let cors = CorsLayer::new()

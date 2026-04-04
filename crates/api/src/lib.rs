@@ -1,20 +1,29 @@
 mod agora;
+mod announcements;
 mod auth_routes;
 mod bookmarks;
 mod devices;
+pub mod ftn;
 mod health;
+mod link_preview;
+mod locations;
+mod map;
 mod messaging;
 mod moderation;
 mod notifications;
+mod response_wrapper;
 mod search;
 mod social;
+mod subscriptions;
+mod uploads;
 mod users;
 
 use std::ops::Deref;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::middleware::from_fn_with_state;
+use axum::middleware::{from_fn, from_fn_with_state};
+use axum::routing::{get, post};
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 
@@ -28,6 +37,7 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub search_client: Option<Arc<SearchClient>>,
     pub ws_registry: ConnectionRegistry,
+    pub ftn_config: Option<Arc<ftn::FtnConfig>>,
 }
 
 impl Deref for AppState {
@@ -48,22 +58,42 @@ pub struct AppConfig {
 pub fn router(state: AppState) -> Router {
     let api = Router::new()
         .merge(health::routes())
+        .merge(announcements::routes())
         .merge(auth_routes::routes())
+        .merge(ftn::routes())
+        .merge(link_preview::routes())
+        .merge(locations::routes())
+        .merge(map::routes())
         .merge(devices::routes())
         .merge(users::routes())
         .merge(social::routes())
         .merge(bookmarks::routes())
+        .merge(subscriptions::routes())
         .merge(agora::routes())
         .merge(messaging::routes())
         .merge(moderation::routes())
         .merge(notifications::routes())
         .merge(search::routes())
-        .layer(from_fn_with_state(state.db.clone(), auth_middleware));
+        .merge(uploads::routes())
+        // DM route aliases — frontend calls /dm/* but v2 uses /conversations/*.
+        .route(
+            "/dm",
+            get(messaging::conversations::list).post(messaging::conversations::create),
+        )
+        .route("/dm/{id}", get(messaging::conversations::get))
+        .route(
+            "/dm/{id}/messages",
+            post(messaging::messages::send).get(messaging::messages::list_messages),
+        )
+        .route("/dm/{id}/read", post(messaging::messages::mark_read))
+        .layer(from_fn_with_state(state.db.clone(), auth_middleware))
+        .layer(from_fn(response_wrapper::wrap_response));
 
-    // WS route is outside the /api/v2 nest (no auth middleware -- handled in the handler)
+    // WS route is outside the API nest (no auth middleware -- handled in the handler)
     let ws_state = (state.db.clone(), state.ws_registry.clone());
 
     Router::new()
+        .nest("/api/v1", api.clone())
         .nest("/api/v2", api)
         .route(
             "/ws/v2",

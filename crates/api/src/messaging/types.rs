@@ -11,47 +11,61 @@ use uuid::Uuid;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateConversationRequest {
     pub conversation_type: ConversationType,
+    /// Encryption mode: "e2ee" (default) or "none" (plaintext).
+    pub encryption: Option<String>,
     pub name: Option<String>,
     pub description: Option<String>,
     pub members: Vec<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateConversationRequest {
     pub name: Option<String>,
     pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendMessageRequest {
     pub message_type: MessageType,
+    /// E2EE: base64-encoded ciphertext (group/channel messages).
     pub ciphertext: Option<String>,
+    /// E2EE: per-device ciphertexts (direct messages).
     pub device_ciphertexts: Option<HashMap<Uuid, String>>,
+    /// Plaintext content (for encryption: "none" conversations).
+    pub content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InviteMemberRequest {
     pub user_id: Uuid,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateRoleRequest {
     pub role: GroupRole,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AcknowledgeRequest {
     pub deliveries: Vec<DeliveryAck>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeliveryAck {
     pub message_id: Uuid,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageCursorParams {
     pub before: Option<Uuid>,
     pub limit: Option<u64>,
@@ -62,6 +76,7 @@ pub struct MessageCursorParams {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConversationResponse {
     pub id: Uuid,
     pub conversation_type: String,
@@ -76,6 +91,7 @@ pub struct ConversationResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConversationListItem {
     pub id: Uuid,
     pub conversation_type: String,
@@ -85,6 +101,7 @@ pub struct ConversationListItem {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MemberSummary {
     pub user_id: Uuid,
     pub role: GroupRole,
@@ -92,13 +109,18 @@ pub struct MemberSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageResponse {
     pub id: Uuid,
     pub conversation_id: Uuid,
     pub sender_id: Uuid,
-    pub sender_device_id: Uuid,
+    pub sender_device_id: Option<Uuid>,
     pub epoch: i64,
+    /// Base64-encoded ciphertext (E2EE) or empty string (plaintext).
     pub ciphertext: String,
+    /// Plaintext content (only set for encryption: "none" conversations).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
     pub message_type: String,
     pub server_ts: String,
 }
@@ -112,7 +134,12 @@ impl MessageResponse {
             sender_id: m.sender_id,
             sender_device_id: m.sender_device_id,
             epoch: m.epoch,
-            ciphertext: STANDARD.encode(&m.ciphertext),
+            ciphertext: m
+                .ciphertext
+                .as_ref()
+                .map(|ct| STANDARD.encode(ct))
+                .unwrap_or_default(),
+            content: None,
             message_type: m.message_type.clone(),
             server_ts: m.server_ts.to_rfc3339(),
         }
@@ -120,6 +147,7 @@ impl MessageResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PendingDelivery {
     pub message_id: Uuid,
     pub ciphertext: String,
@@ -127,6 +155,7 @@ pub struct PendingDelivery {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EpochResponse {
     pub epoch: i64,
     pub rotated_by: Option<Uuid>,

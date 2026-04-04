@@ -18,6 +18,7 @@ pub mod push_subscriptions;
 pub mod reports;
 pub mod sanctions;
 pub mod sessions;
+pub mod subscriptions;
 pub mod tags;
 pub mod thread_views;
 pub mod threads;

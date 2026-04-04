@@ -7,6 +7,13 @@ use crate::entities::{message_device_queue, messages};
 pub struct MessageRepo;
 
 impl MessageRepo {
+    pub async fn find_by_id(
+        db: &impl ConnectionTrait,
+        id: Uuid,
+    ) -> Result<Option<messages::Model>, DbErr> {
+        messages::Entity::find_by_id(id).one(db).await
+    }
+
     pub async fn create(
         db: &impl ConnectionTrait,
         model: messages::ActiveModel,

@@ -15,9 +15,9 @@ mod tests {
             id,
             conversation_id,
             sender_id,
-            sender_device_id: Uuid::now_v7(),
+            sender_device_id: Some(Uuid::now_v7()),
             epoch: 0,
-            ciphertext: vec![0xde, 0xad, 0xbe, 0xef],
+            ciphertext: Some(vec![0xde, 0xad, 0xbe, 0xef]),
             message_type: "text".to_string(),
             server_ts: now(),
         }

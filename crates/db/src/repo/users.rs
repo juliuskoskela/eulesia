@@ -24,6 +24,17 @@ impl UserRepo {
             .await
     }
 
+    pub async fn find_by_rp_subject(
+        db: &DatabaseConnection,
+        rp_subject: &str,
+    ) -> Result<Option<users::Model>, DbErr> {
+        users::Entity::find()
+            .filter(users::Column::RpSubject.eq(rp_subject))
+            .filter(users::Column::DeletedAt.is_null())
+            .one(db)
+            .await
+    }
+
     pub async fn find_by_email(
         db: &DatabaseConnection,
         email: &str,

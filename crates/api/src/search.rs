@@ -11,6 +11,7 @@ use eulesia_common::error::ApiError;
 use crate::AppState;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SearchParams {
     q: String,
     r#type: Option<String>, // "threads" | "users"
@@ -18,6 +19,7 @@ struct SearchParams {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SearchResult {
     threads: Vec<serde_json::Value>,
     users: Vec<serde_json::Value>,
@@ -85,8 +87,93 @@ async fn search_health(State(state): State<AppState>) -> Result<Json<serde_json:
     Ok(Json(serde_json::json!({ "healthy": healthy })))
 }
 
+/// GET /users/search — alias for search with type=users.
+async fn user_search(
+    State(state): State<AppState>,
+    Query(params): Query<SearchParams>,
+) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    let limit = params.limit.unwrap_or(10).min(50);
+
+    if let Some(client) = state.search_client.as_ref() {
+        let users_index = client.inner().index("users");
+        match users_index
+            .search()
+            .with_query(&params.q)
+            .with_limit(limit)
+            .execute::<serde_json::Value>()
+            .await
+        {
+            Ok(r) => Ok(Json(r.hits.into_iter().map(|h| h.result).collect())),
+            Err(e) => {
+                warn!(error = %e, "user search failed");
+                Ok(Json(vec![]))
+            }
+        }
+    } else {
+        Ok(Json(vec![]))
+    }
+}
+
+/// GET /search/threads — dedicated thread search.
+async fn thread_search(
+    State(state): State<AppState>,
+    Query(params): Query<SearchParams>,
+) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    let limit = params.limit.unwrap_or(20).min(100);
+
+    if let Some(client) = state.search_client.as_ref() {
+        let threads_index = client.inner().index("threads");
+        match threads_index
+            .search()
+            .with_query(&params.q)
+            .with_limit(limit)
+            .execute::<serde_json::Value>()
+            .await
+        {
+            Ok(r) => Ok(Json(r.hits.into_iter().map(|h| h.result).collect())),
+            Err(e) => {
+                warn!(error = %e, "thread search failed");
+                Ok(Json(vec![]))
+            }
+        }
+    } else {
+        Ok(Json(vec![]))
+    }
+}
+
+/// GET /search/places — dedicated place search.
+async fn place_search(
+    State(state): State<AppState>,
+    Query(params): Query<SearchParams>,
+) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    let limit = params.limit.unwrap_or(20).min(100);
+
+    if let Some(client) = state.search_client.as_ref() {
+        let places_index = client.inner().index("places");
+        match places_index
+            .search()
+            .with_query(&params.q)
+            .with_limit(limit)
+            .execute::<serde_json::Value>()
+            .await
+        {
+            Ok(r) => Ok(Json(r.hits.into_iter().map(|h| h.result).collect())),
+            Err(e) => {
+                warn!(error = %e, "place search failed");
+                Ok(Json(vec![]))
+            }
+        }
+    } else {
+        Ok(Json(vec![]))
+    }
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/search", get(search_handler))
         .route("/search/health", get(search_health))
+        .route("/search/threads", get(thread_search))
+        .route("/search/places", get(place_search))
+        .route("/users/search", get(user_search))
+        .route("/search/users", get(user_search))
 }
