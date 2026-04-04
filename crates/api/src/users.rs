@@ -2,7 +2,7 @@ use axum::Json;
 use axum::Router;
 use axum::extract::{Path, State};
 use axum::routing::get;
-use sea_orm::ActiveValue::Set;
+use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -123,6 +123,87 @@ async fn update_my_profile(
 }
 
 // ---------------------------------------------------------------------------
+// User settings
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UserSettingsResponse {
+    locale: String,
+    notification_replies: bool,
+    notification_mentions: bool,
+    notification_official: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateSettingsRequest {
+    locale: Option<String>,
+    notification_replies: Option<bool>,
+    notification_mentions: Option<bool>,
+    notification_official: Option<bool>,
+}
+
+/// GET /users/settings
+async fn get_settings(
+    auth: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<UserSettingsResponse>, ApiError> {
+    let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .ok_or(ApiError::Unauthorized)?;
+
+    Ok(Json(UserSettingsResponse {
+        locale: user.locale,
+        notification_replies: user.notification_replies,
+        notification_mentions: user.notification_mentions,
+        notification_official: user.notification_official,
+    }))
+}
+
+/// PATCH /users/settings
+async fn update_settings(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<UpdateSettingsRequest>,
+) -> Result<Json<UserSettingsResponse>, ApiError> {
+    let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .ok_or(ApiError::Unauthorized)?;
+
+    use eulesia_db::entities::users;
+    let mut am: users::ActiveModel = user.into();
+    am.updated_at = Set(chrono::Utc::now().fixed_offset());
+
+    if let Some(locale) = req.locale {
+        am.locale = Set(locale);
+    }
+    if let Some(v) = req.notification_replies {
+        am.notification_replies = Set(v);
+    }
+    if let Some(v) = req.notification_mentions {
+        am.notification_mentions = Set(v);
+    }
+    if let Some(v) = req.notification_official {
+        am.notification_official = Set(v);
+    }
+
+    let updated = am
+        .update(&*state.db)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    Ok(Json(UserSettingsResponse {
+        locale: updated.locale,
+        notification_replies: updated.notification_replies,
+        notification_mentions: updated.notification_mentions,
+        notification_official: updated.notification_official,
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
@@ -130,4 +211,5 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/users/{id}", get(get_user_profile))
         .route("/users/me", axum::routing::patch(update_my_profile))
+        .route("/users/settings", get(get_settings).patch(update_settings))
 }

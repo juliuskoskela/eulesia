@@ -16,7 +16,7 @@ members = [
 # Shared across crates
 anyhow = "1"
 async-trait = "0.1"
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 sea-orm = { version = "1", features = [

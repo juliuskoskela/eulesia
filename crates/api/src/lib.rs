@@ -10,6 +10,7 @@ mod notifications;
 mod response_wrapper;
 mod search;
 mod social;
+mod uploads;
 mod users;
 
 use std::ops::Deref;
@@ -62,6 +63,7 @@ pub fn router(state: AppState) -> Router {
         .merge(moderation::routes())
         .merge(notifications::routes())
         .merge(search::routes())
+        .merge(uploads::routes())
         .layer(from_fn_with_state(state.db.clone(), auth_middleware))
         .layer(from_fn(response_wrapper::wrap_response));
 

@@ -87,8 +87,36 @@ async fn search_health(State(state): State<AppState>) -> Result<Json<serde_json:
     Ok(Json(serde_json::json!({ "healthy": healthy })))
 }
 
+/// GET /users/search — alias for search with type=users.
+async fn user_search(
+    State(state): State<AppState>,
+    Query(params): Query<SearchParams>,
+) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    let limit = params.limit.unwrap_or(10).min(50);
+
+    if let Some(client) = state.search_client.as_ref() {
+        let users_index = client.inner().index("users");
+        match users_index
+            .search()
+            .with_query(&params.q)
+            .with_limit(limit)
+            .execute::<serde_json::Value>()
+            .await
+        {
+            Ok(r) => Ok(Json(r.hits.into_iter().map(|h| h.result).collect())),
+            Err(e) => {
+                warn!(error = %e, "user search failed");
+                Ok(Json(vec![]))
+            }
+        }
+    } else {
+        Ok(Json(vec![]))
+    }
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/search", get(search_handler))
         .route("/search/health", get(search_health))
+        .route("/users/search", get(user_search))
 }
