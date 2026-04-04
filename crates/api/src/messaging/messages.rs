@@ -62,17 +62,11 @@ pub async fn send(
         )));
     }
 
-    // Verify conversation exists.
+    // Verify conversation exists (pre-check, non-authoritative).
     let conv = ConversationRepo::find_by_id(&state.db, conversation_id)
         .await
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
-
-    // Verify sender is active member.
-    MembershipRepo::find_active(&*state.db, conversation_id, caller)
-        .await
-        .map_err(db_err)?
-        .ok_or(ApiError::Forbidden)?;
 
     let msg_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
@@ -83,8 +77,8 @@ pub async fn send(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    // Lock the conversation row and read epoch inside the transaction to
-    // prevent race conditions with concurrent epoch rotations.
+    // Lock the conversation row and read epoch inside the transaction.
+    // This prevents race conditions with concurrent epoch rotations.
     let current_epoch = {
         use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
         let row = txn
@@ -99,6 +93,13 @@ pub async fn send(
         row.try_get_by_index::<i64>(0)
             .map_err(|e| ApiError::Internal(e.to_string()))?
     };
+
+    // Re-check membership inside the locked transaction to prevent a
+    // removed user from sending after their membership was revoked.
+    MembershipRepo::find_active(&txn, conversation_id, caller)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
 
     if conv.r#type.as_str() == "direct" {
         // DM: device_ciphertexts required.

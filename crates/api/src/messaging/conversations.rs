@@ -173,11 +173,16 @@ async fn create_direct(
                 .await
                 .map_err(|e| ApiError::Database(e.to_string()))?;
 
+            // Re-fetch conversation to get updated epoch and timestamps.
+            let refreshed_conv = ConversationRepo::find_by_id(&state.db, existing.id)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
             let refreshed_members = ConversationRepo::active_members(&state.db, existing.id)
                 .await
                 .map_err(db_err)?;
             return Ok(Json(conversation_response(
-                &existing,
+                &refreshed_conv,
                 members_from_models(&refreshed_members),
             )));
         }

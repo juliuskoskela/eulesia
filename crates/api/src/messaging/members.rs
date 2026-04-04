@@ -180,6 +180,19 @@ pub async fn remove_member(
             .map_err(db_err)?
             .ok_or_else(|| ApiError::NotFound("member not found".into()))?;
 
+    // Prevent removing the last admin — would leave the group unmanageable.
+    if target_membership.role == "admin" {
+        let all_members = MembershipRepo::list_active(&*state.db, conversation_id)
+            .await
+            .map_err(db_err)?;
+        let admin_count = all_members.iter().filter(|m| m.role == "admin").count();
+        if admin_count <= 1 {
+            return Err(ApiError::BadRequest(
+                "cannot remove the last admin — promote another member first".into(),
+            ));
+        }
+    }
+
     let now = chrono::Utc::now().fixed_offset();
 
     let txn = state
@@ -286,6 +299,19 @@ pub async fn update_role(
             .await
             .map_err(db_err)?
             .ok_or_else(|| ApiError::NotFound("member not found".into()))?;
+
+    // Prevent demoting the last admin to member.
+    if target_membership.role == "admin" && req.role == "member" {
+        let all_members = MembershipRepo::list_active(&*state.db, conversation_id)
+            .await
+            .map_err(db_err)?;
+        let admin_count = all_members.iter().filter(|m| m.role == "admin").count();
+        if admin_count <= 1 {
+            return Err(ApiError::BadRequest(
+                "cannot demote the last admin — promote another member first".into(),
+            ));
+        }
+    }
 
     let now = chrono::Utc::now().fixed_offset();
 
