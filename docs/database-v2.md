@@ -626,6 +626,22 @@ A background worker processes them:
 4. FCM HTTP v1 POST using `devices.fcm_token`
 5. Mark outbox entry completed (or retry with backoff)
 
+### thread_views
+
+Per-user view deduplication for threads.
+
+```sql
+CREATE TABLE thread_views (
+    thread_id   uuid NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+    user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    viewed_at   timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (thread_id, user_id)
+);
+```
+
+View count is incremented only on the first view per user per thread
+(INSERT ON CONFLICT DO NOTHING + conditional increment).
+
 ---
 
 ## Future: Not Yet Implemented

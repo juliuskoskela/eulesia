@@ -26,11 +26,27 @@ mod comments_test;
 #[cfg(test)]
 mod conversations_test;
 #[cfg(test)]
+mod devices_test;
+#[cfg(test)]
+mod epochs_test;
+#[cfg(test)]
 mod follows_test;
+#[cfg(test)]
+mod memberships_test;
+#[cfg(test)]
+mod messages_test;
 #[cfg(test)]
 mod mutes_test;
 #[cfg(test)]
+mod outbox_test;
+#[cfg(test)]
+mod pre_keys_test;
+#[cfg(test)]
+mod sessions_test;
+#[cfg(test)]
 mod tags_test;
+#[cfg(test)]
+mod thread_views_test;
 #[cfg(test)]
 mod threads_test;
 #[cfg(test)]
