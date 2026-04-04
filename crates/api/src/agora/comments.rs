@@ -3,11 +3,14 @@ use axum::extract::{Path, State};
 use sea_orm::ActiveValue::Set;
 use uuid::Uuid;
 
+use tracing::warn;
+
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::new_id;
+use eulesia_common::types::{UserRole, new_id};
 use eulesia_db::repo::comments::CommentRepo;
+use eulesia_db::repo::outbox_helpers::emit_event;
 use eulesia_db::repo::threads::ThreadRepo;
 use eulesia_db::repo::users::UserRepo;
 
@@ -79,6 +82,25 @@ pub async fn create_comment(
     ThreadRepo::increment_reply_count(&state.db, thread_id, 1)
         .await
         .map_err(db_err)?;
+
+    // Notify thread author (if not self-comment)
+    if thread.author_id != auth.user_id.0 {
+        if let Err(e) = emit_event(
+            &*state.db,
+            "notification",
+            serde_json::json!({
+                "user_id": thread.author_id.to_string(),
+                "event_type": "reply",
+                "title": "New reply on your thread",
+                "body": null,
+                "link": format!("/agora/threads/{}", thread.id),
+            }),
+        )
+        .await
+        {
+            warn!("failed to emit notification event: {e}");
+        }
+    }
 
     // Fetch author for response.
     let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
@@ -185,7 +207,12 @@ pub async fn delete_comment(
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
 
-    if comment.author_id != auth.user_id.0 && user.role != "moderator" {
+    let role: UserRole = user
+        .role
+        .parse()
+        .map_err(|e: String| ApiError::Internal(e))?;
+
+    if comment.author_id != auth.user_id.0 && !role.is_moderator() {
         return Err(ApiError::Forbidden);
     }
 

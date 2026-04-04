@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use base64::{Engine, engine::general_purpose::STANDARD};
+use eulesia_common::types::{ConversationType, GroupRole, MessageType};
+use eulesia_db::entities::messages;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -9,7 +12,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateConversationRequest {
-    pub conversation_type: String,
+    pub conversation_type: ConversationType,
     pub name: Option<String>,
     pub description: Option<String>,
     pub members: Vec<Uuid>,
@@ -23,7 +26,7 @@ pub struct UpdateConversationRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct SendMessageRequest {
-    pub message_type: String,
+    pub message_type: MessageType,
     pub ciphertext: Option<String>,
     pub device_ciphertexts: Option<HashMap<Uuid, String>>,
 }
@@ -35,7 +38,7 @@ pub struct InviteMemberRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateRoleRequest {
-    pub role: String,
+    pub role: GroupRole,
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,7 +87,7 @@ pub struct ConversationListItem {
 #[derive(Debug, Serialize)]
 pub struct MemberSummary {
     pub user_id: Uuid,
-    pub role: String,
+    pub role: GroupRole,
     pub joined_epoch: i64,
 }
 
@@ -98,6 +101,22 @@ pub struct MessageResponse {
     pub ciphertext: String,
     pub message_type: String,
     pub server_ts: String,
+}
+
+impl MessageResponse {
+    /// Build a response from a DB model, encoding ciphertext as base64.
+    pub fn from_model(m: &messages::Model) -> Self {
+        Self {
+            id: m.id,
+            conversation_id: m.conversation_id,
+            sender_id: m.sender_id,
+            sender_device_id: m.sender_device_id,
+            epoch: m.epoch,
+            ciphertext: STANDARD.encode(&m.ciphertext),
+            message_type: m.message_type.clone(),
+            server_ts: m.server_ts.to_rfc3339(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]

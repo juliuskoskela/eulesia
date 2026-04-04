@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::new_id;
+use eulesia_common::types::{ConversationType, GroupRole, new_id};
 use eulesia_db::entities::{
     conversation_epochs, conversations, direct_conversations, membership_events, memberships,
 };
@@ -32,7 +32,7 @@ fn members_from_models(models: &[memberships::Model]) -> Vec<MemberSummary> {
         .iter()
         .map(|m| MemberSummary {
             user_id: m.user_id,
-            role: m.role.clone(),
+            role: m.role.parse::<GroupRole>().unwrap_or(GroupRole::Member),
             joined_epoch: m.joined_epoch,
         })
         .collect()
@@ -68,11 +68,11 @@ pub async fn create(
 ) -> Result<Json<ConversationResponse>, ApiError> {
     let caller = auth.user_id.0;
 
-    match req.conversation_type.as_str() {
-        "direct" => create_direct(caller, &state, &req).await,
-        "group" => create_group(caller, &state, &req).await,
-        _ => Err(ApiError::BadRequest(
-            "conversation_type must be 'direct' or 'group'".into(),
+    match req.conversation_type {
+        ConversationType::Direct => create_direct(caller, &state, &req).await,
+        ConversationType::Group => create_group(caller, &state, &req).await,
+        ConversationType::Channel => Err(ApiError::BadRequest(
+            "channel conversations are not yet supported".into(),
         )),
     }
 }
@@ -144,7 +144,7 @@ async fn create_direct(
                             id: Set(new_id()),
                             conversation_id: Set(existing.id),
                             user_id: Set(uid),
-                            role: Set("member".into()),
+                            role: Set(GroupRole::Member.as_str().into()),
                             joined_epoch: Set(new_epoch),
                             left_at: Set(None),
                             removed_by: Set(None),
@@ -240,7 +240,7 @@ async fn create_direct(
                 id: Set(mem_id),
                 conversation_id: Set(conv_id),
                 user_id: Set(user_id),
-                role: Set("member".into()),
+                role: Set(GroupRole::Member.as_str().into()),
                 joined_epoch: Set(0),
                 left_at: Set(None),
                 removed_by: Set(None),
@@ -355,7 +355,7 @@ async fn create_group(
             id: Set(new_id()),
             conversation_id: Set(conv_id),
             user_id: Set(caller),
-            role: Set("owner".into()),
+            role: Set(GroupRole::Owner.as_str().into()),
             joined_epoch: Set(0),
             left_at: Set(None),
             removed_by: Set(None),
@@ -416,7 +416,7 @@ async fn create_group(
                 id: Set(new_id()),
                 conversation_id: Set(conv_id),
                 user_id: Set(member_id),
-                role: Set("member".into()),
+                role: Set(GroupRole::Member.as_str().into()),
                 joined_epoch: Set(0),
                 left_at: Set(None),
                 removed_by: Set(None),
@@ -533,7 +533,12 @@ pub async fn update(
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
 
-    if conv.r#type != "group" {
+    let conv_type = conv
+        .r#type
+        .parse::<ConversationType>()
+        .map_err(ApiError::Internal)?;
+
+    if conv_type != ConversationType::Group {
         return Err(ApiError::BadRequest(
             "only group conversations can be updated".into(),
         ));
@@ -545,7 +550,12 @@ pub async fn update(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    if membership.role != "owner" {
+    let caller_role: GroupRole = membership
+        .role
+        .parse()
+        .map_err(|e: String| ApiError::Internal(e))?;
+
+    if !caller_role.is_owner() {
         return Err(ApiError::Forbidden);
     }
 
@@ -595,7 +605,11 @@ pub async fn delete_conversation(
         .ok_or(ApiError::Forbidden)?;
 
     let is_creator = conv.creator_id == Some(auth.user_id.0);
-    let is_admin = membership.role == "owner";
+    let caller_role: GroupRole = membership
+        .role
+        .parse()
+        .map_err(|e: String| ApiError::Internal(e))?;
+    let is_admin = caller_role.is_owner();
 
     if !is_creator && !is_admin {
         return Err(ApiError::Forbidden);
