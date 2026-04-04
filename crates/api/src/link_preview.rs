@@ -66,7 +66,15 @@ fn is_private_ip(ip: &std::net::IpAddr) -> bool {
                 // 100.64.0.0/10 (carrier-grade NAT)
                 || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64)
         }
-        std::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified(),
+        std::net::IpAddr::V6(v6) => {
+            let octets = v6.octets();
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || (octets[0] & 0xfe) == 0xfc // fc00::/7 unique local
+                || (octets[0] == 0xfe && (octets[1] & 0xc0) == 0x80) // fe80::/10 link-local
+                || (octets[0] == 0xfe && (octets[1] & 0xc0) == 0xc0) // fec0::/10 site-local (deprecated)
+                || octets.starts_with(&[0x20, 0x01, 0x0d, 0xb8]) // 2001:db8::/32 documentation
+        }
     }
 }
 

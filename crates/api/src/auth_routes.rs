@@ -4,7 +4,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, DatabaseBackend, Statement};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -248,27 +248,25 @@ async fn verify_magic_link(
     jar: CookieJar,
 ) -> Result<Response, ApiError> {
     let token_hash = sha256_hex(&token);
-    let now = chrono::Utc::now().fixed_offset();
 
-    let link = magic_links::Entity::find()
-        .filter(magic_links::Column::TokenHash.eq(&token_hash))
-        .filter(magic_links::Column::Used.eq(false))
-        .filter(magic_links::Column::ExpiresAt.gt(now))
-        .one(&*state.db)
+    // Atomically consume the magic link in a single UPDATE … RETURNING
+    let row = state
+        .db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "UPDATE magic_links SET used = true WHERE token_hash = $1 AND used = false AND expires_at > NOW() RETURNING id, email",
+            [token_hash.into()],
+        ))
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::BadRequest("invalid or expired link".into()))?;
 
-    // Mark as used
-    let mut active: magic_links::ActiveModel = link.clone().into();
-    active.used = Set(true);
-    active
-        .update(&*state.db)
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?;
+    let email: String = row
+        .try_get_by_index(1)
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     // Find or create user by email
-    let user = match UserRepo::find_by_email(&state.db, &link.email)
+    let user = match UserRepo::find_by_email(&state.db, &email)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
     {
@@ -277,7 +275,7 @@ async fn verify_magic_link(
             // Auto-create account from magic link
             let username = format!(
                 "{}_{}",
-                link.email.split('@').next().unwrap_or("user"),
+                email.split('@').next().unwrap_or("user"),
                 &Uuid::now_v7().to_string()[..4]
             );
             let id = eulesia_common::types::new_id();
@@ -286,9 +284,9 @@ async fn verify_magic_link(
             users::ActiveModel {
                 id: Set(id),
                 username: Set(username),
-                email: Set(Some(link.email.clone())),
+                email: Set(Some(email.clone())),
                 password_hash: Set(None),
-                name: Set(link.email.split('@').next().unwrap_or("User").to_string()),
+                name: Set(email.split('@').next().unwrap_or("User").to_string()),
                 avatar_url: Set(None),
                 bio: Set(None),
                 role: Set("citizen".into()),

@@ -86,6 +86,17 @@ async fn upload_avatar(
 ) -> Result<Json<AvatarResponse>, ApiError> {
     let (_content_type, data) = extract_file(multipart).await?;
 
+    // Decode, resize to 200x200 cover crop, encode as WebP
+    let img = image::load_from_memory(&data)
+        .map_err(|e| ApiError::BadRequest(format!("invalid image: {e}")))?;
+    let img = img.resize_to_fill(200, 200, image::imageops::FilterType::Lanczos3);
+    let mut buf = Vec::new();
+    img.write_to(
+        &mut std::io::Cursor::new(&mut buf),
+        image::ImageFormat::WebP,
+    )
+    .map_err(|e| ApiError::Internal(format!("encode WebP: {e}")))?;
+
     let dir = upload_dir().join("avatars");
     fs::create_dir_all(&dir)
         .await
@@ -94,9 +105,7 @@ async fn upload_avatar(
     let name = file_name(auth.user_id.0);
     let path = dir.join(&name);
 
-    // Write raw bytes for now — image processing (resize to 200x200 WebP)
-    // can be added later with the `image` crate. The v1 API uses sharp.js.
-    fs::write(&path, &data)
+    fs::write(&path, &buf)
         .await
         .map_err(|e| ApiError::Internal(format!("write avatar: {e}")))?;
 
@@ -170,8 +179,28 @@ async fn upload_image(
 
     let img = image::load_from_memory(&data)
         .map_err(|e| ApiError::BadRequest(format!("invalid image: {e}")))?;
-    let width = img.width();
-    let height = img.height();
+
+    // Resize main image to fit 640x480 (maintain aspect ratio), encode as WebP
+    let main_img = img.resize(640, 480, image::imageops::FilterType::Lanczos3);
+    let width = main_img.width();
+    let height = main_img.height();
+    let mut main_buf = Vec::new();
+    main_img
+        .write_to(
+            &mut std::io::Cursor::new(&mut main_buf),
+            image::ImageFormat::WebP,
+        )
+        .map_err(|e| ApiError::Internal(format!("encode WebP: {e}")))?;
+
+    // Resize thumbnail to 200x150 cover crop, encode as WebP
+    let thumb_img = img.resize_to_fill(200, 150, image::imageops::FilterType::Lanczos3);
+    let mut thumb_buf = Vec::new();
+    thumb_img
+        .write_to(
+            &mut std::io::Cursor::new(&mut thumb_buf),
+            image::ImageFormat::WebP,
+        )
+        .map_err(|e| ApiError::Internal(format!("encode WebP thumbnail: {e}")))?;
 
     let images_dir = upload_dir().join("images");
     let thumbs_dir = upload_dir().join("thumbnails");
@@ -186,11 +215,10 @@ async fn upload_image(
     let image_path = images_dir.join(&name);
     let thumb_path = thumbs_dir.join(&name);
 
-    // Write raw bytes — image processing (resize + thumbnail) deferred.
-    fs::write(&image_path, &data)
+    fs::write(&image_path, &main_buf)
         .await
         .map_err(|e| ApiError::Internal(format!("write image: {e}")))?;
-    fs::write(&thumb_path, &data)
+    fs::write(&thumb_path, &thumb_buf)
         .await
         .map_err(|e| ApiError::Internal(format!("write thumbnail: {e}")))?;
 

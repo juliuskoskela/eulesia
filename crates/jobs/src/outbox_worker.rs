@@ -99,6 +99,21 @@ async fn process_event(
             }
             Ok(())
         }
+        "magic_link" => {
+            let email = event
+                .payload
+                .get("email")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let url = event
+                .payload
+                .get("verifyUrl")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            info!(email = %email, url = %url, "magic link event processed (email delivery not yet implemented)");
+            // TODO: send email via SMTP/provider
+            Ok(())
+        }
         other => {
             warn!(event_type = other, "unknown outbox event type, skipping");
             Ok(())

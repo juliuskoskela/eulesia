@@ -14,7 +14,8 @@ use serde_json::Value;
 /// responses and health endpoints.
 pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
     // Skip wrapping for health endpoints — they have their own contract.
-    let skip = req.uri().path().ends_with("/health") || req.uri().path().ends_with("/ready");
+    let path = req.uri().path();
+    let skip = path.ends_with("/health") || path.ends_with("/ready") || path.contains("/uploads/");
 
     let response = next.run(req).await;
 

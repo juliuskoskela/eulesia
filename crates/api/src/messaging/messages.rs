@@ -443,12 +443,15 @@ pub async fn edit_message(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    // Find message and verify ownership
+    // Find message, verify it belongs to this conversation, and verify ownership
     let msg = MessageRepo::find_by_id(&*state.db, message_id)
         .await
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("message not found".into()))?;
 
+    if msg.conversation_id != conversation_id {
+        return Err(ApiError::NotFound("message not found".into()));
+    }
     if msg.sender_id != auth.user_id.0 {
         return Err(ApiError::Forbidden);
     }
@@ -488,6 +491,9 @@ pub async fn delete_message(
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("message not found".into()))?;
 
+    if msg.conversation_id != conversation_id {
+        return Err(ApiError::NotFound("message not found".into()));
+    }
     if msg.sender_id != auth.user_id.0 {
         return Err(ApiError::Forbidden);
     }
