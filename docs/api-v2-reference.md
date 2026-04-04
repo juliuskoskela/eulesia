@@ -811,7 +811,7 @@ Get a single conversation with its members.
 Update a group conversation's name or description. Only group conversations
 can be updated, and only by an admin.
 
-**Auth**: required (admin member)
+**Auth**: required (owner)
 
 **Request body** (all fields optional):
 
@@ -929,12 +929,19 @@ List messages in a conversation using cursor-based pagination.
 ]
 ```
 
+**DM ciphertext behavior**: For direct conversations, the `ciphertext` field
+returns the device-specific ciphertext from `message_device_queue` for the
+caller's device (if available). If no device-specific entry exists (e.g., the
+queue entry was GC'd), it falls back to `messages.ciphertext` which contains
+the sender's device copy. For group conversations, `ciphertext` is always the
+sender-key-encrypted message from `messages.ciphertext`.
+
 ### POST /conversations/{id}/members
 
 Invite a user to a group conversation. Increments the conversation epoch
-(triggering key rotation). Only admins may invite.
+(triggering key rotation). Only owners may invite.
 
-**Auth**: required (admin member)
+**Auth**: required (owner)
 
 **Request body**:
 
@@ -990,7 +997,7 @@ Remove a member from a conversation, or leave the conversation (if
 
 Change a member's role. Only admins may change roles.
 
-**Auth**: required (admin member)
+**Auth**: required (owner)
 
 **Request body**:
 
@@ -1005,7 +1012,7 @@ Change a member's role. Only admins may change roles.
 ```json
 {
   "user_id": "uuid",
-  "role": "admin",
+  "role": "owner",
   "joined_epoch": 0
 }
 ```
