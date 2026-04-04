@@ -129,6 +129,52 @@ impl std::fmt::Display for CommentId {
     }
 }
 
+/// Strongly-typed conversation identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ConversationId(pub Uuid);
+
+impl From<Uuid> for ConversationId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<ConversationId> for Uuid {
+    fn from(id: ConversationId) -> Self {
+        id.0
+    }
+}
+
+impl std::fmt::Display for ConversationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Strongly-typed membership identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MembershipId(pub Uuid);
+
+impl From<Uuid> for MembershipId {
+    fn from(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl From<MembershipId> for Uuid {
+    fn from(id: MembershipId) -> Self {
+        id.0
+    }
+}
+
+impl std::fmt::Display for MembershipId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Platform enum
 // ---------------------------------------------------------------------------

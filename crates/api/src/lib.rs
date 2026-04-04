@@ -3,6 +3,7 @@ mod auth_routes;
 mod bookmarks;
 mod devices;
 mod health;
+mod messaging;
 mod social;
 mod users;
 
@@ -46,6 +47,7 @@ pub fn router(state: AppState) -> Router {
         .merge(social::routes())
         .merge(bookmarks::routes())
         .merge(agora::routes())
+        .merge(messaging::routes())
         .layer(from_fn_with_state(state.db.clone(), auth_middleware));
 
     Router::new().nest("/api/v2", api).with_state(state)
