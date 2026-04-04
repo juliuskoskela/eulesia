@@ -2,6 +2,7 @@ mod agora;
 mod auth_routes;
 mod bookmarks;
 mod devices;
+pub mod ftn;
 mod health;
 mod messaging;
 mod moderation;
@@ -29,6 +30,7 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub search_client: Option<Arc<SearchClient>>,
     pub ws_registry: ConnectionRegistry,
+    pub ftn_config: Option<Arc<ftn::FtnConfig>>,
 }
 
 impl Deref for AppState {
@@ -50,6 +52,7 @@ pub fn router(state: AppState) -> Router {
     let api = Router::new()
         .merge(health::routes())
         .merge(auth_routes::routes())
+        .merge(ftn::routes())
         .merge(devices::routes())
         .merge(users::routes())
         .merge(social::routes())

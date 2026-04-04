@@ -229,6 +229,33 @@ impl AuthService {
             })?;
         Ok(())
     }
+
+    /// Revoke all sessions for a user except the given session.
+    pub async fn revoke_other_sessions(
+        db: &DatabaseConnection,
+        user_id: UserId,
+        keep_session_id: SessionId,
+    ) -> Result<(), AuthError> {
+        SessionRepo::revoke_all_except(db, user_id.0, keep_session_id.0)
+            .await
+            .map_err(|e| AuthError::Database {
+                context: "revoke other sessions",
+                source: e,
+            })?;
+        Ok(())
+    }
+
+    /// Create a session for an already-authenticated user (e.g., magic link).
+    pub async fn create_session_for_user(
+        db: &DatabaseConnection,
+        user_id: UserId,
+        device_id: Option<DeviceId>,
+        ip: Option<String>,
+        user_agent: Option<String>,
+        max_age_days: u32,
+    ) -> Result<SessionToken, AuthError> {
+        create_session(db, user_id, device_id, ip, user_agent, max_age_days).await
+    }
 }
 
 async fn create_session(

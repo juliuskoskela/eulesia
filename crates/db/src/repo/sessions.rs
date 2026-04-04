@@ -57,6 +57,24 @@ impl SessionRepo {
         Ok(result.rows_affected)
     }
 
+    pub async fn revoke_all_except(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        keep_session_id: Uuid,
+    ) -> Result<u64, DbErr> {
+        let result = sessions::Entity::update_many()
+            .filter(sessions::Column::UserId.eq(user_id))
+            .filter(sessions::Column::Id.ne(keep_session_id))
+            .filter(sessions::Column::RevokedAt.is_null())
+            .col_expr(
+                sessions::Column::RevokedAt,
+                Expr::current_timestamp().into(),
+            )
+            .exec(db)
+            .await?;
+        Ok(result.rows_affected)
+    }
+
     pub async fn revoke_device_sessions(
         db: &DatabaseConnection,
         device_id: Uuid,
