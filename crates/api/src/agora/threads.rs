@@ -13,6 +13,7 @@ use eulesia_db::repo::blocks::BlockRepo;
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::comments::CommentRepo;
 use eulesia_db::repo::tags::TagRepo;
+use eulesia_db::repo::thread_views::ThreadViewRepo;
 use eulesia_db::repo::threads::ThreadRepo;
 use eulesia_db::repo::users::UserRepo;
 use eulesia_db::repo::votes::VoteRepo;
@@ -246,15 +247,20 @@ pub async fn get_thread(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let user_id = opt_auth.0.as_ref().map(|a| a.user_id.0);
 
+    // Compute excluded (blocked) IDs first so we can check the thread author.
+    let excluded = match user_id {
+        Some(uid) => blocked_ids(&state.db, uid).await?,
+        None => vec![],
+    };
+
     let thread = ThreadRepo::find_by_id(&state.db, id)
         .await
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("thread not found".into()))?;
 
-    let excluded = match user_id {
-        Some(uid) => blocked_ids(&state.db, uid).await?,
-        None => vec![],
-    };
+    if excluded.contains(&thread.author_id) {
+        return Err(ApiError::NotFound("thread not found".into()));
+    }
 
     // Fetch comments.
     let sort = comment_params.sort.as_deref().unwrap_or("best");
@@ -561,29 +567,22 @@ pub async fn delete_thread(
 
 /// Record a thread view. Requires authentication to prevent anonymous
 /// spam. View count is incremented at most once per user per thread
-/// using a conditional UPDATE that checks the current count hasn't
-/// already been bumped by this session. A proper `thread_views` dedup
-/// table should replace this in a future migration.
+/// using a dedicated `thread_views` dedup table.
 pub async fn record_view(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<(), ApiError> {
-    // Verify thread exists.
     ThreadRepo::find_by_id(&state.db, id)
         .await
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("thread not found".into()))?;
 
-    // Best-effort dedup: only increment if this user hasn't voted or
-    // bookmarked (proxy for "seen"). This is imperfect — a proper
-    // thread_views table is needed for real dedup.
-    let already_voted = VoteRepo::get_user_vote_for_thread(&state.db, id, auth.user_id.0)
+    let is_new = ThreadViewRepo::record_view(&state.db, id, auth.user_id.0)
         .await
-        .map_err(db_err)?
-        .is_some();
+        .map_err(db_err)?;
 
-    if !already_voted {
+    if is_new {
         ThreadRepo::increment_view_count(&state.db, id)
             .await
             .map_err(db_err)?;

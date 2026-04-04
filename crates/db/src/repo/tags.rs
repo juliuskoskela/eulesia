@@ -18,14 +18,17 @@ impl TagRepo {
         thread_id: Uuid,
         tags: &[String],
     ) -> Result<(), DbErr> {
-        if tags.is_empty() {
+        // Deduplicate input tags.
+        let unique_tags: std::collections::BTreeSet<&str> =
+            tags.iter().map(String::as_str).collect();
+        if unique_tags.is_empty() {
             return Ok(());
         }
-        let models: Vec<thread_tags::ActiveModel> = tags
-            .iter()
+        let models: Vec<thread_tags::ActiveModel> = unique_tags
+            .into_iter()
             .map(|t| thread_tags::ActiveModel {
                 thread_id: Set(thread_id),
-                tag: Set(t.clone()),
+                tag: Set(t.to_string()),
             })
             .collect();
         thread_tags::Entity::insert_many(models).exec(db).await?;
@@ -86,7 +89,7 @@ impl TagRepo {
     ) -> Result<Vec<TagCount>, DbErr> {
         TagCount::find_by_statement(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT tag, COUNT(*)::bigint AS count FROM thread_tags GROUP BY tag ORDER BY count DESC LIMIT $1",
+            "SELECT tt.tag, COUNT(*)::bigint AS count FROM thread_tags tt JOIN threads t ON t.id = tt.thread_id WHERE t.deleted_at IS NULL AND t.is_hidden = false GROUP BY tt.tag ORDER BY count DESC LIMIT $1",
             [limit.into()],
         ))
         .all(db)

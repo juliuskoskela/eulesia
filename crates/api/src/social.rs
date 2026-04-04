@@ -47,6 +47,14 @@ async fn follow_user(
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
 
+    // Idempotent: already following → no-op.
+    if FollowRepo::is_following(&state.db, auth.user_id.0, target_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+    {
+        return Ok(());
+    }
+
     // Check not blocked in either direction.
     let target_blocked_caller = BlockRepo::is_blocked(&state.db, target_id, auth.user_id.0)
         .await
@@ -162,6 +170,14 @@ async fn block_user(
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
 
+    // Idempotent: already blocked → no-op.
+    if BlockRepo::is_blocked(&state.db, auth.user_id.0, target_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+    {
+        return Ok(());
+    }
+
     let now = chrono::Utc::now().fixed_offset();
     BlockRepo::create(
         &state.db,
@@ -203,6 +219,20 @@ async fn mute_user(
 ) -> Result<(), ApiError> {
     if auth.user_id.0 == target_id {
         return Err(ApiError::BadRequest("cannot mute yourself".into()));
+    }
+
+    // Verify target exists.
+    UserRepo::find_by_id(&state.db, target_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
+
+    // Idempotent: already muted → no-op.
+    if MuteRepo::is_muted(&state.db, auth.user_id.0, target_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+    {
+        return Ok(());
     }
 
     let now = chrono::Utc::now().fixed_offset();

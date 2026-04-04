@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::similar_names)]
 mod tests {
     use std::collections::BTreeMap;
 

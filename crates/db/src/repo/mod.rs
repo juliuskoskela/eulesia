@@ -9,6 +9,7 @@ pub mod outbox;
 pub mod pre_keys;
 pub mod sessions;
 pub mod tags;
+pub mod thread_views;
 pub mod threads;
 pub mod users;
 pub mod votes;
