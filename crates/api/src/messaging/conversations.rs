@@ -355,7 +355,7 @@ async fn create_group(
             id: Set(new_id()),
             conversation_id: Set(conv_id),
             user_id: Set(caller),
-            role: Set("admin".into()),
+            role: Set("owner".into()),
             joined_epoch: Set(0),
             left_at: Set(None),
             removed_by: Set(None),
@@ -545,7 +545,7 @@ pub async fn update(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    if membership.role != "admin" {
+    if membership.role != "owner" {
         return Err(ApiError::Forbidden);
     }
 
@@ -595,7 +595,7 @@ pub async fn delete_conversation(
         .ok_or(ApiError::Forbidden)?;
 
     let is_creator = conv.creator_id == Some(auth.user_id.0);
-    let is_admin = membership.role == "admin";
+    let is_admin = membership.role == "owner";
 
     if !is_creator && !is_admin {
         return Err(ApiError::Forbidden);

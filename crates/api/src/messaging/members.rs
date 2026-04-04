@@ -51,7 +51,7 @@ pub async fn invite(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    if caller_membership.role != "admin" {
+    if caller_membership.role != "owner" {
         return Err(ApiError::Forbidden);
     }
 
@@ -168,7 +168,7 @@ pub async fn remove_member(
             .map_err(db_err)?
             .ok_or(ApiError::Forbidden)?;
 
-        if caller_membership.role != "admin" {
+        if caller_membership.role != "owner" {
             return Err(ApiError::Forbidden);
         }
     }
@@ -181,11 +181,11 @@ pub async fn remove_member(
             .ok_or_else(|| ApiError::NotFound("member not found".into()))?;
 
     // Prevent removing the last admin — would leave the group unmanageable.
-    if target_membership.role == "admin" {
+    if target_membership.role == "owner" {
         let all_members = MembershipRepo::list_active(&*state.db, conversation_id)
             .await
             .map_err(db_err)?;
-        let admin_count = all_members.iter().filter(|m| m.role == "admin").count();
+        let admin_count = all_members.iter().filter(|m| m.role == "owner").count();
         if admin_count <= 1 {
             return Err(ApiError::BadRequest(
                 "cannot remove the last admin — promote another member first".into(),
@@ -271,7 +271,7 @@ pub async fn update_role(
     let caller = auth.user_id.0;
 
     // Validate role.
-    if req.role != "member" && req.role != "admin" {
+    if req.role != "member" && req.role != "owner" {
         return Err(ApiError::BadRequest(
             "role must be 'member' or 'admin'".into(),
         ));
@@ -289,7 +289,7 @@ pub async fn update_role(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    if caller_membership.role != "admin" {
+    if caller_membership.role != "owner" {
         return Err(ApiError::Forbidden);
     }
 
@@ -301,11 +301,11 @@ pub async fn update_role(
             .ok_or_else(|| ApiError::NotFound("member not found".into()))?;
 
     // Prevent demoting the last admin to member.
-    if target_membership.role == "admin" && req.role == "member" {
+    if target_membership.role == "owner" && req.role == "member" {
         let all_members = MembershipRepo::list_active(&*state.db, conversation_id)
             .await
             .map_err(db_err)?;
-        let admin_count = all_members.iter().filter(|m| m.role == "admin").count();
+        let admin_count = all_members.iter().filter(|m| m.role == "owner").count();
         if admin_count <= 1 {
             return Err(ApiError::BadRequest(
                 "cannot demote the last admin — promote another member first".into(),
