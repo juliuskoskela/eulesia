@@ -99,10 +99,12 @@ impl SubscriptionRepo {
                       t.author_id IN (
                         SELECT entity_id::uuid FROM user_subscriptions
                         WHERE user_id = $1 AND entity_type = 'user'
+                          AND entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
                       )
                       OR t.municipality_id IN (
                         SELECT entity_id::uuid FROM user_subscriptions
                         WHERE user_id = $1 AND entity_type = 'municipality'
+                          AND entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
                       )
                       OR tt.tag IN (
                         SELECT entity_id FROM user_subscriptions
@@ -131,10 +133,12 @@ impl SubscriptionRepo {
                       t.author_id IN (
                         SELECT entity_id::uuid FROM user_subscriptions
                         WHERE user_id = $1 AND entity_type = 'user'
+                          AND entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
                       )
                       OR t.municipality_id IN (
                         SELECT entity_id::uuid FROM user_subscriptions
                         WHERE user_id = $1 AND entity_type = 'municipality'
+                          AND entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
                       )
                       OR tt.tag IN (
                         SELECT entity_id FROM user_subscriptions

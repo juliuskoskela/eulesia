@@ -171,6 +171,8 @@ struct MagicLinkRequest {
 #[serde(rename_all = "camelCase")]
 struct MagicLinkResponse {
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dev_url: Option<String>,
 }
 
 fn sha256_hex(input: &str) -> String {
@@ -199,6 +201,7 @@ async fn request_magic_link(
     let token_hash = sha256_hex(&token);
     let now = chrono::Utc::now().fixed_offset();
 
+    let email_clone = email.clone();
     magic_links::ActiveModel {
         id: Set(Uuid::now_v7()),
         email: Set(email),
@@ -211,11 +214,30 @@ async fn request_magic_link(
     .await
     .map_err(|e| ApiError::Database(format!("store magic link: {e}")))?;
 
-    // TODO: emit outbox event to send the email with the token link.
-    // For now the token is generated and stored but not delivered.
+    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3001".into());
+    let verify_url = format!("{api_url}/api/v1/auth/verify/{token}");
+
+    // Emit outbox event for email delivery
+    if let Err(e) = eulesia_db::repo::outbox_helpers::emit_event(
+        &*state.db,
+        "magic_link",
+        serde_json::json!({ "email": email_clone, "verifyUrl": verify_url }),
+    )
+    .await
+    {
+        tracing::warn!("failed to emit magic_link event: {e}");
+    }
+
+    // In development, include the URL for testing
+    let dev_url = if cfg!(debug_assertions) {
+        Some(verify_url)
+    } else {
+        None
+    };
 
     Ok(Json(MagicLinkResponse {
         message: "If an account exists, you will receive a login link".into(),
+        dev_url,
     }))
 }
 
@@ -436,4 +458,5 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/verify/{token}", get(verify_magic_link))
         .route("/auth/config", get(auth_config))
         .route("/users/me/change-password", post(change_password))
+        .route("/users/me/password", post(change_password))
 }

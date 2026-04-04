@@ -41,6 +41,8 @@ struct AvatarResponse {
 struct ImageResponse {
     url: String,
     thumbnail_url: String,
+    width: u32,
+    height: u32,
 }
 
 /// Extract the first file field from a multipart upload.
@@ -164,6 +166,11 @@ async fn upload_image(
 ) -> Result<Json<ImageResponse>, ApiError> {
     let (_content_type, data) = extract_file(multipart).await?;
 
+    let img = image::load_from_memory(&data)
+        .map_err(|e| ApiError::BadRequest(format!("invalid image: {e}")))?;
+    let width = img.width();
+    let height = img.height();
+
     let images_dir = upload_dir().join("images");
     let thumbs_dir = upload_dir().join("thumbnails");
     fs::create_dir_all(&images_dir)
@@ -190,6 +197,8 @@ async fn upload_image(
     Ok(Json(ImageResponse {
         url: format!("{api_url}/uploads/images/{name}"),
         thumbnail_url: format!("{api_url}/uploads/thumbnails/{name}"),
+        width,
+        height,
     }))
 }
 

@@ -38,6 +38,9 @@ pub enum AuthError {
 
     #[error("password hashing failed")]
     HashingFailed,
+
+    #[error("identity already linked to another account")]
+    IdentityAlreadyLinked,
 }
 
 impl From<AuthError> for ApiError {
@@ -48,6 +51,9 @@ impl From<AuthError> for ApiError {
             E::UserNotFound => Self::NotFound("user not found".into()),
             E::UsernameTaken(u) => Self::Conflict(format!("username taken: {u}")),
             E::EmailTaken(e) => Self::Conflict(format!("email taken: {e}")),
+            E::IdentityAlreadyLinked => {
+                Self::Conflict("identity already linked to another account".into())
+            }
             E::WeakPassword { reason } | E::InvalidUsername { reason } => Self::BadRequest(reason),
             E::DeviceLimitExceeded => Self::BadRequest("device limit exceeded".into()),
             E::Database { source, .. } => Self::Database(source.to_string()),

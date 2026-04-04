@@ -175,4 +175,5 @@ pub fn routes() -> Router<AppState> {
         .route("/search/threads", get(thread_search))
         .route("/search/places", get(place_search))
         .route("/users/search", get(user_search))
+        .route("/search/users", get(user_search))
 }

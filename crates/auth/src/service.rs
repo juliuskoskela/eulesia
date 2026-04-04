@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use sea_orm::{ActiveValue::Set, DatabaseConnection};
+use sea_orm::{ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use tracing::{info, warn};
 
@@ -15,11 +15,14 @@ use crate::token::SessionToken;
 pub struct AuthService;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
     pub username: String,
     pub password: String,
     pub name: String,
     pub email: Option<String>,
+    /// FTN token from Idura callback — links strong identity to account.
+    pub ftn_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,29 +74,81 @@ impl AuthService {
             .await
             .map_err(|_| AuthError::HashingFailed)??;
 
+        // Look up FTN pending registration if token provided
+        let ftn_claims = if let Some(ref ftn_token) = req.ftn_token {
+            use eulesia_db::entities::ftn_pending_registrations;
+            use sha2::{Digest, Sha256};
+            let token_hash = hex::encode(Sha256::digest(ftn_token.as_bytes()));
+
+            let pending = ftn_pending_registrations::Entity::find()
+                .filter(ftn_pending_registrations::Column::TokenHash.eq(&token_hash))
+                .one(db)
+                .await
+                .map_err(|e| AuthError::Database {
+                    context: "find FTN pending registration",
+                    source: e,
+                })?;
+
+            match pending {
+                Some(p) if p.expires_at > Utc::now().fixed_offset() => {
+                    // Check rp_subject not already claimed
+                    if UserRepo::find_by_rp_subject(db, &p.sub)
+                        .await
+                        .map_err(|e| AuthError::Database {
+                            context: "check rp_subject uniqueness",
+                            source: e,
+                        })?
+                        .is_some()
+                    {
+                        return Err(AuthError::IdentityAlreadyLinked);
+                    }
+                    // Clean up pending row
+                    ftn_pending_registrations::Entity::delete_by_id(p.id)
+                        .exec(db)
+                        .await
+                        .map_err(|e| AuthError::Database {
+                            context: "delete FTN pending",
+                            source: e,
+                        })?;
+                    Some(p)
+                }
+                _ => None, // expired or not found — register without FTN
+            }
+        } else {
+            None
+        };
+
+        let is_ftn = ftn_claims.is_some();
+
         // Create user
         let user_id = new_id();
         let now = Utc::now().fixed_offset();
         let username = req.username.clone();
-        let user = UserRepo::create(
-            db,
-            users::ActiveModel {
-                id: Set(user_id),
-                username: Set(req.username),
-                email: Set(req.email),
-                password_hash: Set(Some(hash)),
-                name: Set(req.name),
-                role: Set(UserRole::Citizen.as_str().to_string()),
-                identity_verified: Set(false),
-                identity_level: Set("basic".to_string()),
-                locale: Set("en".to_string()),
-                created_at: Set(now),
-                updated_at: Set(now),
-                ..Default::default()
-            },
-        )
-        .await
-        .map_err(|e| {
+
+        let mut am = users::ActiveModel {
+            id: Set(user_id),
+            username: Set(req.username),
+            email: Set(req.email),
+            password_hash: Set(Some(hash)),
+            name: Set(req.name),
+            role: Set(UserRole::Citizen.as_str().to_string()),
+            identity_verified: Set(is_ftn),
+            identity_level: Set(if is_ftn { "substantial" } else { "basic" }.to_string()),
+            locale: Set("fi".to_string()),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        };
+
+        if let Some(ref ftn) = ftn_claims {
+            am.rp_subject = Set(Some(ftn.sub.clone()));
+            am.identity_provider = Set(Some("ftn".to_string()));
+            am.identity_issuer = Set(Some("idura_ftn".to_string()));
+            am.identity_verified_at = Set(Some(now));
+            am.verified_name = Set(Some(format!("{} {}", ftn.given_name, ftn.family_name)));
+        }
+
+        let user = UserRepo::create(db, am).await.map_err(|e| {
             // Catch unique constraint violations (race condition after pre-check)
             let msg = e.to_string();
             if msg.contains("unique") || msg.contains("duplicate") {

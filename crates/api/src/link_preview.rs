@@ -104,20 +104,53 @@ async fn link_preview_handler(
     }
 
     let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(5))
-        .redirect(reqwest::redirect::Policy::limited(5))
         .build()
-        .map_err(|e| ApiError::Internal(format!("http client error: {e}")))?;
+        .map_err(|e| ApiError::Internal(format!("http client: {e}")))?;
 
-    let resp = client
-        .get(&params.url)
-        .header("User-Agent", "EulesiaBot/1.0 (link-preview)")
-        .send()
-        .await
-        .map_err(|e| {
-            warn!(url = %params.url, error = %e, "link preview fetch failed");
-            ApiError::BadRequest(format!("failed to fetch URL: {e}"))
-        })?;
+    // Manually follow redirects, checking each Location against private IP validator
+    let mut current_url = params.url.clone();
+    let mut resp = None;
+    for _ in 0..5 {
+        let r = client
+            .get(&current_url)
+            .header("User-Agent", "EulesiaBot/1.0 (link-preview)")
+            .send()
+            .await
+            .map_err(|e| {
+                warn!(url = %current_url, error = %e, "link preview fetch failed");
+                ApiError::BadRequest(format!("failed to fetch URL: {e}"))
+            })?;
+
+        if r.status().is_redirection() {
+            let location = r
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| ApiError::BadRequest("redirect without Location header".into()))?;
+
+            // Resolve relative redirects
+            let next_url = reqwest::Url::parse(location)
+                .or_else(|_| reqwest::Url::parse(&current_url).and_then(|base| base.join(location)))
+                .map_err(|e| ApiError::BadRequest(format!("invalid redirect URL: {e}")))?
+                .to_string();
+
+            if is_private_url(&next_url)? {
+                return Err(ApiError::BadRequest(
+                    "redirect points to internal/private address".into(),
+                ));
+            }
+
+            current_url = next_url;
+            continue;
+        }
+
+        resp = Some(r);
+        break;
+    }
+
+    let resp = resp.ok_or_else(|| ApiError::BadRequest("too many redirects".into()))?;
 
     let content_length = resp.content_length().unwrap_or(0);
     if content_length > MAX_BODY_SIZE as u64 {

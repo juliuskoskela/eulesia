@@ -26,6 +26,13 @@ pub struct MapPoint {
     pub name: String,
     pub latitude: f64,
     pub longitude: f64,
+    pub meta: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MapPointsResponse {
+    points: Vec<MapPoint>,
 }
 
 #[derive(Debug, Serialize)]
@@ -148,7 +155,7 @@ fn municipality_to_response(m: municipalities::Model) -> MunicipalityResponse {
 async fn get_map_points(
     State(state): State<AppState>,
     Query(params): Query<BoundsParams>,
-) -> Result<Json<Vec<MapPoint>>, ApiError> {
+) -> Result<Json<MapPointsResponse>, ApiError> {
     let db: &sea_orm::DatabaseConnection = &state.db;
 
     // Use raw SQL to query threads and places within bounds in a single UNION ALL.
@@ -220,10 +227,11 @@ async fn get_map_points(
             name,
             latitude: lat,
             longitude: lon,
+            meta: serde_json::json!({}),
         });
     }
 
-    Ok(Json(points))
+    Ok(Json(MapPointsResponse { points }))
 }
 
 /// GET /map/places?limit=50&offset=0&type=...&category=...
