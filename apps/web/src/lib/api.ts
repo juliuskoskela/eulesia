@@ -11,10 +11,8 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler) {
 }
 
 function shouldHandleUnauthorized(endpoint: string): boolean {
-  if (endpoint === "/auth/me" || endpoint === "/auth/logout") {
-    return true;
-  }
-
+  // Auth endpoints handle 401 themselves — don't trigger global logout.
+  // /auth/me is a probe (returns 401 when not logged in — normal).
   if (endpoint.startsWith("/auth/") || endpoint.startsWith("/admin/auth/")) {
     return false;
   }
