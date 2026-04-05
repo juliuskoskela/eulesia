@@ -398,18 +398,40 @@ async fn map_location_detail(
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or_else(|| ApiError::NotFound("location not found".into()))?;
 
-    // Return raw column values as JSON
-    let mut result = serde_json::Map::new();
-    result.insert("type".into(), location_type.into());
-    result.insert("id".into(), id.to_string().into());
+    let result = match location_type.as_str() {
+        "thread" => serde_json::json!({
+            "type": "thread",
+            "id": id,
+            "title": row.try_get_by_index::<String>(1).ok(),
+            "content": row.try_get_by_index::<String>(2).ok(),
+            "authorId": row.try_get_by_index::<Uuid>(3).ok(),
+            "scope": row.try_get_by_index::<String>(4).ok(),
+            "createdAt": row.try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(5).ok().map(|t| t.to_rfc3339()),
+        }),
+        "place" => serde_json::json!({
+            "type": "place",
+            "id": id,
+            "name": row.try_get_by_index::<String>(1).ok(),
+            "description": row.try_get_by_index::<String>(2).ok(),
+            "placeType": row.try_get_by_index::<String>(3).ok(),
+            "category": row.try_get_by_index::<String>(4).ok(),
+            "latitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(5).ok().map(|d| d.to_string()),
+            "longitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(6).ok().map(|d| d.to_string()),
+        }),
+        "municipality" => serde_json::json!({
+            "type": "municipality",
+            "id": id,
+            "name": row.try_get_by_index::<String>(1).ok(),
+            "nameFi": row.try_get_by_index::<String>(2).ok(),
+            "nameSv": row.try_get_by_index::<String>(3).ok(),
+            "latitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(4).ok().map(|d| d.to_string()),
+            "longitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(5).ok().map(|d| d.to_string()),
+            "population": row.try_get_by_index::<i32>(6).ok(),
+        }),
+        _ => return Err(ApiError::NotFound("unknown location type".into())),
+    };
 
-    // Extract name/title
-    let name: Option<String> = row.try_get_by_index(1).ok();
-    if let Some(n) = name {
-        result.insert("name".into(), n.into());
-    }
-
-    Ok(Json(serde_json::Value::Object(result)))
+    Ok(Json(result))
 }
 
 // ---------------------------------------------------------------------------

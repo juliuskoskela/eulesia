@@ -119,11 +119,59 @@ async fn load_user_summary(
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
 
     Ok(UserSummary {
-        id: row.try_get_by_index(0).unwrap_or(user_id),
-        name: row.try_get_by_index(1).unwrap_or_default(),
+        id: row
+            .try_get_by_index(0)
+            .map_err(|e| ApiError::Internal(format!("parse user id: {e}")))?,
+        name: row
+            .try_get_by_index(1)
+            .map_err(|e| ApiError::Internal(format!("parse user name: {e}")))?,
         avatar_url: row.try_get_by_index(2).ok(),
-        role: row.try_get_by_index(3).unwrap_or_default(),
+        role: row
+            .try_get_by_index(3)
+            .map_err(|e| ApiError::Internal(format!("parse user role: {e}")))?,
     })
+}
+
+/// Batch-load user summaries to avoid N+1 queries.
+async fn load_user_summaries(
+    db: &impl ConnectionTrait,
+    user_ids: &[Uuid],
+) -> Result<Vec<UserSummary>, ApiError> {
+    if user_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    // Build $1, $2, ... placeholders
+    let placeholders: Vec<String> = (1..=user_ids.len()).map(|i| format!("${i}")).collect();
+    let sql = format!(
+        "SELECT id, name, avatar_url, role FROM users WHERE id IN ({})",
+        placeholders.join(", ")
+    );
+    let values: Vec<sea_orm::Value> = user_ids.iter().map(|id| (*id).into()).collect();
+    let rows = db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            &sql,
+            values,
+        ))
+        .await
+        .map_err(db_err)?;
+
+    rows.iter()
+        .map(|row| {
+            Ok(UserSummary {
+                id: row
+                    .try_get_by_index(0)
+                    .map_err(|e| ApiError::Internal(format!("parse user id: {e}")))?,
+                name: row
+                    .try_get_by_index(1)
+                    .map_err(|e| ApiError::Internal(format!("parse user name: {e}")))?,
+                avatar_url: row.try_get_by_index(2).ok(),
+                role: row
+                    .try_get_by_index(3)
+                    .map_err(|e| ApiError::Internal(format!("parse user role: {e}")))?,
+            })
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -235,12 +283,8 @@ async fn get_room(
         return Err(ApiError::Forbidden);
     }
 
-    let mut members = Vec::new();
-    for m in &members_raw {
-        if let Ok(u) = load_user_summary(&*state.db, m.user_id).await {
-            members.push(u);
-        }
-    }
+    let member_ids: Vec<Uuid> = members_raw.iter().map(|m| m.user_id).collect();
+    let members = load_user_summaries(&*state.db, &member_ids).await?;
 
     // Threads in this room
     let room_threads = threads::Entity::find()
@@ -369,11 +413,35 @@ async fn room_invitations(
             .collect()
     };
 
-    let mut items = Vec::new();
-    for inv in invitations {
-        if let Some(club) = private_clubs.get(&inv.club_id) {
-            let inviter = load_user_summary(&*state.db, inv.invited_by).await.ok();
-            items.push(RoomInvitationWithDetails {
+    // Batch-load all inviters
+    let inviter_ids: Vec<Uuid> = invitations
+        .iter()
+        .filter(|i| private_clubs.contains_key(&i.club_id))
+        .map(|i| i.invited_by)
+        .collect();
+    let inviters = load_user_summaries(&*state.db, &inviter_ids).await?;
+    let inviter_map: std::collections::HashMap<Uuid, &UserSummary> =
+        inviters.iter().map(|u| (u.id, u)).collect();
+
+    let items: Vec<RoomInvitationWithDetails> = invitations
+        .into_iter()
+        .filter_map(|inv| {
+            let club = private_clubs.get(&inv.club_id)?;
+            let inviter = inviter_map
+                .get(&inv.invited_by)
+                .map(|u| UserSummary {
+                    id: u.id,
+                    name: u.name.clone(),
+                    avatar_url: u.avatar_url.clone(),
+                    role: u.role.clone(),
+                })
+                .unwrap_or(UserSummary {
+                    id: inv.invited_by,
+                    name: "Unknown".into(),
+                    avatar_url: None,
+                    role: "citizen".into(),
+                });
+            Some(RoomInvitationWithDetails {
                 id: inv.id,
                 room_id: inv.club_id,
                 inviter_id: inv.invited_by,
@@ -385,15 +453,10 @@ async fn room_invitations(
                     "name": club.name,
                     "description": club.description,
                 }),
-                inviter: inviter.unwrap_or(UserSummary {
-                    id: inv.invited_by,
-                    name: "Unknown".into(),
-                    avatar_url: None,
-                    role: "citizen".into(),
-                }),
-            });
-        }
-    }
+                inviter,
+            })
+        })
+        .collect();
 
     Ok(Json(items))
 }
