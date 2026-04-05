@@ -167,6 +167,12 @@
             stsIncludeSubdomains = true;
             stsPreload = true;
           };
+
+          redirect-to-eulesia-org.redirectRegex = {
+            regex = "^https?://[^/]+(.*)";
+            replacement = "https://eulesia.org\${1}";
+            permanent = true;
+          };
         };
 
         routers = {
@@ -206,6 +212,29 @@
               "security-headers"
             ];
             tls.certResolver = "letsencrypt";
+          };
+
+          # Redirect .com and .eu domains to eulesia.org
+          eulesia-redirect = {
+            rule = "Host(`eulesia.com`) || Host(`www.eulesia.com`) || Host(`eulesia.eu`) || Host(`www.eulesia.eu`)";
+            service = "eulesia";
+            entryPoints = ["websecure"];
+            middlewares = [
+              "redirect-to-eulesia-org"
+            ];
+            tls = {
+              certResolver = "letsencrypt";
+              domains = [
+                {
+                  main = "eulesia.com";
+                  sans = ["www.eulesia.com"];
+                }
+                {
+                  main = "eulesia.eu";
+                  sans = ["www.eulesia.eu"];
+                }
+              ];
+            };
           };
         };
 
