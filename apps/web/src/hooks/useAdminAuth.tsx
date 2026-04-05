@@ -69,6 +69,10 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       credentials: "include",
       body: JSON.stringify({ username, password }),
     });
+    const ct = response.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      throw new Error((await response.text()) || "Login failed");
+    }
     const data = await response.json();
     if (!response.ok || !data.success) {
       throw new Error(data.error || "Login failed");

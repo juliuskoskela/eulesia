@@ -246,7 +246,7 @@ log "bookmarks: $(v2 'SELECT COUNT(*) FROM bookmarks') rows"
 v2_sql <<'EOSQL'
 INSERT INTO thread_views (thread_id, user_id, viewed_at)
 SELECT * FROM dblink('dbname=eulesia',
-  'SELECT thread_id, user_id, created_at FROM thread_views')
+  'SELECT thread_id, user_id, created_at FROM thread_views WHERE user_id IS NOT NULL')
 AS t(thread_id uuid, user_id uuid, viewed_at timestamptz)
 ON CONFLICT DO NOTHING;
 EOSQL

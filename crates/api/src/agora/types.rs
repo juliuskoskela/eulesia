@@ -89,6 +89,14 @@ pub struct ThreadResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ThreadWithCommentsResponse {
+    #[serde(flatten)]
+    pub thread: ThreadResponse,
+    pub comments: Vec<CommentResponse>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ThreadListResponse {
     #[serde(rename = "items")]
     pub data: Vec<ThreadResponse>,
@@ -134,4 +142,129 @@ pub struct TagWithCount {
 pub struct VoteResponse {
     pub score: i32,
     pub user_vote: i16,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_author() -> AuthorSummary {
+        AuthorSummary {
+            id: Uuid::nil(),
+            username: "testuser".into(),
+            name: "Test User".into(),
+            avatar_url: Some("https://example.com/avatar.png".into()),
+            role: "citizen".into(),
+        }
+    }
+
+    fn sample_thread() -> ThreadResponse {
+        ThreadResponse {
+            id: Uuid::nil(),
+            title: "Test thread".into(),
+            content: "Some content".into(),
+            content_html: Some("<p>Some content</p>".into()),
+            scope: "national".into(),
+            author: sample_author(),
+            tags: vec!["politics".into()],
+            reply_count: 3,
+            score: 12,
+            view_count: 42,
+            user_vote: Some(1),
+            is_bookmarked: true,
+            is_pinned: false,
+            is_locked: false,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-02T00:00:00+00:00".into(),
+        }
+    }
+
+    fn sample_comment() -> CommentResponse {
+        CommentResponse {
+            id: Uuid::nil(),
+            thread_id: Uuid::nil(),
+            parent_id: None,
+            author: sample_author(),
+            content: "A comment".into(),
+            content_html: Some("<p>A comment</p>".into()),
+            depth: 0,
+            score: 5,
+            user_vote: None,
+            created_at: "2026-01-01T12:00:00+00:00".into(),
+            updated_at: "2026-01-01T12:00:00+00:00".into(),
+        }
+    }
+
+    /// Contract test: ThreadWithCommentsResponse serializes to the flat
+    /// camelCase shape the frontend expects (ThreadWithComments extends Thread).
+    #[test]
+    fn thread_with_comments_matches_frontend_contract() {
+        let resp = ThreadWithCommentsResponse {
+            thread: sample_thread(),
+            comments: vec![sample_comment()],
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().expect("response must be a JSON object");
+
+        // Thread fields are flat at top level (not nested under "thread")
+        let thread_keys = [
+            "id",
+            "title",
+            "content",
+            "contentHtml",
+            "scope",
+            "author",
+            "tags",
+            "replyCount",
+            "score",
+            "viewCount",
+            "userVote",
+            "isBookmarked",
+            "isPinned",
+            "isLocked",
+            "createdAt",
+            "updatedAt",
+        ];
+        for key in &thread_keys {
+            assert!(obj.contains_key(*key), "missing thread field: {key}");
+        }
+        assert!(
+            !obj.contains_key("thread"),
+            "thread must be flattened, not nested"
+        );
+
+        // Comments array
+        assert!(obj.contains_key("comments"), "missing comments array");
+        let comments = obj["comments"].as_array().expect("comments must be array");
+        assert_eq!(comments.len(), 1);
+
+        // Comment shape
+        let c = comments[0].as_object().expect("comment must be object");
+        let comment_keys = [
+            "id",
+            "threadId",
+            "parentId",
+            "author",
+            "content",
+            "contentHtml",
+            "depth",
+            "score",
+            "userVote",
+            "createdAt",
+            "updatedAt",
+        ];
+        for key in &comment_keys {
+            assert!(c.contains_key(*key), "missing comment field: {key}");
+        }
+
+        // Author shape (on both thread and comment)
+        let author_keys = ["id", "username", "name", "avatarUrl", "role"];
+        for src in [&obj["author"], &c["author"]] {
+            let a = src.as_object().expect("author must be object");
+            for key in &author_keys {
+                assert!(a.contains_key(*key), "missing author field: {key}");
+            }
+        }
+    }
 }

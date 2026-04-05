@@ -22,6 +22,30 @@ use super::types::{
     MemberSummary, UpdateConversationRequest,
 };
 
+/// v1-compatible request: frontend sends `{ "userId": "..." }`.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CreateDmV1Request {
+    user_id: Uuid,
+}
+
+/// v1-compatible DM creation: accepts `{ "userId": "..." }` and
+/// translates to the v2 `CreateConversationRequest` shape.
+pub async fn create_dm_v1(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<CreateDmV1Request>,
+) -> Result<Json<ConversationResponse>, ApiError> {
+    let v2_req = CreateConversationRequest {
+        conversation_type: ConversationType::Direct,
+        encryption: None,
+        name: None,
+        description: None,
+        members: vec![req.user_id],
+    };
+    create_direct(auth.user_id.0, &state, &v2_req).await
+}
+
 #[allow(clippy::needless_pass_by_value)]
 fn db_err(e: sea_orm::DbErr) -> ApiError {
     ApiError::Database(e.to_string())
@@ -678,4 +702,131 @@ pub async fn list_epochs(
         .collect();
 
     Ok(Json(items))
+}
+
+// ---------------------------------------------------------------------------
+// v1-compat: GET /dm/{id} — returns { id, otherUser, messages[] }
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct V1UserSummary {
+    id: Uuid,
+    name: String,
+    avatar_url: Option<String>,
+    role: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct V1DirectMessage {
+    id: Uuid,
+    conversation_id: Uuid,
+    content: Option<String>,
+    author: Option<V1UserSummary>,
+    created_at: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct V1ConversationWithMessages {
+    id: Uuid,
+    other_user: Option<V1UserSummary>,
+    messages: Vec<V1DirectMessage>,
+}
+
+/// v1-compat: returns the shape the frontend `ConversationWithMessages` expects.
+pub async fn get_dm_v1(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<V1ConversationWithMessages>, ApiError> {
+    let caller = auth.user_id.0;
+
+    let conv = ConversationRepo::find_by_id(&state.db, id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
+
+    // Verify caller is active member.
+    MembershipRepo::find_active(&*state.db, id, caller)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    // Resolve the "other user" — the member who isn't the caller.
+    let members = ConversationRepo::active_members(&state.db, id)
+        .await
+        .map_err(db_err)?;
+    let other_id = members
+        .iter()
+        .find(|m| m.user_id != caller)
+        .map(|m| m.user_id);
+
+    let other_user = if let Some(uid) = other_id {
+        UserRepo::find_by_id(&state.db, uid)
+            .await
+            .map_err(db_err)?
+            .map(|u| V1UserSummary {
+                id: u.id,
+                name: u.name,
+                avatar_url: u.avatar_url,
+                role: u.role,
+            })
+    } else {
+        None
+    };
+
+    // Fetch recent messages (plaintext path).
+    let msgs = ConversationRepo::messages_page(&state.db, id, None, 50)
+        .await
+        .map_err(db_err)?;
+
+    // Resolve all message authors in one batch.
+    let author_ids: Vec<Uuid> = msgs
+        .iter()
+        .map(|m| m.sender_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    let users = UserRepo::find_by_ids(&state.db, &author_ids)
+        .await
+        .map_err(db_err)?;
+    let user_map: std::collections::HashMap<Uuid, V1UserSummary> = users
+        .into_iter()
+        .map(|u| {
+            (
+                u.id,
+                V1UserSummary {
+                    id: u.id,
+                    name: u.name,
+                    avatar_url: u.avatar_url,
+                    role: u.role,
+                },
+            )
+        })
+        .collect();
+
+    let messages = msgs
+        .into_iter()
+        .map(|m| {
+            let content = m
+                .ciphertext
+                .as_ref()
+                .and_then(|ct| String::from_utf8(ct.clone()).ok());
+            V1DirectMessage {
+                id: m.id,
+                conversation_id: m.conversation_id,
+                content,
+                author: user_map.get(&m.sender_id).cloned(),
+                created_at: m.server_ts.to_rfc3339(),
+            }
+        })
+        .collect();
+
+    Ok(Json(V1ConversationWithMessages {
+        id: conv.id,
+        other_user,
+        messages,
+    }))
 }

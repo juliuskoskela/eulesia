@@ -532,6 +532,11 @@ in {
                     try_files $uri $uri/ /index.html;
                   '';
                 };
+                # Admin API stays on v1 Node
+                "/api/v1/admin/" = {
+                  proxyPass = apiProxy;
+                  proxyWebsockets = true;
+                };
                 "/api/" = {
                   proxyPass =
                     if v2Proxy != null

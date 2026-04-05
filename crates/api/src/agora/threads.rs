@@ -23,7 +23,7 @@ use eulesia_db::repo::votes::VoteRepo;
 
 use super::types::{
     AuthorSummary, CommentListParams, CommentResponse, CreateThreadRequest, ThreadListParams,
-    ThreadListResponse, ThreadResponse, UpdateThreadRequest,
+    ThreadListResponse, ThreadResponse, ThreadWithCommentsResponse, UpdateThreadRequest,
 };
 
 const VALID_SCOPES: &[&str] = &["local", "national", "european"];
@@ -192,7 +192,10 @@ pub async fn list_threads(
     Query(params): Query<ThreadListParams>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
     // "all" means no scope filter (v1 compat)
-    let scope_filter = params.scope.as_deref().filter(|s| *s != "all");
+    let scope_filter = params
+        .scope
+        .as_deref()
+        .filter(|s| !matches!(*s, "all" | "following"));
     if let Some(scope) = scope_filter {
         validate_scope(scope)?;
     }
@@ -249,7 +252,7 @@ pub async fn get_thread(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     Query(comment_params): Query<CommentListParams>,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<Json<ThreadWithCommentsResponse>, ApiError> {
     let user_id = opt_auth.0.as_ref().map(|a| a.user_id.0);
 
     // Compute excluded (blocked) IDs first so we can check the thread author.
@@ -362,15 +365,10 @@ pub async fn get_thread(
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "thread": thread_resp,
-        "comments": {
-            "data": comment_resps,
-            "total": comments_total,
-            "offset": offset,
-            "limit": limit,
-        }
-    })))
+    Ok(Json(ThreadWithCommentsResponse {
+        thread: thread_resp,
+        comments: comment_resps,
+    }))
 }
 
 pub async fn create_thread(

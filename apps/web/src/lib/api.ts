@@ -54,6 +54,12 @@ class ApiClient {
       credentials: "include", // Include cookies
     });
 
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      const text = await response.text();
+      throw new Error(text || `Request failed with status ${response.status}`);
+    }
+
     const data: ApiResponse<T> = await response.json();
 
     if (!response.ok || !data.success) {
@@ -880,6 +886,10 @@ class ApiClient {
       credentials: "include",
     });
 
+    const ct = response.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      throw new Error((await response.text()) || "Upload failed");
+    }
     const data = await response.json();
     if (!response.ok || !data.success) {
       throw new Error(data.error || "Upload failed");
@@ -903,6 +913,10 @@ class ApiClient {
       credentials: "include",
     });
 
+    const ct = response.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      throw new Error((await response.text()) || "Upload failed");
+    }
     const data = await response.json();
     if (!response.ok || !data.success) {
       throw new Error(data.error || "Upload failed");
