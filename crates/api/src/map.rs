@@ -1,4 +1,4 @@
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use sea_orm::{
@@ -365,12 +365,83 @@ async fn list_municipalities(
 }
 
 // ---------------------------------------------------------------------------
+// Map location detail
+// ---------------------------------------------------------------------------
+
+async fn map_location_detail(
+    State(state): State<AppState>,
+    Path((location_type, id)): Path<(String, Uuid)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+
+    let sql = match location_type.as_str() {
+        "thread" => {
+            "SELECT id, title, content, author_id, scope, created_at FROM threads WHERE id = $1 AND deleted_at IS NULL"
+        }
+        "place" => {
+            "SELECT id, name, description, type, category, latitude, longitude FROM places WHERE id = $1"
+        }
+        "municipality" => {
+            "SELECT id, name, name_fi, name_sv, latitude, longitude, population FROM municipalities WHERE id = $1"
+        }
+        _ => return Err(ApiError::NotFound("unknown location type".into())),
+    };
+
+    let row = state
+        .db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            sql,
+            [id.into()],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .ok_or_else(|| ApiError::NotFound("location not found".into()))?;
+
+    let result = match location_type.as_str() {
+        "thread" => serde_json::json!({
+            "type": "thread",
+            "id": id,
+            "title": row.try_get_by_index::<String>(1).ok(),
+            "content": row.try_get_by_index::<String>(2).ok(),
+            "authorId": row.try_get_by_index::<Uuid>(3).ok(),
+            "scope": row.try_get_by_index::<String>(4).ok(),
+            "createdAt": row.try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(5).ok().map(|t| t.to_rfc3339()),
+        }),
+        "place" => serde_json::json!({
+            "type": "place",
+            "id": id,
+            "name": row.try_get_by_index::<String>(1).ok(),
+            "description": row.try_get_by_index::<String>(2).ok(),
+            "placeType": row.try_get_by_index::<String>(3).ok(),
+            "category": row.try_get_by_index::<String>(4).ok(),
+            "latitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(5).ok().map(|d| d.to_string()),
+            "longitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(6).ok().map(|d| d.to_string()),
+        }),
+        "municipality" => serde_json::json!({
+            "type": "municipality",
+            "id": id,
+            "name": row.try_get_by_index::<String>(1).ok(),
+            "nameFi": row.try_get_by_index::<String>(2).ok(),
+            "nameSv": row.try_get_by_index::<String>(3).ok(),
+            "latitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(4).ok().map(|d| d.to_string()),
+            "longitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(5).ok().map(|d| d.to_string()),
+            "population": row.try_get_by_index::<i32>(6).ok(),
+        }),
+        _ => return Err(ApiError::NotFound("unknown location type".into())),
+    };
+
+    Ok(Json(result))
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/map/points", get(get_map_points))
+        .route("/map/location/{type}/{id}", get(map_location_detail))
         .route("/map/places/categories", get(place_categories))
         .route("/map/places", get(list_places).post(create_place))
         .route("/map/municipalities", get(list_municipalities))

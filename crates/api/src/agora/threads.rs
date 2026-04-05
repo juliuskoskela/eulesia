@@ -487,6 +487,26 @@ pub async fn update_thread(
         return Err(ApiError::Forbidden);
     }
 
+    // Save current state to edit_history before updating.
+    {
+        use eulesia_db::entities::edit_history;
+        use sea_orm::ActiveModelTrait;
+
+        edit_history::ActiveModel {
+            id: Set(new_id()),
+            content_type: Set("thread".into()),
+            content_id: Set(thread.id),
+            edited_by: Set(auth.user_id.0),
+            previous_content: Set(thread.content.clone()),
+            previous_content_html: Set(thread.content_html.clone()),
+            previous_title: Set(Some(thread.title.clone())),
+            edited_at: Set(chrono::Utc::now().fixed_offset()),
+        }
+        .insert(&*state.db)
+        .await
+        .map_err(|e| ApiError::Database(format!("save edit history: {e}")))?;
+    }
+
     let now = chrono::Utc::now().fixed_offset();
     let mut am = eulesia_db::entities::threads::ActiveModel {
         id: Set(id),

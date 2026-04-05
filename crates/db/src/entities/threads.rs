@@ -32,6 +32,7 @@ pub struct Model {
     pub ai_model: Option<String>,
     pub language: Option<String>,
     pub is_hidden: bool,
+    pub club_id: Option<Uuid>,
     pub deleted_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

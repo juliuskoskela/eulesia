@@ -2,6 +2,7 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use sea_orm::ActiveValue::Set;
+use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -204,6 +205,102 @@ async fn vapid_public_key() -> Json<VapidPublicKeyResponse> {
 }
 
 // ---------------------------------------------------------------------------
+// Push device tokens (FCM)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeviceTokenRequest {
+    token: String,
+    platform: String,
+    device_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteDeviceTokenRequest {
+    token: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeviceTokenRemovedResponse {
+    removed: bool,
+}
+
+/// POST /notifications/push/device-token -- store FCM token for a device.
+async fn store_device_token(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<DeviceTokenRequest>,
+) -> Result<(), ApiError> {
+    if req.token.trim().is_empty() {
+        return Err(ApiError::BadRequest("token must not be empty".into()));
+    }
+
+    // Upsert: set fcm_token on any active device owned by this user.
+    // If device_id is provided, target that specific device; otherwise update the
+    // most-recently-created active device (best effort for clients that don't
+    // track a stable device identifier).
+    let result = if let Some(ref device_id) = req.device_id {
+        state
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                r"UPDATE devices SET fcm_token = $1
+                  WHERE id::text = $2 AND user_id = $3 AND revoked_at IS NULL",
+                [
+                    req.token.clone().into(),
+                    device_id.clone().into(),
+                    auth.user_id.0.into(),
+                ],
+            ))
+            .await
+            .map_err(|e| ApiError::Database(format!("store device token: {e}")))?
+    } else {
+        state
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                r"UPDATE devices SET fcm_token = $1
+                  WHERE id = (
+                    SELECT id FROM devices
+                    WHERE user_id = $2 AND revoked_at IS NULL
+                    ORDER BY created_at DESC LIMIT 1
+                  )",
+                [req.token.clone().into(), auth.user_id.0.into()],
+            ))
+            .await
+            .map_err(|e| ApiError::Database(format!("store device token: {e}")))?
+    };
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound("device not found".into()));
+    }
+
+    Ok(())
+}
+
+/// DELETE /notifications/push/device-token -- clear FCM token for a device.
+async fn remove_device_token(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<DeleteDeviceTokenRequest>,
+) -> Result<Json<DeviceTokenRemovedResponse>, ApiError> {
+    let result = state
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE devices SET fcm_token = NULL
+              WHERE fcm_token = $1 AND user_id = $2",
+            [req.token.into(), auth.user_id.0.into()],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("remove device token: {e}")))?;
+
+    Ok(Json(DeviceTokenRemovedResponse {
+        removed: result.rows_affected() > 0,
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -221,5 +318,9 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/notifications/push/vapid-public-key",
             get(vapid_public_key),
+        )
+        .route(
+            "/notifications/push/device-token",
+            post(store_device_token).delete(remove_device_token),
         )
 }

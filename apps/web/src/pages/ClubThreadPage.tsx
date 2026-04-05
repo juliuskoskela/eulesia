@@ -32,11 +32,10 @@ import { transformAuthor, transformComment } from "../utils/transforms";
 
 type CommentSort = "best" | "new" | "old" | "controversial";
 
-function getCommentWithDescendants(
-  root: { id: string; parentId?: string | null },
-  allComments: { id: string; parentId?: string | null }[],
-) {
-  const result = [root];
+function getCommentWithDescendants<
+  T extends { id: string; parentId?: string | null },
+>(root: T, allComments: T[]): T[] {
+  const result: T[] = [root];
   const children = allComments.filter((c) => c.parentId === root.id);
   for (const child of children) {
     result.push(...getCommentWithDescendants(child, allComments));
