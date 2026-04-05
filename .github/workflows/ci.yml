@@ -277,10 +277,6 @@ jobs:
 
             wait_for "API (v2 Rust)" 60 "curl -sf $API_URL/api/v1/health >/dev/null 2>&1"
 
-            # Seed E2E invite code (after migrations have run)
-            psql -h 127.0.0.1 -p "$EULESIA_PGPORT" -U "$EULESIA_DB_USER" -d "$EULESIA_DB_NAME" -c \
-              "INSERT INTO invite_codes (code, status) VALUES ('\''E2ETEST'\'', '\''available'\'')"
-
             # Start frontend on port 5174 (capture logs)
             pnpm --filter @eulesia/web exec vite --port 5174 > "$EULESIA_DEV_STATE_DIR/web.log" 2>&1 &
             WEB_PID=$!
