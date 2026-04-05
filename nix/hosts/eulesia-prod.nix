@@ -171,13 +171,21 @@
 
         routers = {
           eulesia = {
-            rule = "Host(`eulesia.org`)";
+            rule = "Host(`eulesia.org`) || Host(`www.eulesia.org`)";
             service = "eulesia";
             entryPoints = ["websecure"];
             middlewares = [
               "security-headers"
             ];
-            tls.certResolver = "letsencrypt";
+            tls = {
+              certResolver = "letsencrypt";
+              domains = [
+                {
+                  main = "eulesia.org";
+                  sans = ["www.eulesia.org"];
+                }
+              ];
+            };
           };
 
           eulesia-api = {
