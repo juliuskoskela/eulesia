@@ -26,6 +26,7 @@ struct SearchResult {
     places: Vec<serde_json::Value>,
     municipalities: Vec<serde_json::Value>,
     locations: Vec<serde_json::Value>,
+    tags: Vec<serde_json::Value>,
 }
 
 async fn search_handler(
@@ -41,6 +42,7 @@ async fn search_handler(
         places: vec![],
         municipalities: vec![],
         locations: vec![],
+        tags: vec![],
     };
 
     if let Some(client) = search_client {
