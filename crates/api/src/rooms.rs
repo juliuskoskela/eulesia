@@ -408,7 +408,12 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/home/{userId}", get(get_home))
         .route("/home/rooms", get(list_rooms).post(create_room))
-        .route("/home/rooms/{id}", get(get_room).patch(clubs::update_club).delete(clubs::delete_club))
+        .route(
+            "/home/rooms/{id}",
+            get(get_room)
+                .patch(clubs::update_club)
+                .delete(clubs::delete_club),
+        )
         .route("/home/rooms/{id}/threads", post(clubs::create_club_thread))
         .route(
             "/home/rooms/{id}/threads/{threadId}",
