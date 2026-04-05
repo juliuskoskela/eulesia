@@ -148,6 +148,12 @@ export function UserProfilePage() {
       const response = await fetch(buildApiUrl(`/api/v1/users/${userId}`), {
         credentials: "include",
       });
+      const ct = response.headers.get("content-type") ?? "";
+      if (!ct.includes("application/json")) {
+        throw new Error(
+          (await response.text()) || `Request failed (${response.status})`,
+        );
+      }
       const data = await response.json();
       if (!data.success) throw new Error(data.error);
       return data.data as UserProfile;

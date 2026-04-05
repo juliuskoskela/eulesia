@@ -31,7 +31,8 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
         .and_then(|v| v.to_str().ok())
         .is_some_and(|ct| ct.starts_with("application/json"));
 
-    if !is_json {
+    // Non-JSON success responses (e.g. binary uploads) — pass through.
+    if !is_json && status.is_success() {
         return response;
     }
 
@@ -43,14 +44,27 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
     };
 
     let wrapped = if status.is_success() {
+        // JSON success — wrap in envelope.
         let data: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
         serde_json::json!({ "success": true, "data": data })
-    } else {
+    } else if is_json {
+        // JSON error — extract error message.
         let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
         let error = body
             .get("error")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown error");
+        serde_json::json!({ "success": false, "error": error })
+    } else {
+        // Non-JSON error (e.g. axum extractor rejection, plain text 422/404)
+        // — wrap the raw text in the JSON envelope so the frontend never
+        //   gets a non-JSON error body from /api/*.
+        let text = String::from_utf8_lossy(&bytes);
+        let error = if text.is_empty() {
+            status.canonical_reason().unwrap_or("request failed")
+        } else {
+            &text
+        };
         serde_json::json!({ "success": false, "error": error })
     };
 
