@@ -20,7 +20,7 @@ import { FollowButton, ReportButton } from "../components/common";
 import { useAuth } from "../hooks/useAuth";
 import { useStartConversation } from "../hooks/useApi";
 import { formatDateLong } from "../lib/formatTime";
-import { buildApiUrl } from "../lib/runtimeConfig";
+import { api } from "../lib/api";
 
 interface UserThread {
   id: string;
@@ -145,18 +145,9 @@ export function UserProfilePage() {
   } = useQuery({
     queryKey: ["userProfile", userId],
     queryFn: async () => {
-      const response = await fetch(buildApiUrl(`/api/v1/users/${userId}`), {
-        credentials: "include",
-      });
-      const ct = response.headers.get("content-type") ?? "";
-      if (!ct.includes("application/json")) {
-        throw new Error(
-          (await response.text()) || `Request failed (${response.status})`,
-        );
-      }
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data as UserProfile;
+      // getUser returns the /users/:id payload; cast to UserProfile for
+      // the extra fields (threads, botSummaries, etc.) the endpoint includes.
+      return (await api.getUser(userId!)) as unknown as UserProfile;
     },
     enabled: !!userId,
   });

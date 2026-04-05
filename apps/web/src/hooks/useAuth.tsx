@@ -9,7 +9,6 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import i18n from "../lib/i18n";
 import { api } from "../lib/api";
-import { buildApiUrl } from "../lib/runtimeConfig";
 import type { RegisterRequest, User } from "../lib/api";
 
 interface SanctionInfo {
@@ -71,22 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         err?.message?.includes("banned") ||
         err?.message?.includes("suspended")
       ) {
-        try {
-          const response = await fetch(buildApiUrl("/api/v1/auth/me"), {
-            credentials: "include",
-          });
-          if (response.status === 403) {
-            const data = await response.json();
-            if (data.sanctionType) {
-              setSanction({
-                sanctionType: data.sanctionType,
-                reason: data.reason,
-                expiresAt: data.expiresAt,
-              });
-            }
-          }
-        } catch {
-          // Ignore secondary fetch errors
+        const sanctionInfo = await api.getSanctionInfo();
+        if (sanctionInfo) {
+          setSanction(sanctionInfo);
         }
       }
     } finally {

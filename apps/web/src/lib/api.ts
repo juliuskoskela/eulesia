@@ -103,6 +103,76 @@ class ApiClient {
     return this.request("/auth/me");
   }
 
+  /** Fetch sanction info from /auth/me when a 403 is expected (banned/suspended). */
+  async getSanctionInfo(): Promise<{
+    sanctionType: "suspension" | "ban";
+    reason: string | null;
+    expiresAt: string | null;
+  } | null> {
+    const url = `${this.baseUrl}/api/v1/auth/me`;
+    try {
+      const response = await fetch(url, { credentials: "include" });
+      if (response.status === 403) {
+        const data = await response.json();
+        if (data.sanctionType) {
+          return {
+            sanctionType: data.sanctionType,
+            reason: data.reason,
+            expiresAt: data.expiresAt,
+          };
+        }
+      }
+    } catch {
+      // Ignore secondary fetch errors
+    }
+    return null;
+  }
+
+  async verifyMagicLink(token: string): Promise<void> {
+    await this.request(`/auth/verify/${token}`, {
+      method: "GET",
+    });
+  }
+
+  // Admin auth
+  async adminMe(): Promise<{
+    id: string;
+    username: string;
+    email: string | null;
+    name: string;
+  }> {
+    return this.request("/admin/auth/me");
+  }
+
+  async adminLogin(
+    username: string,
+    password: string,
+  ): Promise<{
+    id: string;
+    username: string;
+    email: string | null;
+    name: string;
+  }> {
+    return this.request("/admin/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+  }
+
+  async adminLogout(): Promise<void> {
+    await this.request("/admin/auth/logout", { method: "POST" });
+  }
+
+  async adminChangePassword(data: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<void> {
+    await this.request("/admin/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   // Users
   async getUser(id: string): Promise<User> {
     return this.request(`/users/${id}`);
