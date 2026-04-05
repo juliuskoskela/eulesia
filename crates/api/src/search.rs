@@ -23,6 +23,9 @@ struct SearchParams {
 struct SearchResult {
     threads: Vec<serde_json::Value>,
     users: Vec<serde_json::Value>,
+    places: Vec<serde_json::Value>,
+    municipalities: Vec<serde_json::Value>,
+    locations: Vec<serde_json::Value>,
 }
 
 async fn search_handler(
@@ -35,6 +38,9 @@ async fn search_handler(
     let mut result = SearchResult {
         threads: vec![],
         users: vec![],
+        places: vec![],
+        municipalities: vec![],
+        locations: vec![],
     };
 
     if let Some(client) = search_client {

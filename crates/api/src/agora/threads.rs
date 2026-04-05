@@ -192,7 +192,10 @@ pub async fn list_threads(
     Query(params): Query<ThreadListParams>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
     // "all" means no scope filter (v1 compat)
-    let scope_filter = params.scope.as_deref().filter(|s| *s != "all");
+    let scope_filter = params
+        .scope
+        .as_deref()
+        .filter(|s| !matches!(*s, "all" | "following"));
     if let Some(scope) = scope_filter {
         validate_scope(scope)?;
     }
