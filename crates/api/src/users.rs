@@ -25,8 +25,11 @@ pub struct UserProfileResponse {
     pub avatar_url: Option<String>,
     pub bio: Option<String>,
     pub role: String,
+    pub institution_type: Option<String>,
+    pub institution_name: Option<String>,
     pub identity_verified: bool,
     pub created_at: String,
+    pub threads: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,8 +53,11 @@ fn user_to_profile(u: eulesia_db::entities::users::Model) -> UserProfileResponse
         avatar_url: u.avatar_url,
         bio: u.bio,
         role: u.role,
+        institution_type: u.institution_type,
+        institution_name: u.institution_name,
         identity_verified: u.identity_verified,
         created_at: u.created_at.to_rfc3339(),
+        threads: vec![],
     }
 }
 
@@ -74,7 +80,35 @@ pub async fn get_user_profile(
         return Err(ApiError::NotFound("user not found".into()));
     }
 
-    Ok(Json(user_to_profile(user)))
+    // Include user's recent public threads
+    use eulesia_db::entities::threads;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+    let user_threads = threads::Entity::find()
+        .filter(threads::Column::AuthorId.eq(id))
+        .filter(threads::Column::DeletedAt.is_null())
+        .filter(threads::Column::IsHidden.eq(false))
+        .filter(threads::Column::ClubId.is_null())
+        .order_by_desc(threads::Column::CreatedAt)
+        .all(&*state.db)
+        .await
+        .map_err(|e| ApiError::Database(format!("list user threads: {e}")))?;
+
+    let thread_values: Vec<serde_json::Value> = user_threads
+        .into_iter()
+        .take(20)
+        .map(|t| {
+            serde_json::json!({
+                "id": t.id,
+                "title": t.title,
+                "scope": t.scope,
+                "createdAt": t.created_at.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    let mut profile = user_to_profile(user);
+    profile.threads = thread_values;
+    Ok(Json(profile))
 }
 
 /// PATCH /users/me — update own profile.
