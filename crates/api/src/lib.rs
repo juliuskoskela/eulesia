@@ -61,9 +61,7 @@ pub struct AppConfig {
 }
 
 /// Stub: DM unread count. Proper tracking requires last_read_at on memberships.
-async fn dm_unread_count(
-    _auth: eulesia_auth::session::AuthUser,
-) -> axum::Json<serde_json::Value> {
+async fn dm_unread_count(_auth: eulesia_auth::session::AuthUser) -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({ "count": 0 }))
 }
 

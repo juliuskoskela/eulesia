@@ -375,9 +375,15 @@ async fn map_location_detail(
     use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 
     let sql = match location_type.as_str() {
-        "thread" => "SELECT id, title, content, author_id, scope, created_at FROM threads WHERE id = $1 AND deleted_at IS NULL",
-        "place" => "SELECT id, name, description, type, category, latitude, longitude FROM places WHERE id = $1",
-        "municipality" => "SELECT id, name, name_fi, name_sv, latitude, longitude, population FROM municipalities WHERE id = $1",
+        "thread" => {
+            "SELECT id, title, content, author_id, scope, created_at FROM threads WHERE id = $1 AND deleted_at IS NULL"
+        }
+        "place" => {
+            "SELECT id, name, description, type, category, latitude, longitude FROM places WHERE id = $1"
+        }
+        "municipality" => {
+            "SELECT id, name, name_fi, name_sv, latitude, longitude, population FROM municipalities WHERE id = $1"
+        }
         _ => return Err(ApiError::NotFound("unknown location type".into())),
     };
 
