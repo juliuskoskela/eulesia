@@ -558,10 +558,7 @@ in {
                   proxyPass = apiProxy;
                 };
                 "/health" = {
-                  proxyPass =
-                    if v2Proxy != null
-                    then v2Proxy
-                    else apiProxy;
+                  proxyPass = apiProxy;
                 };
                 "~ ^/(agora|clubs/|kunnat/|user/|aiheet)" = {
                   extraConfig = ''

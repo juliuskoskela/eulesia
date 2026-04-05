@@ -3,7 +3,7 @@ use sea_orm::{ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, Qu
 use serde::Deserialize;
 use tracing::{info, warn};
 
-use eulesia_common::types::{new_id, DeviceId, SessionId, UserId, UserRole};
+use eulesia_common::types::{DeviceId, SessionId, UserId, UserRole, new_id};
 use eulesia_db::entities::{sessions, users};
 use eulesia_db::repo::sessions::SessionRepo;
 use eulesia_db::repo::users::UserRepo;

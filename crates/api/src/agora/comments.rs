@@ -1,5 +1,5 @@
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use sea_orm::ActiveValue::Set;
 use uuid::Uuid;
 
@@ -8,7 +8,7 @@ use tracing::warn;
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{new_id, UserRole};
+use eulesia_common::types::{UserRole, new_id};
 use eulesia_db::repo::comments::CommentRepo;
 use eulesia_db::repo::outbox_helpers::emit_event;
 use eulesia_db::repo::threads::ThreadRepo;

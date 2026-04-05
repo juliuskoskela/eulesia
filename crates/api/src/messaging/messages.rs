@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use axum::extract::{Path, Query, State};
 use axum::Json;
-use base64::{engine::general_purpose::STANDARD, Engine};
+use axum::extract::{Path, Query, State};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use sea_orm::ActiveValue::Set;
 use sea_orm::TransactionTrait;
 use uuid::Uuid;
@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{new_id, ConversationType};
+use eulesia_common::types::{ConversationType, new_id};
 use eulesia_db::entities::{message_device_queue, messages};
 use eulesia_db::repo::conversations::ConversationRepo;
 use eulesia_db::repo::devices::DeviceRepo;

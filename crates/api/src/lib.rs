@@ -26,9 +26,9 @@ mod waitlist;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use axum::Router;
 use axum::middleware::{from_fn, from_fn_with_state};
 use axum::routing::{get, post};
-use axum::Router;
 use sea_orm::DatabaseConnection;
 use serde::Deserialize;
 

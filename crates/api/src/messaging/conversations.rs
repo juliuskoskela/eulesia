@@ -1,5 +1,5 @@
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use sea_orm::ActiveModelTrait;
 use sea_orm::ActiveValue::Set;
 use sea_orm::TransactionTrait;
@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{new_id, ConversationType, GroupRole};
+use eulesia_common::types::{ConversationType, GroupRole, new_id};
 use eulesia_db::entities::{
     conversation_epochs, conversations, direct_conversations, membership_events, memberships,
 };

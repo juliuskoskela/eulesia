@@ -1,7 +1,7 @@
 use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sea_orm::ActiveValue::Set;
 use sea_orm::TransactionTrait;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use crate::AppState;
 use eulesia_auth::error::AuthError;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{new_id, Id, Platform};
+use eulesia_common::types::{Id, Platform, new_id};
 use eulesia_db::entities::{device_signed_pre_keys, devices, one_time_pre_keys};
 use eulesia_db::repo::devices::DeviceRepo;
 use eulesia_db::repo::pre_keys::PreKeyRepo;

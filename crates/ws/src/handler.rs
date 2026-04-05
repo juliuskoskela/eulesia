@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use axum::{
     extract::{
-        ws::{Message, WebSocket},
         Query, State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     response::{IntoResponse, Response},
 };
