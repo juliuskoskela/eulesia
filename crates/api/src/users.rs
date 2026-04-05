@@ -100,8 +100,16 @@ pub async fn get_user_profile(
             serde_json::json!({
                 "id": t.id,
                 "title": t.title,
+                "content": t.content,
+                "contentHtml": t.content_html,
                 "scope": t.scope,
+                "authorId": t.author_id,
+                "replyCount": t.reply_count,
+                "score": t.score,
+                "viewCount": t.view_count,
+                "language": t.language,
                 "createdAt": t.created_at.to_rfc3339(),
+                "updatedAt": t.updated_at.to_rfc3339(),
             })
         })
         .collect();
