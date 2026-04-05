@@ -39,7 +39,8 @@ impl ThreadRepo {
     ) -> Result<(Vec<threads::Model>, u64), DbErr> {
         let mut query = threads::Entity::find()
             .filter(threads::Column::DeletedAt.is_null())
-            .filter(threads::Column::IsHidden.eq(false));
+            .filter(threads::Column::IsHidden.eq(false))
+            .filter(threads::Column::ClubId.is_null());
 
         if let Some(s) = scope {
             query = query.filter(threads::Column::Scope.eq(s));

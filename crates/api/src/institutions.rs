@@ -401,7 +401,7 @@ async fn update_claim(
     let claim_row = state
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            r"SELECT id, institution_user_id, claimed_by, status
+            r"SELECT id, institution_user_id, claimed_by, status, created_at, resolved_at, resolved_by
               FROM institution_claims WHERE id = $1",
             [claim_id.into()],
         ))

@@ -222,6 +222,12 @@ struct DeleteDeviceTokenRequest {
     token: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeviceTokenRemovedResponse {
+    removed: bool,
+}
+
 /// POST /notifications/push/device-token -- store FCM token for a device.
 async fn store_device_token(
     auth: AuthUser,
@@ -278,8 +284,8 @@ async fn remove_device_token(
     auth: AuthUser,
     State(state): State<AppState>,
     Json(req): Json<DeleteDeviceTokenRequest>,
-) -> Result<(), ApiError> {
-    state
+) -> Result<Json<DeviceTokenRemovedResponse>, ApiError> {
+    let result = state
         .execute(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             r"UPDATE devices SET fcm_token = NULL
@@ -289,7 +295,9 @@ async fn remove_device_token(
         .await
         .map_err(|e| ApiError::Database(format!("remove device token: {e}")))?;
 
-    Ok(())
+    Ok(Json(DeviceTokenRemovedResponse {
+        removed: result.rows_affected() > 0,
+    }))
 }
 
 // ---------------------------------------------------------------------------

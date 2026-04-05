@@ -1,11 +1,13 @@
 use axum::Json;
 use axum::extract::{Path, State};
-use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, QueryFilter, Statement};
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::AppState;
+use eulesia_auth::session::OptionalAuth;
 use eulesia_common::error::ApiError;
+use eulesia_db::entities::{club_members, threads};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,9 +24,36 @@ pub struct EditHistoryEntry {
 
 /// GET /agora/threads/{id}/edit-history
 pub async fn get_edit_history(
+    opt_auth: OptionalAuth,
     State(state): State<AppState>,
     Path(thread_id): Path<Uuid>,
 ) -> Result<Json<Vec<EditHistoryEntry>>, ApiError> {
+    // If the thread belongs to a club, verify the caller is a member.
+    let thread = threads::Entity::find_by_id(thread_id)
+        .one(&*state.db)
+        .await
+        .map_err(|e| ApiError::Database(format!("load thread: {e}")))?
+        .ok_or_else(|| ApiError::NotFound("thread not found".into()))?;
+
+    if let Some(club_id) = thread.club_id {
+        let user_id = opt_auth
+            .0
+            .as_ref()
+            .map(|a| a.user_id.0)
+            .ok_or(ApiError::Unauthorized)?;
+
+        let membership = club_members::Entity::find()
+            .filter(club_members::Column::ClubId.eq(club_id))
+            .filter(club_members::Column::UserId.eq(user_id))
+            .one(&*state.db)
+            .await
+            .map_err(|e| ApiError::Database(format!("check club membership: {e}")))?;
+
+        if membership.is_none() {
+            return Err(ApiError::Forbidden);
+        }
+    }
+
     let rows = state
         .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,

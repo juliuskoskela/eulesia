@@ -114,7 +114,7 @@ impl MigrationTrait for Migration {
         db.execute_unprepared(
             "CREATE TABLE waitlist (
                 id UUID PRIMARY KEY,
-                email VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL UNIQUE,
                 name VARCHAR(255),
                 status VARCHAR(20) NOT NULL DEFAULT 'pending',
                 invite_code VARCHAR(255),
@@ -125,8 +125,6 @@ impl MigrationTrait for Migration {
         )
         .await?;
         db.execute_unprepared("CREATE INDEX idx_waitlist_status ON waitlist(status)")
-            .await?;
-        db.execute_unprepared("CREATE INDEX idx_waitlist_email ON waitlist(email)")
             .await?;
 
         // ---------------------------------------------------------------

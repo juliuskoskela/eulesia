@@ -151,9 +151,8 @@ fn generate_invite_code() -> String {
 // Handlers
 // ---------------------------------------------------------------------------
 
-/// POST /waitlist/join -- public endpoint (no auth required, but the route is
-/// behind the auth middleware so we accept `AuthUser` anyway; the frontend
-/// can call this after initial signup).
+/// POST /waitlist/join -- public endpoint (no auth required).
+/// The frontend calls this during the waitlist signup flow.
 async fn join_waitlist(
     State(state): State<AppState>,
     Json(req): Json<JoinWaitlistRequest>,
@@ -185,7 +184,7 @@ async fn join_waitlist(
             [
                 id.into(),
                 req.email.clone().into(),
-                req.name.clone().unwrap_or_default().into(),
+                req.name.clone().into(),
                 now.into(),
             ],
         ))
@@ -212,12 +211,12 @@ async fn admin_list(
 ) -> Result<Json<WaitlistListResponse>, ApiError> {
     require_moderator(&state.db, auth.user_id.0).await?;
 
-    let limit = params.limit.min(100);
+    let limit = params.limit.max(1).min(100);
     let page = params.page.unwrap_or(1).max(1);
     let offset = if params.page.is_some() {
         (page - 1) * limit
     } else {
-        params.offset
+        params.offset.max(0)
     };
 
     // Count total records.
