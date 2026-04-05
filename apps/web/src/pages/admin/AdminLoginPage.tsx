@@ -92,6 +92,18 @@ export function AdminLoginPage() {
             {isLoading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-500">
+            Looking for Eulesia?{" "}
+            <a
+              href="https://eulesia.org"
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
+              Go to eulesia.org
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

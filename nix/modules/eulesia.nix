@@ -508,6 +508,7 @@ in {
             };
 
             ${cfg.appDomain} = {
+              serverAliases = ["www.${cfg.appDomain}"];
               root = cfg.frontendPackage;
               enableACME = cfg.tls.enable;
               forceSSL = cfg.tls.enable;
