@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::Json;
 use sea_orm::ActiveValue::Set;
 use uuid::Uuid;
 
@@ -10,7 +10,7 @@ use tracing::warn;
 use crate::AppState;
 use eulesia_auth::session::{AuthUser, OptionalAuth};
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{UserRole, new_id};
+use eulesia_common::types::{new_id, UserRole};
 use eulesia_db::repo::blocks::BlockRepo;
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::comments::CommentRepo;

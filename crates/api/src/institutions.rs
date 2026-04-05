@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{UserRole, new_id};
+use eulesia_common::types::{new_id, UserRole};
 use eulesia_db::repo::users::UserRepo;
 
 // ---------------------------------------------------------------------------

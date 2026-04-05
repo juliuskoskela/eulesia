@@ -5,8 +5,8 @@ pub mod threads;
 pub mod types;
 mod votes;
 
-use axum::Router;
 use axum::routing::{get, patch, post};
+use axum::Router;
 
 use crate::AppState;
 

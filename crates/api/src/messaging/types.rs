@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use base64::{Engine, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use eulesia_common::types::{ConversationType, GroupRole, MessageType};
 use eulesia_db::entities::messages;
 use serde::{Deserialize, Serialize};

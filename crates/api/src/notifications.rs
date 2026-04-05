@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{PaginationParams, new_id};
+use eulesia_common::types::{new_id, PaginationParams};
 use eulesia_db::repo::notifications::NotificationRepo;
 use eulesia_db::repo::push_subscriptions::PushSubscriptionRepo;
 

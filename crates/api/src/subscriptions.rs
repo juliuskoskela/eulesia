@@ -3,9 +3,9 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use crate::AppState;
 use crate::agora::threads::enrich_threads;
 use crate::agora::types::ThreadListResponse;
+use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
 use eulesia_db::repo::subscriptions::SubscriptionRepo;

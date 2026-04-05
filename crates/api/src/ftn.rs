@@ -10,10 +10,10 @@
 
 use std::sync::Arc;
 
-use axum::Router;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
+use axum::Router;
 use base64::Engine;
 use std::time::SystemTime;
 
