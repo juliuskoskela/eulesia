@@ -367,12 +367,7 @@ pub async fn get_thread(
 
     Ok(Json(serde_json::json!({
         "thread": thread_resp,
-        "comments": {
-            "data": comment_resps,
-            "total": comments_total,
-            "offset": offset,
-            "limit": limit,
-        }
+        "comments": comment_resps,
     })))
 }
 
