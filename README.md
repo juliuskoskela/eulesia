@@ -87,8 +87,6 @@ Optional local secrets can be sourced from untracked files:
 
 - `.env.local`
 - `.env.development.local`
-- `apps/api/.env.local`
-- `apps/api/.env.development.local`
 
 Managed runtime secrets should live as per-secret encrypted files under:
 

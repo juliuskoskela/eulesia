@@ -213,19 +213,18 @@ Use EU Commission's Launchpad testing tools:
 ## Code Structure
 
 ```
-apps/api/src/
+crates/api/src/
 ├── routes/
-│   ├── auth.ts              # Existing auth routes
-│   └── eudi.ts              # EUDI-specific routes
+│   ├── auth.rs              # Existing auth routes
+│   └── eudi.rs              # EUDI-specific routes
 ├── services/
-│   ├── email.ts             # Email service
 │   └── eudi/
-│       ├── index.ts         # EUDI service
-│       ├── openid4vp.ts     # OpenID4VP request/response
-│       ├── verification.ts  # Credential verification
-│       └── trust-list.ts    # EU Trust List client
+│       ├── mod.rs           # EUDI service
+│       ├── openid4vp.rs     # OpenID4VP request/response
+│       ├── verification.rs  # Credential verification
+│       └── trust_list.rs    # EU Trust List client
 └── middleware/
-    └── auth.ts              # Updated for EUDI sessions
+    └── auth.rs              # Updated for EUDI sessions
 ```
 
 ## Dependencies

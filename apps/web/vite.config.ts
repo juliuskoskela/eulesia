@@ -58,7 +58,7 @@ export default defineConfig({
             urlPattern: /\/api\/v1\//,
             handler: "NetworkFirst",
             options: {
-              cacheName: "eulesia-api",
+              cacheName: "api-cache",
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 5 },
               networkTimeoutSeconds: 10,
             },
@@ -78,8 +78,8 @@ export default defineConfig({
         manualChunks: {
           // Core React + router
           "vendor-react": ["react", "react-dom", "react-router-dom"],
-          // Data fetching & realtime
-          "vendor-data": ["@tanstack/react-query", "socket.io-client"],
+          // Data fetching
+          "vendor-data": ["@tanstack/react-query"],
           // i18n
           "vendor-i18n": [
             "i18next",

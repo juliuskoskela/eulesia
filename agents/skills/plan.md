@@ -30,9 +30,9 @@
 
    ```bash
    # Example: check schema
-   ls apps/api/src/db/
+   ls crates/db/src/
    # Example: check migrations
-   ls apps/api/src/db/startupMigrations.ts
+   ls crates/db/src/migration/
    ```
 
 3. **Decide on approach.** Choose one:

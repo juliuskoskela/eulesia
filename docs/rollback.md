@@ -43,15 +43,15 @@ This means you have up to 3 rollback points available.
 
 ## Post-Rollback
 
-1. Verify the service is healthy: `systemctl status eulesia-api`
+1. Verify the service is healthy: `systemctl status eulesia-server`
 2. Check the health endpoint: `curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/health`
 3. Investigate the failed deploy on a branch — don't push to main until fixed
 4. The failed deploy's CI run will have build logs in GitHub Actions
 
 ## Database Considerations
 
-NixOS rollback reverts the system (code, config, services) but **not the database**. If a startup migration ran during the failed deploy:
+NixOS rollback reverts the system (code, config, services) but **not the database**. If a SeaORM migration ran during the failed deploy:
 
 - Migrations are idempotent — re-running them after rollback is safe
 - If a migration caused data loss, you need a database backup restore (separate procedure)
-- The `startupMigrations.ts` script runs in the API's `preStart`, so rollback will re-run the old migrations which are all `IF NOT EXISTS` / `IF EXISTS` guarded
+- SeaORM migrations run on server startup and are tracked in the `seaql_migrations` table

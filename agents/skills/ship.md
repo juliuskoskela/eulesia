@@ -44,7 +44,7 @@
 
    Check for:
    - **Docs impact:** Are there user-facing changes that need documentation?
-   - **Migration impact:** Are there Drizzle schema changes or `startupMigrations.ts` edits?
+   - **Migration impact:** Are there SeaORM migration changes?
    - **Security impact:** Are there changes to auth, permissions, secrets, or crypto?
 
    Flag any concerns before proceeding.

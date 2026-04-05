@@ -6,7 +6,7 @@ Enter the development shell (automatic with direnv, or `nix develop`):
 
 ```bash
 cd eulesia          # direnv activates automatically
-just dev            # start all services (postgres, meilisearch, v1 api, frontend)
+just dev            # start all services (postgres, meilisearch, server, frontend)
 ```
 
 See [Architecture](./architecture.md) for the system boundary and module map.
@@ -16,8 +16,7 @@ See [Architecture](./architecture.md) for the system boundary and module map.
 ```
 eulesia/
 ├── src/                    React frontend (v1 + v2 client)
-├── apps/api/               Node.js API (v1, being replaced)
-├── crates/server/          Rust server (v2, being built)
+├── crates/server/          Rust server
 ├── nix/                    Nix build system, modules, deployment
 ├── tests/e2e/              Playwright E2E tests
 ├── agents/skills/          Agentic development skills
@@ -26,16 +25,12 @@ eulesia/
 
 ### Two backends during transition
 
-|                | v1 (Node/Express)                         | v2 (Rust/axum)                  |
-| -------------- | ----------------------------------------- | ------------------------------- |
-| **Location**   | `apps/api/`                               | `crates/server/`                |
-| **Port**       | 3001                                      | 3002                            |
-| **API prefix** | `/api/v1/`                                | `/api/v2/`                      |
-| **Build**      | `pnpm --filter @eulesia/api run build`    | `cargo build -p eulesia-server` |
-| **Test**       | `pnpm --filter @eulesia/api run test:run` | `cargo test -p eulesia-server`  |
-| **Nix build**  | `nix build .#api`                         | `nix build .#server`            |
-
-Both run simultaneously. Endpoints migrate from v1 → v2 incrementally.
+| **Location** | `crates/server/` |
+| **Port** | 3002 |
+| **API prefix** | `/api/v1/` and `/api/v2/` |
+| **Build** | `cargo build -p eulesia-server` |
+| **Test** | `cargo test -p eulesia-server` |
+| **Nix build** | `nix build .#server` |
 
 ## Agentic Skills
 
@@ -73,10 +68,7 @@ just test            # All test suites
 # Frontend (React)
 just build-web       # nix build .#frontend
 
-# v1 API (Node)
-just build-api       # nix build .#api
-
-# v2 Server (Rust)
+# Server (Rust)
 just build-server    # nix build .#server
 cargo test           # Fast local Rust tests
 cargo clippy         # Lint Rust code
@@ -130,13 +122,9 @@ Rust formatting is handled by `treefmt` (which invokes `rustfmt`).
 
 ## Database
 
-### v1 Migrations (Node)
+### Migrations (SeaORM)
 
-Schema changes via startup migrations in `apps/api/src/db/startupMigrations.ts`. Runs automatically on API start. In deployment, runs as `preStart` via `eulesia-api-migrate`.
-
-### v2 Migrations (Rust)
-
-TBD — will use sqlx migrations in `crates/server/migrations/`. Applied by the server binary on startup.
+Schema managed by SeaORM migrations in `crates/db/src/migration/`. Applied automatically by the server binary on startup.
 
 ## Adding a New Endpoint
 
@@ -147,9 +135,3 @@ TBD — will use sqlx migrations in `crates/server/migrations/`. Applied by the 
 3. Register the route in `crates/server/src/router.rs`
 4. Add tests (inline `#[cfg(test)]` module or integration test)
 5. `cargo test` → `cargo clippy` → commit
-
-### v1 API (Node) — legacy, avoid new work here
-
-1. Add route in `apps/api/src/routes/`
-2. Register in `apps/api/src/routes/index.ts`
-3. Add tests in the route file or alongside
