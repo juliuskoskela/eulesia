@@ -15,6 +15,8 @@ struct AnnouncementResponse {
     id: Uuid,
     title: String,
     message: String,
+    /// Serializes as "type" to match frontend's `announcement.type`
+    #[serde(rename = "type")]
     announcement_type: String,
     created_at: String,
     expires_at: Option<String>,

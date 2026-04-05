@@ -758,16 +758,28 @@ struct AnnouncementResponse {
     id: Uuid,
     title: String,
     message: String,
+    #[serde(rename = "type")]
     announcement_type: String,
     active: bool,
     created_by: Option<Uuid>,
+    created_by_name: Option<String>,
     created_at: String,
     expires_at: Option<String>,
 }
 
-fn announcement_to_response(
+async fn announcement_to_response(
     m: eulesia_db::entities::system_announcements::Model,
+    db: &sea_orm::DatabaseConnection,
 ) -> AnnouncementResponse {
+    let created_by_name = if let Some(uid) = m.created_by {
+        UserRepo::find_by_id(db, uid)
+            .await
+            .ok()
+            .flatten()
+            .map(|u| u.name)
+    } else {
+        None
+    };
     AnnouncementResponse {
         id: m.id,
         title: m.title,
@@ -775,6 +787,7 @@ fn announcement_to_response(
         announcement_type: m.announcement_type,
         active: m.active,
         created_by: m.created_by,
+        created_by_name,
         created_at: m.created_at.to_rfc3339(),
         expires_at: m.expires_at.map(|t| t.to_rfc3339()),
     }
@@ -794,9 +807,11 @@ async fn admin_list_announcements(
         .await
         .map_err(db_err)?;
 
-    Ok(Json(
-        all.into_iter().map(announcement_to_response).collect(),
-    ))
+    let mut items = Vec::with_capacity(all.len());
+    for a in all {
+        items.push(announcement_to_response(a, &state.db).await);
+    }
+    Ok(Json(items))
 }
 
 #[derive(Deserialize)]
@@ -804,7 +819,7 @@ async fn admin_list_announcements(
 struct CreateAnnouncementRequest {
     title: String,
     message: String,
-    #[serde(default = "default_announcement_type")]
+    #[serde(alias = "type", default = "default_announcement_type")]
     announcement_type: String,
     expires_at: Option<String>,
 }
@@ -859,7 +874,7 @@ async fn admin_create_announcement(
     };
 
     let inserted = model.insert(&*state.db).await.map_err(db_err)?;
-    Ok(Json(announcement_to_response(inserted)))
+    Ok(Json(announcement_to_response(inserted, &state.db).await))
 }
 
 #[derive(Deserialize)]
@@ -888,7 +903,7 @@ async fn admin_toggle_announcement(
     am.active = Set(req.active);
     let updated = am.update(&*state.db).await.map_err(db_err)?;
 
-    Ok(Json(announcement_to_response(updated)))
+    Ok(Json(announcement_to_response(updated, &state.db).await))
 }
 
 /// DELETE /admin/announcements/{id}
@@ -1058,11 +1073,18 @@ fn generate_invite_code() -> String {
 struct InviteCodeListItem {
     id: Uuid,
     code: String,
+    status: String,
     created_by: Option<Uuid>,
-    used_by: Option<Uuid>,
-    used_by_username: Option<String>,
+    used_by: Option<UsedByInfo>,
     used_at: Option<String>,
     created_at: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UsedByInfo {
+    id: Uuid,
+    name: String,
 }
 
 /// GET /admin/invites
@@ -1076,7 +1098,7 @@ async fn admin_list_invites(
         .db
         .query_all(Statement::from_string(
             DatabaseBackend::Postgres,
-            r"SELECT ic.id, ic.code, ic.created_by, ic.used_by, u.username, ic.used_at, ic.created_at
+            r"SELECT ic.id, ic.code, ic.status, ic.created_by, ic.used_by, u.name, ic.used_at, ic.created_at
               FROM invite_codes ic
               LEFT JOIN users u ON u.id = ic.used_by
               ORDER BY ic.created_at DESC",
@@ -1087,18 +1109,24 @@ async fn admin_list_invites(
     let items: Vec<InviteCodeListItem> = rows
         .iter()
         .filter_map(|r| {
+            let used_by_id: Option<Uuid> = r.try_get_by_index(4).ok()?;
+            let used_by_name: Option<String> = r.try_get_by_index(5).ok()?;
+            let used_by = match (used_by_id, used_by_name) {
+                (Some(id), Some(name)) => Some(UsedByInfo { id, name }),
+                _ => None,
+            };
             Some(InviteCodeListItem {
                 id: r.try_get_by_index(0).ok()?,
                 code: r.try_get_by_index(1).ok()?,
-                created_by: r.try_get_by_index(2).ok()?,
-                used_by: r.try_get_by_index(3).ok()?,
-                used_by_username: r.try_get_by_index(4).ok()?,
+                status: r.try_get_by_index::<String>(2).ok()?,
+                created_by: r.try_get_by_index(3).ok()?,
+                used_by,
                 used_at: r
-                    .try_get_by_index::<Option<chrono::DateTime<chrono::FixedOffset>>>(5)
+                    .try_get_by_index::<Option<chrono::DateTime<chrono::FixedOffset>>>(6)
                     .ok()?
                     .map(|t| t.to_rfc3339()),
                 created_at: r
-                    .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(6)
+                    .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(7)
                     .ok()?
                     .to_rfc3339(),
             })

@@ -87,6 +87,21 @@ async fn register(
     jar: CookieJar,
     Json(req): Json<RegisterRequest>,
 ) -> Result<(CookieJar, Json<UserProfile>), ApiError> {
+    // Check if registration is open.
+    {
+        use eulesia_db::entities::site_settings;
+        use sea_orm::EntityTrait;
+        let reg_open = site_settings::Entity::find_by_id("registrationOpen".to_string())
+            .one(&*state.db)
+            .await
+            .ok()
+            .flatten()
+            .map_or(true, |r| r.value == "true");
+        if !reg_open {
+            return Err(ApiError::Forbidden);
+        }
+    }
+
     let (user, token) = AuthService::register(
         &state.db,
         req,
@@ -361,9 +376,21 @@ struct AuthConfigResponse {
 
 /// GET /auth/config — returns which auth methods are available.
 async fn auth_config(State(state): State<AppState>) -> Json<AuthConfigResponse> {
+    // Read registrationOpen from site_settings (defaults to true if not set).
+    let registration_open = {
+        use eulesia_db::entities::site_settings;
+        use sea_orm::EntityTrait;
+        site_settings::Entity::find_by_id("registrationOpen".to_string())
+            .one(&*state.db)
+            .await
+            .ok()
+            .flatten()
+            .map_or(true, |r| r.value == "true")
+    };
+
     Json(AuthConfigResponse {
         registration_mode: "ftn-open".into(),
-        registration_open: true,
+        registration_open,
         ftn_enabled: state.ftn_config.is_some(),
     })
 }
