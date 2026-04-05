@@ -185,15 +185,14 @@ jobs:
             export EULESIA_MEILI_DATA_DIR="$EULESIA_DEV_STATE_DIR/meilisearch"
             export DATABASE_URL="postgresql://$EULESIA_DB_USER:eulesia@127.0.0.1:$EULESIA_PGPORT/$EULESIA_DB_NAME"
             export MEILI_URL="$EULESIA_MEILI_URL"
-            export MEILI_MASTER_KEY="$EULESIA_MEILI_MASTER_KEY"
-            export PORT=3002
+            export MEILI_API_KEY="$EULESIA_MEILI_MASTER_KEY"
+            export EULESIA_PORT=3002
+            export EULESIA_FRONTEND_ORIGIN="http://localhost:5174"
+            export EULESIA_LOG_LEVEL="info"
             export APP_URL="http://localhost:5174"
-            export API_URL="http://localhost:$PORT"
+            export API_URL="http://localhost:$EULESIA_PORT"
             export VITE_API_URL="$API_URL"
-            export SESSION_SECRET="e2e-test-secret-key-must-be-32chars"
-            export ALLOWED_ORIGINS="http://localhost:5174"
             export UPLOAD_DIR="$EULESIA_DEV_STATE_DIR/uploads"
-            export NODE_ENV=development
             export CI=true
             export PLAYWRIGHT_BASE_URL="http://localhost:5174"
             export PLAYWRIGHT_API_URL="$API_URL"
@@ -266,19 +265,21 @@ jobs:
 
             wait_for "Meilisearch" 30 "curl -sf $EULESIA_MEILI_URL/health >/dev/null 2>&1"
 
-            # Install deps and run migrations
+            # Build Rust v2 server (cached from flake-check)
+            RUST_SERVER=$(nix build .#server --print-out-paths --no-link)
+
+            # Install frontend deps (still needed for Vite + Playwright)
             pnpm install --frozen-lockfile
-            pnpm --filter @eulesia/api exec drizzle-kit push --force
 
-            # Seed E2E invite code for test user registration
-            psql -h 127.0.0.1 -p "$EULESIA_PGPORT" -U "$EULESIA_DB_USER" -d "$EULESIA_DB_NAME" -c \
-              "INSERT INTO invite_codes (code, status) VALUES ('\''E2ETEST'\'', '\''available'\'')"
-
-            # Start API (capture logs for debugging)
-            pnpm --filter @eulesia/api run dev > "$EULESIA_DEV_STATE_DIR/api.log" 2>&1 &
+            # Start Rust v2 API server (auto-runs SeaORM migrations)
+            "$RUST_SERVER/bin/eulesia-server" > "$EULESIA_DEV_STATE_DIR/api.log" 2>&1 &
             API_PID=$!
 
-            wait_for "API" 30 "curl -sf $API_URL/api/v1/health >/dev/null 2>&1"
+            wait_for "API (v2 Rust)" 60 "curl -sf $API_URL/api/v1/health >/dev/null 2>&1"
+
+            # Seed E2E invite code (after migrations have run)
+            psql -h 127.0.0.1 -p "$EULESIA_PGPORT" -U "$EULESIA_DB_USER" -d "$EULESIA_DB_NAME" -c \
+              "INSERT INTO invite_codes (code, status) VALUES ('\''E2ETEST'\'', '\''available'\'')"
 
             # Start frontend on port 5174 (capture logs)
             pnpm --filter @eulesia/web exec vite --port 5174 > "$EULESIA_DEV_STATE_DIR/web.log" 2>&1 &

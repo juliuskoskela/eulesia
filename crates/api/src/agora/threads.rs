@@ -23,7 +23,7 @@ use eulesia_db::repo::votes::VoteRepo;
 
 use super::types::{
     AuthorSummary, CommentListParams, CommentResponse, CreateThreadRequest, ThreadListParams,
-    ThreadListResponse, ThreadResponse, UpdateThreadRequest,
+    ThreadListResponse, ThreadResponse, ThreadWithCommentsResponse, UpdateThreadRequest,
 };
 
 const VALID_SCOPES: &[&str] = &["local", "national", "european"];
@@ -252,7 +252,7 @@ pub async fn get_thread(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     Query(comment_params): Query<CommentListParams>,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<Json<ThreadWithCommentsResponse>, ApiError> {
     let user_id = opt_auth.0.as_ref().map(|a| a.user_id.0);
 
     // Compute excluded (blocked) IDs first so we can check the thread author.
@@ -365,14 +365,10 @@ pub async fn get_thread(
         })
         .collect();
 
-    // Flatten: thread fields at top level + comments array.
-    // Frontend expects ThreadWithComments which extends Thread (flat).
-    let mut resp = serde_json::to_value(&thread_resp)
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-    if let serde_json::Value::Object(ref mut map) = resp {
-        map.insert("comments".into(), serde_json::to_value(&comment_resps).unwrap_or_default());
-    }
-    Ok(Json(resp))
+    Ok(Json(ThreadWithCommentsResponse {
+        thread: thread_resp,
+        comments: comment_resps,
+    }))
 }
 
 pub async fn create_thread(
