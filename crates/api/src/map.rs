@@ -160,7 +160,7 @@ async fn get_map_points(
     let db: &sea_orm::DatabaseConnection = &state.db;
 
     // Use raw SQL to query threads and places within bounds in a single UNION ALL.
-    let sql = r#"
+    let sql = r"
         SELECT id, 'thread' AS point_type, title AS name,
                latitude::float8 AS lat, longitude::float8 AS lon
         FROM threads
@@ -186,7 +186,7 @@ async fn get_map_points(
         WHERE latitude IS NOT NULL AND longitude IS NOT NULL
           AND latitude BETWEEN $1 AND $2
           AND longitude BETWEEN $3 AND $4
-    "#;
+    ";
 
     let stmt = Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
@@ -279,12 +279,10 @@ async fn create_place(
 
     let latitude = req
         .latitude
-        .map(|v| sea_orm::prelude::Decimal::from_f64_retain(v))
-        .flatten();
+        .and_then(sea_orm::prelude::Decimal::from_f64_retain);
     let longitude = req
         .longitude
-        .map(|v| sea_orm::prelude::Decimal::from_f64_retain(v))
-        .flatten();
+        .and_then(sea_orm::prelude::Decimal::from_f64_retain);
 
     let am = places::ActiveModel {
         id: Set(id),
@@ -321,13 +319,13 @@ async fn place_categories(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<CategoryCount>>, ApiError> {
     let db: &sea_orm::DatabaseConnection = &state.db;
-    let sql = r#"
+    let sql = r"
         SELECT category, COUNT(*) AS count
         FROM places
         WHERE category IS NOT NULL
         GROUP BY category
         ORDER BY count DESC
-    "#;
+    ";
 
     let stmt = Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql.to_string());
     let rows = db

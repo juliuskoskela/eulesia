@@ -51,7 +51,7 @@ impl SubscriptionRepo {
         Ok(())
     }
 
-    /// List all subscriptions for a user, ordered by created_at desc.
+    /// List all subscriptions for a user, ordered by `created_at` desc.
     pub async fn list_for_user(
         db: &DatabaseConnection,
         user_id: Uuid,
@@ -149,8 +149,8 @@ impl SubscriptionRepo {
                   LIMIT $2 OFFSET $3",
                 [
                     user_id.into(),
-                    (limit as i64).into(),
-                    (offset as i64).into(),
+                    i64::try_from(limit).unwrap_or(i64::MAX).into(),
+                    i64::try_from(offset).unwrap_or(0).into(),
                 ],
             ))
             .await?;
@@ -160,6 +160,6 @@ impl SubscriptionRepo {
             .filter_map(|r| r.try_get_by_index::<Uuid>(0).ok())
             .collect();
 
-        Ok((ids, total as u64))
+        Ok((ids, total.max(0).try_into().unwrap_or(0)))
     }
 }

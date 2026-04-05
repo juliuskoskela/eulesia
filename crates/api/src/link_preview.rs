@@ -36,7 +36,12 @@ fn is_private_url(url: &str) -> Result<bool, ApiError> {
         .ok_or_else(|| ApiError::BadRequest("URL has no host".into()))?;
 
     // Block obvious private hostnames
-    if host == "localhost" || host.ends_with(".local") || host.ends_with(".internal") {
+    if host == "localhost"
+        || std::path::Path::new(host)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("local"))
+        || host.ends_with(".internal")
+    {
         return Ok(true);
     }
 

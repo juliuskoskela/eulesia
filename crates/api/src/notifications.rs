@@ -212,6 +212,7 @@ async fn vapid_public_key() -> Json<VapidPublicKeyResponse> {
 #[serde(rename_all = "camelCase")]
 struct DeviceTokenRequest {
     token: String,
+    #[allow(dead_code)]
     platform: String,
     device_id: Option<String>,
 }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use axum::Json;
 use axum::Router;
 use axum::extract::{Multipart, State};
-use axum::routing::{delete, post};
+use axum::routing::post;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde::Serialize;
 use tokio::fs;
@@ -47,7 +47,7 @@ struct ImageResponse {
 
 /// Extract the first file field from a multipart upload.
 async fn extract_file(mut multipart: Multipart) -> Result<(String, Vec<u8>), ApiError> {
-    while let Some(field) = multipart
+    if let Some(field) = multipart
         .next_field()
         .await
         .map_err(|e| ApiError::BadRequest(format!("multipart error: {e}")))?
@@ -84,6 +84,8 @@ async fn upload_avatar(
     State(state): State<AppState>,
     multipart: Multipart,
 ) -> Result<Json<AvatarResponse>, ApiError> {
+    use eulesia_db::entities::users;
+
     let (_content_type, data) = extract_file(multipart).await?;
 
     // Decode, resize to 200x200 cover crop, encode as WebP
@@ -128,7 +130,6 @@ async fn upload_avatar(
     }
 
     // Update user avatar_url
-    use eulesia_db::entities::users;
     let mut am: users::ActiveModel = user.into();
     am.avatar_url = Set(Some(avatar_url.clone()));
     am.updated_at = Set(chrono::Utc::now().fixed_offset());
@@ -144,6 +145,8 @@ async fn delete_avatar(
     auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    use eulesia_db::entities::users;
+
     let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
@@ -158,7 +161,6 @@ async fn delete_avatar(
         }
     }
 
-    use eulesia_db::entities::users;
     let mut am: users::ActiveModel = user.into();
     am.avatar_url = Set(None);
     am.updated_at = Set(chrono::Utc::now().fixed_offset());

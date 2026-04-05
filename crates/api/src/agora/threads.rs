@@ -474,6 +474,7 @@ pub async fn create_thread(
     }))
 }
 
+#[allow(clippy::too_many_lines)]
 pub async fn update_thread(
     auth: AuthUser,
     State(state): State<AppState>,

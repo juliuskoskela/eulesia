@@ -211,7 +211,7 @@ async fn admin_list(
 ) -> Result<Json<WaitlistListResponse>, ApiError> {
     require_moderator(&state.db, auth.user_id.0).await?;
 
-    let limit = params.limit.max(1).min(100);
+    let limit = params.limit.clamp(1, 100);
     let page = params.page.unwrap_or(1).max(1);
     let offset = if params.page.is_some() {
         (page - 1) * limit
@@ -221,14 +221,15 @@ async fn admin_list(
 
     // Count total records.
     let (count_sql, count_values): (String, Vec<sea_orm::Value>) =
-        if let Some(ref status) = params.status {
-            (
-                "SELECT COUNT(*)::bigint FROM waitlist WHERE status = $1".into(),
-                vec![status.clone().into()],
-            )
-        } else {
-            ("SELECT COUNT(*)::bigint FROM waitlist".into(), vec![])
-        };
+        params.status.as_ref().map_or_else(
+            || ("SELECT COUNT(*)::bigint FROM waitlist".into(), vec![]),
+            |status| {
+                (
+                    "SELECT COUNT(*)::bigint FROM waitlist WHERE status = $1".into(),
+                    vec![status.clone().into()],
+                )
+            },
+        );
 
     let total: i64 = state
         .query_one(Statement::from_sql_and_values(
@@ -241,21 +242,24 @@ async fn admin_list(
         .and_then(|row| row.try_get_by_index(0).ok())
         .unwrap_or(0);
 
-    let (sql, values): (String, Vec<sea_orm::Value>) = if let Some(ref status) = params.status {
-        (
-            r"SELECT id, email, name, status, invite_code, created_at, approved_at, approved_by
-              FROM waitlist WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3"
-                .into(),
-            vec![status.clone().into(), limit.into(), offset.into()],
-        )
-    } else {
-        (
-            r"SELECT id, email, name, status, invite_code, created_at, approved_at, approved_by
+    let (sql, values): (String, Vec<sea_orm::Value>) = params.status.as_ref().map_or_else(
+        || {
+            (
+                r"SELECT id, email, name, status, invite_code, created_at, approved_at, approved_by
               FROM waitlist ORDER BY created_at DESC LIMIT $1 OFFSET $2"
-                .into(),
-            vec![limit.into(), offset.into()],
-        )
-    };
+                    .into(),
+                vec![limit.into(), offset.into()],
+            )
+        },
+        |status| {
+            (
+                r"SELECT id, email, name, status, invite_code, created_at, approved_at, approved_by
+              FROM waitlist WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3"
+                    .into(),
+                vec![status.clone().into(), limit.into(), offset.into()],
+            )
+        },
+    );
 
     let rows = state
         .query_all(Statement::from_sql_and_values(
@@ -438,16 +442,15 @@ async fn bulk_approve(
             .await
             .map_err(|e| ApiError::Database(format!("bulk approve fetch: {e}")))?;
 
-        let email: String = match email_row.and_then(|r| r.try_get_by_index(0).ok()) {
-            Some(e) => e,
-            None => {
-                results.push(BulkApproveResult {
-                    code: String::new(),
-                    email: String::new(),
-                    status: "not_found".into(),
-                });
-                continue;
-            }
+        let email: String = if let Some(e) = email_row.and_then(|r| r.try_get_by_index(0).ok()) {
+            e
+        } else {
+            results.push(BulkApproveResult {
+                code: String::new(),
+                email: String::new(),
+                status: "not_found".into(),
+            });
+            continue;
         };
 
         let result = state

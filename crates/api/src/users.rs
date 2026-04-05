@@ -169,12 +169,13 @@ async fn update_settings(
     State(state): State<AppState>,
     Json(req): Json<UpdateSettingsRequest>,
 ) -> Result<Json<UserSettingsResponse>, ApiError> {
+    use eulesia_db::entities::users;
+
     let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
         .ok_or(ApiError::Unauthorized)?;
 
-    use eulesia_db::entities::users;
     let mut am: users::ActiveModel = user.into();
     am.updated_at = Set(chrono::Utc::now().fixed_offset());
 
@@ -280,6 +281,7 @@ async fn onboarding_complete(
 // ---------------------------------------------------------------------------
 
 /// GET /users/me/data -- export all user data for GDPR compliance.
+#[allow(clippy::too_many_lines)]
 async fn export_my_data(
     auth: AuthUser,
     State(state): State<AppState>,

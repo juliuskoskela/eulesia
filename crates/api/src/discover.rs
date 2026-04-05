@@ -96,7 +96,7 @@ async fn explore(
             let author_id: uuid::Uuid = row.try_get_by_index(4).ok()?;
             let scope: String = row.try_get_by_index(5).ok()?;
             let reply_count: i32 = row.try_get_by_index(6).ok()?;
-            let score: i32 = row.try_get_by_index(7).ok()?;
+            let vote_score: i32 = row.try_get_by_index(7).ok()?;
             let view_count: i32 = row.try_get_by_index(8).ok()?;
             let created_at: chrono::DateTime<chrono::FixedOffset> = row.try_get_by_index(9).ok()?;
             let updated_at: chrono::DateTime<chrono::FixedOffset> =
@@ -111,7 +111,7 @@ async fn explore(
                 "authorId": author_id,
                 "scope": scope,
                 "replyCount": reply_count,
-                "score": score,
+                "score": vote_score,
                 "viewCount": view_count,
                 "createdAt": created_at.to_rfc3339(),
                 "updatedAt": updated_at.to_rfc3339(),
