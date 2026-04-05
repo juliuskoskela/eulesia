@@ -103,6 +103,11 @@ pub fn router(state: AppState) -> Router {
             post(messaging::messages::send).get(messaging::messages::list_messages),
         )
         .route("/dm/{id}/read", post(messaging::messages::mark_read))
+        .route(
+            "/dm/{id}/messages/{messageId}",
+            axum::routing::patch(messaging::messages::edit_message)
+                .delete(messaging::messages::delete_message),
+        )
         .route("/dm/unread-count", get(dm_unread_count))
         // Report aliases — frontend calls /reports but v2 uses /moderation
         .route("/reports", post(moderation::reports::create_report))

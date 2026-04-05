@@ -1331,7 +1331,7 @@ pub async fn get_club_thread(
     })))
 }
 
-async fn update_club_thread(
+pub async fn update_club_thread(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(path): Path<ClubThreadPath>,
@@ -1364,7 +1364,7 @@ async fn update_club_thread(
     })))
 }
 
-async fn delete_club_thread(
+pub async fn delete_club_thread(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(path): Path<ClubThreadPath>,
@@ -1524,7 +1524,7 @@ pub struct ClubCommentPath {
     comment_id: Uuid,
 }
 
-async fn delete_club_comment(
+pub async fn delete_club_comment(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(path): Path<ClubCommentPath>,
@@ -1570,7 +1570,7 @@ async fn delete_club_comment(
     Ok(())
 }
 
-async fn vote_club_comment(
+pub async fn vote_club_comment(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(path): Path<ClubCommentPath>,

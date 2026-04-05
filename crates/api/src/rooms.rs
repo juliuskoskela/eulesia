@@ -412,7 +412,9 @@ pub fn routes() -> Router<AppState> {
         .route("/home/rooms/{id}/threads", post(clubs::create_club_thread))
         .route(
             "/home/rooms/{id}/threads/{threadId}",
-            get(clubs::get_club_thread),
+            get(clubs::get_club_thread)
+                .patch(clubs::update_club_thread)
+                .delete(clubs::delete_club_thread),
         )
         .route(
             "/home/rooms/{id}/threads/{threadId}/comments",
@@ -421,6 +423,14 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/home/rooms/{id}/threads/{threadId}/vote",
             post(clubs::vote_club_thread),
+        )
+        .route(
+            "/home/rooms/{id}/threads/{threadId}/comments/{commentId}",
+            delete(clubs::delete_club_comment),
+        )
+        .route(
+            "/home/rooms/{id}/threads/{threadId}/comments/{commentId}/vote",
+            post(clubs::vote_club_comment),
         )
         .route(
             "/home/rooms/{id}/members",
