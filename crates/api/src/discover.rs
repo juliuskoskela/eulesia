@@ -70,7 +70,7 @@ async fn explore(
         r"SELECT id, title, content, content_html, author_id, scope, reply_count, score, view_count,
                created_at, updated_at,
                (score * 0.3 + reply_count * 0.2 + view_count * 0.1 -
-                EXTRACT(EPOCH FROM (NOW() - created_at)) * 0.0001) AS cvs_score
+                EXTRACT(EPOCH FROM (NOW() - created_at)) * 0.0001)::float8 AS cvs_score
         FROM threads
         WHERE {where_clause}
         ORDER BY cvs_score DESC
