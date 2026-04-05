@@ -543,6 +543,11 @@ in {
                   proxyPass = v2Proxy;
                   proxyWebsockets = true;
                 };
+                # Socket.IO stays on v1 Node API (v2 uses native WS at /ws/v2)
+                "/socket.io/" = {
+                  proxyPass = apiProxy;
+                  proxyWebsockets = true;
+                };
                 "/uploads/" = {
                   proxyPass = apiProxy;
                 };
