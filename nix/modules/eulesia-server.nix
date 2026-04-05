@@ -180,6 +180,7 @@ in {
       wantedBy = ["multi-user.target"];
       after = ["postgresql.service"];
       requires = ["postgresql.service"];
+      path = [config.services.postgresql.package];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
