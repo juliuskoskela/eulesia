@@ -1,0 +1,60 @@
+import { test, expect, expectNoPageErrors } from "./fixtures/auth";
+
+const API_URL = process.env.PLAYWRIGHT_API_URL || "http://localhost:3001";
+
+test.describe("Direct Messages", () => {
+  test("user can start a conversation and send a message", async ({
+    authenticatedPage: page,
+  }) => {
+    // Get the second test user's ID via API
+    const ctx = await page.context();
+    const meRes = await ctx.request.get(`${API_URL}/api/v1/auth/me`);
+    expect(meRes.ok()).toBeTruthy();
+
+    // Search for the second test user
+    const searchRes = await ctx.request.get(
+      `${API_URL}/api/v1/search/users?q=e2e_testuser2&limit=1`,
+    );
+    expect(searchRes.ok()).toBeTruthy();
+    const searchData = await searchRes.json();
+    const users = searchData.data?.items ?? searchData.data ?? [];
+    expect(users.length).toBeGreaterThan(0);
+    const otherUserId = users[0].id;
+
+    // Start a DM conversation via API
+    const dmRes = await ctx.request.post(`${API_URL}/api/v1/dm`, {
+      data: { userId: otherUserId },
+    });
+    expect(dmRes.ok()).toBeTruthy();
+    const dmData = await dmRes.json();
+    const conversationId = dmData.data?.id ?? dmData.data?.conversationId;
+    expect(conversationId).toBeTruthy();
+
+    // Send a message via API
+    const msgRes = await ctx.request.post(
+      `${API_URL}/api/v1/dm/${conversationId}/messages`,
+      { data: { content: "Hello from e2e test!" } },
+    );
+    expect(msgRes.ok()).toBeTruthy();
+
+    // Navigate to the conversation page and verify the message renders
+    await page.goto(`/messages/${conversationId}`);
+    await expect(page.locator("main")).toBeVisible();
+
+    // The message text should appear on the page
+    await expect(page.getByText("Hello from e2e test!")).toBeVisible({
+      timeout: 10000,
+    });
+
+    expectNoPageErrors(page);
+  });
+
+  test("messages page loads for authenticated user", async ({
+    authenticatedPage: page,
+  }) => {
+    await page.goto("/messages");
+    await expect(page).toHaveURL(/messages/);
+    await expect(page.locator("main")).toBeVisible();
+    expectNoPageErrors(page);
+  });
+});

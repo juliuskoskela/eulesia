@@ -12,6 +12,12 @@ const TEST_USER = {
   inviteCode: process.env.E2E_INVITE_CODE || "E2ETEST",
 };
 
+const TEST_USER_2 = {
+  username: "e2e_testuser2",
+  password: "testpass123",
+  name: "E2E Test User 2",
+};
+
 const TEST_ADMIN = {
   username: "e2e_admin",
   password: "adminpass123",
@@ -90,11 +96,41 @@ async function setupAdminAuth(): Promise<void> {
   await ctx.dispose();
 }
 
+async function setupUser2Auth(): Promise<void> {
+  const ctx = await request.newContext({ baseURL: API_URL });
+
+  let res = await ctx.post("/api/v1/auth/login", {
+    data: { username: TEST_USER_2.username, password: TEST_USER_2.password },
+  });
+
+  if (!res.ok()) {
+    res = await ctx.post("/api/v1/auth/register", {
+      data: {
+        username: TEST_USER_2.username,
+        password: TEST_USER_2.password,
+        name: TEST_USER_2.name,
+      },
+    });
+    if (!res.ok()) {
+      const body = await res.text();
+      throw new Error(
+        `Failed to register test user 2: ${res.status()} ${body}`,
+      );
+    }
+  }
+
+  const storageState = await ctx.storageState();
+  const user2AuthPath = path.join(AUTH_DIR, "user2.json");
+  fs.writeFileSync(user2AuthPath, JSON.stringify(storageState, null, 2));
+  await ctx.dispose();
+}
+
 async function globalSetup(_config: FullConfig): Promise<void> {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
 
   await waitForApi();
   await setupUserAuth();
+  await setupUser2Auth();
   await setupAdminAuth();
 }
 
