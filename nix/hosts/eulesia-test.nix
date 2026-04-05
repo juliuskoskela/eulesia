@@ -278,8 +278,8 @@
       };
       idura = {
         enable = true;
-        domain = "eulesia.idura.broker";
-        clientId = "urn:my:application:identifier:524753";
+        domain = "eulesia-test.criipto.id";
+        clientId = "urn:my:application:identifier:923383";
         callbackUrl = "https://test.eulesia.org/api/v1/auth/ftn/callback";
         signingKeyFile = config.sops.secrets."idura-signing-key.jwk.json".path;
         encryptionKeyFile = config.sops.secrets."idura-encryption-key.jwk.json".path;
