@@ -12,6 +12,11 @@ with lib; let
   appUrl = "${urlScheme}://${cfg.appDomain}";
   apiUrl = "${urlScheme}://${cfg.apiDomain}";
   apiProxy = "http://${cfg.api.listenAddress}:${toString cfg.api.port}";
+  # When v2ServerPort is set, route /api/* traffic to v2 Rust server.
+  v2Proxy =
+    if cfg.v2ServerPort != null
+    then "http://127.0.0.1:${toString cfg.v2ServerPort}"
+    else null;
   ogBotRegex = "(facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|Slackbot|Discordbot|TelegramBot|Embedly|Pinterest|vkShare|Applebot|Googlebot|bingbot|Baiduspider|YandexBot|DuckDuckBot)";
 
   fileEnv = name: path:
@@ -142,6 +147,12 @@ in {
       type = types.str;
       default = "api.eulesia.org";
       description = "API domain.";
+    };
+
+    v2ServerPort = mkOption {
+      type = types.nullOr types.port;
+      default = null;
+      description = "When set, route /api/* traffic to the v2 Rust server on this port instead of v1 Node. Admin routes stay on v1.";
     };
 
     adminDomain = mkOption {
@@ -501,7 +512,10 @@ in {
               forceSSL = cfg.tls.enable;
               locations = {
                 "/" = {
-                  proxyPass = apiProxy;
+                  proxyPass =
+                    if v2Proxy != null
+                    then v2Proxy
+                    else apiProxy;
                   proxyWebsockets = true;
                 };
               };
@@ -519,7 +533,14 @@ in {
                   '';
                 };
                 "/api/" = {
-                  proxyPass = apiProxy;
+                  proxyPass =
+                    if v2Proxy != null
+                    then v2Proxy
+                    else apiProxy;
+                  proxyWebsockets = true;
+                };
+                "/ws/" = mkIf (v2Proxy != null) {
+                  proxyPass = v2Proxy;
                   proxyWebsockets = true;
                 };
                 "/uploads/" = {
@@ -532,7 +553,10 @@ in {
                   proxyPass = apiProxy;
                 };
                 "/health" = {
-                  proxyPass = apiProxy;
+                  proxyPass =
+                    if v2Proxy != null
+                    then v2Proxy
+                    else apiProxy;
                 };
                 "~ ^/(agora|clubs/|kunnat/|user/|aiheet)" = {
                   extraConfig = ''
