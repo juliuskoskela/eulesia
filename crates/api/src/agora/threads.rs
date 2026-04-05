@@ -365,10 +365,14 @@ pub async fn get_thread(
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "thread": thread_resp,
-        "comments": comment_resps,
-    })))
+    // Flatten: thread fields at top level + comments array.
+    // Frontend expects ThreadWithComments which extends Thread (flat).
+    let mut resp = serde_json::to_value(&thread_resp)
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    if let serde_json::Value::Object(ref mut map) = resp {
+        map.insert("comments".into(), serde_json::to_value(&comment_resps).unwrap_or_default());
+    }
+    Ok(Json(resp))
 }
 
 pub async fn create_thread(
