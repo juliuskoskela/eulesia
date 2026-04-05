@@ -47,7 +47,7 @@
     checks = {
       server-clippy = rustBuilds.clippy;
       server-test = rustBuilds.test;
-      server-fmt = rustBuilds.fmt;
+      # server-fmt removed — treefmt handles Rust formatting via the format check.
     };
 
     apps = {

@@ -87,6 +87,71 @@ in {
       default = true;
       description = "Set Secure flag on session cookies.";
     };
+
+    sessionSecretFile = mkOption {
+      type = types.nullOr types.path;
+      default = null;
+      description = "Path to file containing the session secret.";
+    };
+
+    sessionMaxAgeDays = mkOption {
+      type = types.int;
+      default = 30;
+      description = "Session cookie max age in days.";
+    };
+
+    meilisearch = {
+      url = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Meilisearch URL.";
+      };
+      masterKeyFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = "Path to Meilisearch master key file.";
+      };
+    };
+
+    uploadDir = mkOption {
+      type = types.str;
+      default = "/var/lib/eulesia/uploads";
+      description = "Directory for file uploads.";
+    };
+
+    idura = {
+      enable = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Enable Idura FTN authentication.";
+      };
+      domain = mkOption {
+        type = types.str;
+        default = "";
+      };
+      clientId = mkOption {
+        type = types.str;
+        default = "";
+      };
+      callbackUrl = mkOption {
+        type = types.str;
+        default = "";
+      };
+      signingKeyFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+      };
+      encryptionKeyFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+      };
+    };
+
+    extraEnvironment = mkOption {
+      type = types.attrsOf types.str;
+      default = {};
+      description = "Extra environment variables for the v2 server.";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -115,6 +180,7 @@ in {
       wantedBy = ["multi-user.target"];
       after = ["postgresql.service"];
       requires = ["postgresql.service"];
+      path = [config.services.postgresql.package];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -151,19 +217,46 @@ in {
             if cfg.cookieSecure
             then "true"
             else "";
+          EULESIA_SESSION_MAX_AGE_DAYS = toString cfg.sessionMaxAgeDays;
+          UPLOAD_DIR = cfg.uploadDir;
         }
         // optionalAttrs (cfg.cookieDomain != null) {
           EULESIA_COOKIE_DOMAIN = cfg.cookieDomain;
-        };
+        }
+        // optionalAttrs (cfg.meilisearch.url != null) {
+          MEILI_URL = cfg.meilisearch.url;
+        }
+        // optionalAttrs cfg.idura.enable {
+          IDURA_DOMAIN = cfg.idura.domain;
+          IDURA_CLIENT_ID = cfg.idura.clientId;
+          IDURA_CALLBACK_URL = cfg.idura.callbackUrl;
+        }
+        // cfg.extraEnvironment;
 
       serviceConfig = {
         Type = "simple";
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${cfg.package}/bin/eulesia-server";
         Restart = "on-failure";
         RestartSec = 5;
+        StateDirectory = "eulesia";
       };
+
+      # Load secrets from files into environment variables at startup,
+      # then exec the server binary.
+      script = let
+        readSecret = file: var: ''
+          if [ -f "${file}" ]; then
+            export ${var}="$(cat "${file}")"
+          fi
+        '';
+      in ''
+        ${optionalString (cfg.sessionSecretFile != null) (readSecret cfg.sessionSecretFile "EULESIA_SESSION_SECRET")}
+        ${optionalString (cfg.meilisearch.masterKeyFile != null) (readSecret cfg.meilisearch.masterKeyFile "MEILI_API_KEY")}
+        ${optionalString (cfg.idura.enable && cfg.idura.signingKeyFile != null) "export IDURA_SIGNING_KEY_FILE=\"${cfg.idura.signingKeyFile}\""}
+        ${optionalString (cfg.idura.enable && cfg.idura.encryptionKeyFile != null) "export IDURA_ENCRYPTION_KEY_FILE=\"${cfg.idura.encryptionKeyFile}\""}
+        exec ${cfg.package}/bin/eulesia-server
+      '';
     };
   };
 }

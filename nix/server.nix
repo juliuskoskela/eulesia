@@ -1,6 +1,7 @@
 {
   craneLib,
   src,
+  pkgs,
   ...
 }: let
   commonArgs = {
@@ -8,6 +9,9 @@
     pname = "eulesia-server";
     version = "0.1.0";
     strictDeps = true;
+    # josekit depends on openssl-sys for JWE/JWT crypto
+    nativeBuildInputs = [pkgs.pkg-config];
+    buildInputs = [pkgs.openssl];
   };
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;

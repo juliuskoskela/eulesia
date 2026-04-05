@@ -1,7 +1,7 @@
 //! Rooms — private discussion spaces exposed under /home/*.
 //!
-//! Returns room-shaped responses matching the frontend's HomeData,
-//! RoomWithThreads, and RoomThreadWithComments contracts.
+//! Returns room-shaped responses matching the frontend's `HomeData`,
+//! `RoomWithThreads`, and `RoomThreadWithComments` contracts.
 
 use axum::extract::{Path, State};
 use axum::routing::{delete, get, post};
@@ -19,6 +19,7 @@ use eulesia_common::error::ApiError;
 use eulesia_common::types::new_id;
 use eulesia_db::entities::{club_invitations, club_members, clubs, threads};
 
+#[allow(clippy::needless_pass_by_value)]
 fn db_err(e: sea_orm::DbErr) -> ApiError {
     ApiError::Database(e.to_string())
 }
@@ -427,20 +428,20 @@ async fn room_invitations(
         .into_iter()
         .filter_map(|inv| {
             let club = private_clubs.get(&inv.club_id)?;
-            let inviter = inviter_map
-                .get(&inv.invited_by)
-                .map(|u| UserSummary {
-                    id: u.id,
-                    name: u.name.clone(),
-                    avatar_url: u.avatar_url.clone(),
-                    role: u.role.clone(),
-                })
-                .unwrap_or(UserSummary {
+            let inviter = inviter_map.get(&inv.invited_by).map_or_else(
+                || UserSummary {
                     id: inv.invited_by,
                     name: "Unknown".into(),
                     avatar_url: None,
                     role: "citizen".into(),
-                });
+                },
+                |u| UserSummary {
+                    id: u.id,
+                    name: u.name.clone(),
+                    avatar_url: u.avatar_url.clone(),
+                    role: u.role.clone(),
+                },
+            );
             Some(RoomInvitationWithDetails {
                 id: inv.id,
                 room_id: inv.club_id,

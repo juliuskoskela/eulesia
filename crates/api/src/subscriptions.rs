@@ -24,6 +24,7 @@ struct SubscribeRequest {
     notify: Option<String>,
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn default_notify() -> Option<String> {
     Some("all".into())
 }
@@ -53,7 +54,7 @@ struct FeedParams {
     offset: u64,
 }
 
-fn default_limit() -> u64 {
+const fn default_limit() -> u64 {
     20
 }
 
@@ -96,7 +97,7 @@ async fn subscribe(
     }))
 }
 
-/// DELETE /subscriptions/{entity_type}/{entity_id}
+/// DELETE `/subscriptions/{entity_type}/{entity_id}`
 async fn unsubscribe(
     auth: AuthUser,
     State(state): State<AppState>,
@@ -130,7 +131,7 @@ async fn list_subscriptions(
     Ok(Json(data))
 }
 
-/// GET /subscriptions/check/{entity_type}/{entity_id}
+/// GET `/subscriptions/check/{entity_type}/{entity_id}`
 async fn check_subscription(
     auth: AuthUser,
     State(state): State<AppState>,

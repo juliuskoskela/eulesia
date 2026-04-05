@@ -32,6 +32,7 @@ pub struct LoginRequest {
 }
 
 impl AuthService {
+    #[allow(clippy::too_many_lines)]
     pub async fn register(
         db: &DatabaseConnection,
         req: RegisterRequest,

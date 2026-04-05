@@ -3,12 +3,10 @@
 //! Implements the OIDC authorization code flow with:
 //! - Signed request objects (JAR) for the authorize endpoint
 //! - Private-key JWT client assertion for the token endpoint
-//! - JWE-encrypted id_token decryption + inner JWT verification
+//! - JWE-encrypted `id_token` decryption + inner JWT verification
 //!
 //! The flow stores short-lived OIDC state in the DB (replaces
 //! express-session from the Node implementation).
-
-use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::{Query, State};
@@ -73,7 +71,7 @@ impl FtnConfig {
         })
     }
 
-    pub fn is_enabled(&self) -> bool {
+    pub const fn is_enabled(&self) -> bool {
         !self.domain.is_empty() && !self.client_id.is_empty()
     }
 }
@@ -100,6 +98,7 @@ struct DiscoveryDocument {
     issuer: String,
     authorization_endpoint: String,
     token_endpoint: String,
+    #[allow(dead_code)]
     jwks_uri: String,
 }
 
@@ -137,7 +136,7 @@ fn create_signed_request_object(
     payload.set_audience(vec![&discovery.issuer]);
     payload.set_issued_at(&now);
     payload.set_expires_at(&expires);
-    payload.set_jwt_id(&Uuid::now_v7().to_string());
+    payload.set_jwt_id(Uuid::now_v7().to_string());
     payload
         .set_claim("response_type", Some("code".into()))
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -186,7 +185,7 @@ fn create_client_assertion(config: &FtnConfig, audience: &str) -> Result<String,
     payload.set_audience(vec![audience]);
     payload.set_issued_at(&now);
     payload.set_expires_at(&expires);
-    payload.set_jwt_id(&Uuid::now_v7().to_string());
+    payload.set_jwt_id(Uuid::now_v7().to_string());
 
     sign_jwt(&config.signing_key, &alg, &payload, &header)
 }
@@ -338,10 +337,9 @@ fn decrypt_and_verify_id_token(
 fn normalize_name(name: &str) -> String {
     if name.chars().all(|c| c.is_uppercase() || !c.is_alphabetic()) {
         let mut chars = name.chars();
-        match chars.next() {
-            None => String::new(),
-            Some(first) => first.to_uppercase().to_string() + &chars.as_str().to_lowercase(),
-        }
+        chars.next().map_or_else(String::new, |first| {
+            first.to_uppercase().to_string() + &chars.as_str().to_lowercase()
+        })
     } else {
         name.to_string()
     }
@@ -462,10 +460,13 @@ async fn ftn_start(
 }
 
 /// GET /auth/ftn/callback — handle Idura redirect
+#[allow(clippy::too_many_lines)]
 async fn ftn_callback(
     State(state): State<AppState>,
     Query(query): Query<FtnCallbackQuery>,
 ) -> Result<Response, ApiError> {
+    use eulesia_db::entities::users;
+
     let ftn_config = state
         .ftn_config
         .as_ref()
@@ -547,7 +548,6 @@ async fn ftn_callback(
     };
 
     // Check for duplicate identity
-    use eulesia_db::entities::users;
     let existing = users::Entity::find()
         .filter(users::Column::RpSubject.eq(&claims.sub))
         .one(&*state.db)
@@ -573,7 +573,7 @@ async fn ftn_callback(
         given_name: Set(claims.given_name.clone()),
         family_name: Set(claims.family_name.clone()),
         sub: Set(claims.sub),
-        country: Set(claims.country.or(Some("FI".into()))),
+        country: Set(claims.country.or_else(|| Some("FI".into()))),
         invite_code: Set(stored.invite_code),
         expires_at: Set(now + chrono::Duration::minutes(15)),
         created_at: Set(now),
@@ -599,8 +599,7 @@ async fn ftn_error(State(state): State<AppState>) -> Response {
     let frontend_url = state
         .ftn_config
         .as_ref()
-        .map(|c| c.frontend_url.as_str())
-        .unwrap_or("http://localhost:5173");
+        .map_or("http://localhost:5173", |c| c.frontend_url.as_str());
 
     Redirect::temporary(&format!("{frontend_url}/register?ftn_error=ftn_failed")).into_response()
 }

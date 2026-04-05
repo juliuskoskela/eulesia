@@ -200,6 +200,7 @@ pub struct ClubThreadListParams {
 // Helpers
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::needless_pass_by_value)]
 fn db_err(e: DbErr) -> ApiError {
     ApiError::Database(e.to_string())
 }

@@ -191,7 +191,9 @@ pub async fn list_threads(
     State(state): State<AppState>,
     Query(params): Query<ThreadListParams>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
-    if let Some(ref scope) = params.scope {
+    // "all" means no scope filter (v1 compat)
+    let scope_filter = params.scope.as_deref().filter(|s| *s != "all");
+    if let Some(scope) = scope_filter {
         validate_scope(scope)?;
     }
 
@@ -219,7 +221,7 @@ pub async fn list_threads(
 
     let (threads, total) = ThreadRepo::list(
         &state.db,
-        params.scope.as_deref(),
+        scope_filter,
         params.municipality_id,
         None,
         tag_ids.as_deref(),
@@ -472,6 +474,7 @@ pub async fn create_thread(
     }))
 }
 
+#[allow(clippy::too_many_lines)]
 pub async fn update_thread(
     auth: AuthUser,
     State(state): State<AppState>,

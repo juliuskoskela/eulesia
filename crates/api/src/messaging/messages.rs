@@ -426,6 +426,8 @@ pub async fn edit_message(
     Path((conversation_id, message_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<EditMessageRequest>,
 ) -> Result<Json<MessageResponse>, ApiError> {
+    use sea_orm::ActiveModelTrait;
+
     let conv = ConversationRepo::find_by_id(&state.db, conversation_id)
         .await
         .map_err(db_err)?
@@ -457,7 +459,6 @@ pub async fn edit_message(
     }
 
     // Update content
-    use sea_orm::ActiveModelTrait;
     let mut am: messages::ActiveModel = msg.into();
     am.ciphertext = Set(Some(req.content.as_bytes().to_vec()));
     let updated = am.update(&*state.db).await.map_err(db_err)?;
@@ -480,6 +481,9 @@ pub async fn delete_message(
     State(state): State<AppState>,
     Path((conversation_id, message_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    use eulesia_db::entities::message_redactions;
+    use sea_orm::ActiveModelTrait;
+
     // Verify membership
     MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
         .await
@@ -499,8 +503,6 @@ pub async fn delete_message(
     }
 
     // Soft-delete via message_redactions
-    use eulesia_db::entities::message_redactions;
-    use sea_orm::ActiveModelTrait;
     let now = chrono::Utc::now().fixed_offset();
     message_redactions::ActiveModel {
         message_id: Set(message_id),
@@ -524,6 +526,8 @@ pub async fn mark_read(
     State(state): State<AppState>,
     Path(conversation_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+
     // Verify membership
     MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
         .await
@@ -532,7 +536,6 @@ pub async fn mark_read(
 
     // Update membership last_read_at via raw SQL (column may not exist yet —
     // this is a forward-compatible placeholder that silently succeeds).
-    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
     let _ = state
         .db
         .execute(Statement::from_sql_and_values(

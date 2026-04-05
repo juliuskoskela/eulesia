@@ -3,14 +3,20 @@ _: {
     config,
     pkgs,
     ...
-  }: {
+  }: let
+    # Use the same Rust toolchain as the server build so rustfmt output matches.
+    rustToolchain = pkgs.rust-bin.stable.latest.default;
+  in {
     treefmt = {
       projectRootFile = "flake.nix";
 
       programs = {
         alejandra.enable = true;
         prettier.enable = true;
-        rustfmt.enable = true;
+        rustfmt = {
+          enable = true;
+          package = rustToolchain;
+        };
         shfmt.enable = true;
       };
 

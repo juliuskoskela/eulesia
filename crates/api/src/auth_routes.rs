@@ -19,6 +19,7 @@ use eulesia_db::repo::users::UserRepo;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
 struct UserProfile {
     id: Id,
     username: String,
@@ -247,6 +248,8 @@ async fn verify_magic_link(
     Path(token): Path<String>,
     jar: CookieJar,
 ) -> Result<Response, ApiError> {
+    use eulesia_db::entities::users;
+
     let token_hash = sha256_hex(&token);
 
     // Atomically consume the magic link in a single UPDATE … RETURNING
@@ -266,54 +269,52 @@ async fn verify_magic_link(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     // Find or create user by email
-    let user = match UserRepo::find_by_email(&state.db, &email)
+    let user = if let Some(u) = UserRepo::find_by_email(&state.db, &email)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?
     {
-        Some(u) => u,
-        None => {
-            // Auto-create account from magic link
-            let username = format!(
-                "{}_{}",
-                email.split('@').next().unwrap_or("user"),
-                &Uuid::now_v7().to_string()[..4]
-            );
-            let id = eulesia_common::types::new_id();
-            let user_now = chrono::Utc::now().fixed_offset();
-            use eulesia_db::entities::users;
-            users::ActiveModel {
-                id: Set(id),
-                username: Set(username),
-                email: Set(Some(email.clone())),
-                password_hash: Set(None),
-                name: Set(email.split('@').next().unwrap_or("User").to_string()),
-                avatar_url: Set(None),
-                bio: Set(None),
-                role: Set("citizen".into()),
-                institution_type: Set(None),
-                institution_name: Set(None),
-                identity_verified: Set(false),
-                identity_provider: Set(Some("magic_link".into())),
-                identity_level: Set("basic".into()),
-                identity_issuer: Set(None),
-                identity_verified_at: Set(None),
-                verified_name: Set(None),
-                rp_subject: Set(None),
-                municipality_id: Set(None),
-                locale: Set("fi".into()),
-                notification_replies: Set(true),
-                notification_mentions: Set(true),
-                notification_official: Set(true),
-                onboarding_completed_at: Set(None),
-                deleted_at: Set(None),
-                created_at: Set(user_now),
-                updated_at: Set(user_now),
-                last_seen_at: Set(None),
-            }
-            .insert(&*state.db)
-            .await
-            .map_err(|e| ApiError::Database(format!("create user: {e}")))?
+        u
+    } else {
+        // Auto-create account from magic link
+        let username = format!(
+            "{}_{}",
+            email.split('@').next().unwrap_or("user"),
+            &Uuid::now_v7().to_string()[..4]
+        );
+        let id = eulesia_common::types::new_id();
+        let user_now = chrono::Utc::now().fixed_offset();
+        users::ActiveModel {
+            id: Set(id),
+            username: Set(username),
+            email: Set(Some(email.clone())),
+            password_hash: Set(None),
+            name: Set(email.split('@').next().unwrap_or("User").to_string()),
+            avatar_url: Set(None),
+            bio: Set(None),
+            role: Set("citizen".into()),
+            institution_type: Set(None),
+            institution_name: Set(None),
+            identity_verified: Set(false),
+            identity_provider: Set(Some("magic_link".into())),
+            identity_level: Set("basic".into()),
+            identity_issuer: Set(None),
+            identity_verified_at: Set(None),
+            verified_name: Set(None),
+            rp_subject: Set(None),
+            municipality_id: Set(None),
+            locale: Set("fi".into()),
+            notification_replies: Set(true),
+            notification_mentions: Set(true),
+            notification_official: Set(true),
+            onboarding_completed_at: Set(None),
+            deleted_at: Set(None),
+            created_at: Set(user_now),
+            updated_at: Set(user_now),
+            last_seen_at: Set(None),
         }
+        .insert(&*state.db)
+        .await
+        .map_err(|e| ApiError::Database(format!("create user: {e}")))?
     };
 
     // Create session
@@ -334,8 +335,9 @@ async fn verify_magic_link(
     let frontend_url = state
         .ftn_config
         .as_ref()
-        .map(|c| c.frontend_url.as_str())
-        .unwrap_or(&state.config.frontend_origin);
+        .map_or(state.config.frontend_origin.as_str(), |c| {
+            c.frontend_url.as_str()
+        });
 
     // Jar must be in the response for the cookie to be set
     Ok((
@@ -383,6 +385,8 @@ async fn change_password(
     State(state): State<AppState>,
     Json(req): Json<ChangePasswordRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    use eulesia_db::entities::users;
+
     if req.new_password.len() < 6 {
         return Err(ApiError::BadRequest(
             "password must be at least 6 characters".into(),
@@ -421,7 +425,6 @@ async fn change_password(
     .to_string();
 
     // Update password
-    use eulesia_db::entities::users;
     let mut active: users::ActiveModel = user.into();
     active.password_hash = Set(Some(new_hash));
     active.updated_at = Set(chrono::Utc::now().fixed_offset());

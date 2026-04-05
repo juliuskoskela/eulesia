@@ -228,7 +228,7 @@ async fn get_location(
 
 /// GET /locations/osm/{osmType}/{osmId} — OSM lookup.
 ///
-/// Tries local DB first (by osm_id + osm_type), falls back to Nominatim reverse lookup.
+/// Tries local DB first (by `osm_id` + `osm_type`), falls back to Nominatim reverse lookup.
 async fn osm_lookup(
     State(state): State<AppState>,
     Path((osm_type, osm_id)): Path<(String, i64)>,
