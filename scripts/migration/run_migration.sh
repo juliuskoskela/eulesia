@@ -280,9 +280,12 @@ v2_sql <<'EOSQL'
 INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id,
     report_id, reason, metadata, created_at)
 SELECT * FROM dblink('dbname=eulesia',
-  'SELECT id, admin_user_id, action_type::text, target_type::text, target_id,
-    report_id, reason, metadata, created_at
-  FROM moderation_actions')
+  'SELECT ma.id, ma.admin_user_id, ma.action_type::text, ma.target_type::text, ma.target_id,
+    CASE WHEN cr.id IS NOT NULL THEN ma.report_id ELSE NULL END,
+    ma.reason, ma.metadata, ma.created_at
+  FROM moderation_actions ma
+  LEFT JOIN content_reports cr ON ma.report_id = cr.id
+    AND cr.content_type::text NOT IN (''club_thread'', ''club_comment'', ''club'', ''room_message'')')
 AS t(id uuid, admin_id uuid, action_type varchar, target_type varchar, target_id uuid,
     report_id uuid, reason text, metadata jsonb, created_at timestamptz)
 ON CONFLICT DO NOTHING;
@@ -306,10 +309,14 @@ v2_sql <<'EOSQL'
 INSERT INTO moderation_appeals (id, user_id, sanction_id, report_id, action_id,
     reason, status, admin_response, responded_by, responded_at, created_at)
 SELECT * FROM dblink('dbname=eulesia',
-  'SELECT id, user_id, sanction_id, report_id, action_id,
-    reason, COALESCE(status::text, ''pending''), admin_response,
-    responded_by, responded_at, created_at
-  FROM moderation_appeals')
+  'SELECT ap.id, ap.user_id, ap.sanction_id,
+    CASE WHEN cr.id IS NOT NULL THEN ap.report_id ELSE NULL END,
+    ap.action_id,
+    ap.reason, COALESCE(ap.status::text, ''pending''), ap.admin_response,
+    ap.responded_by, ap.responded_at, ap.created_at
+  FROM moderation_appeals ap
+  LEFT JOIN content_reports cr ON ap.report_id = cr.id
+    AND cr.content_type::text NOT IN (''club_thread'', ''club_comment'', ''club'', ''room_message'')')
 AS t(id uuid, user_id uuid, sanction_id uuid, report_id uuid, action_id uuid,
     reason text, status varchar, admin_response text, responded_by uuid,
     responded_at timestamptz, created_at timestamptz)
@@ -328,7 +335,9 @@ echo "=== Phase 5: Notifications ==="
 v2_sql <<'EOSQL'
 INSERT INTO notifications (id, user_id, event_type, title, body, link, read, created_at)
 SELECT * FROM dblink('dbname=eulesia',
-  'SELECT id, user_id, type, title, body, link, COALESCE(read, false), created_at
+  'SELECT id, user_id,
+    CASE WHEN type = ''dm'' THEN ''message'' ELSE type END,
+    title, body, link, COALESCE(read, false), created_at
   FROM notifications')
 AS t(id uuid, user_id uuid, event_type varchar, title varchar, body text,
     link varchar, read bool, created_at timestamptz)
@@ -413,7 +422,7 @@ INSERT INTO messages (id, conversation_id, sender_id, sender_device_id, epoch,
     ciphertext, message_type, server_ts)
 SELECT * FROM dblink('dbname=eulesia',
   'SELECT id, conversation_id, author_id, NULL::uuid, 0::bigint,
-    NULL::bytea, ''text'', created_at
+    ''''::bytea, ''text'', created_at
   FROM direct_messages WHERE is_hidden = true')
 AS t(id uuid, conversation_id uuid, sender_id uuid, sender_device_id uuid,
     epoch bigint, ciphertext bytea, message_type varchar, server_ts timestamptz)
