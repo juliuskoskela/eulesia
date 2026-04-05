@@ -22,6 +22,30 @@ use super::types::{
     MemberSummary, UpdateConversationRequest,
 };
 
+/// v1-compatible request: frontend sends `{ "userId": "..." }`.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CreateDmV1Request {
+    user_id: Uuid,
+}
+
+/// v1-compatible DM creation: accepts `{ "userId": "..." }` and
+/// translates to the v2 `CreateConversationRequest` shape.
+pub async fn create_dm_v1(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<CreateDmV1Request>,
+) -> Result<Json<ConversationResponse>, ApiError> {
+    let v2_req = CreateConversationRequest {
+        conversation_type: ConversationType::Direct,
+        encryption: None,
+        name: None,
+        description: None,
+        members: vec![req.user_id],
+    };
+    create_direct(auth.user_id.0, &state, &v2_req).await
+}
+
 #[allow(clippy::needless_pass_by_value)]
 fn db_err(e: sea_orm::DbErr) -> ApiError {
     ApiError::Database(e.to_string())
