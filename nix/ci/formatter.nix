@@ -25,9 +25,7 @@ _: {
           excludes = [
             ".git/*"
             "node_modules/*"
-            "apps/api/node_modules/*"
             "dist/*"
-            "apps/api/dist/*"
             "result*"
             "flake.lock"
             "Cargo.lock"

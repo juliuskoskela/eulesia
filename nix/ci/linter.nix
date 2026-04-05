@@ -100,34 +100,13 @@ _: {
       '';
     };
 
-    lintApi = pkgs.writeShellApplication {
-      name = "lint-api";
-      runtimeInputs = with pkgs; [
-        nodejs
-        pnpm_10
-        python3
-        pkg-config
-        vips
-        libargon2
-      ];
-      text = ''
-        set -euo pipefail
-        ${shellFunctions}
-        ensure_dependencies
-        pnpm run lint:api:fix
-        pnpm run lint:api
-        pnpm run typecheck:api
-      '';
-    };
-
     lint = pkgs.writeShellApplication {
       name = "lint";
-      runtimeInputs = [lintNix lintFrontend lintApi];
+      runtimeInputs = [lintNix lintFrontend];
       text = ''
         set -euo pipefail
         lint-nix
         lint-frontend
-        lint-api
       '';
     };
 
@@ -149,31 +128,12 @@ _: {
       '';
     };
 
-    testApi = pkgs.writeShellApplication {
-      name = "test-api";
-      runtimeInputs = with pkgs; [
-        nodejs
-        pnpm_10
-        python3
-        pkg-config
-        vips
-        libargon2
-      ];
-      text = ''
-        set -euo pipefail
-        ${shellFunctions}
-        ensure_dependencies
-        pnpm run test:api:run
-      '';
-    };
-
     test = pkgs.writeShellApplication {
       name = "eulesia-test";
-      runtimeInputs = [testFrontend testApi];
+      runtimeInputs = [testFrontend];
       text = ''
         set -euo pipefail
         test-frontend
-        test-api
       '';
     };
 
@@ -186,7 +146,7 @@ _: {
         check-format
         lint
         eulesia-test
-        nix build .#frontend .#api .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
+        nix build .#frontend .#server .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
       '';
     };
   in {
@@ -219,15 +179,6 @@ _: {
           language = "system";
           pass_filenames = false;
         };
-
-        lint-api = {
-          enable = true;
-          name = "lint-api";
-          description = "Run API ESLint and type checking";
-          entry = "${lintApi}/bin/lint-api";
-          language = "system";
-          pass_filenames = false;
-        };
       };
     };
 
@@ -236,10 +187,8 @@ _: {
       check-format = checkFormat;
       lint-nix = lintNix;
       lint-frontend = lintFrontend;
-      lint-api = lintApi;
       inherit lint test;
       test-frontend = testFrontend;
-      test-api = testApi;
       ci-check = ciCheck;
     };
 
@@ -257,12 +206,12 @@ _: {
       lint = {
         type = "app";
         program = "${lint}/bin/lint";
-        meta.description = "Run Nix, frontend, and API lint/typecheck commands";
+        meta.description = "Run Nix and frontend lint/typecheck commands";
       };
       test = {
         type = "app";
         program = "${test}/bin/eulesia-test";
-        meta.description = "Run frontend and API test suites";
+        meta.description = "Run frontend test suite";
       };
       ci-check = {
         type = "app";

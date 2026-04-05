@@ -12,9 +12,6 @@ dev-api:
 dev-web:
     nix run .#dev-web
 
-db-migrate:
-    nix run .#db-migrate
-
 db-reset:
     nix run .#db-reset
 
@@ -38,9 +35,6 @@ test-e2e-ui:
 
 build:
     nix build .#build
-
-build-api:
-    nix build .#api
 
 build-web:
     nix build .#frontend

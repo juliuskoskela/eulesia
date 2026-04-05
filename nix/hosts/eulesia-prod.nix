@@ -249,7 +249,6 @@
 
     eulesia = {
       enable = true;
-      package = eulesiaPackages.api;
       frontendPackage = eulesiaPackages.frontend;
       appDomain = "eulesia.org";
       apiDomain = "api.eulesia.org";
@@ -299,11 +298,9 @@
         APP_URL = "https://eulesia.org";
         API_URL = "https://eulesia.org";
       };
-      # Route /api/* to v2 Rust server
-      v2ServerPort = 3002;
     };
 
-    # v2 Rust server
+    # Rust API server — sole backend for all /api/* traffic
     eulesia-server = {
       enable = true;
       package = eulesiaPackages.server;

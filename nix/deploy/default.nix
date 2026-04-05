@@ -117,16 +117,16 @@
 
         report_vm_status() {
           "$SSH_BIN" "''${SSH_OPTS[@]}" root@localhost \
-            "systemctl --no-pager --full status postgresql.service nginx.service meilisearch.service eulesia-api.service || true"
+            "systemctl --no-pager --full status postgresql.service nginx.service meilisearch.service eulesia-server.service || true"
           "$SSH_BIN" "''${SSH_OPTS[@]}" root@localhost \
-            "journalctl -u meilisearch.service -u eulesia-api.service -n 80 --no-pager || true"
+            "journalctl -u meilisearch.service -u eulesia-server.service -n 80 --no-pager || true"
         }
 
         wait_for_vm_readiness() {
           wait_for_remote_service postgresql.service
           wait_for_remote_service nginx.service
           wait_for_remote_service meilisearch.service
-          wait_for_remote_service eulesia-api.service
+          wait_for_remote_service eulesia-server.service
           wait_for_database
           wait_for_local_http "Meilisearch" "http://localhost:17701/health"
           wait_for_local_http "API" "http://localhost:18080/api/v1/health"
@@ -342,16 +342,16 @@
 
         report_vm_status() {
           "$SSH_BIN" "''${SSH_OPTS[@]}" root@localhost \
-            "systemctl --no-pager --full status postgresql.service nginx.service meilisearch.service eulesia-api.service || true"
+            "systemctl --no-pager --full status postgresql.service nginx.service meilisearch.service eulesia-server.service || true"
           "$SSH_BIN" "''${SSH_OPTS[@]}" root@localhost \
-            "journalctl -u meilisearch.service -u eulesia-api.service -n 80 --no-pager || true"
+            "journalctl -u meilisearch.service -u eulesia-server.service -n 80 --no-pager || true"
         }
 
         wait_for_vm_readiness() {
           wait_for_remote_service postgresql.service
           wait_for_remote_service nginx.service
           wait_for_remote_service meilisearch.service
-          wait_for_remote_service eulesia-api.service
+          wait_for_remote_service eulesia-server.service
           wait_for_database
           wait_for_local_http "Meilisearch" "http://localhost:17701/health"
           wait_for_local_http "API" "http://localhost:18080/api/v1/health"
