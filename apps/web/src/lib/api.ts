@@ -2,6 +2,26 @@ import { API_BASE_URL } from "./runtimeConfig";
 
 const API_URL = API_BASE_URL;
 
+type UnauthorizedHandler = (() => void) | null;
+
+let unauthorizedHandler: UnauthorizedHandler = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler) {
+  unauthorizedHandler = handler;
+}
+
+function shouldHandleUnauthorized(endpoint: string): boolean {
+  if (endpoint === "/auth/me" || endpoint === "/auth/logout") {
+    return true;
+  }
+
+  if (endpoint.startsWith("/auth/") || endpoint.startsWith("/admin/auth/")) {
+    return false;
+  }
+
+  return true;
+}
+
 interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -53,6 +73,10 @@ class ApiClient {
       },
       credentials: "include", // Include cookies
     });
+
+    if (response.status === 401 && shouldHandleUnauthorized(endpoint)) {
+      queueMicrotask(() => unauthorizedHandler?.());
+    }
 
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {

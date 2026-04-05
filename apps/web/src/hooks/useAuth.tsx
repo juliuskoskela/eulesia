@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import i18n from "../lib/i18n";
-import { api } from "../lib/api";
+import { api, setUnauthorizedHandler } from "../lib/api";
 import type { RegisterRequest, User } from "../lib/api";
 
 interface SanctionInfo {
@@ -38,6 +38,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sanction, setSanction] = useState<SanctionInfo | null>(null);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+      setSanction(null);
+      queryClient.clear();
+    });
+
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, [queryClient]);
 
   const checkAuth = useCallback(async () => {
     try {
