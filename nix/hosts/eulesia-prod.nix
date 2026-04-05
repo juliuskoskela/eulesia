@@ -9,6 +9,7 @@
     ./lib/hetzner-cloud-hardware.nix
     ./eulesia-prod-disks.nix
     ../modules/eulesia.nix
+    ../modules/eulesia-server.nix
   ];
 
   # Keep store clean — 3 generations in GRUB, weekly GC
@@ -293,6 +294,36 @@
         # Native push stays disabled on prod until a real Firebase service
         # account is provisioned and the host secret set is extended again.
         firebaseServiceAccountKeyFile = null;
+      };
+      extraEnvironment = {
+        APP_URL = "https://eulesia.org";
+        API_URL = "https://eulesia.org";
+      };
+      # Route /api/* to v2 Rust server
+      v2ServerPort = 3002;
+    };
+
+    # v2 Rust server
+    eulesia-server = {
+      enable = true;
+      package = eulesiaPackages.server;
+      frontendOrigin = "https://eulesia.org";
+      cookieDomain = ".eulesia.org";
+      cookieSecure = true;
+      sessionSecretFile = config.sops.secrets."session-secret".path;
+      meilisearch = {
+        url = "http://127.0.0.1:7700";
+        masterKeyFile = config.sops.secrets."meili-master-key".path;
+      };
+      idura = {
+        enable = true;
+        domain = "eulesia.idura.broker";
+        clientId = "urn:my:application:identifier:524753";
+        callbackUrl = "https://eulesia.org/api/v1/auth/ftn/callback";
+        signingKeyFile =
+          config.sops.secrets."idura-signing-key.jwk.json".path;
+        encryptionKeyFile =
+          config.sops.secrets."idura-encryption-key.jwk.json".path;
       };
       extraEnvironment = {
         APP_URL = "https://eulesia.org";
