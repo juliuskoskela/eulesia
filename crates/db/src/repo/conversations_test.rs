@@ -40,6 +40,7 @@ mod tests {
             left_at: None,
             removed_by: None,
             created_at: now(),
+            last_read_at: None,
         }
     }
 
