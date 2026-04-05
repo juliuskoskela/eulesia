@@ -526,7 +526,8 @@ pub async fn mark_read(
     State(state): State<AppState>,
     Path(conversation_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+    use eulesia_db::entities::memberships;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, prelude::Expr};
 
     // Verify membership
     MembershipRepo::find_active(&*state.db, conversation_id, auth.user_id.0)
@@ -534,16 +535,18 @@ pub async fn mark_read(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    // Update membership last_read_at via raw SQL (column may not exist yet —
-    // this is a forward-compatible placeholder that silently succeeds).
-    let _ = state
-        .db
-        .execute(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            "UPDATE memberships SET updated_at = NOW() WHERE conversation_id = $1 AND user_id = $2",
-            [conversation_id.into(), auth.user_id.0.into()],
-        ))
-        .await;
+    // Set last_read_at = NOW() on the caller's active membership row.
+    memberships::Entity::update_many()
+        .filter(memberships::Column::ConversationId.eq(conversation_id))
+        .filter(memberships::Column::UserId.eq(auth.user_id.0))
+        .filter(memberships::Column::LeftAt.is_null())
+        .col_expr(
+            memberships::Column::LastReadAt,
+            Expr::current_timestamp().into(),
+        )
+        .exec(&*state.db)
+        .await
+        .map_err(db_err)?;
 
     Ok(Json(serde_json::json!({ "read": true })))
 }

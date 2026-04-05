@@ -13,6 +13,7 @@ pub struct Model {
     pub left_at: Option<DateTimeWithTimeZone>,
     pub removed_by: Option<Uuid>,
     pub created_at: DateTimeWithTimeZone,
+    pub last_read_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

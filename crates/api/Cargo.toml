@@ -35,6 +35,10 @@ tower = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[features]
+ts = ["dep:ts-rs", "eulesia-common/ts"]
 
 [dev-dependencies]
 axum-test = "17"

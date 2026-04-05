@@ -1,4 +1,5 @@
-mod agora;
+mod admin;
+pub mod agora;
 mod announcements;
 mod auth_routes;
 mod bookmarks;
@@ -11,7 +12,7 @@ mod institutions;
 mod link_preview;
 mod locations;
 mod map;
-mod messaging;
+pub mod messaging;
 pub mod moderation;
 mod notifications;
 mod response_wrapper;
@@ -27,6 +28,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::State;
 use axum::middleware::{from_fn, from_fn_with_state};
 use axum::routing::{get, post};
 use sea_orm::DatabaseConnection;
@@ -60,14 +62,49 @@ pub struct AppConfig {
     pub frontend_origin: String,
 }
 
-/// Stub: DM unread count. Proper tracking requires `last_read_at` on memberships.
-async fn dm_unread_count(_auth: eulesia_auth::session::AuthUser) -> axum::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({ "count": 0 }))
+/// DM unread count: counts messages across all conversations the user is a
+/// member of where `server_ts > last_read_at` (or all messages if
+/// `last_read_at` is NULL, i.e. never read).
+async fn dm_unread_count(
+    auth: eulesia_auth::session::AuthUser,
+    State(state): State<AppState>,
+) -> Result<axum::Json<serde_json::Value>, eulesia_common::error::ApiError> {
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+
+    let row = state
+        .db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r#"
+            SELECT COALESCE(SUM(cnt), 0)::BIGINT AS total
+            FROM (
+                SELECT COUNT(m.id) AS cnt
+                FROM memberships mb
+                JOIN messages m
+                  ON m.conversation_id = mb.conversation_id
+                 AND m.sender_id <> mb.user_id
+                 AND (mb.last_read_at IS NULL OR m.server_ts > mb.last_read_at)
+                WHERE mb.user_id = $1
+                  AND mb.left_at IS NULL
+                GROUP BY mb.conversation_id
+            ) sub
+            "#,
+            [auth.user_id.0.into()],
+        ))
+        .await
+        .map_err(|e| eulesia_common::error::ApiError::Database(e.to_string()))?;
+
+    let count: i64 = row
+        .map(|r| r.try_get_by_index::<i64>(0).unwrap_or(0))
+        .unwrap_or(0);
+
+    Ok(axum::Json(serde_json::json!({ "count": count })))
 }
 
 pub fn router(state: AppState) -> Router {
     let api = Router::new()
         .merge(health::routes())
+        .merge(admin::routes())
         .merge(announcements::routes())
         .merge(auth_routes::routes())
         .merge(ftn::routes())

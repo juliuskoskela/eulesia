@@ -181,6 +181,8 @@ impl std::fmt::Display for MembershipId {
 
 /// Device platform — closed set matching the DB CHECK constraint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum Platform {
     Web,
@@ -225,6 +227,8 @@ impl std::str::FromStr for Platform {
 
 /// Platform user role — closed set matching the DB CHECK constraint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum UserRole {
     Citizen,
@@ -270,6 +274,8 @@ impl std::str::FromStr for UserRole {
 
 /// Conversation membership role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum GroupRole {
     Member,
@@ -312,6 +318,8 @@ impl std::str::FromStr for GroupRole {
 
 /// Conversation type — closed set matching the DB CHECK constraint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum ConversationType {
     Direct,
@@ -353,6 +361,8 @@ impl std::str::FromStr for ConversationType {
 
 /// Message type — closed set matching the DB CHECK constraint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum MessageType {
     Text,
@@ -400,6 +410,8 @@ impl std::str::FromStr for MessageType {
 
 /// Content report status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum ReportStatus {
     Pending,
@@ -440,6 +452,8 @@ impl std::str::FromStr for ReportStatus {
 
 /// Content report reason.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum ReportReason {
     Illegal,
@@ -483,6 +497,8 @@ impl std::str::FromStr for ReportReason {
 
 /// User sanction type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum SanctionType {
     Warning,
@@ -520,6 +536,8 @@ impl std::str::FromStr for SanctionType {
 
 /// Moderation appeal status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum AppealStatus {
     Pending,
@@ -560,6 +578,8 @@ pub type Timestamp = DateTime<Utc>;
 
 /// Standard paginated response wrapper.
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct Paginated<T> {
     #[serde(rename = "items")]

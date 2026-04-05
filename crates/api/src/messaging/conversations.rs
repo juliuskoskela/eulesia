@@ -173,6 +173,7 @@ async fn create_direct(
                             left_at: Set(None),
                             removed_by: Set(None),
                             created_at: Set(now),
+                            last_read_at: Set(None),
                         },
                     )
                     .await
@@ -276,6 +277,7 @@ async fn create_direct(
                 left_at: Set(None),
                 removed_by: Set(None),
                 created_at: Set(now),
+                last_read_at: Set(None),
             },
         )
         .await
@@ -398,6 +400,7 @@ async fn create_group(
             left_at: Set(None),
             removed_by: Set(None),
             created_at: Set(now),
+            last_read_at: Set(None),
         },
     )
     .await
@@ -459,6 +462,7 @@ async fn create_group(
                 left_at: Set(None),
                 removed_by: Set(None),
                 created_at: Set(now),
+                last_read_at: Set(None),
             },
         )
         .await
