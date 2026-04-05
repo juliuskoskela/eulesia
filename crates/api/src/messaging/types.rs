@@ -31,6 +31,7 @@ pub struct UpdateConversationRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendMessageRequest {
+    #[serde(default = "MessageType::default")]
     pub message_type: MessageType,
     /// E2EE: base64-encoded ciphertext (group/channel messages).
     pub ciphertext: Option<String>,
