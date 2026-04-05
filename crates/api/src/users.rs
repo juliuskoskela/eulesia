@@ -108,6 +108,11 @@ pub async fn get_user_profile(
                 "score": t.score,
                 "viewCount": t.view_count,
                 "language": t.language,
+                "tags": [],
+                "isPinned": t.is_pinned,
+                "isLocked": t.is_locked,
+                "isBookmarked": false,
+                "userVote": null,
                 "createdAt": t.created_at.to_rfc3339(),
                 "updatedAt": t.updated_at.to_rfc3339(),
             })
