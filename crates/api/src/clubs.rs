@@ -53,6 +53,7 @@ pub fn routes() -> Router<AppState> {
             "/clubs/{id}/members/{userId}/role",
             patch(change_member_role),
         )
+        .route("/clubs/{id}/members", get(list_club_members))
         .route("/clubs/{id}/members/{userId}", delete(kick_member))
         // Invitations
         .route("/clubs/{id}/invite", post(invite_user))
@@ -590,6 +591,30 @@ pub async fn delete_club(
 // ---------------------------------------------------------------------------
 // Membership
 // ---------------------------------------------------------------------------
+
+pub async fn list_club_members(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    let members = club_members::Entity::find()
+        .filter(club_members::Column::ClubId.eq(id))
+        .all(&*state.db)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    let items: Vec<serde_json::Value> = members
+        .into_iter()
+        .map(|m| {
+            serde_json::json!({
+                "userId": m.user_id,
+                "role": m.role,
+                "joinedAt": m.joined_at.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    Ok(Json(items))
+}
 
 pub async fn join_club(
     auth: AuthUser,
@@ -1371,7 +1396,7 @@ async fn delete_club_thread(
     Ok(())
 }
 
-async fn vote_club_thread(
+pub async fn vote_club_thread(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(path): Path<ClubThreadPath>,
@@ -1405,7 +1430,7 @@ async fn vote_club_thread(
     }))
 }
 
-async fn create_club_comment(
+pub async fn create_club_comment(
     auth: AuthUser,
     State(state): State<AppState>,
     Path(path): Path<ClubThreadPath>,

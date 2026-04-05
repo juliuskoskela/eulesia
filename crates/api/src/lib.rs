@@ -12,7 +12,7 @@ mod link_preview;
 mod locations;
 mod map;
 mod messaging;
-mod moderation;
+pub mod moderation;
 mod notifications;
 mod response_wrapper;
 mod rooms;
@@ -20,7 +20,7 @@ mod search;
 mod social;
 mod subscriptions;
 mod uploads;
-mod users;
+pub mod users;
 mod waitlist;
 
 use std::ops::Deref;
@@ -58,6 +58,13 @@ pub struct AppConfig {
     pub cookie_secure: bool,
     pub session_max_age_days: u32,
     pub frontend_origin: String,
+}
+
+/// Stub: DM unread count. Proper tracking requires last_read_at on memberships.
+async fn dm_unread_count(
+    _auth: eulesia_auth::session::AuthUser,
+) -> axum::Json<serde_json::Value> {
+    axum::Json(serde_json::json!({ "count": 0 }))
 }
 
 pub fn router(state: AppState) -> Router {
@@ -98,6 +105,10 @@ pub fn router(state: AppState) -> Router {
             post(messaging::messages::send).get(messaging::messages::list_messages),
         )
         .route("/dm/{id}/read", post(messaging::messages::mark_read))
+        .route("/dm/unread-count", get(dm_unread_count))
+        // Report aliases — frontend calls /reports but v2 uses /moderation
+        .route("/reports", post(moderation::reports::create_report))
+        .route("/reports/appeal", post(moderation::appeals::create_appeal))
         .layer(from_fn_with_state(state.db.clone(), auth_middleware))
         .layer(from_fn(response_wrapper::wrap_response));
 

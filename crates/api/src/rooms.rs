@@ -124,6 +124,7 @@ pub fn routes() -> Router<AppState> {
     use crate::clubs;
 
     Router::new()
+        .route("/home/{userId}", get(crate::users::get_user_profile))
         .route("/home/rooms", get(list_rooms).post(clubs::create_club))
         .route(
             "/home/rooms/{id}",
@@ -135,6 +136,18 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/home/rooms/{id}/threads/{threadId}",
             get(clubs::get_club_thread),
+        )
+        .route(
+            "/home/rooms/{id}/threads/{threadId}/comments",
+            post(clubs::create_club_comment),
+        )
+        .route(
+            "/home/rooms/{id}/threads/{threadId}/vote",
+            post(clubs::vote_club_thread),
+        )
+        .route(
+            "/home/rooms/{id}/members",
+            get(clubs::list_club_members).post(clubs::invite_user),
         )
         .route(
             "/home/rooms/{id}/members/{userId}",

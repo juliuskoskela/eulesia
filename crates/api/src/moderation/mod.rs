@@ -1,7 +1,7 @@
-mod appeals;
-mod reports;
+pub mod appeals;
+pub mod reports;
 mod sanctions;
-mod types;
+pub mod types;
 
 use axum::extract::State;
 use axum::routing::{get, patch, post};

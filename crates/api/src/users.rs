@@ -60,7 +60,7 @@ fn user_to_profile(u: eulesia_db::entities::users::Model) -> UserProfileResponse
 // ---------------------------------------------------------------------------
 
 /// GET /users/{id} — public profile.
-async fn get_user_profile(
+pub async fn get_user_profile(
     _opt_auth: OptionalAuth,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,

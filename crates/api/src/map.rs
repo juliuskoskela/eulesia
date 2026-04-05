@@ -1,4 +1,4 @@
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use sea_orm::{
@@ -365,12 +365,55 @@ async fn list_municipalities(
 }
 
 // ---------------------------------------------------------------------------
+// Map location detail
+// ---------------------------------------------------------------------------
+
+async fn map_location_detail(
+    State(state): State<AppState>,
+    Path((location_type, id)): Path<(String, Uuid)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+
+    let sql = match location_type.as_str() {
+        "thread" => "SELECT id, title, content, author_id, scope, created_at FROM threads WHERE id = $1 AND deleted_at IS NULL",
+        "place" => "SELECT id, name, description, type, category, latitude, longitude FROM places WHERE id = $1",
+        "municipality" => "SELECT id, name, name_fi, name_sv, latitude, longitude, population FROM municipalities WHERE id = $1",
+        _ => return Err(ApiError::NotFound("unknown location type".into())),
+    };
+
+    let row = state
+        .db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            sql,
+            [id.into()],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .ok_or_else(|| ApiError::NotFound("location not found".into()))?;
+
+    // Return raw column values as JSON
+    let mut result = serde_json::Map::new();
+    result.insert("type".into(), location_type.into());
+    result.insert("id".into(), id.to_string().into());
+
+    // Extract name/title
+    let name: Option<String> = row.try_get_by_index(1).ok();
+    if let Some(n) = name {
+        result.insert("name".into(), n.into());
+    }
+
+    Ok(Json(serde_json::Value::Object(result)))
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/map/points", get(get_map_points))
+        .route("/map/location/{type}/{id}", get(map_location_detail))
         .route("/map/places/categories", get(place_categories))
         .route("/map/places", get(list_places).post(create_place))
         .route("/map/municipalities", get(list_municipalities))
