@@ -219,11 +219,13 @@ export function EulesiaMap({
         >
           {points.map((point) => (
             <Marker
-              key={`${point.type}-${point.id}`}
+              key={`${point.pointType}-${point.id}`}
               position={[point.latitude, point.longitude]}
-              icon={icons[point.type]}
+              icon={icons[point.pointType as keyof typeof icons]}
               // Store point type for cluster icon calculation
-              {...({ pointType: point.type } as unknown as L.MarkerOptions)}
+              {...({
+                pointType: point.pointType,
+              } as unknown as L.MarkerOptions)}
               eventHandlers={{
                 click: () => onPointClick?.(point),
               }}
