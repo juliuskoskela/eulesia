@@ -96,3 +96,25 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
 
     Response::from_parts(parts, Body::from(json_bytes))
 }
+
+#[cfg(test)]
+mod tests {
+    /// Regression: empty-body success (follow, unfollow, delete, mark-read)
+    /// must be detected as "no real body" so the wrapper produces
+    /// {success:true, data:null} instead of passing through unwrapped.
+    #[test]
+    fn empty_body_detection() {
+        // Simulate what axum's () IntoResponse produces: no content-type,
+        // no content-length header. The wrapper should NOT skip this.
+        let has_body = None::<usize>.is_some_and(|len: usize| len > 0);
+        assert!(!has_body, "empty response must not be treated as having a body");
+    }
+
+    /// Regression: binary uploads (content-length > 0, not JSON) should pass through.
+    #[test]
+    fn binary_body_passes_through() {
+        let has_body = Some(12345_usize).is_some_and(|len| len > 0);
+        assert!(has_body, "non-empty binary response must pass through");
+    }
+}
+

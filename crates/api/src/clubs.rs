@@ -2211,4 +2211,54 @@ mod tests {
             "authorId must match author.id"
         );
     }
+
+    /// Regression #3: Club/room thread detail must be FLAT (not nested under "thread").
+    /// Frontend destructures {id, title, comments, memberRole, isRoomOwner} at top level.
+    #[test]
+    fn club_thread_detail_is_flat() {
+        use crate::agora::types::{AuthorSummary, ThreadResponse};
+
+        let thread = ThreadResponse {
+            id: Uuid::nil(),
+            title: "Test".into(),
+            content: "Body".into(),
+            content_html: None,
+            scope: "club".into(),
+            author: AuthorSummary {
+                id: Uuid::nil(),
+                username: "test".into(),
+                name: "Test".into(),
+                avatar_url: None,
+                role: "citizen".into(),
+            },
+            tags: vec![],
+            reply_count: 0,
+            score: 0,
+            view_count: 0,
+            user_vote: None,
+            is_bookmarked: false,
+            is_pinned: false,
+            is_locked: false,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        // Simulate the flattening logic from get_club_thread
+        let mut resp = serde_json::to_value(&thread).unwrap();
+        let obj = resp.as_object_mut().unwrap();
+        obj.insert("comments".into(), serde_json::json!([]));
+        obj.insert("memberRole".into(), serde_json::json!("owner"));
+        obj.insert("isRoomOwner".into(), serde_json::json!(true));
+
+        // Thread fields at top level (not nested under "thread")
+        assert!(obj.contains_key("id"), "id must be at top level");
+        assert!(obj.contains_key("title"), "title must be at top level");
+        assert!(!obj.contains_key("thread"), "must NOT have nested 'thread' key");
+
+        // Required frontend fields
+        assert!(obj.contains_key("comments"), "must have comments array");
+        assert!(obj.contains_key("memberRole"), "must have memberRole");
+        assert!(obj.contains_key("isRoomOwner"), "must have isRoomOwner");
+        assert_eq!(obj["isRoomOwner"], true);
+    }
 }

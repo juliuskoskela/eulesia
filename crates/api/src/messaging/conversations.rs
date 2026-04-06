@@ -1220,4 +1220,23 @@ mod tests {
 
         assert!(obj["messages"].as_array().unwrap().len() == 1);
     }
+
+    /// Regression #19: CreateDmV1Request accepts {userId} (not {conversationType, members}).
+    #[test]
+    fn create_dm_v1_request_accepts_user_id() {
+        let json = r#"{"userId":"550e8400-e29b-41d4-a716-446655440000"}"#;
+        let req: CreateDmV1Request = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            req.user_id,
+            "550e8400-e29b-41d4-a716-446655440000".parse::<Uuid>().unwrap()
+        );
+    }
+
+    /// Regression #19: {conversationType, members} should NOT be required for /dm.
+    #[test]
+    fn create_dm_v1_request_rejects_v2_shape() {
+        let json = r#"{"conversationType":"direct","members":["550e8400-e29b-41d4-a716-446655440000"]}"#;
+        let result = serde_json::from_str::<CreateDmV1Request>(json);
+        assert!(result.is_err(), "v2 shape must not parse as v1 request");
+    }
 }
