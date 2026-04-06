@@ -128,6 +128,24 @@ _: {
       '';
     };
 
+    checkGeneratedTypes = pkgs.writeShellApplication {
+      name = "check-generated-types";
+      runtimeInputs = with pkgs; [
+        git
+      ];
+      text = ''
+        set -euo pipefail
+        ${shellFunctions}
+        cargo test -p eulesia-api --features ts --test ts_export 2>/dev/null
+        if ! git diff --quiet apps/web/src/types/generated/; then
+          echo "Generated TypeScript types are stale!"
+          echo "Run: just generate-types"
+          git diff --stat apps/web/src/types/generated/
+          exit 1
+        fi
+      '';
+    };
+
     test = pkgs.writeShellApplication {
       name = "eulesia-test";
       runtimeInputs = [testFrontend];
@@ -179,12 +197,23 @@ _: {
           language = "system";
           pass_filenames = false;
         };
+
+        check-generated-types = {
+          enable = true;
+          name = "check-generated-types";
+          description = "Verify generated TypeScript types are fresh";
+          entry = "${checkGeneratedTypes}/bin/check-generated-types";
+          language = "system";
+          pass_filenames = false;
+          files = "crates/api/src/.*\\.rs$|crates/common/src/types\\.rs$";
+        };
       };
     };
 
     packages = {
       format-repo = formatRepo;
       check-format = checkFormat;
+      check-generated-types = checkGeneratedTypes;
       lint-nix = lintNix;
       lint-frontend = lintFrontend;
       inherit lint test;
