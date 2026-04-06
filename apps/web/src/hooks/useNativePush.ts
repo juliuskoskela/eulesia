@@ -31,7 +31,7 @@ export function useNativePush() {
       }
 
       if (permission.receive !== "granted") {
-        console.log("Push notification permission not granted");
+        // Permission not granted — silently bail
         return;
       }
 
@@ -39,7 +39,7 @@ export function useNativePush() {
       const regListener = await PushNotifications.addListener(
         "registration",
         async (token) => {
-          console.log("Push registration token:", token.value);
+          // Token received — register with backend
           const platform = Capacitor.getPlatform() as "android" | "ios";
           try {
             await api.registerDeviceToken(token.value, platform);

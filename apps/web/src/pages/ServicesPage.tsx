@@ -16,7 +16,18 @@ import { Layout } from "../components/layout";
 import { SEOHead } from "../components/SEOHead";
 import { ContentEndMarker } from "../components/common";
 import { services, getServiceCategories } from "../data";
-import type { Service } from "../types";
+// Demo service type — not an API type, only used for the services demo page
+type Service = {
+  id: string;
+  name?: string;
+  title?: string;
+  description: string;
+  category: string;
+  provider?: string;
+  url?: string;
+  icon?: string;
+  integrationDemoType?: string;
+};
 
 const categoryIcons: Record<string, React.ElementType> = {
   Recreation: Calendar,
