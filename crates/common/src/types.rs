@@ -313,6 +313,57 @@ impl std::str::FromStr for GroupRole {
 }
 
 // ---------------------------------------------------------------------------
+// ClubRole enum
+// ---------------------------------------------------------------------------
+
+/// Club/room membership role — closed set matching the DB values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "lowercase")]
+pub enum ClubRole {
+    Member,
+    Moderator,
+    Owner,
+}
+
+impl ClubRole {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Member => "member",
+            Self::Moderator => "moderator",
+            Self::Owner => "owner",
+        }
+    }
+
+    pub const fn is_owner(&self) -> bool {
+        matches!(self, Self::Owner)
+    }
+
+    pub const fn is_at_least_moderator(&self) -> bool {
+        matches!(self, Self::Moderator | Self::Owner)
+    }
+}
+
+impl std::fmt::Display for ClubRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ClubRole {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "member" => Ok(Self::Member),
+            "moderator" => Ok(Self::Moderator),
+            "owner" => Ok(Self::Owner),
+            other => Err(format!("invalid club role: {other}")),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ConversationType enum
 // ---------------------------------------------------------------------------
 

@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::{AuthUser, OptionalAuth};
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{UserRole, new_id};
+use eulesia_common::types::{ClubRole, UserRole, new_id};
 use eulesia_db::entities::{club_invitations, club_members, clubs, threads};
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::comments::CommentRepo;
@@ -277,17 +277,10 @@ fn slugify(name: &str) -> String {
         .join("-")
 }
 
-/// Club role hierarchy: owner (3) > moderator (2) > member (1).
-fn role_level(role: &str) -> u8 {
-    match role {
-        "owner" => 3,
-        "moderator" => 2,
-        "member" => 1,
-        _ => 0,
-    }
+/// Parse a club member's stored role string into a `ClubRole`.
+fn parse_club_role(role: &str) -> Result<ClubRole, ApiError> {
+    role.parse::<ClubRole>().map_err(|e| ApiError::Internal(e))
 }
-
-const VALID_CLUB_ROLES: &[&str] = &["member", "moderator", "owner"];
 
 /// Fetch the club member record for a user. Returns `None` if not a member.
 async fn get_membership(
@@ -309,13 +302,14 @@ pub async fn require_club_role(
     db: &DatabaseConnection,
     club_id: Uuid,
     user_id: Uuid,
-    min_role: &str,
+    min_role: ClubRole,
 ) -> Result<club_members::Model, ApiError> {
     let member = get_membership(db, club_id, user_id)
         .await?
         .ok_or(ApiError::Forbidden)?;
 
-    if role_level(&member.role) < role_level(min_role) {
+    let actual = parse_club_role(&member.role)?;
+    if actual < min_role {
         return Err(ApiError::Forbidden);
     }
 
@@ -628,7 +622,7 @@ pub async fn get_club(
                 avatar_url: u.avatar_url.clone(),
                 role: m.role.clone(),
             };
-            if role_level(&m.role) >= role_level("moderator") {
+            if parse_club_role(&m.role).is_ok_and(|r| r.is_at_least_moderator()) {
                 moderators.push(summary.clone());
             }
             members.push(summary);
@@ -647,7 +641,7 @@ pub async fn update_club(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateClubRequest>,
 ) -> Result<Json<ClubResponse>, ApiError> {
-    let _member = require_club_role(&state.db, id, auth.user_id.0, "moderator").await?;
+    let _member = require_club_role(&state.db, id, auth.user_id.0, ClubRole::Moderator).await?;
 
     let club = clubs::Entity::find_by_id(id)
         .one(&*state.db)
@@ -723,7 +717,7 @@ pub async fn delete_club(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<(), ApiError> {
-    let _member = require_club_role(&state.db, id, auth.user_id.0, "owner").await?;
+    let _member = require_club_role(&state.db, id, auth.user_id.0, ClubRole::Owner).await?;
 
     // Delete invitations, members, then the club.
     club_invitations::Entity::delete_many()
@@ -830,10 +824,10 @@ pub async fn leave_club(
         .ok_or_else(|| ApiError::NotFound("not a member".into()))?;
 
     // Prevent last owner from leaving.
-    if member.role == "owner" {
+    if parse_club_role(&member.role)? == ClubRole::Owner {
         let owner_count = club_members::Entity::find()
             .filter(club_members::Column::ClubId.eq(id))
-            .filter(club_members::Column::Role.eq("owner"))
+            .filter(club_members::Column::Role.eq(ClubRole::Owner.as_str()))
             .count(&*state.db)
             .await
             .map_err(db_err)?;
@@ -877,14 +871,14 @@ async fn change_member_role(
     Path(path): Path<MemberPath>,
     Json(req): Json<ChangeRoleRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let _admin = require_club_role(&state.db, path.id, auth.user_id.0, "owner").await?;
+    let _admin = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Owner).await?;
 
-    if !VALID_CLUB_ROLES.contains(&req.role.as_str()) {
-        return Err(ApiError::BadRequest(format!(
-            "invalid role '{}': must be member, moderator, or admin",
+    let _: ClubRole = req.role.parse().map_err(|_| {
+        ApiError::BadRequest(format!(
+            "invalid role '{}': must be member, moderator, or owner",
             req.role
-        )));
-    }
+        ))
+    })?;
 
     // Cannot change own role.
     if path.user_id == auth.user_id.0 {
@@ -911,7 +905,7 @@ pub async fn kick_member(
     State(state): State<AppState>,
     Path(path): Path<MemberPath>,
 ) -> Result<(), ApiError> {
-    let actor = require_club_role(&state.db, path.id, auth.user_id.0, "moderator").await?;
+    let actor = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator).await?;
 
     if path.user_id == auth.user_id.0 {
         return Err(ApiError::BadRequest("cannot kick yourself".into()));
@@ -922,7 +916,9 @@ pub async fn kick_member(
         .ok_or_else(|| ApiError::NotFound("user is not a member".into()))?;
 
     // Cannot kick someone with equal or higher role.
-    if role_level(&target.role) >= role_level(&actor.role) {
+    let actor_role = parse_club_role(&actor.role)?;
+    let target_role = parse_club_role(&target.role)?;
+    if target_role >= actor_role {
         return Err(ApiError::Forbidden);
     }
 
@@ -956,7 +952,8 @@ pub async fn invite_user(
     Path(club_id): Path<Uuid>,
     Json(req): Json<InviteRequest>,
 ) -> Result<Json<InvitationResponse>, ApiError> {
-    let _member = require_club_role(&state.db, club_id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, club_id, auth.user_id.0, ClubRole::Moderator).await?;
 
     // Verify target user exists.
     UserRepo::find_by_id(&state.db, req.user_id)
@@ -1018,7 +1015,8 @@ async fn list_invitations(
     State(state): State<AppState>,
     Path(club_id): Path<Uuid>,
 ) -> Result<Json<Vec<InvitationResponse>>, ApiError> {
-    let _member = require_club_role(&state.db, club_id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, club_id, auth.user_id.0, ClubRole::Moderator).await?;
 
     let invitations = club_invitations::Entity::find()
         .filter(club_invitations::Column::ClubId.eq(club_id))
@@ -1085,7 +1083,8 @@ async fn revoke_invitation(
     State(state): State<AppState>,
     Path(path): Path<ClubInvitationPath>,
 ) -> Result<(), ApiError> {
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator).await?;
 
     let inv = club_invitations::Entity::find_by_id(path.invitation_id)
         .one(&*state.db)
@@ -1272,7 +1271,7 @@ pub async fn create_club_thread(
     Path(club_id): Path<Uuid>,
     Json(req): Json<CreateThreadRequest>,
 ) -> Result<Json<ThreadResponse>, ApiError> {
-    let _member = require_club_role(&state.db, club_id, auth.user_id.0, "member").await?;
+    let _member = require_club_role(&state.db, club_id, auth.user_id.0, ClubRole::Member).await?;
 
     if req.title.trim().is_empty() {
         return Err(ApiError::BadRequest("title must not be empty".into()));
@@ -1363,7 +1362,7 @@ async fn list_club_threads(
 
     if !club.is_public {
         let uid = user_id.ok_or(ApiError::Forbidden)?;
-        let _member = require_club_role(&state.db, club_id, uid, "member").await?;
+        let _member = require_club_role(&state.db, club_id, uid, ClubRole::Member).await?;
     }
 
     let sort = params.sort.as_deref().unwrap_or("recent");
@@ -1449,7 +1448,7 @@ pub async fn get_club_thread(
 
     if !club.is_public {
         let uid = user_id.ok_or(ApiError::Forbidden)?;
-        let _member = require_club_role(&state.db, path.id, uid, "member").await?;
+        let _member = require_club_role(&state.db, path.id, uid, ClubRole::Member).await?;
     }
 
     let thread = verify_club_thread(&state.db, path.id, path.thread_id).await?;
@@ -1576,7 +1575,10 @@ pub async fn get_club_thread(
     }
     obj.insert("comments".into(), comments_json);
     obj.insert("memberRole".into(), serde_json::json!(member_role));
-    let is_owner = member_role.as_deref() == Some("owner");
+    let is_owner = member_role
+        .as_deref()
+        .and_then(|r| r.parse::<ClubRole>().ok())
+        .is_some_and(|r| r.is_owner());
     obj.insert("isRoomOwner".into(), serde_json::json!(is_owner));
 
     Ok(Json(resp))
@@ -1588,7 +1590,8 @@ pub async fn update_club_thread(
     Path(path): Path<ClubThreadPath>,
     Json(req): Json<UpdateClubThreadRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator).await?;
 
     let _thread = verify_club_thread(&state.db, path.id, path.thread_id).await?;
 
@@ -1624,7 +1627,7 @@ pub async fn delete_club_thread(
 
     // Allow author or club moderator+.
     let is_author = thread.author_id == auth.user_id.0;
-    let is_club_mod = require_club_role(&state.db, path.id, auth.user_id.0, "moderator")
+    let is_club_mod = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator)
         .await
         .is_ok();
 
@@ -1659,7 +1662,7 @@ pub async fn vote_club_thread(
         ));
     }
 
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "member").await?;
+    let _member = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Member).await?;
     let thread = verify_club_thread(&state.db, path.id, path.thread_id).await?;
 
     VoteRepo::upsert_thread_vote(&state.db, path.thread_id, auth.user_id.0, req.value)
@@ -1687,7 +1690,7 @@ pub async fn create_club_comment(
     Path(path): Path<ClubThreadPath>,
     Json(req): Json<CreateCommentRequest>,
 ) -> Result<Json<CommentResponse>, ApiError> {
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "member").await?;
+    let _member = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Member).await?;
 
     if req.content.trim().is_empty() {
         return Err(ApiError::BadRequest("content must not be empty".into()));
@@ -1795,7 +1798,7 @@ pub async fn delete_club_comment(
 
     // Allow author, club moderator+, or platform moderator.
     let is_author = comment.author_id == auth.user_id.0;
-    let is_club_mod = require_club_role(&state.db, path.id, auth.user_id.0, "moderator")
+    let is_club_mod = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator)
         .await
         .is_ok();
 
@@ -1833,7 +1836,7 @@ pub async fn vote_club_comment(
         ));
     }
 
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "member").await?;
+    let _member = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Member).await?;
     let _thread = verify_club_thread(&state.db, path.id, path.thread_id).await?;
 
     let comment = CommentRepo::find_by_id(&state.db, path.comment_id)
@@ -2119,45 +2122,52 @@ mod tests {
         assert_eq!(req.latitude, Some(60.17));
     }
 
-    /// Club/room owners use the "owner" role — isRoomOwner true.
+    /// ClubRole is a proper enum — "admin" does not parse.
     #[test]
-    fn is_room_owner_true_for_owner_role() {
-        let member_role: Option<&str> = Some("owner");
-        let is_owner = member_role == Some("owner");
-        assert!(is_owner);
+    fn club_role_rejects_admin() {
+        assert!("admin".parse::<ClubRole>().is_err());
     }
 
-    /// Regular members should not have isRoomOwner=true.
+    /// ClubRole ordering: Owner > Moderator > Member.
     #[test]
-    fn is_room_owner_false_for_member_role() {
-        let member_role: Option<&str> = Some("member");
-        let is_owner = member_role == Some("owner");
-        assert!(!is_owner);
+    fn club_role_ordering() {
+        assert!(ClubRole::Owner > ClubRole::Moderator);
+        assert!(ClubRole::Moderator > ClubRole::Member);
     }
 
-    /// isRoomOwner false for moderator role.
+    /// ClubRole roundtrips through as_str / parse.
     #[test]
-    fn is_room_owner_false_for_moderator_role() {
-        let member_role: Option<&str> = Some("moderator");
-        let is_owner = member_role == Some("owner");
-        assert!(!is_owner);
+    fn club_role_roundtrip() {
+        for role in [ClubRole::Member, ClubRole::Moderator, ClubRole::Owner] {
+            let s = role.as_str();
+            let parsed: ClubRole = s.parse().unwrap();
+            assert_eq!(parsed, role);
+        }
     }
 
-    /// No role (non-member) → isRoomOwner false.
+    /// ClubRole serializes to lowercase via serde.
     #[test]
-    fn is_room_owner_false_for_no_role() {
-        let member_role: Option<&str> = None;
-        let is_owner = member_role == Some("owner");
-        assert!(!is_owner);
+    fn club_role_serde() {
+        let json = serde_json::to_value(ClubRole::Owner).unwrap();
+        assert_eq!(json, "owner");
+        let parsed: ClubRole = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed, ClubRole::Owner);
     }
 
-    /// role_level: owner > moderator > member > unknown.
+    /// isRoomOwner derived from ClubRole::is_owner().
     #[test]
-    fn role_level_hierarchy() {
-        assert!(role_level("owner") > role_level("moderator"));
-        assert!(role_level("moderator") > role_level("member"));
-        assert!(role_level("member") > role_level("unknown"));
-        assert_eq!(role_level("admin"), 0, "admin is not a valid club role");
+    fn is_room_owner_via_enum() {
+        assert!(ClubRole::Owner.is_owner());
+        assert!(!ClubRole::Moderator.is_owner());
+        assert!(!ClubRole::Member.is_owner());
+    }
+
+    /// is_at_least_moderator covers Owner and Moderator.
+    #[test]
+    fn is_at_least_moderator() {
+        assert!(ClubRole::Owner.is_at_least_moderator());
+        assert!(ClubRole::Moderator.is_at_least_moderator());
+        assert!(!ClubRole::Member.is_at_least_moderator());
     }
 
     /// Verify flattened comment payload includes authorId.

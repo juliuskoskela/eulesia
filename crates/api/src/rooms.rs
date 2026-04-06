@@ -486,9 +486,11 @@ async fn add_room_member(
     Json(req): Json<AddRoomMemberRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     use crate::clubs::require_club_role;
+    use eulesia_common::types::ClubRole;
     use eulesia_db::repo::users::UserRepo;
 
-    let _member = require_club_role(&state.db, room_id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, room_id, auth.user_id.0, ClubRole::Moderator).await?;
 
     // Verify target user exists.
     UserRepo::find_by_id(&state.db, req.user_id)
