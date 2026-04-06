@@ -89,7 +89,10 @@ export function PWAProvider({ children }: { children: ReactNode }) {
             setOfflineReady(true);
           },
           onNeedRefresh() {
-            setNeedRefresh(true);
+            // With registerType: "autoUpdate" + skipWaiting + clientsClaim,
+            // the new SW activates immediately. Auto-reload instead of
+            // showing an update banner — users should never need to click.
+            window.location.reload();
           },
         });
       } catch {
