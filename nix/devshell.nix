@@ -43,7 +43,6 @@
             config.packages.dev
             config.packages.dev-api
             config.packages.dev-web
-            config.packages.db-migrate
             config.packages.db-reset
             config.packages.check-format
             config.packages.lint
@@ -74,8 +73,8 @@
 
           E2E testing         Database
           ──────────────      ──────────────────────
-          just test-e2e       just db-migrate
-          just test-e2e-ui    just db-reset
+          just test-e2e       just db-reset
+          just test-e2e-ui
 
           Tools: node ${pkgs.nodejs_22.version} | pnpm ${pkgs.pnpm_10.version} | pg ${pkgs.postgresql_16.version}
 

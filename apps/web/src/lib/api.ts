@@ -2,6 +2,24 @@ import { API_BASE_URL } from "./runtimeConfig";
 
 const API_URL = API_BASE_URL;
 
+type UnauthorizedHandler = (() => void) | null;
+
+let unauthorizedHandler: UnauthorizedHandler = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler) {
+  unauthorizedHandler = handler;
+}
+
+function shouldHandleUnauthorized(endpoint: string): boolean {
+  // Auth endpoints handle 401 themselves — don't trigger global logout.
+  // /auth/me is a probe (returns 401 when not logged in — normal).
+  if (endpoint.startsWith("/auth/") || endpoint.startsWith("/admin/auth/")) {
+    return false;
+  }
+
+  return true;
+}
+
 interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -54,6 +72,10 @@ class ApiClient {
       credentials: "include", // Include cookies
     });
 
+    if (response.status === 401 && shouldHandleUnauthorized(endpoint)) {
+      queueMicrotask(() => unauthorizedHandler?.());
+    }
+
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
       const text = await response.text();
@@ -101,6 +123,76 @@ class ApiClient {
 
   async getCurrentUser(): Promise<User> {
     return this.request("/auth/me");
+  }
+
+  /** Fetch sanction info from /auth/me when a 403 is expected (banned/suspended). */
+  async getSanctionInfo(): Promise<{
+    sanctionType: "suspension" | "ban";
+    reason: string | null;
+    expiresAt: string | null;
+  } | null> {
+    const url = `${this.baseUrl}/api/v1/auth/me`;
+    try {
+      const response = await fetch(url, { credentials: "include" });
+      if (response.status === 403) {
+        const data = await response.json();
+        if (data.sanctionType) {
+          return {
+            sanctionType: data.sanctionType,
+            reason: data.reason,
+            expiresAt: data.expiresAt,
+          };
+        }
+      }
+    } catch {
+      // Ignore secondary fetch errors
+    }
+    return null;
+  }
+
+  async verifyMagicLink(token: string): Promise<void> {
+    await this.request(`/auth/verify/${token}`, {
+      method: "GET",
+    });
+  }
+
+  // Admin auth
+  async adminMe(): Promise<{
+    id: string;
+    username: string;
+    email: string | null;
+    name: string;
+  }> {
+    return this.request("/admin/auth/me");
+  }
+
+  async adminLogin(
+    username: string,
+    password: string,
+  ): Promise<{
+    id: string;
+    username: string;
+    email: string | null;
+    name: string;
+  }> {
+    return this.request("/admin/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+  }
+
+  async adminLogout(): Promise<void> {
+    await this.request("/admin/auth/logout", { method: "POST" });
+  }
+
+  async adminChangePassword(data: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<void> {
+    await this.request("/admin/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
   // Users
@@ -1725,6 +1817,7 @@ export interface EditHistoryEntry {
 
 export interface ConversationWithMessages {
   id: string;
+  encryption?: "e2ee" | "none";
   otherUser: UserSummary | null;
   messages: DirectMessage[];
 }

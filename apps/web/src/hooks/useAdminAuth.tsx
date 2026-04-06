@@ -6,7 +6,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { API_BASE_URL } from "../lib/runtimeConfig";
+import { api } from "../lib/api";
 
 interface AdminUser {
   id: string;
@@ -34,22 +34,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/auth/me`, {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        setAdmin(null);
-        setIsAuthenticated(false);
-        return;
-      }
-      const data = await response.json();
-      if (data.success && data.data) {
-        setAdmin(data.data);
-        setIsAuthenticated(true);
-      } else {
-        setAdmin(null);
-        setIsAuthenticated(false);
-      }
+      const data = await api.adminMe();
+      setAdmin(data);
+      setIsAuthenticated(true);
     } catch {
       setAdmin(null);
       setIsAuthenticated(false);
@@ -63,30 +50,14 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, [checkAuth]);
 
   const login = async (username: string, password: string) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/admin/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ username, password }),
-    });
-    const ct = response.headers.get("content-type") ?? "";
-    if (!ct.includes("application/json")) {
-      throw new Error((await response.text()) || "Login failed");
-    }
-    const data = await response.json();
-    if (!response.ok || !data.success) {
-      throw new Error(data.error || "Login failed");
-    }
-    setAdmin(data.data);
+    const data = await api.adminLogin(username, password);
+    setAdmin(data);
     setIsAuthenticated(true);
   };
 
   const logout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/api/v1/admin/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
+      await api.adminLogout();
     } catch {
       // Ignore logout errors
     } finally {

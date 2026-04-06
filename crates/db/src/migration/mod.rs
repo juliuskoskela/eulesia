@@ -9,6 +9,9 @@ mod m20260404_000006_plaintext_messaging;
 mod m20260404_000007_auth_ftn_magiclink;
 mod m20260405_000008_subscriptions;
 mod m20260405_000009_clubs_institutions_waitlist;
+mod m20260405_000010_dm_unread_count;
+mod m20260405_000011_admin_features;
+mod m20260406_000012_admin_accounts;
 
 pub struct Migrator;
 
@@ -25,6 +28,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260404_000007_auth_ftn_magiclink::Migration),
             Box::new(m20260405_000008_subscriptions::Migration),
             Box::new(m20260405_000009_clubs_institutions_waitlist::Migration),
+            Box::new(m20260405_000010_dm_unread_count::Migration),
+            Box::new(m20260405_000011_admin_features::Migration),
+            Box::new(m20260406_000012_admin_accounts::Migration),
         ]
     }
 }

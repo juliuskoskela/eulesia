@@ -22,7 +22,7 @@
 
 2. **Classify the failure.** Is it one of these obvious categories?
 
-   **TypeScript (frontend, v1 API):**
+   **TypeScript (frontend):**
    - Formatting, missing imports, unused variables, simple type errors, missing exports
 
    **Rust (v2 server):**

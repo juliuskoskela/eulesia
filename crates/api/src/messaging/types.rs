@@ -31,6 +31,7 @@ pub struct UpdateConversationRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendMessageRequest {
+    #[serde(default = "MessageType::default")]
     pub message_type: MessageType,
     /// E2EE: base64-encoded ciphertext (group/channel messages).
     pub ciphertext: Option<String>,
@@ -76,6 +77,8 @@ pub struct MessageCursorParams {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationResponse {
     pub id: Uuid,
@@ -91,6 +94,8 @@ pub struct ConversationResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationListItem {
     pub id: Uuid,
@@ -101,6 +106,8 @@ pub struct ConversationListItem {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct MemberSummary {
     pub user_id: Uuid,
@@ -109,6 +116,8 @@ pub struct MemberSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct MessageResponse {
     pub id: Uuid,
@@ -155,6 +164,8 @@ pub struct PendingDelivery {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct EpochResponse {
     pub epoch: i64,

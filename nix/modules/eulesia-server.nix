@@ -147,6 +147,12 @@ in {
       };
     };
 
+    bootstrapAdminAccountsFile = mkOption {
+      type = types.nullOr types.path;
+      default = config.services.eulesia.auth.bootstrapAdminAccountsFile or null;
+      description = "SOPS-managed JSON file with admin accounts to bootstrap on startup.";
+    };
+
     extraEnvironment = mkOption {
       type = types.attrsOf types.str;
       default = {};
@@ -230,6 +236,9 @@ in {
           IDURA_DOMAIN = cfg.idura.domain;
           IDURA_CLIENT_ID = cfg.idura.clientId;
           IDURA_CALLBACK_URL = cfg.idura.callbackUrl;
+        }
+        // optionalAttrs (cfg.bootstrapAdminAccountsFile != null) {
+          ADMIN_BOOTSTRAP_FILE = cfg.bootstrapAdminAccountsFile;
         }
         // cfg.extraEnvironment;
 

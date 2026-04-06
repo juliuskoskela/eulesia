@@ -106,6 +106,7 @@ pub async fn invite(
             left_at: Set(None),
             removed_by: Set(None),
             created_at: Set(now),
+            last_read_at: Set(None),
         },
     )
     .await

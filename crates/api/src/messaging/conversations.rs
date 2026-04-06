@@ -38,7 +38,7 @@ pub async fn create_dm_v1(
 ) -> Result<Json<ConversationResponse>, ApiError> {
     let v2_req = CreateConversationRequest {
         conversation_type: ConversationType::Direct,
-        encryption: None,
+        encryption: Some("none".into()),
         name: None,
         description: None,
         members: vec![req.user_id],
@@ -173,6 +173,7 @@ async fn create_direct(
                             left_at: Set(None),
                             removed_by: Set(None),
                             created_at: Set(now),
+                            last_read_at: Set(None),
                         },
                     )
                     .await
@@ -276,6 +277,7 @@ async fn create_direct(
                 left_at: Set(None),
                 removed_by: Set(None),
                 created_at: Set(now),
+                last_read_at: Set(None),
             },
         )
         .await
@@ -398,6 +400,7 @@ async fn create_group(
             left_at: Set(None),
             removed_by: Set(None),
             created_at: Set(now),
+            last_read_at: Set(None),
         },
     )
     .await
@@ -459,6 +462,7 @@ async fn create_group(
                 left_at: Set(None),
                 removed_by: Set(None),
                 created_at: Set(now),
+                last_read_at: Set(None),
             },
         )
         .await
@@ -731,6 +735,7 @@ pub(crate) struct V1DirectMessage {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct V1ConversationWithMessages {
     id: Uuid,
+    encryption: String,
     other_user: Option<V1UserSummary>,
     messages: Vec<V1DirectMessage>,
 }
@@ -826,6 +831,7 @@ pub async fn get_dm_v1(
 
     Ok(Json(V1ConversationWithMessages {
         id: conv.id,
+        encryption: conv.encryption,
         other_user,
         messages,
     }))

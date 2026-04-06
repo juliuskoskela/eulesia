@@ -6,6 +6,9 @@ edition = "2021"
 [lints]
 workspace = true
 
+[features]
+ts = ["dep:ts-rs"]
+
 [dependencies]
 axum = { workspace = true }
 chrono = { workspace = true }
@@ -13,3 +16,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
+ts-rs = { workspace = true, optional = true }

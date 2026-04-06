@@ -20,7 +20,7 @@ import { FollowButton, ReportButton } from "../components/common";
 import { useAuth } from "../hooks/useAuth";
 import { useStartConversation } from "../hooks/useApi";
 import { formatDateLong } from "../lib/formatTime";
-import { buildApiUrl } from "../lib/runtimeConfig";
+import { api } from "../lib/api";
 
 interface UserThread {
   id: string;
@@ -121,19 +121,25 @@ function ThreadListItem({ thread }: { thread: UserThread }) {
 export function UserProfilePage() {
   const { t } = useTranslation(["profile", "agora", "common"]);
   const { userId } = useParams<{ userId: string }>();
-  const { currentUser } = useAuth();
+  const { currentUser, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const startConversationMutation = useStartConversation();
   const [sendingMessage, setSendingMessage] = useState(false);
 
   const handleSendMessage = async () => {
     if (!userId || sendingMessage) return;
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
     setSendingMessage(true);
     try {
       const conversation = await startConversationMutation.mutateAsync(userId);
       navigate(`/messages/${conversation.id}`);
     } catch (err) {
       console.error("Failed to start conversation:", err);
+    } finally {
       setSendingMessage(false);
     }
   };
@@ -145,18 +151,9 @@ export function UserProfilePage() {
   } = useQuery({
     queryKey: ["userProfile", userId],
     queryFn: async () => {
-      const response = await fetch(buildApiUrl(`/api/v1/users/${userId}`), {
-        credentials: "include",
-      });
-      const ct = response.headers.get("content-type") ?? "";
-      if (!ct.includes("application/json")) {
-        throw new Error(
-          (await response.text()) || `Request failed (${response.status})`,
-        );
-      }
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data as UserProfile;
+      // getUser returns the /users/:id payload; cast to UserProfile for
+      // the extra fields (threads, botSummaries, etc.) the endpoint includes.
+      return (await api.getUser(userId!)) as unknown as UserProfile;
     },
     enabled: !!userId,
   });
@@ -282,7 +279,7 @@ export function UserProfilePage() {
         </div>
 
         {/* Report user */}
-        {!isOwnProfile && userId && (
+        {isAuthenticated && !isOwnProfile && userId && (
           <div className="mt-3">
             <ReportButton contentType="user" contentId={userId} size="sm" />
           </div>
@@ -291,16 +288,18 @@ export function UserProfilePage() {
         {/* Send message & visit home buttons */}
         {!isOwnProfile && userId && (
           <div className="mt-4 flex gap-2">
-            <button
-              onClick={handleSendMessage}
-              disabled={sendingMessage}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" />
-              {sendingMessage
-                ? t("profile:userProfile.opening")
-                : t("profile:userProfile.sendMessage")}
-            </button>
+            {isAuthenticated && (
+              <button
+                onClick={handleSendMessage}
+                disabled={sendingMessage}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+                {sendingMessage
+                  ? t("profile:userProfile.opening")
+                  : t("profile:userProfile.sendMessage")}
+              </button>
+            )}
             <Link
               to={`/home/${userId}`}
               className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"

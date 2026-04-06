@@ -36,22 +36,6 @@
         '';
       };
 
-    mkApiCheck = name: script:
-      pkgs.stdenv.mkDerivation {
-        pname = name;
-        version = "1.0.0";
-        src = repoSrc;
-        inherit nativeBuildInputs buildInputs pnpmDeps;
-        buildPhase = ''
-          runHook preBuild
-          pnpm --filter @eulesia/api run ${script}
-          runHook postBuild
-        '';
-        installPhase = ''
-          mkdir -p $out
-        '';
-      };
-
     formatCheck =
       pkgs.runCommand "eulesia-format-check" {
         nativeBuildInputs = [config.treefmt.build.wrapper];
@@ -80,11 +64,8 @@
         format = formatCheck;
         nix-lint = nixLintCheck;
         frontend-lint = mkFrontendCheck "eulesia-frontend-lint-check" "check:web";
-        api-lint = mkApiCheck "eulesia-api-lint-check" "check";
         frontend-test = mkFrontendCheck "eulesia-frontend-test-check" "test:web:run";
-        api-test = mkApiCheck "eulesia-api-test-check" "test:run";
         frontend-build = config.packages.frontend;
-        api-build = config.packages.api;
       }
       // lib.optionalAttrs (system == "x86_64-linux") {
         vm-build = inputs.self.nixosConfigurations.eulesia-vm.config.microvm.runner.qemu;

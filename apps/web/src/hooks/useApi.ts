@@ -429,10 +429,11 @@ export function useSubscriptions() {
 }
 
 export function useSubscriptionCheck(entityType: EntityType, entityId: string) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: queryKeys.subscriptionCheck(entityType, entityId),
     queryFn: () => api.checkSubscription(entityType, entityId),
-    enabled: !!entityId,
+    enabled: isAuthenticated && !!entityId,
   });
 }
 

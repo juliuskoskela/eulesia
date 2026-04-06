@@ -4,6 +4,8 @@ use axum::Json;
 use axum::Router;
 use axum::extract::{Multipart, State};
 use axum::routing::post;
+use image::imageops::FilterType;
+use image::{DynamicImage, ImageReader};
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde::Serialize;
 use tokio::fs;
@@ -15,8 +17,28 @@ use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
 use eulesia_db::repo::users::UserRepo;
 
-const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_TYPES: &[&str] = &["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
+
+// Wide format support — anything the `image` crate can decode
+const ALLOWED_TYPES: &[&str] = &[
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/bmp",
+    "image/tiff",
+    "image/avif",
+    // Some browsers send these
+    "image/jpg",
+    "image/x-png",
+];
+
+// Size limits
+const MAIN_MAX_WIDTH: u32 = 1920;
+const MAIN_MAX_HEIGHT: u32 = 1920;
+const THUMB_WIDTH: u32 = 400;
+const THUMB_HEIGHT: u32 = 300;
+const AVATAR_SIZE: u32 = 400; // retina-ready (displayed at 200)
 
 fn upload_dir() -> PathBuf {
     PathBuf::from(std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into()))
@@ -28,6 +50,30 @@ fn file_name(user_id: Uuid) -> String {
         &user_id.to_string()[..8],
         chrono::Utc::now().timestamp_millis()
     )
+}
+
+/// Encode a `DynamicImage` as lossy WebP via libwebp.
+///
+/// Quality 0–100. At 80, a typical 8MB phone JPEG becomes ~150-300KB.
+fn encode_lossy_webp(img: &DynamicImage, quality: f32) -> Result<Vec<u8>, ApiError> {
+    let encoder = webp::Encoder::from_image(img)
+        .map_err(|e| ApiError::Internal(format!("WebP encoder init: {e}")))?;
+    let mem = encoder.encode(quality);
+    Ok(mem.to_vec())
+}
+
+/// Decode image bytes (any supported format) on a blocking thread.
+async fn decode_image(data: Vec<u8>) -> Result<DynamicImage, ApiError> {
+    tokio::task::spawn_blocking(move || {
+        let reader = ImageReader::new(std::io::Cursor::new(&data))
+            .with_guessed_format()
+            .map_err(|e| ApiError::BadRequest(format!("unrecognised image format: {e}")))?;
+        reader
+            .decode()
+            .map_err(|e| ApiError::BadRequest(format!("invalid image: {e}")))
+    })
+    .await
+    .map_err(|_| ApiError::Internal("image decode task failed".into()))?
 }
 
 #[derive(Serialize)]
@@ -50,7 +96,7 @@ async fn extract_file(mut multipart: Multipart) -> Result<(String, Vec<u8>), Api
     if let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|e| ApiError::BadRequest(format!("multipart error: {e}")))?
+        .map_err(|e| ApiError::BadRequest(format!("read upload: {e}")))?
     {
         let content_type = field
             .content_type()
@@ -59,7 +105,7 @@ async fn extract_file(mut multipart: Multipart) -> Result<(String, Vec<u8>), Api
 
         if !ALLOWED_TYPES.contains(&content_type.as_str()) {
             return Err(ApiError::BadRequest(format!(
-                "unsupported file type: {content_type}"
+                "unsupported file type: {content_type}. Supported: JPEG, PNG, WebP, GIF, BMP, TIFF, AVIF"
             )));
         }
 
@@ -69,7 +115,7 @@ async fn extract_file(mut multipart: Multipart) -> Result<(String, Vec<u8>), Api
             .map_err(|e| ApiError::BadRequest(format!("read upload: {e}")))?;
 
         if data.len() > MAX_FILE_SIZE {
-            return Err(ApiError::BadRequest("file too large (max 5 MB)".into()));
+            return Err(ApiError::BadRequest("file too large (max 10 MB)".into()));
         }
 
         return Ok((content_type, data.to_vec()));
@@ -88,16 +134,19 @@ async fn upload_avatar(
 
     let (_content_type, data) = extract_file(multipart).await?;
 
-    // Decode, resize to 200x200 cover crop, encode as WebP
-    let img = image::load_from_memory(&data)
-        .map_err(|e| ApiError::BadRequest(format!("invalid image: {e}")))?;
-    let img = img.resize_to_fill(200, 200, image::imageops::FilterType::Lanczos3);
-    let mut buf = Vec::new();
-    img.write_to(
-        &mut std::io::Cursor::new(&mut buf),
-        image::ImageFormat::WebP,
-    )
-    .map_err(|e| ApiError::Internal(format!("encode WebP: {e}")))?;
+    // Decode + resize + encode on blocking thread
+    let buf = tokio::task::spawn_blocking(move || {
+        let img = ImageReader::new(std::io::Cursor::new(&data))
+            .with_guessed_format()
+            .map_err(|e| ApiError::BadRequest(format!("unrecognised format: {e}")))?
+            .decode()
+            .map_err(|e| ApiError::BadRequest(format!("invalid image: {e}")))?;
+
+        let img = img.resize_to_fill(AVATAR_SIZE, AVATAR_SIZE, FilterType::Lanczos3);
+        encode_lossy_webp(&img, 80.0)
+    })
+    .await
+    .map_err(|_| ApiError::Internal("avatar processing task failed".into()))??;
 
     let dir = upload_dir().join("avatars");
     fs::create_dir_all(&dir)
@@ -179,30 +228,25 @@ async fn upload_image(
 ) -> Result<Json<ImageResponse>, ApiError> {
     let (_content_type, data) = extract_file(multipart).await?;
 
-    let img = image::load_from_memory(&data)
-        .map_err(|e| ApiError::BadRequest(format!("invalid image: {e}")))?;
+    // Decode on blocking thread
+    let img = decode_image(data).await?;
 
-    // Resize main image to fit 640x480 (maintain aspect ratio), encode as WebP
-    let main_img = img.resize(640, 480, image::imageops::FilterType::Lanczos3);
-    let width = main_img.width();
-    let height = main_img.height();
-    let mut main_buf = Vec::new();
-    main_img
-        .write_to(
-            &mut std::io::Cursor::new(&mut main_buf),
-            image::ImageFormat::WebP,
-        )
-        .map_err(|e| ApiError::Internal(format!("encode WebP: {e}")))?;
+    // Resize + encode main image and thumbnail on blocking thread
+    let (main_buf, thumb_buf, width, height) = tokio::task::spawn_blocking(move || {
+        // Main: fit within max dimensions, preserve aspect ratio
+        let main_img = img.resize(MAIN_MAX_WIDTH, MAIN_MAX_HEIGHT, FilterType::Lanczos3);
+        let w = main_img.width();
+        let h = main_img.height();
+        let main_buf = encode_lossy_webp(&main_img, 82.0)?;
 
-    // Resize thumbnail to 200x150 cover crop, encode as WebP
-    let thumb_img = img.resize_to_fill(200, 150, image::imageops::FilterType::Lanczos3);
-    let mut thumb_buf = Vec::new();
-    thumb_img
-        .write_to(
-            &mut std::io::Cursor::new(&mut thumb_buf),
-            image::ImageFormat::WebP,
-        )
-        .map_err(|e| ApiError::Internal(format!("encode WebP thumbnail: {e}")))?;
+        // Thumbnail: cover crop
+        let thumb_img = img.resize_to_fill(THUMB_WIDTH, THUMB_HEIGHT, FilterType::Lanczos3);
+        let thumb_buf = encode_lossy_webp(&thumb_img, 75.0)?;
+
+        Ok::<_, ApiError>((main_buf, thumb_buf, w, h))
+    })
+    .await
+    .map_err(|_| ApiError::Internal("image processing task failed".into()))??;
 
     let images_dir = upload_dir().join("images");
     let thumbs_dir = upload_dir().join("thumbnails");
@@ -238,4 +282,5 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/uploads/avatar", post(upload_avatar).delete(delete_avatar))
         .route("/uploads/image", post(upload_image))
+        .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024))
 }

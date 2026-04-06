@@ -5,107 +5,11 @@
 }:
 with lib; let
   cfg = config.services.eulesia;
-  urlScheme =
-    if cfg.tls.enable
-    then "https"
-    else "http";
-  appUrl = "${urlScheme}://${cfg.appDomain}";
-  apiUrl = "${urlScheme}://${cfg.apiDomain}";
   apiProxy = "http://${cfg.api.listenAddress}:${toString cfg.api.port}";
-  # When v2ServerPort is set, route /api/* traffic to v2 Rust server.
-  v2Proxy =
-    if cfg.v2ServerPort != null
-    then "http://127.0.0.1:${toString cfg.v2ServerPort}"
-    else null;
   ogBotRegex = "(facebookexternalhit|Facebot|Twitterbot|LinkedInBot|WhatsApp|Slackbot|Discordbot|TelegramBot|Embedly|Pinterest|vkShare|Applebot|Googlebot|bingbot|Baiduspider|YandexBot|DuckDuckBot)";
-
-  fileEnv = name: path:
-    optionalString (path != null) ''
-      export ${name}="$(cat ${escapeShellArg (toString path)})"
-    '';
-
-  stringEnv = name: value: ''
-    export ${name}=${escapeShellArg value}
-  '';
-
-  extraEnvironment = concatStringsSep "\n" (
-    mapAttrsToList stringEnv cfg.extraEnvironment
-  );
-
-  extraSecretEnvironment = concatStringsSep "\n" (
-    mapAttrsToList fileEnv cfg.extraSecretEnvironmentFiles
-  );
-
-  apiSecretFiles =
-    unique
-    (map toString (filter (path: path != null) (
-      [
-        cfg.auth.sessionSecretFile
-        cfg.auth.bootstrapAdminAccountsFile
-        cfg.auth.idura.signingKeyFile
-        cfg.auth.idura.encryptionKeyFile
-        cfg.meilisearch.masterKeyFile
-        cfg.email.smtp.userFile
-        cfg.email.smtp.passFile
-        cfg.ai.mistralApiKeyFile
-        cfg.push.vapidPublicKeyFile
-        cfg.push.vapidPrivateKeyFile
-        cfg.push.firebaseServiceAccountKeyFile
-      ]
-      ++ attrValues cfg.extraSecretEnvironmentFiles
-    )));
-
-  apiEnvironment = ''
-    ${stringEnv "NODE_ENV" "production"}
-    ${stringEnv "PORT" (toString cfg.api.port)}
-    ${stringEnv "DATABASE_URL" cfg.database.url}
-    ${optionalString cfg.database.createLocally (stringEnv "PGHOST" "/run/postgresql")}
-    ${optionalString cfg.database.createLocally (stringEnv "PGUSER" cfg.database.user)}
-    ${stringEnv "APP_URL" appUrl}
-    ${stringEnv "API_URL" apiUrl}
-    ${optionalString cfg.auth.idura.enable (stringEnv "IDURA_DOMAIN" cfg.auth.idura.domain)}
-    ${optionalString cfg.auth.idura.enable (stringEnv "IDURA_CLIENT_ID" cfg.auth.idura.clientId)}
-    ${optionalString cfg.auth.idura.enable (stringEnv "IDURA_CALLBACK_URL" cfg.auth.idura.callbackUrl)}
-    ${optionalString (cfg.auth.idura.enable && cfg.auth.idura.signingKeyFile != null) (stringEnv "IDURA_SIGNING_KEY_FILE" (toString cfg.auth.idura.signingKeyFile))}
-    ${optionalString (cfg.auth.idura.enable && cfg.auth.idura.encryptionKeyFile != null) (stringEnv "IDURA_ENCRYPTION_KEY_FILE" (toString cfg.auth.idura.encryptionKeyFile))}
-    ${stringEnv "EMAIL_PROVIDER" cfg.email.provider}
-    ${stringEnv "EMAIL_FROM" cfg.email.from}
-    ${stringEnv "MEILI_URL" cfg.meilisearch.url}
-    ${optionalString cfg.ai.mistralEnabled (stringEnv "MISTRAL_ENABLED" "true")}
-    ${stringEnv "MISTRAL_MODEL" cfg.ai.mistralModel}
-    ${stringEnv "UPLOAD_DIR" cfg.uploadsDir}
-    ${stringEnv "ALLOWED_ORIGINS" (concatStringsSep "," cfg.auth.nativeOrigins)}
-    ${optionalString (cfg.auth.cookieDomain != null) (stringEnv "COOKIE_DOMAIN" cfg.auth.cookieDomain)}
-    ${optionalString (cfg.email.smtp.host != null) (stringEnv "SMTP_HOST" cfg.email.smtp.host)}
-    ${stringEnv "SMTP_PORT" (toString cfg.email.smtp.port)}
-    ${stringEnv "SMTP_SECURE" (
-      if cfg.email.smtp.secure
-      then "true"
-      else "false"
-    )}
-    ${fileEnv "SESSION_SECRET" cfg.auth.sessionSecretFile}
-    ${fileEnv "MEILI_MASTER_KEY" cfg.meilisearch.masterKeyFile}
-    ${fileEnv "SMTP_USER" cfg.email.smtp.userFile}
-    ${fileEnv "SMTP_PASS" cfg.email.smtp.passFile}
-    ${fileEnv "MISTRAL_API_KEY" cfg.ai.mistralApiKeyFile}
-    ${fileEnv "VAPID_PUBLIC_KEY" cfg.push.vapidPublicKeyFile}
-    ${fileEnv "VAPID_PRIVATE_KEY" cfg.push.vapidPrivateKeyFile}
-    ${stringEnv "VAPID_SUBJECT" cfg.push.vapidSubject}
-    ${fileEnv "FIREBASE_SERVICE_ACCOUNT_KEY" cfg.push.firebaseServiceAccountKeyFile}
-    ${extraEnvironment}
-    ${stringEnv "AUTH_REGISTRATION_MODE" cfg.auth.registrationMode}
-    ${optionalString (cfg.auth.bootstrapAdminAccountsFile != null) (stringEnv "BOOTSTRAP_ADMIN_ACCOUNTS_FILE" (toString cfg.auth.bootstrapAdminAccountsFile))}
-    ${extraSecretEnvironment}
-  '';
 in {
   options.services.eulesia = {
     enable = mkEnableOption "Eulesia civic platform";
-
-    package = mkOption {
-      type = types.nullOr types.package;
-      default = null;
-      description = "Packaged Eulesia API derivation.";
-    };
 
     frontendPackage = mkOption {
       type = types.nullOr types.package;
@@ -149,12 +53,6 @@ in {
       description = "API domain.";
     };
 
-    v2ServerPort = mkOption {
-      type = types.nullOr types.port;
-      default = null;
-      description = "When set, route /api/* traffic to the v2 Rust server on this port instead of v1 Node. Admin routes stay on v1.";
-    };
-
     adminDomain = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -170,8 +68,8 @@ in {
 
       port = mkOption {
         type = types.port;
-        default = 3001;
-        description = "Port for the API service.";
+        default = 3002;
+        description = "Port for the API service (Rust server).";
       };
     };
 
@@ -437,10 +335,6 @@ in {
   config = mkIf cfg.enable {
     assertions = [
       {
-        assertion = cfg.package != null;
-        message = "services.eulesia.package must be set when the service is enabled.";
-      }
-      {
         assertion = cfg.frontendPackage != null;
         message = "services.eulesia.frontendPackage must be set when the service is enabled.";
       }
@@ -512,10 +406,7 @@ in {
               forceSSL = cfg.tls.enable;
               locations = {
                 "/" = {
-                  proxyPass =
-                    if v2Proxy != null
-                    then v2Proxy
-                    else apiProxy;
+                  proxyPass = apiProxy;
                   proxyWebsockets = true;
                 };
               };
@@ -532,24 +423,12 @@ in {
                     try_files $uri $uri/ /index.html;
                   '';
                 };
-                # Admin API stays on v1 Node
-                "/api/v1/admin/" = {
+                "/api/" = {
                   proxyPass = apiProxy;
                   proxyWebsockets = true;
+                  extraConfig = "client_max_body_size 10m;";
                 };
-                "/api/" = {
-                  proxyPass =
-                    if v2Proxy != null
-                    then v2Proxy
-                    else apiProxy;
-                  proxyWebsockets = true;
-                };
-                "/ws/" = mkIf (v2Proxy != null) {
-                  proxyPass = v2Proxy;
-                  proxyWebsockets = true;
-                };
-                # Socket.IO stays on v1 Node API (v2 uses native WS at /ws/v2)
-                "/socket.io/" = {
+                "/ws/" = {
                   proxyPass = apiProxy;
                   proxyWebsockets = true;
                 };
@@ -617,69 +496,6 @@ in {
       ];
 
       services = {
-        eulesia-api = {
-          description = "Eulesia API";
-          wantedBy = ["multi-user.target"];
-          wants =
-            ["network-online.target"]
-            ++ optional (apiSecretFiles != []) "sops-install-secrets.service"
-            ++ optional cfg.database.createLocally "postgresql.service"
-            ++ optional cfg.meilisearch.createLocally "meilisearch.service";
-          after =
-            ["network-online.target"]
-            ++ optional (apiSecretFiles != []) "sops-install-secrets.service"
-            ++ optional cfg.database.createLocally "postgresql.service"
-            ++ optional cfg.meilisearch.createLocally "meilisearch.service";
-          unitConfig = optionalAttrs (apiSecretFiles != []) {
-            ConditionPathExists = apiSecretFiles;
-          };
-          preStart = ''
-            set -euo pipefail
-            ${apiEnvironment}
-            ${cfg.package}/bin/eulesia-api-migrate
-            ${cfg.package}/bin/eulesia-api-bootstrap-admins
-          '';
-          serviceConfig = {
-            Type = "simple";
-            User = cfg.user;
-            Group = cfg.group;
-            WorkingDirectory = cfg.stateDir;
-            Restart = "on-failure";
-            RestartSec = 5;
-            UMask = "0077";
-            ReadWritePaths = [
-              cfg.stateDir
-              cfg.uploadsDir
-            ];
-          };
-          script = ''
-            set -euo pipefail
-            ${apiEnvironment}
-            exec ${cfg.package}/bin/eulesia-api
-          '';
-        };
-
-        # One-shot service for importing municipal minutes
-        # Usage: systemctl start eulesia-import-minutes
-        # Or with args: systemctl start eulesia-import-minutes@"--municipality=Rautalampi --limit=1"
-        eulesia-import-minutes = {
-          description = "Eulesia Municipal Minutes Import";
-          after = ["eulesia-api.service"];
-          serviceConfig = {
-            Type = "oneshot";
-            User = cfg.user;
-            Group = cfg.group;
-            WorkingDirectory = cfg.stateDir;
-            UMask = "0077";
-            ReadWritePaths = [cfg.stateDir];
-          };
-          script = ''
-            set -euo pipefail
-            ${apiEnvironment}
-            ${cfg.package}/bin/eulesia-api-import-minutes "$@"
-          '';
-        };
-
         meilisearch = mkIf cfg.meilisearch.createLocally {
           wants = optional (cfg.meilisearch.masterKeyFile != null) "sops-install-secrets.service";
           after = optional (cfg.meilisearch.masterKeyFile != null) "sops-install-secrets.service";

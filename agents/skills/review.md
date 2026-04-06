@@ -40,12 +40,12 @@
 
    ```bash
    # Look for schema changes in the diff
-   gh pr diff <pr-number> --repo Eulesia/eulesia | grep -A 5 "schema\|migration\|startupMigrations"
+   gh pr diff <pr-number> --repo Eulesia/eulesia | grep -A 5 "schema\|migration"
    ```
 
    Verify:
-   - Migration files are present for schema changes
-   - Migration order is correct in `startupMigrations.ts`
+   - SeaORM migration files are present for schema changes in `crates/db/src/migration/`
+   - Migration order is correct
    - Rollback is possible (no destructive changes without plan)
 
 5. **Identify missing tests.** For each functional change, check if there is a corresponding test. Flag untested code paths.

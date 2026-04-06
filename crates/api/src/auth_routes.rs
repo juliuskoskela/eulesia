@@ -76,6 +76,17 @@ fn auth_response(
     config: &AppConfig,
     jar: CookieJar,
 ) -> (CookieJar, Json<UserProfile>) {
+    // Clear any stale session cookies that may have been set with different
+    // domain/path attributes (e.g. by the old v1 Node API). We clear both
+    // with and without domain to cover all variants the browser may hold.
+    let mut removal = Cookie::build("session").path("/").build();
+    let jar = jar.remove(removal.clone());
+    if let Some(ref domain) = config.cookie_domain {
+        removal.set_domain(domain.clone());
+    }
+    let jar = jar.remove(removal);
+    let jar = jar.remove(Cookie::build("__Host-session").path("/").build());
+
     let cookie = build_session_cookie(token.as_str(), config);
     let jar = jar.add(cookie);
 
@@ -87,6 +98,21 @@ async fn register(
     jar: CookieJar,
     Json(req): Json<RegisterRequest>,
 ) -> Result<(CookieJar, Json<UserProfile>), ApiError> {
+    // Check if registration is open.
+    {
+        use eulesia_db::entities::site_settings;
+        use sea_orm::EntityTrait;
+        let reg_open = site_settings::Entity::find_by_id("registrationOpen".to_string())
+            .one(&*state.db)
+            .await
+            .ok()
+            .flatten()
+            .map_or(true, |r| r.value == "true");
+        if !reg_open {
+            return Err(ApiError::Forbidden);
+        }
+    }
+
     let (user, token) = AuthService::register(
         &state.db,
         req,
@@ -128,6 +154,7 @@ async fn logout(
         .map_err(ApiError::from)?;
 
     let jar = jar.remove(Cookie::from("session"));
+    let jar = jar.remove(Cookie::from("__Host-session"));
     Ok(jar)
 }
 
@@ -361,9 +388,21 @@ struct AuthConfigResponse {
 
 /// GET /auth/config — returns which auth methods are available.
 async fn auth_config(State(state): State<AppState>) -> Json<AuthConfigResponse> {
+    // Read registrationOpen from site_settings (defaults to true if not set).
+    let registration_open = {
+        use eulesia_db::entities::site_settings;
+        use sea_orm::EntityTrait;
+        site_settings::Entity::find_by_id("registrationOpen".to_string())
+            .one(&*state.db)
+            .await
+            .ok()
+            .flatten()
+            .map_or(true, |r| r.value == "true")
+    };
+
     Json(AuthConfigResponse {
         registration_mode: "ftn-open".into(),
-        registration_open: true,
+        registration_open,
         ftn_enabled: state.ftn_config.is_some(),
     })
 }

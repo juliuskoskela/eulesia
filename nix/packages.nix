@@ -15,14 +15,9 @@
       inherit pkgs pnpmDeps;
       src = repoSrc;
     };
-    api = import ./api.nix {
-      inherit pkgs pnpmDeps;
-      src = repoSrc;
-    };
     fullBuild = pkgs.runCommand "eulesia-build" {} ''
       mkdir -p $out
       ln -s ${frontend} $out/frontend
-      ln -s ${api} $out/api
       ln -s ${server} $out/server
     '';
 
@@ -38,7 +33,7 @@
     server = rustBuilds.package;
   in {
     packages = {
-      inherit frontend api server pnpmDeps;
+      inherit frontend server pnpmDeps;
       build = fullBuild;
       generate-idura-jwks = generateIduraJwks;
       default = fullBuild;
@@ -51,15 +46,10 @@
     };
 
     apps = {
-      api = {
-        type = "app";
-        program = "${api}/bin/eulesia-api";
-        meta.description = "Run the packaged Eulesia API server";
-      };
       server = {
         type = "app";
         program = "${server}/bin/eulesia-server";
-        meta.description = "Run the Eulesia v2 Rust server";
+        meta.description = "Run the Eulesia Rust API server";
       };
       generate-idura-jwks = {
         type = "app";
@@ -68,8 +58,8 @@
       };
       default = {
         type = "app";
-        program = "${api}/bin/eulesia-api";
-        meta.description = "Run the packaged Eulesia API server";
+        program = "${server}/bin/eulesia-server";
+        meta.description = "Run the Eulesia Rust API server";
       };
     };
   };

@@ -27,6 +27,11 @@ async fn main() -> anyhow::Result<()> {
     let db = eulesia_db::connect(database_url).await?;
     eulesia_db::migrate(&db).await?;
 
+    // Bootstrap admin accounts from SOPS-managed JSON file (idempotent).
+    if let Some(ref path) = config.admin_bootstrap_file {
+        bootstrap_admins(&db, path).await?;
+    }
+
     let db = Arc::new(db);
 
     let app_config = AppConfig {
@@ -157,4 +162,64 @@ async fn shutdown_signal(cancel: CancellationToken) {
 
     info!("cancelling background workers");
     cancel.cancel();
+}
+
+/// Bootstrap admin accounts from a SOPS-managed JSON file.
+///
+/// Idempotent: inserts new accounts, reseeds passwords when
+/// `reseedPassword` is true. Safe to run on every server start.
+async fn bootstrap_admins(db: &sea_orm::DatabaseConnection, path: &str) -> anyhow::Result<()> {
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct AdminEntry {
+        username: String,
+        email: Option<String>,
+        name: String,
+        password: String,
+        managed_key: String,
+        #[serde(default)]
+        reseed_password: bool,
+    }
+
+    let content = tokio::fs::read_to_string(path).await?;
+    let entries: Vec<AdminEntry> = serde_json::from_str(&content)?;
+    info!(count = entries.len(), "bootstrapping admin accounts");
+
+    for entry in &entries {
+        // Argon2 is CPU-intensive — run off the async executor.
+        let pw = entry.password.clone();
+        let hash = tokio::task::spawn_blocking(move || eulesia_auth::password::hash_password(&pw))
+            .await??;
+
+        let sql = if entry.reseed_password {
+            r#"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, $4, 'sops', $5, NOW(), NOW())
+               ON CONFLICT (username) DO UPDATE SET
+                 password_hash = $3, name = $4, email = $2, updated_at = NOW()"#
+        } else {
+            r#"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, $4, 'sops', $5, NOW(), NOW())
+               ON CONFLICT (username) DO UPDATE SET
+                 name = $4, email = $2, updated_at = NOW()"#
+        };
+
+        db.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            sql,
+            [
+                entry.username.as_str().into(),
+                entry.email.as_deref().into(),
+                hash.as_str().into(),
+                entry.name.as_str().into(),
+                entry.managed_key.as_str().into(),
+            ],
+        ))
+        .await?;
+
+        info!(username = %entry.username, reseed = entry.reseed_password, "admin account synced");
+    }
+
+    Ok(())
 }

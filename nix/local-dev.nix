@@ -17,9 +17,7 @@ _: {
         local env_file
         for env_file in \
           ".env.local" \
-          ".env.development.local" \
-          "apps/api/.env.local" \
-          "apps/api/.env.development.local"
+          ".env.development.local"
         do
           if [ -f "$env_file" ]; then
             set -a
@@ -44,16 +42,16 @@ _: {
         export EULESIA_MEILI_DATA_DIR="''${EULESIA_MEILI_DATA_DIR:-$EULESIA_DEV_STATE_DIR/meilisearch}"
         export EULESIA_UPLOAD_DIR="''${EULESIA_UPLOAD_DIR:-$EULESIA_DEV_STATE_DIR/uploads}"
         export APP_URL="''${APP_URL:-http://localhost:5173}"
-        export API_URL="''${API_URL:-http://localhost:3001}"
-        export PORT="''${PORT:-3001}"
-        export SESSION_SECRET="''${SESSION_SECRET:-development-secret-key-change-in-production-32chars}"
-        export ALLOWED_ORIGINS="''${ALLOWED_ORIGINS:-capacitor://localhost,https://localhost}"
+        export API_URL="''${API_URL:-http://localhost:3002}"
         export DATABASE_URL="''${DATABASE_URL:-postgresql://$EULESIA_DB_USER:eulesia@127.0.0.1:$EULESIA_PGPORT/$EULESIA_DB_NAME}"
         export MEILI_URL="''${MEILI_URL:-$EULESIA_MEILI_URL}"
-        export MEILI_MASTER_KEY="''${MEILI_MASTER_KEY:-$EULESIA_MEILI_MASTER_KEY}"
+        export MEILI_API_KEY="''${MEILI_API_KEY:-$EULESIA_MEILI_MASTER_KEY}"
         export UPLOAD_DIR="''${UPLOAD_DIR:-$EULESIA_UPLOAD_DIR}"
-        export NODE_ENV="''${NODE_ENV:-development}"
         export VITE_API_URL="''${VITE_API_URL:-$API_URL}"
+
+        # Rust server env vars
+        export EULESIA_PORT="''${EULESIA_PORT:-3002}"
+        export EULESIA_FRONTEND_ORIGIN="''${EULESIA_FRONTEND_ORIGIN:-$APP_URL}"
 
         mkdir -p "$EULESIA_DEV_STATE_DIR" "$EULESIA_UPLOAD_DIR"
       }
@@ -164,40 +162,26 @@ _: {
       '';
     };
 
-    dbMigrate = pkgs.writeShellApplication {
-      name = "eulesia-db-migrate";
-      runtimeInputs = [nodejs pkgs.pnpm_10 postgres pkgs.curl];
-      text = ''
-        set -euo pipefail
-        ${shellFunctions}
-        configure_dev_env
-        ensure_dependencies
-        wait_for_postgres
-
-        exec pnpm --filter @eulesia/api run db:push
-      '';
-    };
-
     devApi = pkgs.writeShellApplication {
       name = "eulesia-dev-api";
-      runtimeInputs = [nodejs pkgs.pnpm_10 postgres pkgs.curl dbMigrate];
+      runtimeInputs = [postgres pkgs.curl];
       text = ''
         set -euo pipefail
         ${shellFunctions}
         configure_dev_env
-        ensure_dependencies
         wait_for_postgres
         wait_for_http "$MEILI_URL/health"
         mkdir -p "$UPLOAD_DIR"
-        ${dbMigrate}/bin/eulesia-db-migrate
 
-        exec pnpm --filter @eulesia/api run dev
+        # The Rust server auto-runs SeaORM migrations on startup.
+        # Cargo and the Rust toolchain are provided by the devshell.
+        exec cargo run -p eulesia-server
       '';
     };
 
     dbReset = pkgs.writeShellApplication {
       name = "eulesia-db-reset";
-      runtimeInputs = [postgres dbMigrate];
+      runtimeInputs = [postgres];
       text = ''
         set -euo pipefail
         ${shellFunctions}
@@ -209,14 +193,8 @@ _: {
 
         rm -rf "$EULESIA_PGDATA_DIR"
         bootstrap_postgres
-        pg_ctl \
-          -D "$EULESIA_PGDATA_DIR" \
-          -l "$EULESIA_DEV_STATE_DIR/postgres-bootstrap.log" \
-          -o "-F -h 127.0.0.1 -p $EULESIA_PGPORT" \
-          -w start
 
-        trap 'pg_ctl -D "$EULESIA_PGDATA_DIR" -m fast stop >/dev/null 2>&1 || true' EXIT
-        ${dbMigrate}/bin/eulesia-db-migrate
+        echo "Database cluster recreated. SeaORM migrations will run automatically on next server start."
       '';
     };
 
@@ -247,7 +225,6 @@ _: {
       inherit dev;
       dev-api = devApi;
       dev-web = devWeb;
-      db-migrate = dbMigrate;
       db-reset = dbReset;
     };
 
@@ -260,22 +237,17 @@ _: {
       dev-api = {
         type = "app";
         program = "${devApi}/bin/eulesia-dev-api";
-        meta.description = "Start the API against locally managed PostgreSQL and Meilisearch";
+        meta.description = "Start the Rust API server against locally managed PostgreSQL and Meilisearch";
       };
       dev-web = {
         type = "app";
         program = "${devWeb}/bin/eulesia-dev-web";
         meta.description = "Start the Vite frontend development server";
       };
-      db-migrate = {
-        type = "app";
-        program = "${dbMigrate}/bin/eulesia-db-migrate";
-        meta.description = "Apply local database schema changes with Drizzle";
-      };
       db-reset = {
         type = "app";
         program = "${dbReset}/bin/eulesia-db-reset";
-        meta.description = "Recreate the local PostgreSQL cluster and apply schema changes";
+        meta.description = "Recreate the local PostgreSQL cluster (migrations run on server start)";
       };
     };
   };

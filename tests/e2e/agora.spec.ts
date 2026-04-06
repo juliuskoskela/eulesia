@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/auth";
+import { test, expect, expectNoPageErrors } from "./fixtures/auth";
 
 test.describe("Agora", () => {
   test("agora page loads for authenticated user", async ({
@@ -6,8 +6,8 @@ test.describe("Agora", () => {
   }) => {
     await page.goto("/agora");
     await expect(page).toHaveURL(/agora/);
-    // The agora heading or feed content should be visible
     await expect(page.locator("main")).toBeVisible();
+    expectNoPageErrors(page);
   });
 
   test("agora page is publicly accessible", async ({ page }) => {

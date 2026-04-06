@@ -198,16 +198,11 @@ Client → Generate identity key + signed pre-key + one-time pre-keys
 
 ## Deployment Model
 
-Both v1 (Node) and v2 (Rust) run simultaneously during transition:
+The Rust server is the sole backend:
 
 ```
                     Traefik (:443)
-                    ├── /api/v1/*  → nginx → Node API (:3001)
-                    ├── /api/v2/*  → Rust server (:3002)
+                    ├── /api/v1/*  → Rust server (:3002)
                     ├── /ws/v2     → Rust server (:3002)
-                    ├── /admin/*   → nginx → Node API (:3001)
                     └── /*         → nginx → Frontend static
 ```
-
-The v2 server starts with health + device registration + message relay.
-Endpoints migrate from v1 → v2 incrementally.

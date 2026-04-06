@@ -4,12 +4,12 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import i18n from "../lib/i18n";
-import { api } from "../lib/api";
-import { buildApiUrl } from "../lib/runtimeConfig";
+import { api, setUnauthorizedHandler } from "../lib/api";
 import type { RegisterRequest, User } from "../lib/api";
 
 interface SanctionInfo {
@@ -39,6 +39,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sanction, setSanction] = useState<SanctionInfo | null>(null);
   const queryClient = useQueryClient();
+
+  // Only install the 401 handler after initial auth check completes.
+  // Before that, background requests firing 401 are expected (user may
+  // not be logged in yet) and should not nuke auth state.
+  const authCheckedRef = useRef(false);
+  const sessionLostRef = useRef(false);
+
+  useEffect(() => {
+    if (!authCheckedRef.current) return;
+
+    setUnauthorizedHandler(() => {
+      if (sessionLostRef.current) return;
+      sessionLostRef.current = true;
+
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+      setSanction(null);
+
+      setTimeout(() => {
+        sessionLostRef.current = false;
+      }, 1000);
+    });
+
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, [isLoading]); // re-run when isLoading changes (auth check completes)
 
   const checkAuth = useCallback(async () => {
     try {
@@ -71,26 +98,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         err?.message?.includes("banned") ||
         err?.message?.includes("suspended")
       ) {
-        try {
-          const response = await fetch(buildApiUrl("/api/v1/auth/me"), {
-            credentials: "include",
-          });
-          if (response.status === 403) {
-            const data = await response.json();
-            if (data.sanctionType) {
-              setSanction({
-                sanctionType: data.sanctionType,
-                reason: data.reason,
-                expiresAt: data.expiresAt,
-              });
-            }
-          }
-        } catch {
-          // Ignore secondary fetch errors
+        const sanctionInfo = await api.getSanctionInfo();
+        if (sanctionInfo) {
+          setSanction(sanctionInfo);
         }
       }
     } finally {
       setIsLoading(false);
+      authCheckedRef.current = true;
     }
   }, []);
 

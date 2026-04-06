@@ -28,7 +28,7 @@ import {
   Check,
   Copy,
 } from "lucide-react";
-import { API_BASE_URL } from "../../lib/runtimeConfig";
+import { api } from "../../lib/api";
 
 function ToggleSwitch({
   enabled,
@@ -81,26 +81,13 @@ function AdminPasswordChangeCard() {
 
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/v1/admin/auth/change-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ currentPassword, newPassword }),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || "Failed to change password");
-        return;
-      }
+      await api.adminChangePassword({ currentPassword, newPassword });
       setSuccess(true);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch {
-      setError("Network error");
+    } catch (err: any) {
+      setError(err?.message || "Failed to change password");
     } finally {
       setLoading(false);
     }

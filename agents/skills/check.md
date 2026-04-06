@@ -31,7 +31,7 @@ Run each step sequentially. **Exit on first failure.**
 3. **Typecheck** (detect which components have changes)
 
    ```bash
-   # Frontend + v1 API (TypeScript)
+   # Frontend (TypeScript)
    pnpm run typecheck
 
    # v2 Server (Rust) -- only if crates/ has changes
@@ -94,7 +94,6 @@ Detect which components are affected by uncommitted or staged changes:
 | Path pattern   | Component      | Toolchain                                     |
 | -------------- | -------------- | --------------------------------------------- |
 | `crates/**`    | v2 Rust server | `cargo build`, `cargo test`, `cargo clippy`   |
-| `apps/api/**`  | v1 Node API    | `pnpm --filter @eulesia/api run check`        |
 | `src/**`       | Frontend       | `pnpm run lint:web && pnpm run typecheck:web` |
 | `nix/**`       | Nix infra      | `nix flake check`                             |
 | `tests/e2e/**` | E2E tests      | `pnpm exec playwright test`                   |
