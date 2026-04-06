@@ -78,6 +78,7 @@ struct WaitlistListResponse {
     total: i64,
     limit: i64,
     page: i64,
+    has_more: bool,
 }
 
 const fn default_limit() -> i64 {
@@ -115,6 +116,7 @@ struct BulkApproveResponse {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BulkApproveResult {
+    id: Uuid,
     code: String,
     email: String,
     status: String,
@@ -156,7 +158,7 @@ fn generate_invite_code() -> String {
 async fn join_waitlist(
     State(state): State<AppState>,
     Json(req): Json<JoinWaitlistRequest>,
-) -> Result<Json<WaitlistEntryResponse>, ApiError> {
+) -> Result<Json<serde_json::Value>, ApiError> {
     validate_email(&req.email)?;
 
     let id = new_id();
@@ -191,16 +193,10 @@ async fn join_waitlist(
         .await
         .map_err(|e| ApiError::Database(format!("insert waitlist: {e}")))?;
 
-    Ok(Json(WaitlistEntryResponse {
-        id,
-        email: req.email,
-        name: req.name,
-        status: "pending".into(),
-        invite_code: None,
-        created_at: now.to_rfc3339(),
-        approved_at: None,
-        approved_by: None,
-    }))
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": "You have been added to the waitlist"
+    })))
 }
 
 /// GET /waitlist/admin -- list entries (moderator only).
@@ -292,11 +288,13 @@ async fn admin_list(
         })
         .collect();
 
+    let has_more = offset + limit < total;
     Ok(Json(WaitlistListResponse {
         data,
         total,
         limit,
         page,
+        has_more,
     }))
 }
 
@@ -446,6 +444,7 @@ async fn bulk_approve(
             e
         } else {
             results.push(BulkApproveResult {
+                id: *id,
                 code: String::new(),
                 email: String::new(),
                 status: "not_found".into(),
@@ -477,6 +476,7 @@ async fn bulk_approve(
         };
 
         results.push(BulkApproveResult {
+            id: *id,
             code: invite_code,
             email,
             status: status.into(),

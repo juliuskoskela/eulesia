@@ -2,30 +2,17 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{delete, post};
 use axum::{Json, Router};
 use sea_orm::ActiveValue::Set;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::agora::threads::enrich_threads;
+use crate::agora::types::ThreadListResponse;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
 use eulesia_common::types::PaginationParams;
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::threads::ThreadRepo;
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct BookmarkResponse {
-    thread_id: Uuid,
-    created_at: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct BookmarkListResponse {
-    #[serde(rename = "items")]
-    data: Vec<BookmarkResponse>,
-    total: u64,
-}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +69,7 @@ async fn list_bookmarks(
     auth: AuthUser,
     State(state): State<AppState>,
     Query(params): Query<PaginationParams>,
-) -> Result<Json<BookmarkListResponse>, ApiError> {
+) -> Result<Json<ThreadListResponse>, ApiError> {
     let offset = u64::try_from(params.offset).unwrap_or(0);
     let limit = u64::try_from(params.limit).unwrap_or(50);
 
@@ -90,15 +77,35 @@ async fn list_bookmarks(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    let data = bookmarks
-        .into_iter()
-        .map(|b| BookmarkResponse {
-            thread_id: b.thread_id,
-            created_at: b.created_at.to_rfc3339(),
-        })
-        .collect();
+    let thread_ids: Vec<Uuid> = bookmarks.iter().map(|b| b.thread_id).collect();
+    let (threads, _) = ThreadRepo::list(
+        &state.db,
+        None,
+        None,
+        None,
+        Some(&thread_ids),
+        &[],
+        "recent",
+        None,
+        0,
+        limit,
+    )
+    .await
+    .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    Ok(Json(BookmarkListResponse { data, total }))
+    let data = enrich_threads(&state.db, threads, Some(auth.user_id.0)).await?;
+
+    let page = offset / limit + 1;
+    let has_more = offset + limit < total;
+    Ok(Json(ThreadListResponse {
+        data,
+        total,
+        page,
+        limit,
+        has_more,
+        feed_scope: None,
+        has_subscriptions: false,
+    }))
 }
 
 pub fn routes() -> Router<AppState> {

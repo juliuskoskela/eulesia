@@ -15,6 +15,8 @@ use uuid::Uuid;
 
 use eulesia_auth::service::AuthService;
 
+use eulesia_db::repo::conversations::ConversationRepo;
+
 use crate::messages::{ClientMessage, ServerMessage};
 use crate::registry::ConnectionRegistry;
 
@@ -39,14 +41,21 @@ pub async fn ws_upgrade(
             // connection key. This allows device-less sessions (from
             // /auth/register, /auth/login) to connect.
             let connection_id = session.device_id.unwrap_or(session.id);
+            let user_id = session.user_id;
 
-            ws.on_upgrade(move |socket| handle_socket(socket, connection_id, registry))
+            ws.on_upgrade(move |socket| handle_socket(socket, connection_id, user_id, db, registry))
         }
         Err(_) => (axum::http::StatusCode::UNAUTHORIZED, "invalid session").into_response(),
     }
 }
 
-async fn handle_socket(socket: WebSocket, connection_id: Uuid, registry: ConnectionRegistry) {
+async fn handle_socket(
+    socket: WebSocket,
+    connection_id: Uuid,
+    user_id: Uuid,
+    db: Arc<sea_orm::DatabaseConnection>,
+    registry: ConnectionRegistry,
+) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(crate::registry::CHANNEL_CAPACITY);
 
@@ -55,8 +64,8 @@ async fn handle_socket(socket: WebSocket, connection_id: Uuid, registry: Connect
     let instance_id = uuid::Uuid::now_v7();
 
     // Register connection
-    registry.register(connection_id, tx, instance_id);
-    info!(connection_id = %connection_id, "WebSocket connected");
+    registry.register(connection_id, tx, instance_id, user_id);
+    info!(connection_id = %connection_id, user_id = %user_id, "WebSocket connected");
 
     // Spawn task to forward server messages to WebSocket
     let send_task = tokio::spawn(async move {
@@ -84,11 +93,10 @@ async fn handle_socket(socket: WebSocket, connection_id: Uuid, registry: Connect
                             // Keepalive -- no action needed
                         }
                         ClientMessage::TypingStart { conversation_id } => {
-                            // TODO: broadcast typing indicator to conversation members
-                            info!(connection_id = %connection_id, conversation_id = %conversation_id, "typing start");
+                            broadcast_typing(&db, &registry, conversation_id, user_id, true).await;
                         }
                         ClientMessage::TypingStop { conversation_id } => {
-                            info!(connection_id = %connection_id, conversation_id = %conversation_id, "typing stop");
+                            broadcast_typing(&db, &registry, conversation_id, user_id, false).await;
                         }
                     }
                 }
@@ -103,4 +111,67 @@ async fn handle_socket(socket: WebSocket, connection_id: Uuid, registry: Connect
     registry.unregister_if_match(&connection_id, instance_id);
     send_task.abort();
     info!(connection_id = %connection_id, "WebSocket disconnected");
+}
+
+/// Broadcast a typing indicator to all other members of a conversation.
+async fn broadcast_typing(
+    db: &sea_orm::DatabaseConnection,
+    registry: &ConnectionRegistry,
+    conversation_id: Uuid,
+    sender_id: Uuid,
+    is_typing: bool,
+) {
+    let members = match ConversationRepo::active_members(db, conversation_id).await {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to fetch members for typing broadcast");
+            return;
+        }
+    };
+
+    let msg = ServerMessage::Typing {
+        conversation_id,
+        user_id: sender_id,
+        is_typing,
+    };
+
+    for member in &members {
+        if member.user_id != sender_id {
+            registry.send_to_user(&member.user_id, &msg);
+        }
+    }
+}
+
+/// Broadcast a new-message event to all other conversation members.
+/// Called by message handlers after persisting a message.
+pub async fn broadcast_new_message(
+    db: &sea_orm::DatabaseConnection,
+    registry: &ConnectionRegistry,
+    conversation_id: Uuid,
+    message_id: Uuid,
+    sender_id: Uuid,
+    ciphertext: &str,
+    epoch: i64,
+) {
+    let members = match ConversationRepo::active_members(db, conversation_id).await {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to fetch members for message broadcast");
+            return;
+        }
+    };
+
+    let msg = ServerMessage::NewMessage {
+        conversation_id,
+        message_id,
+        sender_id,
+        ciphertext: ciphertext.to_string(),
+        epoch,
+    };
+
+    for member in &members {
+        if member.user_id != sender_id {
+            registry.send_to_user(&member.user_id, &msg);
+        }
+    }
 }

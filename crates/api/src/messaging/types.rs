@@ -102,6 +102,31 @@ pub struct ConversationListItem {
     pub conversation_type: String,
     pub name: Option<String>,
     pub current_epoch: i64,
+    pub other_user: Option<ConversationUserSummary>,
+    pub last_message: Option<LastMessageSummary>,
+    pub unread_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationUserSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct LastMessageSummary {
+    pub id: Uuid,
+    pub content: Option<String>,
+    pub sender_id: Uuid,
     pub created_at: String,
 }
 

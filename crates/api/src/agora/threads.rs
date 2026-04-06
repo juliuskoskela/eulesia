@@ -14,6 +14,7 @@ use eulesia_common::types::{UserRole, new_id};
 use eulesia_db::repo::blocks::BlockRepo;
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::comments::CommentRepo;
+use eulesia_db::repo::follows::FollowRepo;
 use eulesia_db::repo::outbox_helpers::emit_event;
 use eulesia_db::repo::tags::TagRepo;
 use eulesia_db::repo::thread_views::ThreadViewRepo;
@@ -191,7 +192,9 @@ pub async fn list_threads(
     State(state): State<AppState>,
     Query(params): Query<ThreadListParams>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
-    // "all" means no scope filter (v1 compat)
+    let is_following = params.scope.as_deref() == Some("following");
+
+    // "all" and "following" mean no scope filter in the DB query
     let scope_filter = params
         .scope
         .as_deref()
@@ -207,8 +210,48 @@ pub async fn list_threads(
     };
 
     let sort = params.sort.as_deref().unwrap_or("recent");
-    let offset = params.offset.unwrap_or(0);
     let limit = clamp_limit(params.limit);
+    // Support both page-based and offset-based pagination
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = params.offset.unwrap_or_else(|| (page - 1) * limit);
+
+    // Check if user has any subscriptions (follows)
+    let has_subscriptions = match user_id {
+        Some(uid) => {
+            FollowRepo::count_following(&state.db, uid)
+                .await
+                .map_err(db_err)?
+                > 0
+        }
+        None => false,
+    };
+
+    // For "following" feed, resolve followed author IDs and use author_id filter
+    let following_author_id = if is_following {
+        if let Some(uid) = user_id {
+            let (follows, _) = FollowRepo::following_of(&state.db, uid, 0, 10_000)
+                .await
+                .map_err(db_err)?;
+            let ids: Vec<Uuid> = follows.iter().map(|f| f.followed_id).collect();
+            if ids.is_empty() {
+                // No follows — return empty result immediately
+                return Ok(Json(ThreadListResponse {
+                    data: vec![],
+                    total: 0,
+                    page,
+                    limit,
+                    has_more: false,
+                    feed_scope: Some("following".into()),
+                    has_subscriptions: false,
+                }));
+            }
+            Some(ids)
+        } else {
+            return Err(ApiError::Unauthorized);
+        }
+    } else {
+        None
+    };
 
     // If filtering by tag, resolve thread IDs first, then pass them into
     // ThreadRepo::list so that sorting, visibility, and pagination are applied
@@ -222,14 +265,64 @@ pub async fn list_threads(
         None
     };
 
+    // For following feed, we need to filter by author IDs.
+    // Use thread_ids approach: fetch thread IDs for followed authors first.
+    let following_thread_ids = if let Some(ref author_ids) = following_author_id {
+        // Get all thread IDs by these authors (using a list query with each author)
+        // More efficient: use a single query
+        let mut all_ids = Vec::new();
+        for aid in author_ids {
+            let (threads, _) = ThreadRepo::list(
+                &state.db,
+                scope_filter,
+                params.municipality_id,
+                Some(*aid),
+                None,
+                &excluded,
+                "recent",
+                None,
+                0,
+                10_000,
+            )
+            .await
+            .map_err(db_err)?;
+            all_ids.extend(threads.iter().map(|t| t.id));
+        }
+        Some(all_ids)
+    } else {
+        None
+    };
+
+    // Merge tag_ids and following_thread_ids if both present
+    let merged_ids = match (&tag_ids, &following_thread_ids) {
+        (Some(tags), Some(follows)) => {
+            let tag_set: HashSet<Uuid> = tags.iter().copied().collect();
+            Some(
+                follows
+                    .iter()
+                    .copied()
+                    .filter(|id| tag_set.contains(id))
+                    .collect::<Vec<_>>(),
+            )
+        }
+        (Some(tags), None) => Some(tags.clone()),
+        (None, Some(follows)) => Some(follows.clone()),
+        (None, None) => None,
+    };
+
     let (threads, total) = ThreadRepo::list(
         &state.db,
-        scope_filter,
+        if following_author_id.is_some() {
+            None
+        } else {
+            scope_filter
+        },
         params.municipality_id,
         None,
-        tag_ids.as_deref(),
+        merged_ids.as_deref(),
         &excluded,
         sort,
+        params.top_period.as_deref(),
         offset,
         limit,
     )
@@ -237,12 +330,16 @@ pub async fn list_threads(
     .map_err(db_err)?;
 
     let data = enrich_threads(&state.db, threads, user_id).await?;
+    let has_more = offset + limit < total;
 
     Ok(Json(ThreadListResponse {
         data,
         total,
-        offset,
+        page,
         limit,
+        has_more,
+        feed_scope: params.scope.clone(),
+        has_subscriptions,
     }))
 }
 
@@ -376,9 +473,13 @@ pub async fn create_thread(
     State(state): State<AppState>,
     Json(req): Json<CreateThreadRequest>,
 ) -> Result<Json<ThreadResponse>, ApiError> {
-    validate_scope(&req.scope)?;
+    let scope = req
+        .scope
+        .as_deref()
+        .ok_or_else(|| ApiError::BadRequest("scope is required".into()))?;
+    validate_scope(scope)?;
 
-    if req.scope == "local" && req.municipality_id.is_none() {
+    if scope == "local" && req.municipality_id.is_none() {
         return Err(ApiError::BadRequest(
             "municipality_id is required for local scope".into(),
         ));
@@ -390,6 +491,7 @@ pub async fn create_thread(
         return Err(ApiError::BadRequest("content must not be empty".into()));
     }
 
+    let scope = scope.to_string();
     let thread_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
@@ -400,9 +502,12 @@ pub async fn create_thread(
             title: Set(req.title),
             content: Set(req.content),
             author_id: Set(auth.user_id.0),
-            scope: Set(req.scope),
+            scope: Set(scope),
             municipality_id: Set(req.municipality_id),
             language: Set(req.language),
+            country: Set(req.country),
+            location_id: Set(req.location_id),
+            institutional_context: Set(req.institutional_context),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()

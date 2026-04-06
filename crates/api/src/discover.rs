@@ -30,11 +30,21 @@ const fn default_limit() -> i64 {
 // Handlers
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DiscoverListResponse {
+    items: Vec<serde_json::Value>,
+    total: i64,
+    page: i64,
+    limit: i64,
+    has_more: bool,
+}
+
 /// GET /discover/explore -- CVS-ranked thread feed.
 async fn explore(
     State(state): State<AppState>,
     Query(params): Query<ExploreParams>,
-) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+) -> Result<Json<DiscoverListResponse>, ApiError> {
     let limit = params.limit.min(100);
     let offset = params.offset;
 
@@ -120,11 +130,20 @@ async fn explore(
         })
         .collect();
 
-    Ok(Json(results))
+    let page = if limit > 0 { offset / limit + 1 } else { 1 };
+    let total = results.len() as i64 + offset; // approximate — exact count would need a separate query
+    let has_more = results.len() as i64 == limit;
+    Ok(Json(DiscoverListResponse {
+        items: results,
+        total,
+        page,
+        limit,
+        has_more,
+    }))
 }
 
 /// GET /discover/trending -- recent high-engagement threads.
-async fn trending(State(state): State<AppState>) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+async fn trending(State(state): State<AppState>) -> Result<Json<DiscoverListResponse>, ApiError> {
     let rows = state
         .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
@@ -162,7 +181,14 @@ async fn trending(State(state): State<AppState>) -> Result<Json<Vec<serde_json::
         })
         .collect();
 
-    Ok(Json(results))
+    let total = results.len() as i64;
+    Ok(Json(DiscoverListResponse {
+        items: results,
+        total,
+        page: 1,
+        limit: 20,
+        has_more: false,
+    }))
 }
 
 /// GET /discover/algorithm -- static JSON explaining ranking factors.

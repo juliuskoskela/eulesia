@@ -34,6 +34,7 @@ impl ThreadRepo {
         thread_ids: Option<&[Uuid]>,
         excluded_author_ids: &[Uuid],
         sort: &str,
+        top_period: Option<&str>,
         offset: u64,
         limit: u64,
     ) -> Result<(Vec<threads::Model>, u64), DbErr> {
@@ -61,11 +62,29 @@ impl ThreadRepo {
             query = query.filter(threads::Column::AuthorId.is_not_in(excluded_author_ids.to_vec()));
         }
 
+        // For "top" sort with a time period, filter by created_at cutoff
+        if sort == "top" {
+            if let Some(period) = top_period {
+                let now = chrono::Utc::now();
+                let cutoff = match period {
+                    "day" => Some(now - chrono::Duration::days(1)),
+                    "week" => Some(now - chrono::Duration::weeks(1)),
+                    "month" => Some(now - chrono::Duration::days(30)),
+                    "year" => Some(now - chrono::Duration::days(365)),
+                    _ => None, // "all" — no cutoff
+                };
+                if let Some(cutoff) = cutoff {
+                    query = query.filter(threads::Column::CreatedAt.gte(cutoff.fixed_offset()));
+                }
+            }
+        }
+
         let total = query.clone().count(db).await?;
 
         let query = match sort {
             "top" => query.order_by_desc(threads::Column::Score),
             "active" => query.order_by_desc(threads::Column::UpdatedAt),
+            "new" => query.order_by_desc(threads::Column::CreatedAt),
             _ => query.order_by_desc(threads::Column::CreatedAt), // "recent" default
         };
 

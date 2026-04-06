@@ -1,5 +1,5 @@
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use sea_orm::ActiveModelTrait;
 use sea_orm::ActiveValue::Set;
 use sea_orm::TransactionTrait;
@@ -18,8 +18,8 @@ use eulesia_db::repo::memberships::MembershipRepo;
 use eulesia_db::repo::users::UserRepo;
 
 use super::types::{
-    ConversationListItem, ConversationResponse, CreateConversationRequest, EpochResponse,
-    MemberSummary, UpdateConversationRequest,
+    ConversationListItem, ConversationResponse, ConversationUserSummary, CreateConversationRequest,
+    EpochResponse, LastMessageSummary, MemberSummary, UpdateConversationRequest,
 };
 
 /// v1-compatible request: frontend sends `{ "userId": "..." }`.
@@ -507,23 +507,174 @@ pub async fn list(
     auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ConversationListItem>>, ApiError> {
-    let memberships = ConversationRepo::user_conversations(&state.db, auth.user_id.0)
+    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+
+    let caller = auth.user_id.0;
+    let memberships = ConversationRepo::user_conversations(&state.db, caller)
         .await
         .map_err(db_err)?;
 
     let conv_ids: Vec<uuid::Uuid> = memberships.iter().map(|m| m.conversation_id).collect();
+    if conv_ids.is_empty() {
+        return Ok(Json(vec![]));
+    }
+
     let conversations = ConversationRepo::find_by_ids(&state.db, &conv_ids)
         .await
         .map_err(db_err)?;
 
+    // Batch query: last message + unread count per conversation
+    // Using a single raw SQL for efficiency
+    let placeholders: Vec<String> = (1..=conv_ids.len()).map(|i| format!("${i}")).collect();
+    let in_clause = placeholders.join(", ");
+
+    // Last message per conversation
+    let last_msg_sql = format!(
+        r"SELECT DISTINCT ON (conversation_id)
+                 conversation_id, id, sender_id, ciphertext, server_ts
+          FROM messages
+          WHERE conversation_id IN ({in_clause})
+          ORDER BY conversation_id, server_ts DESC"
+    );
+    let mut values: Vec<sea_orm::Value> = conv_ids.iter().map(|id| (*id).into()).collect();
+    let last_msg_rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            &last_msg_sql,
+            values.clone(),
+        ))
+        .await
+        .map_err(db_err)?;
+
+    struct LastMsg {
+        id: Uuid,
+        sender_id: Uuid,
+        content: Option<String>,
+        server_ts: chrono::DateTime<chrono::FixedOffset>,
+    }
+    let mut last_msg_map: std::collections::HashMap<Uuid, LastMsg> =
+        std::collections::HashMap::new();
+    for row in &last_msg_rows {
+        let conv_id: Uuid = row.try_get("", "conversation_id").map_err(db_err)?;
+        let id: Uuid = row.try_get("", "id").map_err(db_err)?;
+        let sender_id: Uuid = row.try_get("", "sender_id").map_err(db_err)?;
+        let ciphertext: Option<Vec<u8>> = row.try_get("", "ciphertext").map_err(db_err)?;
+        let server_ts: chrono::DateTime<chrono::FixedOffset> =
+            row.try_get("", "server_ts").map_err(db_err)?;
+        let content = ciphertext.and_then(|ct| String::from_utf8(ct).ok());
+        last_msg_map.insert(
+            conv_id,
+            LastMsg {
+                id,
+                sender_id,
+                content,
+                server_ts,
+            },
+        );
+    }
+
+    // Unread counts — messages after last_read_at, not sent by caller
+    let unread_sql = format!(
+        r"SELECT mb.conversation_id, COUNT(m.id)::bigint AS cnt
+          FROM memberships mb
+          JOIN messages m
+            ON m.conversation_id = mb.conversation_id
+           AND m.sender_id <> mb.user_id
+           AND (mb.last_read_at IS NULL OR m.server_ts > mb.last_read_at)
+          WHERE mb.user_id = ${} AND mb.left_at IS NULL
+            AND mb.conversation_id IN ({in_clause})
+          GROUP BY mb.conversation_id",
+        conv_ids.len() + 1
+    );
+    values.push(caller.into());
+    let unread_rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            &unread_sql,
+            values,
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let mut unread_map: std::collections::HashMap<Uuid, i64> = std::collections::HashMap::new();
+    for row in &unread_rows {
+        let conv_id: Uuid = row.try_get("", "conversation_id").map_err(db_err)?;
+        let cnt: i64 = row.try_get("", "cnt").map_err(db_err)?;
+        unread_map.insert(conv_id, cnt);
+    }
+
+    // For direct conversations, resolve the "other user"
+    // Collect all member lists for direct convos
+    let direct_conv_ids: Vec<Uuid> = conversations
+        .iter()
+        .filter(|c| c.r#type == "direct")
+        .map(|c| c.id)
+        .collect();
+
+    let mut other_user_map: std::collections::HashMap<Uuid, ConversationUserSummary> =
+        std::collections::HashMap::new();
+
+    if !direct_conv_ids.is_empty() {
+        // Get all memberships for direct conversations to find the other user
+        let mut other_ids: Vec<Uuid> = Vec::new();
+        for &conv_id in &direct_conv_ids {
+            let members = ConversationRepo::active_members(&state.db, conv_id)
+                .await
+                .map_err(db_err)?;
+            if let Some(other) = members.iter().find(|m| m.user_id != caller) {
+                other_ids.push(other.user_id);
+            }
+        }
+
+        let other_users = UserRepo::find_by_ids(&state.db, &other_ids)
+            .await
+            .map_err(db_err)?;
+        let user_lookup: std::collections::HashMap<Uuid, _> =
+            other_users.into_iter().map(|u| (u.id, u)).collect();
+
+        for &conv_id in &direct_conv_ids {
+            let members = ConversationRepo::active_members(&state.db, conv_id)
+                .await
+                .map_err(db_err)?;
+            if let Some(other) = members.iter().find(|m| m.user_id != caller) {
+                if let Some(u) = user_lookup.get(&other.user_id) {
+                    other_user_map.insert(
+                        conv_id,
+                        ConversationUserSummary {
+                            id: u.id,
+                            name: u.name.clone(),
+                            avatar_url: u.avatar_url.clone(),
+                        },
+                    );
+                }
+            }
+        }
+    }
+
     let items = conversations
         .into_iter()
-        .map(|conv| ConversationListItem {
-            id: conv.id,
-            conversation_type: conv.r#type,
-            name: conv.name,
-            current_epoch: conv.current_epoch,
-            created_at: conv.created_at.to_rfc3339(),
+        .map(|conv| {
+            let last_message = last_msg_map.remove(&conv.id).map(|lm| LastMessageSummary {
+                id: lm.id,
+                content: lm.content,
+                sender_id: lm.sender_id,
+                created_at: lm.server_ts.to_rfc3339(),
+            });
+            let unread_count = unread_map.get(&conv.id).copied().unwrap_or(0);
+            let other_user = other_user_map.remove(&conv.id);
+            ConversationListItem {
+                id: conv.id,
+                conversation_type: conv.r#type,
+                name: conv.name,
+                current_epoch: conv.current_epoch,
+                other_user,
+                last_message,
+                unread_count,
+                created_at: conv.created_at.to_rfc3339(),
+                updated_at: conv.updated_at.to_rfc3339(),
+            }
         })
         .collect();
 
@@ -834,5 +985,152 @@ pub async fn get_dm_v1(
         encryption: conv.encryption,
         other_user,
         messages,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// v1-compat: GET /dm/{id}/messages — returns DirectMessage[] shape
+// ---------------------------------------------------------------------------
+
+pub async fn list_dm_messages_v1(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Query(params): Query<super::types::MessageCursorParams>,
+) -> Result<Json<Vec<V1DirectMessage>>, ApiError> {
+    let caller = auth.user_id.0;
+
+    // Verify caller is active member.
+    MembershipRepo::find_active(&*state.db, id, caller)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    let limit = params.limit.unwrap_or(50).min(100);
+    let msgs = ConversationRepo::messages_page(&state.db, id, params.before, limit)
+        .await
+        .map_err(db_err)?;
+
+    // Resolve authors in one batch.
+    let author_ids: Vec<Uuid> = msgs
+        .iter()
+        .map(|m| m.sender_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    let users = UserRepo::find_by_ids(&state.db, &author_ids)
+        .await
+        .map_err(db_err)?;
+    let user_map: std::collections::HashMap<Uuid, V1UserSummary> = users
+        .into_iter()
+        .map(|u| {
+            (
+                u.id,
+                V1UserSummary {
+                    id: u.id,
+                    name: u.name,
+                    avatar_url: u.avatar_url,
+                    role: u.role,
+                },
+            )
+        })
+        .collect();
+
+    let messages = msgs
+        .into_iter()
+        .map(|m| {
+            let content = m
+                .ciphertext
+                .as_ref()
+                .and_then(|ct| String::from_utf8(ct.clone()).ok());
+            V1DirectMessage {
+                id: m.id,
+                conversation_id: m.conversation_id,
+                content,
+                author: user_map.get(&m.sender_id).cloned(),
+                created_at: m.server_ts.to_rfc3339(),
+            }
+        })
+        .collect();
+
+    Ok(Json(messages))
+}
+
+// ---------------------------------------------------------------------------
+// v1-compat: POST /dm/{id}/messages — send and return DirectMessage shape
+// ---------------------------------------------------------------------------
+
+pub async fn send_dm_message_v1(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Json(req): Json<super::types::SendMessageRequest>,
+) -> Result<Json<V1DirectMessage>, ApiError> {
+    let caller = auth.user_id.0;
+
+    // Verify caller is active member.
+    let conv = ConversationRepo::find_by_id(&state.db, id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
+
+    MembershipRepo::find_active(&*state.db, id, caller)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Forbidden)?;
+
+    // For plaintext DMs, store the content directly.
+    let content_text = req.content.clone();
+    let ciphertext = content_text.as_ref().map(|c| c.as_bytes().to_vec());
+
+    let msg_id = eulesia_common::types::new_id();
+    let now = chrono::Utc::now().fixed_offset();
+
+    let msg = eulesia_db::repo::messages::MessageRepo::create(
+        &*state.db,
+        eulesia_db::entities::messages::ActiveModel {
+            id: sea_orm::ActiveValue::Set(msg_id),
+            conversation_id: sea_orm::ActiveValue::Set(id),
+            sender_id: sea_orm::ActiveValue::Set(caller),
+            sender_device_id: sea_orm::ActiveValue::Set(None),
+            epoch: sea_orm::ActiveValue::Set(conv.current_epoch),
+            ciphertext: sea_orm::ActiveValue::Set(ciphertext),
+            message_type: sea_orm::ActiveValue::Set(req.message_type.as_str().to_string()),
+            server_ts: sea_orm::ActiveValue::Set(now),
+        },
+    )
+    .await
+    .map_err(db_err)?;
+
+    // Broadcast to other members via WebSocket
+    eulesia_ws::handler::broadcast_new_message(
+        &state.db,
+        &state.ws_registry,
+        id,
+        msg.id,
+        caller,
+        "",
+        conv.current_epoch,
+    )
+    .await;
+
+    // Resolve author for response.
+    let user = UserRepo::find_by_id(&state.db, caller)
+        .await
+        .map_err(db_err)?;
+
+    let author = user.map(|u| V1UserSummary {
+        id: u.id,
+        name: u.name,
+        avatar_url: u.avatar_url,
+        role: u.role,
+    });
+
+    Ok(Json(V1DirectMessage {
+        id: msg.id,
+        conversation_id: msg.conversation_id,
+        content: content_text,
+        author,
+        created_at: msg.server_ts.to_rfc3339(),
     }))
 }

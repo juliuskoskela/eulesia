@@ -12,6 +12,7 @@ mod m20260405_000009_clubs_institutions_waitlist;
 mod m20260405_000010_dm_unread_count;
 mod m20260405_000011_admin_features;
 mod m20260406_000012_admin_accounts;
+mod m20260406_000013_club_enrichment;
 
 pub struct Migrator;
 
@@ -31,6 +32,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260405_000010_dm_unread_count::Migration),
             Box::new(m20260405_000011_admin_features::Migration),
             Box::new(m20260406_000012_admin_accounts::Migration),
+            Box::new(m20260406_000013_club_enrichment::Migration),
         ]
     }
 }

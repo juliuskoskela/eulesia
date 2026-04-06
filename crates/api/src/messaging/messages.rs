@@ -251,6 +251,18 @@ pub async fn send(
             .await
             .map_err(|e| ApiError::Database(e.to_string()))?;
 
+        // Broadcast to other members via WebSocket
+        eulesia_ws::handler::broadcast_new_message(
+            &state.db,
+            &state.ws_registry,
+            conversation_id,
+            msg.id,
+            caller,
+            "",
+            current_epoch,
+        )
+        .await;
+
         let mut resp = MessageResponse::from_model(&msg);
         resp.content = msg
             .ciphertext
@@ -299,6 +311,18 @@ pub async fn send(
     txn.commit()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    // Broadcast to other members via WebSocket
+    eulesia_ws::handler::broadcast_new_message(
+        &state.db,
+        &state.ws_registry,
+        conversation_id,
+        msg.id,
+        caller,
+        "",
+        current_epoch,
+    )
+    .await;
 
     Ok(Json(MessageResponse::from_model(&msg)))
 }

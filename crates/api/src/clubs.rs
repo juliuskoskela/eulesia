@@ -103,6 +103,11 @@ pub struct CreateClubRequest {
     pub category: Option<String>,
     pub is_public: Option<bool>,
     pub avatar_url: Option<String>,
+    pub cover_image_url: Option<String>,
+    pub rules: Option<String>,
+    pub address: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,6 +118,11 @@ pub struct UpdateClubRequest {
     pub category: Option<String>,
     pub is_public: Option<bool>,
     pub avatar_url: Option<String>,
+    pub cover_image_url: Option<String>,
+    pub rules: Option<String>,
+    pub address: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -120,8 +130,19 @@ pub struct UpdateClubRequest {
 pub struct ClubListParams {
     pub search: Option<String>,
     pub category: Option<String>,
+    pub membership: Option<String>,
+    pub page: Option<u64>,
     pub limit: Option<u64>,
     pub offset: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClubMemberSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    pub role: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -134,9 +155,20 @@ pub struct ClubResponse {
     pub category: Option<String>,
     pub is_public: bool,
     pub creator_id: Uuid,
+    pub creator: Option<ClubMemberSummary>,
     pub avatar_url: Option<String>,
+    pub cover_image_url: Option<String>,
+    pub rules: Option<String>,
+    pub address: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
     pub member_count: i32,
+    pub is_member: bool,
     pub member_role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moderators: Option<Vec<ClubMemberSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub members: Option<Vec<ClubMemberSummary>>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -146,8 +178,9 @@ pub struct ClubResponse {
 pub struct ClubListResponse {
     pub items: Vec<ClubResponse>,
     pub total: u64,
-    pub offset: u64,
+    pub page: u64,
     pub limit: u64,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,12 +191,32 @@ pub struct InviteRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct InvitationClubSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvitationUserSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InvitationResponse {
     pub id: Uuid,
     pub club_id: Uuid,
     pub club_name: Option<String>,
+    pub club: Option<InvitationClubSummary>,
     pub user_id: Uuid,
+    pub invitee: Option<InvitationUserSummary>,
     pub invited_by: Uuid,
+    pub inviter: Option<InvitationUserSummary>,
     pub status: String,
     pub created_at: String,
 }
@@ -252,7 +305,7 @@ async fn get_membership(
 
 /// Require that the user is a member of the club with at least `min_role`.
 /// Returns the member record on success, `ApiError::Forbidden` otherwise.
-async fn require_club_role(
+pub async fn require_club_role(
     db: &DatabaseConnection,
     club_id: Uuid,
     user_id: Uuid,
@@ -271,7 +324,12 @@ async fn require_club_role(
 
 /// Helper to build a `ClubResponse` from a club model, optionally including
 /// the requesting user's role.
+fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> f64 {
+    d.to_string().parse().unwrap_or(0.0)
+}
+
 fn club_to_response(club: clubs::Model, member_role: Option<String>) -> ClubResponse {
+    let is_member = member_role.is_some();
     ClubResponse {
         id: club.id,
         name: club.name,
@@ -280,9 +338,18 @@ fn club_to_response(club: clubs::Model, member_role: Option<String>) -> ClubResp
         category: club.category,
         is_public: club.is_public,
         creator_id: club.creator_id,
+        creator: None, // populated in detail view
         avatar_url: club.avatar_url,
+        cover_image_url: club.cover_image_url,
+        rules: club.rules,
+        address: club.address,
+        latitude: club.latitude.map(decimal_to_f64),
+        longitude: club.longitude.map(decimal_to_f64),
         member_count: club.member_count,
+        is_member,
         member_role,
+        moderators: None,
+        members: None,
         created_at: club.created_at.to_rfc3339(),
         updated_at: club.updated_at.to_rfc3339(),
     }
@@ -353,6 +420,13 @@ pub async fn create_club(
     let now = chrono::Utc::now().fixed_offset();
     let is_public = req.is_public.unwrap_or(true);
 
+    let latitude = req
+        .latitude
+        .and_then(sea_orm::prelude::Decimal::from_f64_retain);
+    let longitude = req
+        .longitude
+        .and_then(sea_orm::prelude::Decimal::from_f64_retain);
+
     let club = clubs::ActiveModel {
         id: Set(club_id),
         name: Set(name),
@@ -362,6 +436,11 @@ pub async fn create_club(
         is_public: Set(is_public),
         creator_id: Set(auth.user_id.0),
         avatar_url: Set(req.avatar_url),
+        cover_image_url: Set(req.cover_image_url),
+        rules: Set(req.rules),
+        address: Set(req.address),
+        latitude: Set(latitude),
+        longitude: Set(longitude),
         member_count: Set(1),
         created_at: Set(now),
         updated_at: Set(now),
@@ -390,26 +469,41 @@ async fn list_clubs(
     Query(params): Query<ClubListParams>,
 ) -> Result<Json<ClubListResponse>, ApiError> {
     let user_id = opt_auth.0.as_ref().map(|a| a.user_id.0);
-    let offset = params.offset.unwrap_or(0);
     let limit = clamp_limit(params.limit);
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = params.offset.unwrap_or_else(|| (page - 1) * limit);
 
     let mut query = clubs::Entity::find();
 
-    // Filter: public clubs + user's own private clubs.
-    if let Some(uid) = user_id {
+    // membership=mine filter: only show clubs the user is a member of
+    if params.membership.as_deref() == Some("mine") {
+        let uid = user_id.ok_or(ApiError::Unauthorized)?;
         query = query.filter(
-            Condition::any().add(clubs::Column::IsPublic.eq(true)).add(
-                clubs::Column::Id.in_subquery(
-                    sea_orm::sea_query::Query::select()
-                        .column(club_members::Column::ClubId)
-                        .from(club_members::Entity)
-                        .and_where(club_members::Column::UserId.eq(uid))
-                        .to_owned(),
-                ),
+            clubs::Column::Id.in_subquery(
+                sea_orm::sea_query::Query::select()
+                    .column(club_members::Column::ClubId)
+                    .from(club_members::Entity)
+                    .and_where(club_members::Column::UserId.eq(uid))
+                    .to_owned(),
             ),
         );
     } else {
-        query = query.filter(clubs::Column::IsPublic.eq(true));
+        // Default: public clubs + user's own private clubs.
+        if let Some(uid) = user_id {
+            query = query.filter(
+                Condition::any().add(clubs::Column::IsPublic.eq(true)).add(
+                    clubs::Column::Id.in_subquery(
+                        sea_orm::sea_query::Query::select()
+                            .column(club_members::Column::ClubId)
+                            .from(club_members::Entity)
+                            .and_where(club_members::Column::UserId.eq(uid))
+                            .to_owned(),
+                    ),
+                ),
+            );
+        } else {
+            query = query.filter(clubs::Column::IsPublic.eq(true));
+        }
     }
 
     if let Some(ref search) = params.search {
@@ -464,11 +558,13 @@ async fn list_clubs(
         })
         .collect();
 
+    let has_more = offset + limit < total;
     Ok(Json(ClubListResponse {
         items,
         total,
-        offset,
+        page,
         limit,
+        has_more,
     }))
 }
 
@@ -496,7 +592,53 @@ pub async fn get_club(
         return Err(ApiError::NotFound("club not found".into()));
     }
 
-    Ok(Json(club_to_response(club, member_role)))
+    let creator_id = club.creator_id;
+    let mut resp = club_to_response(club, member_role);
+
+    // Resolve creator
+    if let Ok(Some(creator_user)) = UserRepo::find_by_id(&state.db, creator_id).await {
+        resp.creator = Some(ClubMemberSummary {
+            id: creator_user.id,
+            name: creator_user.name,
+            avatar_url: creator_user.avatar_url,
+            role: "admin".into(),
+        });
+    }
+
+    // Fetch all members for moderators/members lists
+    let all_members = club_members::Entity::find()
+        .filter(club_members::Column::ClubId.eq(id))
+        .all(&*state.db)
+        .await
+        .map_err(db_err)?;
+
+    let member_user_ids: Vec<Uuid> = all_members.iter().map(|m| m.user_id).collect();
+    let member_users = UserRepo::find_by_ids(&state.db, &member_user_ids)
+        .await
+        .map_err(db_err)?;
+    let user_lookup: HashMap<Uuid, _> = member_users.into_iter().map(|u| (u.id, u)).collect();
+
+    let mut moderators = Vec::new();
+    let mut members = Vec::new();
+    for m in &all_members {
+        if let Some(u) = user_lookup.get(&m.user_id) {
+            let summary = ClubMemberSummary {
+                id: u.id,
+                name: u.name.clone(),
+                avatar_url: u.avatar_url.clone(),
+                role: m.role.clone(),
+            };
+            if role_level(&m.role) >= role_level("moderator") {
+                moderators.push(summary.clone());
+            }
+            members.push(summary);
+        }
+    }
+
+    resp.moderators = Some(moderators);
+    resp.members = Some(members);
+
+    Ok(Json(resp))
 }
 
 pub async fn update_club(
@@ -553,6 +695,21 @@ pub async fn update_club(
     }
     if let Some(avatar_url) = req.avatar_url {
         am.avatar_url = Set(Some(avatar_url));
+    }
+    if let Some(cover_image_url) = req.cover_image_url {
+        am.cover_image_url = Set(Some(cover_image_url));
+    }
+    if let Some(rules) = req.rules {
+        am.rules = Set(Some(rules));
+    }
+    if let Some(address) = req.address {
+        am.address = Set(Some(address));
+    }
+    if let Some(lat) = req.latitude {
+        am.latitude = Set(sea_orm::prelude::Decimal::from_f64_retain(lat));
+    }
+    if let Some(lon) = req.longitude {
+        am.longitude = Set(sea_orm::prelude::Decimal::from_f64_retain(lon));
     }
 
     let updated = am.update(&*state.db).await.map_err(db_err)?;
@@ -846,8 +1003,11 @@ pub async fn invite_user(
         id: inv.id,
         club_id: inv.club_id,
         club_name: None,
+        club: None,
         user_id: inv.user_id,
+        invitee: None,
         invited_by: inv.invited_by,
+        inviter: None,
         status: inv.status,
         created_at: inv.created_at.to_rfc3339(),
     }))
@@ -868,16 +1028,45 @@ async fn list_invitations(
         .await
         .map_err(db_err)?;
 
+    // Resolve invitees and inviters
+    let user_ids: Vec<Uuid> = invitations
+        .iter()
+        .flat_map(|inv| [inv.user_id, inv.invited_by])
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let users = UserRepo::find_by_ids(&state.db, &user_ids)
+        .await
+        .map_err(db_err)?;
+    let user_map: HashMap<Uuid, _> = users.into_iter().map(|u| (u.id, u)).collect();
+
     let items = invitations
         .into_iter()
-        .map(|inv| InvitationResponse {
-            id: inv.id,
-            club_id: inv.club_id,
-            club_name: None,
-            user_id: inv.user_id,
-            invited_by: inv.invited_by,
-            status: inv.status,
-            created_at: inv.created_at.to_rfc3339(),
+        .map(|inv| {
+            let invitee = user_map.get(&inv.user_id).map(|u| InvitationUserSummary {
+                id: u.id,
+                name: u.name.clone(),
+                avatar_url: u.avatar_url.clone(),
+            });
+            let inviter = user_map
+                .get(&inv.invited_by)
+                .map(|u| InvitationUserSummary {
+                    id: u.id,
+                    name: u.name.clone(),
+                    avatar_url: u.avatar_url.clone(),
+                });
+            InvitationResponse {
+                id: inv.id,
+                club_id: inv.club_id,
+                club_name: None,
+                club: None,
+                user_id: inv.user_id,
+                invitee,
+                invited_by: inv.invited_by,
+                inviter,
+                status: inv.status,
+                created_at: inv.created_at.to_rfc3339(),
+            }
         })
         .collect();
 
@@ -928,9 +1117,9 @@ async fn my_invitations(
         .await
         .map_err(db_err)?;
 
-    // Fetch club names for enrichment.
+    // Fetch clubs for enrichment.
     let club_ids: Vec<Uuid> = invitations.iter().map(|inv| inv.club_id).collect();
-    let club_names: HashMap<Uuid, String> = if club_ids.is_empty() {
+    let club_map: HashMap<Uuid, clubs::Model> = if club_ids.is_empty() {
         HashMap::new()
     } else {
         clubs::Entity::find()
@@ -939,20 +1128,49 @@ async fn my_invitations(
             .await
             .map_err(db_err)?
             .into_iter()
-            .map(|c| (c.id, c.name))
+            .map(|c| (c.id, c))
             .collect()
     };
+
+    // Fetch inviters for enrichment.
+    let inviter_ids: Vec<Uuid> = invitations
+        .iter()
+        .map(|inv| inv.invited_by)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let inviter_users = UserRepo::find_by_ids(&state.db, &inviter_ids)
+        .await
+        .map_err(db_err)?;
+    let inviter_map: HashMap<Uuid, _> = inviter_users.into_iter().map(|u| (u.id, u)).collect();
 
     let items = invitations
         .into_iter()
         .map(|inv| {
-            let club_name = club_names.get(&inv.club_id).cloned();
+            let club = club_map.get(&inv.club_id);
+            let club_name = club.map(|c| c.name.clone());
+            let club_summary = club.map(|c| InvitationClubSummary {
+                id: c.id,
+                name: c.name.clone(),
+                slug: c.slug.clone(),
+                avatar_url: c.avatar_url.clone(),
+            });
+            let inviter = inviter_map
+                .get(&inv.invited_by)
+                .map(|u| InvitationUserSummary {
+                    id: u.id,
+                    name: u.name.clone(),
+                    avatar_url: u.avatar_url.clone(),
+                });
             InvitationResponse {
                 id: inv.id,
                 club_id: inv.club_id,
                 club_name,
+                club: club_summary,
                 user_id: inv.user_id,
+                invitee: None, // caller is the invitee, frontend knows who they are
                 invited_by: inv.invited_by,
+                inviter,
                 status: inv.status,
                 created_at: inv.created_at.to_rfc3339(),
             }
@@ -1066,6 +1284,7 @@ pub async fn create_club_thread(
     let thread_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
+    let scope = req.scope.unwrap_or_else(|| "club".into());
     let thread = ThreadRepo::create(
         &state.db,
         threads::ActiveModel {
@@ -1073,7 +1292,7 @@ pub async fn create_club_thread(
             title: Set(req.title),
             content: Set(req.content),
             author_id: Set(auth.user_id.0),
-            scope: Set(req.scope),
+            scope: Set(scope),
             municipality_id: Set(req.municipality_id),
             language: Set(req.language),
             club_id: Set(Some(club_id)),
@@ -1174,11 +1393,16 @@ async fn list_club_threads(
 
     let data = enrich_threads(&state.db, thread_models, user_id).await?;
 
+    let page = offset / limit + 1;
+    let has_more = offset + limit < total;
     Ok(Json(ThreadListResponse {
         data,
         total,
-        offset,
+        page,
         limit,
+        has_more,
+        feed_scope: None,
+        has_subscriptions: false,
     }))
 }
 
@@ -1321,15 +1545,32 @@ pub async fn get_club_thread(
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "thread": thread_resp,
-        "comments": {
-            "data": comment_resps,
-            "total": comments_total,
-            "offset": offset,
-            "limit": limit,
-        }
-    })))
+    // Resolve the caller's club membership role (for memberRole / isRoomOwner)
+    let member_role = if let Some(uid) = user_id {
+        club_members::Entity::find()
+            .filter(club_members::Column::ClubId.eq(path.id))
+            .filter(club_members::Column::UserId.eq(uid))
+            .one(&*state.db)
+            .await
+            .map_err(db_err)?
+            .map(|m| m.role)
+    } else {
+        None
+    };
+
+    // Flatten: thread fields at top level + comments array + memberRole
+    let mut resp =
+        serde_json::to_value(&thread_resp).map_err(|e| ApiError::Internal(e.to_string()))?;
+    let obj = resp.as_object_mut().unwrap();
+    obj.insert(
+        "comments".into(),
+        serde_json::to_value(&comment_resps).unwrap(),
+    );
+    obj.insert("memberRole".into(), serde_json::json!(member_role));
+    let is_owner = member_role.as_deref() == Some("owner");
+    obj.insert("isRoomOwner".into(), serde_json::json!(is_owner));
+
+    Ok(Json(resp))
 }
 
 pub async fn update_club_thread(

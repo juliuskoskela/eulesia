@@ -161,12 +161,17 @@ async fn subscription_feed(
             .await
             .map_err(db_err)?;
 
+    let page = offset / limit + 1;
+
     if thread_ids.is_empty() {
         return Ok(Json(ThreadListResponse {
             data: vec![],
             total: 0,
-            offset,
+            page,
             limit,
+            has_more: false,
+            feed_scope: None,
+            has_subscriptions: true,
         }));
     }
 
@@ -179,6 +184,7 @@ async fn subscription_feed(
         Some(&thread_ids),
         &[],
         "recent",
+        None,
         0,
         limit,
     )
@@ -186,12 +192,16 @@ async fn subscription_feed(
     .map_err(db_err)?;
 
     let data = enrich_threads(&state.db, threads, Some(auth.user_id.0)).await?;
+    let has_more = offset + limit < total;
 
     Ok(Json(ThreadListResponse {
         data,
         total,
-        offset,
+        page,
         limit,
+        has_more,
+        feed_scope: None,
+        has_subscriptions: true,
     }))
 }
 

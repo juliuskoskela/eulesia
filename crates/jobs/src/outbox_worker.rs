@@ -110,8 +110,24 @@ async fn process_event(
                 .get("verifyUrl")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            info!(email = %email, url = %url, "magic link event processed (email delivery not yet implemented)");
-            // TODO: send email via SMTP/provider
+
+            if let Some(ref dispatcher) = ctx.dispatcher {
+                let subject = "Kirjaudu Eulesiaan";
+                let body = format!(
+                    r#"<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+                    <h2>Kirjaudu Eulesiaan</h2>
+                    <p>Klikkaa alla olevaa linkkiä kirjautuaksesi:</p>
+                    <p><a href="{url}" style="display: inline-block; padding: 12px 24px;
+                        background: #2563eb; color: #fff; text-decoration: none;
+                        border-radius: 6px;">Kirjaudu sisään</a></p>
+                    <p style="color: #666; font-size: 14px;">Linkki vanhenee 15 minuutin kuluttua.
+                    Jos et pyytänyt tätä, voit jättää viestin huomiotta.</p>
+                    </div>"#,
+                );
+                dispatcher.send_email(email, subject, &body).await;
+            }
+
+            info!(email = %email, "magic link email processed");
             Ok(())
         }
         other => {

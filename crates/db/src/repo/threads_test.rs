@@ -89,9 +89,10 @@ mod tests {
             .append_query_results([vec![t1.clone(), t2.clone()]])
             .into_connection();
 
-        let (items, total) = ThreadRepo::list(&db, None, None, None, None, &[], "recent", 0, 20)
-            .await
-            .unwrap();
+        let (items, total) =
+            ThreadRepo::list(&db, None, None, None, None, &[], "recent", None, 0, 20)
+                .await
+                .unwrap();
 
         assert_eq!(items.len(), 2);
         assert_eq!(total, 2);
@@ -105,9 +106,10 @@ mod tests {
             .append_query_results([Vec::<threads::Model>::new()])
             .into_connection();
 
-        let (items, total) = ThreadRepo::list(&db, None, None, None, None, &[], "recent", 0, 20)
-            .await
-            .unwrap();
+        let (items, total) =
+            ThreadRepo::list(&db, None, None, None, None, &[], "recent", None, 0, 20)
+                .await
+                .unwrap();
 
         assert!(items.is_empty());
         assert_eq!(total, 0);

@@ -10,10 +10,13 @@ use uuid::Uuid;
 pub struct CreateThreadRequest {
     pub title: String,
     pub content: String,
-    pub scope: String,
+    pub scope: Option<String>,
     pub municipality_id: Option<Uuid>,
     pub tags: Option<Vec<String>>,
     pub language: Option<String>,
+    pub country: Option<String>,
+    pub location_id: Option<Uuid>,
+    pub institutional_context: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +36,8 @@ pub struct ThreadListParams {
     pub tag: Option<String>,
     #[serde(alias = "sortBy")]
     pub sort: Option<String>,
+    pub top_period: Option<String>,
+    pub page: Option<u64>,
     pub offset: Option<u64>,
     pub limit: Option<u64>,
 }
@@ -107,8 +112,12 @@ pub struct ThreadListResponse {
     #[serde(rename = "items")]
     pub data: Vec<ThreadResponse>,
     pub total: u64,
-    pub offset: u64,
+    pub page: u64,
     pub limit: u64,
+    pub has_more: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub feed_scope: Option<String>,
+    pub has_subscriptions: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -144,9 +153,14 @@ pub struct AuthorSummary {
 #[derive(Debug, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "camelCase")]
 pub struct TagWithCount {
     pub tag: String,
     pub count: i64,
+    pub display_name: String,
+    pub category: Option<String>,
+    pub description: Option<String>,
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

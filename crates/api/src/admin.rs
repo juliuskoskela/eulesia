@@ -1,5 +1,5 @@
 use axum::extract::{Path, Query, State};
-use axum::routing::{get, patch, post};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
@@ -1191,6 +1191,316 @@ async fn admin_list_invites(
 }
 
 // ===========================================================================
+// Modlog & Transparency
+// ===========================================================================
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ModlogParams {
+    offset: Option<u64>,
+    limit: Option<u64>,
+    action_type: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModlogEntry {
+    id: Uuid,
+    admin_id: Uuid,
+    admin_name: String,
+    action_type: String,
+    target_type: String,
+    target_id: Uuid,
+    reason: Option<String>,
+    created_at: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModlogResponse {
+    items: Vec<ModlogEntry>,
+    total: i64,
+    offset: u64,
+    limit: u64,
+}
+
+/// GET /admin/modlog — paginated moderation action log (admin-only).
+async fn admin_modlog(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Query(params): Query<ModlogParams>,
+) -> Result<Json<ModlogResponse>, ApiError> {
+    require_admin(&jar, &state).await?;
+
+    let offset = params.offset.unwrap_or(0);
+    let limit = params.limit.unwrap_or(50).min(200);
+
+    let type_filter = params
+        .action_type
+        .as_deref()
+        .map(|t| format!("AND ma.action_type = '{}'", t.replace('\'', "''")))
+        .unwrap_or_default();
+
+    let count_sql =
+        format!("SELECT COUNT(*)::bigint FROM moderation_actions ma WHERE true {type_filter}");
+    let total: i64 = state
+        .db
+        .query_one(Statement::from_string(DatabaseBackend::Postgres, count_sql))
+        .await
+        .map_err(db_err)?
+        .map(|r| r.try_get_by_index::<i64>(0).unwrap_or(0))
+        .unwrap_or(0);
+
+    let data_sql = format!(
+        r"SELECT ma.id, ma.admin_id, COALESCE(u.name, aa.name, 'system') AS admin_name,
+                 ma.action_type, ma.target_type, ma.target_id, ma.reason, ma.created_at
+          FROM moderation_actions ma
+          LEFT JOIN users u ON u.id = ma.admin_id
+          LEFT JOIN admin_accounts aa ON aa.id = ma.admin_id
+          WHERE true {type_filter}
+          ORDER BY ma.created_at DESC
+          OFFSET {offset} LIMIT {limit}"
+    );
+
+    let rows = state
+        .db
+        .query_all(Statement::from_string(DatabaseBackend::Postgres, data_sql))
+        .await
+        .map_err(db_err)?;
+
+    let items: Vec<ModlogEntry> = rows
+        .iter()
+        .filter_map(|r| {
+            Some(ModlogEntry {
+                id: r.try_get_by_index(0).ok()?,
+                admin_id: r.try_get_by_index(1).ok()?,
+                admin_name: r.try_get_by_index::<String>(2).ok()?,
+                action_type: r.try_get_by_index(3).ok()?,
+                target_type: r.try_get_by_index(4).ok()?,
+                target_id: r.try_get_by_index(5).ok()?,
+                reason: r.try_get_by_index::<Option<String>>(6).ok()?,
+                created_at: r
+                    .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(7)
+                    .ok()?
+                    .to_rfc3339(),
+            })
+        })
+        .collect();
+
+    Ok(Json(ModlogResponse {
+        items,
+        total,
+        offset,
+        limit,
+    }))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyActionCount {
+    action_type: String,
+    count: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyResponse {
+    total_actions: i64,
+    actions_by_type: Vec<TransparencyActionCount>,
+    recent_actions: Vec<ModlogEntry>,
+}
+
+/// GET /admin/transparency — public-facing moderation transparency summary.
+async fn admin_transparency(
+    State(state): State<AppState>,
+) -> Result<Json<TransparencyResponse>, ApiError> {
+    let total: i64 = state
+        .db
+        .query_one(Statement::from_string(
+            DatabaseBackend::Postgres,
+            "SELECT COUNT(*)::bigint FROM moderation_actions",
+        ))
+        .await
+        .map_err(db_err)?
+        .map(|r| r.try_get_by_index::<i64>(0).unwrap_or(0))
+        .unwrap_or(0);
+
+    let type_rows = state
+        .db
+        .query_all(Statement::from_string(
+            DatabaseBackend::Postgres,
+            r"SELECT action_type, COUNT(*)::bigint AS cnt
+              FROM moderation_actions
+              GROUP BY action_type
+              ORDER BY cnt DESC",
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let actions_by_type: Vec<TransparencyActionCount> = type_rows
+        .iter()
+        .filter_map(|r| {
+            Some(TransparencyActionCount {
+                action_type: r.try_get_by_index(0).ok()?,
+                count: r.try_get_by_index(1).ok()?,
+            })
+        })
+        .collect();
+
+    // Recent actions (anonymized — no admin_id exposed)
+    let recent_rows = state
+        .db
+        .query_all(Statement::from_string(
+            DatabaseBackend::Postgres,
+            r"SELECT ma.id, ma.action_type, ma.target_type, ma.target_id, ma.reason, ma.created_at
+              FROM moderation_actions ma
+              ORDER BY ma.created_at DESC
+              LIMIT 20",
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let recent_actions: Vec<ModlogEntry> = recent_rows
+        .iter()
+        .filter_map(|r| {
+            Some(ModlogEntry {
+                id: r.try_get_by_index(0).ok()?,
+                admin_id: Uuid::nil(),          // anonymized
+                admin_name: "moderator".into(), // anonymized
+                action_type: r.try_get_by_index(1).ok()?,
+                target_type: r.try_get_by_index(2).ok()?,
+                target_id: r.try_get_by_index(3).ok()?,
+                reason: r.try_get_by_index::<Option<String>>(4).ok()?,
+                created_at: r
+                    .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(5)
+                    .ok()?
+                    .to_rfc3339(),
+            })
+        })
+        .collect();
+
+    Ok(Json(TransparencyResponse {
+        total_actions: total,
+        actions_by_type,
+        recent_actions,
+    }))
+}
+
+// ===========================================================================
+// Content moderation (admin-authenticated)
+// ===========================================================================
+
+/// DELETE /admin/content/{type}/{id} — soft-delete content (thread or comment).
+async fn admin_delete_content(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path((content_type, content_id)): Path<(String, Uuid)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let admin = require_admin(&jar, &state).await?;
+
+    match content_type.as_str() {
+        "thread" => {
+            state
+                .db
+                .execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE threads SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+                    [content_id.into()],
+                ))
+                .await
+                .map_err(db_err)?;
+        }
+        "comment" => {
+            state
+                .db
+                .execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE comments SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+                    [content_id.into()],
+                ))
+                .await
+                .map_err(db_err)?;
+        }
+        _ => {
+            return Err(ApiError::BadRequest(
+                "type must be 'thread' or 'comment'".into(),
+            ));
+        }
+    }
+
+    // Log the moderation action
+    state
+        .db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id, reason, created_at)
+              VALUES (gen_random_uuid(), $1, 'content_delete', $2, $3, NULL, NOW())",
+            [admin.id.into(), content_type.clone().into(), content_id.into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    Ok(Json(
+        serde_json::json!({ "deleted": true, "type": content_type, "id": content_id }),
+    ))
+}
+
+/// POST /admin/content/{type}/{id}/restore — un-delete content.
+async fn admin_restore_content(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path((content_type, content_id)): Path<(String, Uuid)>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let admin = require_admin(&jar, &state).await?;
+
+    match content_type.as_str() {
+        "thread" => {
+            state
+                .db
+                .execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE threads SET deleted_at = NULL WHERE id = $1",
+                    [content_id.into()],
+                ))
+                .await
+                .map_err(db_err)?;
+        }
+        "comment" => {
+            state
+                .db
+                .execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE comments SET deleted_at = NULL WHERE id = $1",
+                    [content_id.into()],
+                ))
+                .await
+                .map_err(db_err)?;
+        }
+        _ => {
+            return Err(ApiError::BadRequest(
+                "type must be 'thread' or 'comment'".into(),
+            ));
+        }
+    }
+
+    // Log the moderation action
+    state
+        .db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id, reason, created_at)
+              VALUES (gen_random_uuid(), $1, 'content_restore', $2, $3, NULL, NOW())",
+            [admin.id.into(), content_type.clone().into(), content_id.into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    Ok(Json(
+        serde_json::json!({ "restored": true, "type": content_type, "id": content_id }),
+    ))
+}
+
+// ===========================================================================
 // Routes
 // ===========================================================================
 
@@ -1225,4 +1535,43 @@ pub fn routes() -> Router<AppState> {
         // Invites
         .route("/admin/invites/generate", post(admin_generate_invites))
         .route("/admin/invites", get(admin_list_invites))
+        // Modlog & Transparency
+        .route("/admin/modlog", get(admin_modlog))
+        .route("/admin/transparency", get(admin_transparency))
+        // Moderation aliases — frontend calls /admin/* but handlers live in moderation module
+        .route(
+            "/admin/reports",
+            get(crate::moderation::reports::list_reports),
+        )
+        .route(
+            "/admin/reports/{id}",
+            get(crate::moderation::reports::get_report)
+                .patch(crate::moderation::reports::update_report),
+        )
+        .route(
+            "/admin/appeals",
+            get(crate::moderation::appeals::list_appeals),
+        )
+        .route(
+            "/admin/appeals/{id}",
+            patch(crate::moderation::appeals::respond_appeal),
+        )
+        .route(
+            "/admin/users/{id}/sanction",
+            post(crate::moderation::sanctions::create_sanction),
+        )
+        .route(
+            "/admin/users/{id}/sanctions",
+            get(crate::moderation::sanctions::user_sanctions),
+        )
+        .route(
+            "/admin/sanctions/{id}",
+            delete(crate::moderation::sanctions::revoke_sanction),
+        )
+        // Content moderation
+        .route("/admin/content/{type}/{id}", delete(admin_delete_content))
+        .route(
+            "/admin/content/{type}/{id}/restore",
+            post(admin_restore_content),
+        )
 }

@@ -6,6 +6,7 @@ use config::Config;
 use eulesia_api::{AppConfig, AppState};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
@@ -82,7 +83,9 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(AllowHeaders::mirror_request())
         .allow_credentials(true);
 
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into());
     let app = eulesia_api::router(state)
+        .nest_service("/uploads", ServeDir::new(upload_dir))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 

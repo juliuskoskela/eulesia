@@ -31,6 +31,13 @@ pub struct LocationResponse {
     pub source: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocationSearchResponse {
+    results: Vec<LocationResponse>,
+    source: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SearchParams {
@@ -153,7 +160,7 @@ async fn fetch_nominatim(query: &str, country: &str, limit: u64) -> Vec<Location
 async fn search_locations(
     State(state): State<AppState>,
     Query(params): Query<SearchParams>,
-) -> Result<Json<Vec<LocationResponse>>, ApiError> {
+) -> Result<Json<LocationSearchResponse>, ApiError> {
     let query = params.q.trim().to_string();
     if query.is_empty() {
         return Err(ApiError::BadRequest(
@@ -193,6 +200,8 @@ async fn search_locations(
         let local_osm_ids: std::collections::HashSet<i64> =
             local_results.iter().filter_map(|r| r.osm_id).collect();
 
+        let has_local = !local_results.is_empty();
+        let has_nominatim = !nominatim_results.is_empty();
         let mut combined = local_results;
         for nr in nominatim_results {
             if let Some(osm_id) = nr.osm_id {
@@ -206,9 +215,21 @@ async fn search_locations(
             combined.push(nr);
         }
 
-        Ok(Json(combined))
+        let source = match (has_local, has_nominatim) {
+            (true, true) => "mixed",
+            (false, true) => "nominatim",
+            _ => "cache",
+        };
+
+        Ok(Json(LocationSearchResponse {
+            results: combined,
+            source: source.into(),
+        }))
     } else {
-        Ok(Json(local_results))
+        Ok(Json(LocationSearchResponse {
+            results: local_results,
+            source: "cache".into(),
+        }))
     }
 }
 

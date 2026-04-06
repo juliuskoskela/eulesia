@@ -12,6 +12,7 @@ pub struct NotificationDispatcher {
     db: Arc<DatabaseConnection>,
     fcm: channels::fcm::FcmClient,
     webpush: channels::webpush::WebPushClient,
+    email: channels::email::EmailClient,
 }
 
 impl NotificationDispatcher {
@@ -20,7 +21,13 @@ impl NotificationDispatcher {
             db,
             fcm: channels::fcm::FcmClient::new(),
             webpush: channels::webpush::WebPushClient::new(),
+            email: channels::email::EmailClient::new(),
         }
+    }
+
+    /// Send an email (used by outbox worker for magic links, etc.).
+    pub async fn send_email(&self, to: &str, subject: &str, body_html: &str) {
+        self.email.send_email(to, subject, body_html).await;
     }
 
     pub async fn dispatch(

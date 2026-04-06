@@ -161,7 +161,9 @@ async fn get_map_points(
 
     // Use raw SQL to query threads and places within bounds in a single UNION ALL.
     let sql = r"
-        SELECT id, 'thread' AS point_type, title AS name,
+        SELECT id,
+               CASE WHEN club_id IS NOT NULL THEN 'club' ELSE 'thread' END AS point_type,
+               title AS name,
                latitude::float8 AS lat, longitude::float8 AS lon
         FROM threads
         WHERE latitude IS NOT NULL AND longitude IS NOT NULL
@@ -373,7 +375,7 @@ async fn map_location_detail(
     use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 
     let sql = match location_type.as_str() {
-        "thread" => {
+        "thread" | "club" => {
             "SELECT id, title, content, author_id, scope, created_at FROM threads WHERE id = $1 AND deleted_at IS NULL"
         }
         "place" => {
@@ -397,7 +399,7 @@ async fn map_location_detail(
         .ok_or_else(|| ApiError::NotFound("location not found".into()))?;
 
     let result = match location_type.as_str() {
-        "thread" => serde_json::json!({
+        "thread" | "club" => serde_json::json!({
             "type": "thread",
             "id": id,
             "title": row.try_get_by_index::<String>(1).ok(),
