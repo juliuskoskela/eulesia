@@ -1307,7 +1307,9 @@ pub async fn create_club_thread(
     let thread_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
-    let scope = req.scope.unwrap_or_else(|| "club".into());
+    let scope = req
+        .scope
+        .unwrap_or(eulesia_common::types::ThreadScope::Club);
     let thread = ThreadRepo::create(
         &state.db,
         threads::ActiveModel {
@@ -1315,7 +1317,7 @@ pub async fn create_club_thread(
             title: Set(req.title),
             content: Set(req.content),
             author_id: Set(auth.user_id.0),
-            scope: Set(scope),
+            scope: Set(scope.to_string()),
             municipality_id: Set(req.municipality_id),
             language: Set(req.language),
             club_id: Set(Some(club_id)),
@@ -1354,7 +1356,10 @@ pub async fn create_club_thread(
         title: thread.title,
         content: thread.content,
         content_html: thread.content_html,
-        scope: thread.scope,
+        scope: thread
+            .scope
+            .parse()
+            .unwrap_or(eulesia_common::types::ThreadScope::Club),
         author,
         tags: req.tags.unwrap_or_default(),
         reply_count: thread.reply_count,
@@ -1366,7 +1371,10 @@ pub async fn create_club_thread(
         is_locked: thread.is_locked,
         municipality_id: thread.municipality_id,
         institutional_context: thread.institutional_context,
-        source: thread.source,
+        source: thread
+            .source
+            .parse()
+            .unwrap_or(eulesia_common::types::ThreadSource::User),
         source_url: thread.source_url,
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
@@ -1537,7 +1545,10 @@ pub async fn get_club_thread(
         title: thread.title,
         content: thread.content,
         content_html: thread.content_html,
-        scope: thread.scope,
+        scope: thread
+            .scope
+            .parse()
+            .unwrap_or(eulesia_common::types::ThreadScope::Club),
         author: thread_author,
         tags,
         reply_count: thread.reply_count,
@@ -1549,7 +1560,10 @@ pub async fn get_club_thread(
         is_locked: thread.is_locked,
         municipality_id: thread.municipality_id,
         institutional_context: thread.institutional_context,
-        source: thread.source,
+        source: thread
+            .source
+            .parse()
+            .unwrap_or(eulesia_common::types::ThreadSource::User),
         source_url: thread.source_url,
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
@@ -2279,7 +2293,7 @@ mod tests {
             title: "Test".into(),
             content: "Body".into(),
             content_html: None,
-            scope: "club".into(),
+            scope: eulesia_common::types::ThreadScope::Club,
             author: AuthorSummary {
                 id: Uuid::nil(),
                 username: "test".into(),
@@ -2297,7 +2311,7 @@ mod tests {
             is_bookmarked: false,
             is_pinned: false,
             is_locked: false,
-            source: "user".into(),
+            source: eulesia_common::types::ThreadSource::User,
             source_url: None,
             source_institution_id: None,
             ai_generated: false,

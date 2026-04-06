@@ -658,3 +658,181 @@ const fn default_offset() -> i64 {
 const fn default_limit() -> i64 {
     50
 }
+
+// ---------------------------------------------------------------------------
+// ThreadScope enum
+// ---------------------------------------------------------------------------
+
+/// Agora thread scope — determines visibility and feed placement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "lowercase")]
+pub enum ThreadScope {
+    Local,
+    National,
+    European,
+    Club,
+}
+
+impl ThreadScope {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::National => "national",
+            Self::European => "european",
+            Self::Club => "club",
+        }
+    }
+}
+
+impl std::fmt::Display for ThreadScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ThreadScope {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "local" => Ok(Self::Local),
+            "national" => Ok(Self::National),
+            "european" => Ok(Self::European),
+            "club" => Ok(Self::Club),
+            other => Err(format!("invalid thread scope: {other}")),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ThreadSource enum
+// ---------------------------------------------------------------------------
+
+/// How a thread was created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "snake_case")]
+pub enum ThreadSource {
+    User,
+    MinutesImport,
+    RssImport,
+}
+
+impl ThreadSource {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::MinutesImport => "minutes_import",
+            Self::RssImport => "rss_import",
+        }
+    }
+}
+
+impl std::fmt::Display for ThreadSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ThreadSource {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "user" => Ok(Self::User),
+            "minutes_import" => Ok(Self::MinutesImport),
+            "rss_import" => Ok(Self::RssImport),
+            other => Err(format!("invalid thread source: {other}")),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MapPointType enum
+// ---------------------------------------------------------------------------
+
+/// Type of point on the map.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "lowercase")]
+pub enum MapPointType {
+    Thread,
+    Club,
+    Place,
+    Municipality,
+}
+
+impl MapPointType {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Thread => "thread",
+            Self::Club => "club",
+            Self::Place => "place",
+            Self::Municipality => "municipality",
+        }
+    }
+}
+
+impl std::fmt::Display for MapPointType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for MapPointType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "thread" => Ok(Self::Thread),
+            "club" => Ok(Self::Club),
+            "place" => Ok(Self::Place),
+            "municipality" => Ok(Self::Municipality),
+            other => Err(format!("invalid map point type: {other}")),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// InvitationStatus enum
+// ---------------------------------------------------------------------------
+
+/// Club/room invitation status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "lowercase")]
+pub enum InvitationStatus {
+    Pending,
+    Accepted,
+    Declined,
+}
+
+impl InvitationStatus {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Accepted => "accepted",
+            Self::Declined => "declined",
+        }
+    }
+}
+
+impl std::fmt::Display for InvitationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for InvitationStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pending" => Ok(Self::Pending),
+            "accepted" => Ok(Self::Accepted),
+            "declined" => Ok(Self::Declined),
+            other => Err(format!("invalid invitation status: {other}")),
+        }
+    }
+}

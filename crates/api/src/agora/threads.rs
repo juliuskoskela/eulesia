@@ -10,6 +10,7 @@ use tracing::warn;
 use crate::AppState;
 use eulesia_auth::session::{AuthUser, OptionalAuth};
 use eulesia_common::error::ApiError;
+use eulesia_common::types::{ThreadScope, ThreadSource};
 use eulesia_common::types::{UserRole, new_id};
 use eulesia_db::repo::blocks::BlockRepo;
 use eulesia_db::repo::bookmarks::BookmarkRepo;
@@ -164,7 +165,7 @@ pub async fn enrich_threads(
                 title: t.title,
                 content: t.content,
                 content_html: t.content_html,
-                scope: t.scope,
+                scope: t.scope.parse().unwrap_or(ThreadScope::National),
                 author,
                 tags: tags_map.remove(&t.id).unwrap_or_default(),
                 municipality_id: t.municipality_id,
@@ -176,7 +177,7 @@ pub async fn enrich_threads(
                 is_bookmarked: bookmark_set.contains(&t.id),
                 is_pinned: t.is_pinned,
                 is_locked: t.is_locked,
-                source: t.source,
+                source: t.source.parse().unwrap_or(ThreadSource::User),
                 source_url: t.source_url,
                 source_institution_id: t.source_institution_id,
                 ai_generated: t.ai_generated,
@@ -386,7 +387,7 @@ pub async fn get_thread(
         title: thread.title,
         content: thread.content,
         content_html: thread.content_html,
-        scope: thread.scope,
+        scope: thread.scope.parse().unwrap_or(ThreadScope::National),
         author: thread_author,
         tags,
         reply_count: thread.reply_count,
@@ -396,7 +397,7 @@ pub async fn get_thread(
         is_bookmarked,
         is_pinned: thread.is_pinned,
         is_locked: thread.is_locked,
-        source: thread.source,
+        source: thread.source.parse().unwrap_or(ThreadSource::User),
         source_url: thread.source_url,
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
@@ -442,11 +443,9 @@ pub async fn create_thread(
 ) -> Result<Json<ThreadResponse>, ApiError> {
     let scope = req
         .scope
-        .as_deref()
         .ok_or_else(|| ApiError::BadRequest("scope is required".into()))?;
-    validate_scope(scope)?;
 
-    if scope == "local" && req.municipality_id.is_none() {
+    if scope == ThreadScope::Local && req.municipality_id.is_none() {
         return Err(ApiError::BadRequest(
             "municipality_id is required for local scope".into(),
         ));
@@ -458,7 +457,7 @@ pub async fn create_thread(
         return Err(ApiError::BadRequest("content must not be empty".into()));
     }
 
-    let scope = scope.to_string();
+    let scope_str = scope.to_string();
     let thread_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
@@ -469,7 +468,7 @@ pub async fn create_thread(
             title: Set(req.title),
             content: Set(req.content),
             author_id: Set(auth.user_id.0),
-            scope: Set(scope),
+            scope: Set(scope_str),
             municipality_id: Set(req.municipality_id),
             language: Set(req.language),
             country: Set(req.country),
@@ -529,7 +528,7 @@ pub async fn create_thread(
         title: thread.title,
         content: thread.content,
         content_html: thread.content_html,
-        scope: thread.scope,
+        scope: thread.scope.parse().unwrap_or(ThreadScope::National),
         author,
         tags: req.tags.unwrap_or_default(),
         reply_count: thread.reply_count,
@@ -539,7 +538,7 @@ pub async fn create_thread(
         is_bookmarked: false,
         is_pinned: thread.is_pinned,
         is_locked: thread.is_locked,
-        source: thread.source,
+        source: thread.source.parse().unwrap_or(ThreadSource::User),
         source_url: thread.source_url,
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
@@ -661,7 +660,7 @@ pub async fn update_thread(
         title: updated.title,
         content: updated.content,
         content_html: updated.content_html,
-        scope: updated.scope,
+        scope: updated.scope.parse().unwrap_or(ThreadScope::National),
         author,
         tags,
         reply_count: updated.reply_count,
@@ -673,7 +672,7 @@ pub async fn update_thread(
         is_locked: updated.is_locked,
         municipality_id: updated.municipality_id,
         institutional_context: updated.institutional_context,
-        source: updated.source,
+        source: updated.source.parse().unwrap_or(ThreadSource::User),
         source_url: updated.source_url,
         source_institution_id: updated.source_institution_id,
         ai_generated: updated.ai_generated,
