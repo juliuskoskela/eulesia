@@ -76,6 +76,17 @@ fn auth_response(
     config: &AppConfig,
     jar: CookieJar,
 ) -> (CookieJar, Json<UserProfile>) {
+    // Clear any stale session cookies that may have been set with different
+    // domain/path attributes (e.g. by the old v1 Node API). We clear both
+    // with and without domain to cover all variants the browser may hold.
+    let mut removal = Cookie::build("session").path("/").build();
+    let jar = jar.remove(removal.clone());
+    if let Some(ref domain) = config.cookie_domain {
+        removal.set_domain(domain.clone());
+    }
+    let jar = jar.remove(removal);
+    let jar = jar.remove(Cookie::build("__Host-session").path("/").build());
+
     let cookie = build_session_cookie(token.as_str(), config);
     let jar = jar.add(cookie);
 
@@ -143,6 +154,7 @@ async fn logout(
         .map_err(ApiError::from)?;
 
     let jar = jar.remove(Cookie::from("session"));
+    let jar = jar.remove(Cookie::from("__Host-session"));
     Ok(jar)
 }
 
