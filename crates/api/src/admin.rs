@@ -8,14 +8,14 @@ use sea_orm::{
     QueryFilter, QueryOrder, Statement,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{AppConfig, AppState};
 use eulesia_auth::password;
-use eulesia_auth::service::{AuthService, LoginRequest};
-use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
 use eulesia_common::types::{Id, new_id};
+use eulesia_db::entities::{admin_accounts, admin_sessions};
 use eulesia_db::repo::users::UserRepo;
 
 // ---------------------------------------------------------------------------
@@ -26,95 +26,33 @@ fn db_err(e: sea_orm::DbErr) -> ApiError {
     ApiError::Database(e.to_string())
 }
 
-// ---------------------------------------------------------------------------
-// Moderator guard
-// ---------------------------------------------------------------------------
+/// SHA-256 hash a raw token string and return the hex digest.
+fn sha256_hex(input: &str) -> String {
+    let hash = Sha256::digest(input.as_bytes());
+    hex::encode(hash)
+}
 
-/// Load the user model for `auth` and return `Forbidden` unless their role is
-/// `moderator`. This is the single gating helper used by every admin endpoint.
-async fn require_moderator(
-    state: &AppState,
-    auth: &AuthUser,
-) -> Result<eulesia_db::entities::users::Model, ApiError> {
-    let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?
-        .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
-
-    if user.role != "moderator" {
-        return Err(ApiError::Forbidden);
-    }
-
-    Ok(user)
+/// Generate a cryptographically random token (32 bytes, base64-encoded).
+fn generate_admin_token() -> String {
+    use base64::Engine;
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::rng().fill_bytes(&mut bytes);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
 // ---------------------------------------------------------------------------
-// Response types (auth)
+// Admin session cookie
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(clippy::struct_excessive_bools)]
-struct AdminUserProfile {
-    id: Id,
-    username: String,
-    email: Option<String>,
-    name: String,
-    avatar_url: Option<String>,
-    bio: Option<String>,
-    role: String,
-    institution_type: Option<String>,
-    institution_name: Option<String>,
-    identity_verified: bool,
-    identity_level: String,
-    identity_provider: Option<String>,
-    verified_name: Option<String>,
-    municipality_id: Option<Id>,
-    locale: String,
-    notification_replies: bool,
-    notification_mentions: bool,
-    notification_official: bool,
-    onboarding_completed_at: Option<String>,
-    created_at: String,
-}
+const ADMIN_SESSION_MAX_AGE_DAYS: i64 = 30;
 
-impl From<eulesia_db::entities::users::Model> for AdminUserProfile {
-    fn from(u: eulesia_db::entities::users::Model) -> Self {
-        Self {
-            id: u.id,
-            username: u.username,
-            email: u.email,
-            name: u.name,
-            avatar_url: u.avatar_url,
-            bio: u.bio,
-            role: u.role,
-            institution_type: u.institution_type,
-            institution_name: u.institution_name,
-            identity_verified: u.identity_verified,
-            identity_level: u.identity_level,
-            identity_provider: u.identity_provider,
-            verified_name: u.verified_name,
-            municipality_id: u.municipality_id,
-            locale: u.locale,
-            notification_replies: u.notification_replies,
-            notification_mentions: u.notification_mentions,
-            notification_official: u.notification_official,
-            onboarding_completed_at: u.onboarding_completed_at.map(|t| t.to_rfc3339()),
-            created_at: u.created_at.to_rfc3339(),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Cookie helper (mirrors auth_routes)
-// ---------------------------------------------------------------------------
-
-fn build_session_cookie(token: &str, config: &AppConfig) -> Cookie<'static> {
-    let mut cookie = Cookie::build(("session", token.to_string()))
+fn build_admin_session_cookie(token: &str, config: &AppConfig) -> Cookie<'static> {
+    let mut cookie = Cookie::build(("admin_session", token.to_string()))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
-        .max_age(time::Duration::days(i64::from(config.session_max_age_days)))
+        .max_age(time::Duration::days(ADMIN_SESSION_MAX_AGE_DAYS))
         .build();
 
     if config.cookie_secure {
@@ -127,68 +65,190 @@ fn build_session_cookie(token: &str, config: &AppConfig) -> Cookie<'static> {
     cookie
 }
 
-// ===========================================================================
-// Auth Endpoints (existing)
-// ===========================================================================
+fn clear_admin_session_cookie(config: &AppConfig) -> Cookie<'static> {
+    let mut cookie = Cookie::build("admin_session")
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .max_age(time::Duration::ZERO)
+        .build();
 
-/// GET /admin/auth/me -- return the authenticated moderator's profile.
-async fn admin_me(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<AdminUserProfile>, ApiError> {
-    let user = require_moderator(&state, &auth).await?;
-    Ok(Json(AdminUserProfile::from(user)))
+    if config.cookie_secure {
+        cookie.set_secure(true);
+    }
+    if let Some(ref domain) = config.cookie_domain {
+        cookie.set_domain(domain.clone());
+    }
+
+    cookie
 }
 
-/// POST /admin/auth/login -- authenticate and verify moderator role.
+// ---------------------------------------------------------------------------
+// Admin session validation
+// ---------------------------------------------------------------------------
+
+/// Validate the `admin_session` cookie and return the authenticated admin
+/// account. This is the single gating helper used by every admin endpoint.
+async fn require_admin(
+    jar: &CookieJar,
+    state: &AppState,
+) -> Result<admin_accounts::Model, ApiError> {
+    let token = jar
+        .get("admin_session")
+        .map(|c| c.value().to_string())
+        .ok_or(ApiError::Unauthorized)?;
+
+    let token_hash = sha256_hex(&token);
+
+    // Look up the session by token hash
+    let session = admin_sessions::Entity::find()
+        .filter(admin_sessions::Column::TokenHash.eq(&token_hash))
+        .one(&*state.db)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Unauthorized)?;
+
+    // Verify not expired
+    let now = chrono::Utc::now().fixed_offset();
+    if session.expires_at < now {
+        // Clean up expired session
+        let _ = admin_sessions::Entity::delete_by_id(session.id)
+            .exec(&*state.db)
+            .await;
+        return Err(ApiError::Unauthorized);
+    }
+
+    // Load the admin account
+    let admin = admin_accounts::Entity::find_by_id(session.admin_id)
+        .one(&*state.db)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Unauthorized)?;
+
+    Ok(admin)
+}
+
+// ---------------------------------------------------------------------------
+// Response types (auth)
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminProfile {
+    id: Id,
+    username: String,
+    name: String,
+    email: Option<String>,
+}
+
+impl From<&admin_accounts::Model> for AdminProfile {
+    fn from(a: &admin_accounts::Model) -> Self {
+        Self {
+            id: a.id,
+            username: a.username.clone(),
+            name: a.name.clone(),
+            email: a.email.clone(),
+        }
+    }
+}
+
+// ===========================================================================
+// Auth Endpoints
+// ===========================================================================
+
+/// POST /admin/auth/login -- authenticate via admin_accounts.
+#[derive(Deserialize)]
+struct AdminLoginRequest {
+    username: String,
+    password: String,
+}
+
 async fn admin_login(
     State(state): State<AppState>,
     jar: CookieJar,
-    Json(req): Json<LoginRequest>,
-) -> Result<(CookieJar, Json<AdminUserProfile>), ApiError> {
-    let (user, token) = AuthService::login(
-        &state.db,
-        req,
-        None,
-        None,
-        state.config.session_max_age_days,
-    )
-    .await
-    .map_err(ApiError::from)?;
+    Json(req): Json<AdminLoginRequest>,
+) -> Result<(CookieJar, Json<AdminProfile>), ApiError> {
+    // Look up admin by username
+    let admin = admin_accounts::Entity::find()
+        .filter(admin_accounts::Column::Username.eq(&req.username))
+        .one(&*state.db)
+        .await
+        .map_err(db_err)?
+        .ok_or(ApiError::Unauthorized)?;
 
-    // Gate on moderator role
-    if user.role != "moderator" {
-        let _ = AuthService::revoke_session(
-            &state.db,
-            eulesia_common::types::SessionId(uuid::Uuid::nil()),
-        )
-        .await;
-        return Err(ApiError::Forbidden);
+    // Verify password (spawn_blocking because argon2 is CPU-intensive)
+    let pw = req.password.clone();
+    let hash = admin.password_hash.clone();
+    let valid = tokio::task::spawn_blocking(move || password::verify_password(&pw, &hash))
+        .await
+        .map_err(|_| ApiError::Internal("password verification task failed".into()))?
+        .map_err(|_| ApiError::Internal("password hashing error".into()))?;
+
+    if !valid {
+        return Err(ApiError::Unauthorized);
     }
 
-    let cookie = build_session_cookie(token.as_str(), &state.config);
+    // Generate session token
+    let raw_token = generate_admin_token();
+    let token_hash = sha256_hex(&raw_token);
+    let now = chrono::Utc::now().fixed_offset();
+    let expires_at = now + chrono::Duration::days(ADMIN_SESSION_MAX_AGE_DAYS);
+
+    // Store session
+    admin_sessions::ActiveModel {
+        id: Set(Uuid::now_v7()),
+        admin_id: Set(admin.id),
+        token_hash: Set(token_hash),
+        ip_address: Set(None),
+        user_agent: Set(None),
+        expires_at: Set(expires_at),
+        created_at: Set(now),
+    }
+    .insert(&*state.db)
+    .await
+    .map_err(db_err)?;
+
+    // Update last_seen_at
+    let mut active: admin_accounts::ActiveModel = admin.clone().into();
+    active.last_seen_at = Set(Some(now));
+    active.update(&*state.db).await.map_err(db_err)?;
+
+    // Set cookie
+    let cookie = build_admin_session_cookie(&raw_token, &state.config);
     let jar = jar.add(cookie);
 
-    Ok((jar, Json(AdminUserProfile::from(user))))
+    Ok((jar, Json(AdminProfile::from(&admin))))
 }
 
-/// POST /admin/auth/logout -- revoke the current session.
+/// GET /admin/auth/me -- return the authenticated admin's profile.
+async fn admin_me(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> Result<Json<AdminProfile>, ApiError> {
+    let admin = require_admin(&jar, &state).await?;
+    Ok(Json(AdminProfile::from(&admin)))
+}
+
+/// POST /admin/auth/logout -- delete the admin session and clear cookie.
 async fn admin_logout(
     State(state): State<AppState>,
-    auth: AuthUser,
     jar: CookieJar,
 ) -> Result<CookieJar, ApiError> {
-    require_moderator(&state, &auth).await?;
+    if let Some(token) = jar.get("admin_session").map(|c| c.value().to_string()) {
+        let token_hash = sha256_hex(&token);
+        // Delete the session record
+        admin_sessions::Entity::delete_many()
+            .filter(admin_sessions::Column::TokenHash.eq(&token_hash))
+            .exec(&*state.db)
+            .await
+            .map_err(db_err)?;
+    }
 
-    AuthService::revoke_session(&state.db, auth.session_id)
-        .await
-        .map_err(ApiError::from)?;
-
-    let jar = jar.remove(Cookie::from("session"));
+    let jar = jar.add(clear_admin_session_cookie(&state.config));
     Ok(jar)
 }
 
-/// POST /admin/auth/change-password -- change moderator's own password.
+/// POST /admin/auth/change-password -- change admin's own password.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AdminChangePasswordRequest {
@@ -197,13 +257,11 @@ struct AdminChangePasswordRequest {
 }
 
 async fn admin_change_password(
-    auth: AuthUser,
     State(state): State<AppState>,
+    jar: CookieJar,
     Json(req): Json<AdminChangePasswordRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    use eulesia_db::entities::users;
-
-    let user = require_moderator(&state, &auth).await?;
+    let admin = require_admin(&jar, &state).await?;
 
     if req.new_password.len() < 8 {
         return Err(ApiError::BadRequest(
@@ -211,13 +269,9 @@ async fn admin_change_password(
         ));
     }
 
-    let hash = user
-        .password_hash
-        .as_ref()
-        .ok_or_else(|| ApiError::BadRequest("account has no password set".into()))?;
-
+    // Verify current password
     let current = req.current_password.clone();
-    let stored = hash.clone();
+    let stored = admin.password_hash.clone();
     let valid = tokio::task::spawn_blocking(move || password::verify_password(&current, &stored))
         .await
         .map_err(|_| ApiError::Internal("password verification task failed".into()))?
@@ -227,23 +281,18 @@ async fn admin_change_password(
         return Err(ApiError::BadRequest("incorrect current password".into()));
     }
 
+    // Hash new password
     let new_pw = req.new_password.clone();
     let new_hash = tokio::task::spawn_blocking(move || password::hash_password(&new_pw))
         .await
         .map_err(|_| ApiError::Internal("password hashing task failed".into()))?
         .map_err(|e| ApiError::Internal(format!("hash password: {e}")))?;
 
-    let mut active: users::ActiveModel = user.into();
-    active.password_hash = Set(Some(new_hash));
+    // Update password
+    let mut active: admin_accounts::ActiveModel = admin.into();
+    active.password_hash = Set(new_hash);
     active.updated_at = Set(chrono::Utc::now().fixed_offset());
-    active
-        .update(&*state.db)
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?;
-
-    AuthService::revoke_other_sessions(&state.db, auth.user_id, auth.session_id)
-        .await
-        .map_err(ApiError::from)?;
+    active.update(&*state.db).await.map_err(db_err)?;
 
     Ok(Json(serde_json::json!({ "changed": true })))
 }
@@ -299,9 +348,9 @@ struct DashboardResponse {
 /// GET /admin/dashboard
 async fn admin_dashboard(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
 ) -> Result<Json<DashboardResponse>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     // Stats counts via a single query
     let stats_row = state
@@ -456,10 +505,10 @@ struct AdminUsersListResponse {
 /// GET /admin/users
 async fn admin_list_users(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Query(params): Query<AdminUsersListParams>,
 ) -> Result<Json<AdminUsersListResponse>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     let limit = params.limit.clamp(1, 100);
     let page = params.page.max(1);
@@ -592,10 +641,10 @@ struct AdminUserDetailResponse {
 /// GET /admin/users/{id}
 async fn admin_get_user(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Path(id): Path<Uuid>,
 ) -> Result<Json<AdminUserDetailResponse>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     let user = UserRepo::find_by_id(&state.db, id)
         .await
@@ -690,11 +739,11 @@ struct ChangeRoleRequest {
 /// PATCH /admin/users/{id}/role
 async fn admin_change_user_role(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Path(id): Path<Uuid>,
     Json(req): Json<ChangeRoleRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     // Only allow setting to citizen or institution
     if req.role != "citizen" && req.role != "institution" {
@@ -727,11 +776,11 @@ struct VerifyRequest {
 /// PATCH /admin/users/{id}/verify
 async fn admin_toggle_verify(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Path(id): Path<Uuid>,
     Json(req): Json<VerifyRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     let user = UserRepo::find_by_id(&state.db, id)
         .await
@@ -796,9 +845,9 @@ async fn announcement_to_response(
 /// GET /admin/announcements -- list ALL announcements (admin only)
 async fn admin_list_announcements(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
 ) -> Result<Json<Vec<AnnouncementResponse>>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     use eulesia_db::entities::system_announcements;
     let all = system_announcements::Entity::find()
@@ -831,10 +880,10 @@ fn default_announcement_type() -> String {
 /// POST /admin/announcements
 async fn admin_create_announcement(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Json(req): Json<CreateAnnouncementRequest>,
 ) -> Result<Json<AnnouncementResponse>, ApiError> {
-    let admin = require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     if req.title.trim().is_empty() || req.message.trim().is_empty() {
         return Err(ApiError::BadRequest(
@@ -868,7 +917,7 @@ async fn admin_create_announcement(
         message: Set(req.message.clone()),
         announcement_type: Set(req.announcement_type.clone()),
         active: Set(true),
-        created_by: Set(Some(admin.id)),
+        created_by: Set(None),
         created_at: Set(now),
         expires_at: Set(expires_at),
     };
@@ -886,11 +935,11 @@ struct ToggleAnnouncementRequest {
 /// PATCH /admin/announcements/{id}
 async fn admin_toggle_announcement(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Path(id): Path<Uuid>,
     Json(req): Json<ToggleAnnouncementRequest>,
 ) -> Result<Json<AnnouncementResponse>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     use eulesia_db::entities::system_announcements;
     let existing = system_announcements::Entity::find_by_id(id)
@@ -909,10 +958,10 @@ async fn admin_toggle_announcement(
 /// DELETE /admin/announcements/{id}
 async fn admin_delete_announcement(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     use eulesia_db::entities::system_announcements;
     let result = system_announcements::Entity::delete_by_id(id)
@@ -940,9 +989,9 @@ struct SiteSettingsResponse {
 /// GET /admin/settings
 async fn admin_get_settings(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
 ) -> Result<Json<SiteSettingsResponse>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     use eulesia_db::entities::site_settings;
     let row = site_settings::Entity::find_by_id("registrationOpen")
@@ -964,10 +1013,10 @@ struct UpdateSiteSettingsRequest {
 /// PATCH /admin/settings
 async fn admin_update_settings(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Json(req): Json<UpdateSiteSettingsRequest>,
 ) -> Result<Json<SiteSettingsResponse>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     let now = chrono::Utc::now().fixed_offset();
     let value = if req.registration_open {
@@ -1014,10 +1063,10 @@ struct InviteCodeResponse {
 /// POST /admin/invites/generate
 async fn admin_generate_invites(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
     Json(req): Json<GenerateInvitesRequest>,
 ) -> Result<Json<Vec<InviteCodeResponse>>, ApiError> {
-    let admin = require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     if req.count == 0 || req.count > 50 {
         return Err(ApiError::BadRequest(
@@ -1038,7 +1087,12 @@ async fn admin_generate_invites(
                 DatabaseBackend::Postgres,
                 r"INSERT INTO invite_codes (id, code, created_by, created_at)
                   VALUES ($1, $2, $3, $4)",
-                [id.into(), code.clone().into(), admin.id.into(), now.into()],
+                [
+                    id.into(),
+                    code.clone().into(),
+                    sea_orm::Value::Uuid(None),
+                    now.into(),
+                ],
             ))
             .await
             .map_err(db_err)?;
@@ -1090,9 +1144,9 @@ struct UsedByInfo {
 /// GET /admin/invites
 async fn admin_list_invites(
     State(state): State<AppState>,
-    auth: AuthUser,
+    jar: CookieJar,
 ) -> Result<Json<Vec<InviteCodeListItem>>, ApiError> {
-    require_moderator(&state, &auth).await?;
+    require_admin(&jar, &state).await?;
 
     let rows = state
         .db

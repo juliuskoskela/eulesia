@@ -66,6 +66,8 @@ pub mod user_subscriptions;
 pub mod waitlist;
 
 // Admin / Site
+pub mod admin_accounts;
+pub mod admin_sessions;
 pub mod invite_codes;
 pub mod site_settings;
 pub mod system_announcements;
