@@ -57,6 +57,21 @@ server-fmt:
 ci-check:
     nix run .#ci-check
 
+# Regenerate TypeScript types from Rust structs (backend → frontend)
+generate-types:
+    cargo test -p eulesia-api --features ts --test ts_export
+
+# Verify generated types are up-to-date (fails if stale)
+check-types:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo test -p eulesia-api --features ts --test ts_export 2>/dev/null
+    if ! git diff --quiet apps/web/src/types/generated/; then
+        echo "Generated TypeScript types are stale. Run: just generate-types"
+        git diff --stat apps/web/src/types/generated/
+        exit 1
+    fi
+
 vm-build:
     nix build .#nixosConfigurations.eulesia-vm.config.microvm.runner.qemu
 

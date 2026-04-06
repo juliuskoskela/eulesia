@@ -4,6 +4,9 @@ import type { ThreadResponse } from "./ThreadResponse";
 export type ThreadListResponse = {
   items: Array<ThreadResponse>;
   total: number;
-  offset: number;
+  page: number;
   limit: number;
+  hasMore: boolean;
+  feedScope: string | null;
+  hasSubscriptions: boolean;
 };

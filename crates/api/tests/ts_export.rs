@@ -17,8 +17,12 @@ use eulesia_api::agora::types::{
 
 // Messaging types
 use eulesia_api::messaging::types::{
-    ConversationListItem, ConversationResponse, EpochResponse, MemberSummary, MessageResponse,
+    ConversationListItem, ConversationResponse, ConversationUserSummary, EpochResponse,
+    LastMessageSummary, MemberSummary, MessageResponse,
 };
+
+// Common types (re-exported through eulesia-common)
+use eulesia_common::types::{ClubRole, GroupRole};
 
 #[test]
 fn export_bindings() {
@@ -26,7 +30,7 @@ fn export_bindings() {
         .with_out_dir("../../apps/web/src/types/generated")
         .with_large_int("number");
 
-    // Agora types (export_all pulls in dependencies like AuthorSummary)
+    // Agora types
     ThreadResponse::export_all(&cfg).expect("ThreadResponse");
     ThreadWithCommentsResponse::export_all(&cfg).expect("ThreadWithCommentsResponse");
     ThreadListResponse::export_all(&cfg).expect("ThreadListResponse");
@@ -38,7 +42,13 @@ fn export_bindings() {
     // Messaging types
     ConversationResponse::export_all(&cfg).expect("ConversationResponse");
     ConversationListItem::export_all(&cfg).expect("ConversationListItem");
+    ConversationUserSummary::export_all(&cfg).expect("ConversationUserSummary");
+    LastMessageSummary::export_all(&cfg).expect("LastMessageSummary");
     MemberSummary::export_all(&cfg).expect("MemberSummary");
     MessageResponse::export_all(&cfg).expect("MessageResponse");
     EpochResponse::export_all(&cfg).expect("EpochResponse");
+
+    // Enum types
+    ClubRole::export_all(&cfg).expect("ClubRole");
+    GroupRole::export_all(&cfg).expect("GroupRole");
 }
