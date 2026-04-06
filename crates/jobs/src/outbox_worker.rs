@@ -124,10 +124,13 @@ async fn process_event(
                     Jos et pyytänyt tätä, voit jättää viestin huomiotta.</p>
                     </div>"#,
                 );
-                dispatcher.send_email(email, subject, &body).await;
+                dispatcher
+                    .send_email(email, subject, &body)
+                    .await
+                    .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
             }
 
-            info!(email = %email, "magic link email processed");
+            info!(email = %email, "magic link email sent");
             Ok(())
         }
         other => {

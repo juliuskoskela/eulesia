@@ -1562,12 +1562,22 @@ pub async fn get_club_thread(
     let mut resp =
         serde_json::to_value(&thread_resp).map_err(|e| ApiError::Internal(e.to_string()))?;
     let obj = resp.as_object_mut().unwrap();
-    obj.insert(
-        "comments".into(),
-        serde_json::to_value(&comment_resps).unwrap(),
-    );
+
+    // Inject authorId on each comment — frontend checks comment.authorId === currentUser.id
+    let mut comments_json = serde_json::to_value(&comment_resps).unwrap();
+    if let Some(arr) = comments_json.as_array_mut() {
+        for c in arr {
+            if let Some(author_id) = c.get("author").and_then(|a| a.get("id")).cloned() {
+                c.as_object_mut()
+                    .unwrap()
+                    .insert("authorId".into(), author_id);
+            }
+        }
+    }
+    obj.insert("comments".into(), comments_json);
     obj.insert("memberRole".into(), serde_json::json!(member_role));
-    let is_owner = member_role.as_deref() == Some("owner");
+    // Club/room owners are stored with the "admin" role, not "owner"
+    let is_owner = matches!(member_role.as_deref(), Some("admin" | "owner"));
     obj.insert("isRoomOwner".into(), serde_json::json!(is_owner));
 
     Ok(Json(resp))
@@ -2108,5 +2118,80 @@ mod tests {
         );
         assert_eq!(req.rules.as_deref(), Some("Be nice"));
         assert_eq!(req.latitude, Some(60.17));
+    }
+
+    /// Room owners are stored as "admin" role — isRoomOwner must be true for them.
+    #[test]
+    fn is_room_owner_true_for_admin_role() {
+        // Simulate what get_club_thread does when building the flattened response
+        let member_role: Option<&str> = Some("admin");
+        let is_owner = matches!(member_role, Some("admin" | "owner"));
+        assert!(is_owner, "admin role must be treated as owner");
+    }
+
+    /// Regular members should not have isRoomOwner=true.
+    #[test]
+    fn is_room_owner_false_for_member_role() {
+        let member_role: Option<&str> = Some("member");
+        let is_owner = matches!(member_role, Some("admin" | "owner"));
+        assert!(!is_owner);
+    }
+
+    /// isRoomOwner false for moderator role.
+    #[test]
+    fn is_room_owner_false_for_moderator_role() {
+        let member_role: Option<&str> = Some("moderator");
+        let is_owner = matches!(member_role, Some("admin" | "owner"));
+        assert!(!is_owner);
+    }
+
+    /// No role (non-member) → isRoomOwner false.
+    #[test]
+    fn is_room_owner_false_for_no_role() {
+        let member_role: Option<&str> = None;
+        let is_owner = matches!(member_role, Some("admin" | "owner"));
+        assert!(!is_owner);
+    }
+
+    /// Verify flattened comment payload includes authorId.
+    #[test]
+    fn flattened_comment_has_author_id() {
+        use crate::agora::types::{AuthorSummary, CommentResponse};
+
+        let comment = CommentResponse {
+            id: Uuid::nil(),
+            thread_id: Uuid::nil(),
+            parent_id: None,
+            author: AuthorSummary {
+                id: Uuid::from_u128(42),
+                username: "alice".into(),
+                name: "Alice".into(),
+                avatar_url: None,
+                role: "citizen".into(),
+            },
+            content: "Hello".into(),
+            content_html: None,
+            depth: 0,
+            score: 1,
+            user_vote: None,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        // Simulate the injection logic from get_club_thread
+        let mut json = serde_json::to_value(&comment).unwrap();
+        if let Some(author_id) = json.get("author").and_then(|a| a.get("id")).cloned() {
+            json.as_object_mut()
+                .unwrap()
+                .insert("authorId".into(), author_id);
+        }
+
+        let obj = json.as_object().unwrap();
+        assert!(obj.contains_key("authorId"), "must have authorId");
+        assert_eq!(
+            obj["authorId"],
+            serde_json::json!(Uuid::from_u128(42)),
+            "authorId must match author.id"
+        );
     }
 }

@@ -26,8 +26,9 @@ impl NotificationDispatcher {
     }
 
     /// Send an email (used by outbox worker for magic links, etc.).
-    pub async fn send_email(&self, to: &str, subject: &str, body_html: &str) {
-        self.email.send_email(to, subject, body_html).await;
+    /// Returns `Err` on delivery failure so the outbox can retry.
+    pub async fn send_email(&self, to: &str, subject: &str, body_html: &str) -> Result<(), String> {
+        self.email.send_email(to, subject, body_html).await
     }
 
     pub async fn dispatch(

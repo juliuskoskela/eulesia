@@ -62,41 +62,35 @@ impl EmailClient {
         (Some(transport), from)
     }
 
-    pub async fn send_email(&self, to: &str, subject: &str, body_html: &str) {
+    /// Send an email. Returns `Err` on delivery failure so callers (e.g. the
+    /// outbox worker) can retry rather than silently dropping the message.
+    pub async fn send_email(&self, to: &str, subject: &str, body_html: &str) -> Result<(), String> {
         let transport = match &self.transport {
             Some(t) => t,
             None => {
+                // SMTP not configured — treat as success (nothing to deliver to).
                 info!(to, subject, "SMTP not configured, skipping email");
-                return;
+                return Ok(());
             }
         };
 
         let message =
-            match Message::builder()
+            Message::builder()
                 .from(self.from.parse().unwrap_or_else(|_| {
                     "noreply@eulesia.org".parse().expect("valid fallback from")
                 }))
-                .to(match to.parse() {
-                    Ok(addr) => addr,
-                    Err(e) => {
-                        warn!(to, error = %e, "invalid email recipient");
-                        return;
-                    }
-                })
+                .to(to.parse().map_err(|e| format!("invalid recipient: {e}"))?)
                 .subject(subject)
                 .header(ContentType::TEXT_HTML)
                 .body(body_html.to_string())
-            {
-                Ok(m) => m,
-                Err(e) => {
-                    warn!(error = %e, "failed to build email message");
-                    return;
-                }
-            };
+                .map_err(|e| format!("build email: {e}"))?;
 
-        match transport.send(message).await {
-            Ok(_) => info!(to, subject, "email sent"),
-            Err(e) => warn!(to, subject, error = %e, "email send failed"),
-        }
+        transport
+            .send(message)
+            .await
+            .map_err(|e| format!("SMTP send: {e}"))?;
+
+        info!(to, subject, "email sent");
+        Ok(())
     }
 }
