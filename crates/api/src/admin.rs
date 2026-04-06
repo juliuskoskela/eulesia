@@ -194,13 +194,13 @@ async fn admin_login(
     let now = chrono::Utc::now().fixed_offset();
     let expires_at = now + chrono::Duration::days(ADMIN_SESSION_MAX_AGE_DAYS);
 
-    // Store session
+    // Store session — omit ip_address/user_agent (INET type needs explicit cast)
     admin_sessions::ActiveModel {
         id: Set(Uuid::now_v7()),
         admin_id: Set(admin.id),
         token_hash: Set(token_hash),
-        ip_address: Set(None),
-        user_agent: Set(None),
+        ip_address: sea_orm::ActiveValue::NotSet,
+        user_agent: sea_orm::ActiveValue::NotSet,
         expires_at: Set(expires_at),
         created_at: Set(now),
     }
