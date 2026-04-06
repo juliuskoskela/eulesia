@@ -54,6 +54,11 @@ pub struct Config {
     /// Path to JSON file with admin accounts to bootstrap on startup
     #[arg(long, env = "ADMIN_BOOTSTRAP_FILE")]
     pub admin_bootstrap_file: Option<String>,
+
+    /// Directory containing the built frontend (serves static files + SPA fallback).
+    /// When set, the server serves the frontend directly — no separate webserver needed.
+    #[arg(long, env = "EULESIA_FRONTEND_DIR")]
+    pub frontend_dir: Option<String>,
 }
 
 impl Config {

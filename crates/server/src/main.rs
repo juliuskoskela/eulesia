@@ -2,6 +2,9 @@ mod config;
 
 use std::sync::Arc;
 
+use axum::http::{HeaderValue, header};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use config::Config;
 use eulesia_api::{AppConfig, AppState};
 use tokio_util::sync::CancellationToken;
@@ -84,10 +87,22 @@ async fn main() -> anyhow::Result<()> {
         .allow_credentials(true);
 
     let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into());
-    let app = eulesia_api::router(state)
-        .nest_service("/uploads", ServeDir::new(upload_dir))
-        .layer(cors)
-        .layer(TraceLayer::new_for_http());
+    let mut app = eulesia_api::router(state).nest_service("/uploads", ServeDir::new(upload_dir));
+
+    // Optionally serve the built frontend — eliminates the need for a
+    // separate webserver (nginx). Hashed assets get immutable caching;
+    // index.html is never cached so deploys take effect immediately.
+    if let Some(ref frontend_dir) = config.frontend_dir {
+        info!(dir = %frontend_dir, "serving frontend");
+        let index_path = std::path::PathBuf::from(frontend_dir).join("index.html");
+        let spa_fallback =
+            ServeDir::new(frontend_dir).fallback(tower_http::services::ServeFile::new(&index_path));
+        app = app
+            .fallback_service(spa_fallback)
+            .layer(middleware::from_fn(cache_headers));
+    }
+
+    let app = app.layer(cors).layer(TraceLayer::new_for_http());
 
     // Build outbox worker context with optional integrations
     let dispatcher = Arc::new(eulesia_notify::dispatch::NotificationDispatcher::new(
@@ -225,4 +240,30 @@ async fn bootstrap_admins(db: &sea_orm::DatabaseConnection, path: &str) -> anyho
     }
 
     Ok(())
+}
+
+/// Middleware: set `Cache-Control` based on request path.
+/// - Hashed assets (contain a `.` + extension): immutable, cached 1 year
+/// - HTML / SPA fallback routes: never cached
+async fn cache_headers(req: axum::extract::Request, next: Next) -> Response {
+    let path = req.uri().path().to_string();
+    let mut resp = next.run(req).await;
+
+    // Skip API routes, uploads, and websocket — they set their own headers
+    if path.starts_with("/api/") || path.starts_with("/uploads/") || path.starts_with("/ws/") {
+        return resp;
+    }
+
+    let is_hashed_asset = path.contains('.') && !path.ends_with(".html");
+
+    let value = if is_hashed_asset {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-cache, no-store, must-revalidate"
+    };
+
+    resp.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static(value));
+
+    resp
 }

@@ -119,6 +119,12 @@ in {
       description = "Directory for file uploads.";
     };
 
+    frontendDir = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Path to built frontend. When set, the Rust server serves it directly (no nginx needed).";
+    };
+
     idura = {
       enable = mkOption {
         type = types.bool;
@@ -239,6 +245,9 @@ in {
         }
         // optionalAttrs (cfg.bootstrapAdminAccountsFile != null) {
           ADMIN_BOOTSTRAP_FILE = cfg.bootstrapAdminAccountsFile;
+        }
+        // optionalAttrs (cfg.frontendDir != null) {
+          EULESIA_FRONTEND_DIR = cfg.frontendDir;
         }
         // cfg.extraEnvironment;
 
