@@ -79,55 +79,6 @@
       };
     };
 
-    nginx = {
-      defaultListenAddresses = ["127.0.0.1"];
-      defaultHTTPListenPort = 8080;
-      appendHttpConfig = ''
-        map $http_x_forwarded_proto $eulesia_forwarded_proto {
-          default $http_x_forwarded_proto;
-          "" $scheme;
-        }
-      '';
-      virtualHosts = {
-        "api.eulesia.org".locations."/".extraConfig = ''
-          proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-        '';
-
-        "eulesia.org".locations = {
-          "/.well-known/".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-          "/api/".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-          "/health".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-          "/sitemap.xml".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-          "/uploads/".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-        };
-
-        "admin.eulesia.org".locations = {
-          "/.well-known/".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-          "/api/".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-          "/health".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-          "/uploads/".extraConfig = ''
-            proxy_set_header X-Forwarded-Proto $eulesia_forwarded_proto;
-          '';
-        };
-      };
-    };
-
     traefik = {
       enable = true;
 
@@ -241,7 +192,7 @@
 
         services.eulesia.loadBalancer.servers = [
           {
-            url = "http://127.0.0.1:8080";
+            url = "http://127.0.0.1:3002";
           }
         ];
       };
@@ -250,6 +201,7 @@
     eulesia = {
       enable = true;
       frontendPackage = eulesiaPackages.frontend;
+      nginx.enable = false;
       appDomain = "eulesia.org";
       apiDomain = "api.eulesia.org";
       adminDomain = "admin.eulesia.org";
@@ -300,10 +252,11 @@
       };
     };
 
-    # Rust API server — sole backend for all /api/* traffic
+    # Rust server — serves API + frontend, sole backend for Traefik
     eulesia-server = {
       enable = true;
       package = eulesiaPackages.server;
+      frontendDir = "${eulesiaPackages.frontend}";
       frontendOrigin = "https://eulesia.org";
       cookieDomain = ".eulesia.org";
       cookieSecure = true;
