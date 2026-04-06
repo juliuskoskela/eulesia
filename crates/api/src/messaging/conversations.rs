@@ -1106,14 +1106,22 @@ pub async fn send_dm_message_v1(
     .await
     .map_err(db_err)?;
 
-    // Broadcast to other members via WebSocket
+    // Broadcast to other members via WebSocket with stored content as base64
+    let broadcast_ct = msg
+        .ciphertext
+        .as_ref()
+        .map(|ct| {
+            use base64::Engine;
+            base64::engine::general_purpose::STANDARD.encode(ct)
+        })
+        .unwrap_or_default();
     eulesia_ws::handler::broadcast_new_message(
         &state.db,
         &state.ws_registry,
         id,
         msg.id,
         caller,
-        "",
+        &broadcast_ct,
         conv.current_epoch,
     )
     .await;

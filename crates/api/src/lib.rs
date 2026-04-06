@@ -137,8 +137,7 @@ pub fn router(state: AppState) -> Router {
         .route("/dm/{id}", get(messaging::conversations::get_dm_v1))
         .route(
             "/dm/{id}/messages",
-            post(messaging::conversations::send_dm_message_v1)
-                .get(messaging::conversations::list_dm_messages_v1),
+            post(messaging::messages::send).get(messaging::messages::list_messages),
         )
         .route("/dm/{id}/read", post(messaging::messages::mark_read))
         .route(

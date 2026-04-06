@@ -11,6 +11,7 @@ use crate::agora::types::ThreadListResponse;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
 use eulesia_common::types::PaginationParams;
+use eulesia_db::entities::threads;
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::threads::ThreadRepo;
 
@@ -77,21 +78,23 @@ async fn list_bookmarks(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
+    // Fetch threads directly by ID — do NOT use ThreadRepo::list, which
+    // filters out club threads (club_id IS NULL). Bookmarks can reference
+    // any thread, including club/room threads.
     let thread_ids: Vec<Uuid> = bookmarks.iter().map(|b| b.thread_id).collect();
-    let (threads, _) = ThreadRepo::list(
-        &state.db,
-        None,
-        None,
-        None,
-        Some(&thread_ids),
-        &[],
-        "recent",
-        None,
-        0,
-        limit,
-    )
-    .await
-    .map_err(|e| ApiError::Database(e.to_string()))?;
+    let thread_models = if thread_ids.is_empty() {
+        vec![]
+    } else {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        threads::Entity::find()
+            .filter(threads::Column::Id.is_in(thread_ids))
+            .filter(threads::Column::DeletedAt.is_null())
+            .filter(threads::Column::IsHidden.eq(false))
+            .all(&*state.db)
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?
+    };
+    let threads = thread_models;
 
     let data = enrich_threads(&state.db, threads, Some(auth.user_id.0)).await?;
 

@@ -1400,37 +1400,33 @@ async fn admin_delete_content(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let admin = require_admin(&jar, &state).await?;
 
-    match content_type.as_str() {
-        "thread" => {
-            state
-                .db
-                .execute(Statement::from_sql_and_values(
-                    DatabaseBackend::Postgres,
-                    "UPDATE threads SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
-                    [content_id.into()],
-                ))
-                .await
-                .map_err(db_err)?;
-        }
-        "comment" => {
-            state
-                .db
-                .execute(Statement::from_sql_and_values(
-                    DatabaseBackend::Postgres,
-                    "UPDATE comments SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
-                    [content_id.into()],
-                ))
-                .await
-                .map_err(db_err)?;
-        }
+    let sql = match content_type.as_str() {
+        "thread" => "UPDATE threads SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+        "comment" => "UPDATE comments SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
         _ => {
             return Err(ApiError::BadRequest(
                 "type must be 'thread' or 'comment'".into(),
             ));
         }
+    };
+
+    let result = state
+        .db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            sql,
+            [content_id.into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound(format!(
+            "{content_type} not found or already deleted"
+        )));
     }
 
-    // Log the moderation action
+    // Log only when content was actually deleted
     state
         .db
         .execute(Statement::from_sql_and_values(
@@ -1455,37 +1451,35 @@ async fn admin_restore_content(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let admin = require_admin(&jar, &state).await?;
 
-    match content_type.as_str() {
-        "thread" => {
-            state
-                .db
-                .execute(Statement::from_sql_and_values(
-                    DatabaseBackend::Postgres,
-                    "UPDATE threads SET deleted_at = NULL WHERE id = $1",
-                    [content_id.into()],
-                ))
-                .await
-                .map_err(db_err)?;
-        }
+    let sql = match content_type.as_str() {
+        "thread" => "UPDATE threads SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
         "comment" => {
-            state
-                .db
-                .execute(Statement::from_sql_and_values(
-                    DatabaseBackend::Postgres,
-                    "UPDATE comments SET deleted_at = NULL WHERE id = $1",
-                    [content_id.into()],
-                ))
-                .await
-                .map_err(db_err)?;
+            "UPDATE comments SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL"
         }
         _ => {
             return Err(ApiError::BadRequest(
                 "type must be 'thread' or 'comment'".into(),
             ));
         }
+    };
+
+    let result = state
+        .db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            sql,
+            [content_id.into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound(format!(
+            "{content_type} not found or not deleted"
+        )));
     }
 
-    // Log the moderation action
+    // Log only when content was actually restored
     state
         .db
         .execute(Statement::from_sql_and_values(
