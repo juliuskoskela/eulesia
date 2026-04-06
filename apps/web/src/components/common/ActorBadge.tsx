@@ -1,9 +1,19 @@
 import { Building2, ShieldCheck, ShieldOff } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { User } from "../../types";
+interface ActorUser {
+  id: string | null;
+  name: string;
+  role: string;
+  avatarUrl?: string | null;
+  avatarInitials?: string;
+  verified?: boolean;
+  canViewProfile?: boolean;
+  institutionType?: string;
+  institutionName?: string;
+}
 
 interface ActorBadgeProps {
-  user: User;
+  user: ActorUser;
   showName?: boolean;
   size?: "sm" | "md" | "lg";
 }

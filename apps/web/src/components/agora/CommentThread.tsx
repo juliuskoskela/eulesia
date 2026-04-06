@@ -14,15 +14,16 @@ import { ActorBadge } from "../common/ActorBadge";
 import { EditedIndicator } from "../common/EditedIndicator";
 import { ConfirmDeleteDialog } from "../common/ConfirmDeleteDialog";
 import { formatRelativeTime } from "../../lib/formatTime";
-import type { UserRole } from "../../types";
 
 interface CommentAuthor {
   id: string | null;
   name: string;
-  role: UserRole;
+  role: string;
   verified: boolean;
   avatarInitials: string;
-  institutionType?: "municipality" | "agency" | "ministry";
+  avatarUrl?: string | null;
+  canViewProfile?: boolean;
+  institutionType?: string;
   institutionName?: string;
 }
 

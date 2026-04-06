@@ -59,7 +59,7 @@ function ConversationItem({ conversation }: { conversation: Conversation }) {
           <p
             className={`text-sm truncate ${unreadCount > 0 ? "text-gray-900 dark:text-gray-100 font-medium" : "text-gray-500 dark:text-gray-400"}`}
           >
-            {lastMessage
+            {lastMessage?.content
               ? lastMessage.content.substring(0, 80)
               : t("noMessagesPreview")}
           </p>

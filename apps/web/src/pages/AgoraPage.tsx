@@ -49,7 +49,7 @@ function transformThread(thread: ApiThread | ExploreThread) {
     municipalityId: thread.municipality?.id,
     municipalityName: thread.municipality?.name,
     tags: thread.tags,
-    authorId: thread.authorId ?? thread.author.id ?? "",
+    authorId: thread.authorId ?? thread.author?.id ?? "",
     content: thread.content,
     contentHtml: thread.contentHtml,
     createdAt: thread.createdAt,
@@ -149,7 +149,7 @@ export function AgoraPage() {
     if (!threadsData?.items) return;
     const newItems = threadsData.items.map((item) => ({
       thread: transformThread(item),
-      author: transformAuthor(item.author),
+      author: transformAuthor(item.author ?? { id: "", name: "", role: "" }),
     }));
     if (page === 1) {
       setAllThreads(newItems);

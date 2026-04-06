@@ -1,6 +1,6 @@
-import type { Service } from "../types";
-
-export const services: Service[] = [
+// Demo fixture data — loosely typed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const services: any[] = [
   {
     id: "service-booking",
     name: "Sports Facility Booking",
@@ -57,13 +57,11 @@ export const services: Service[] = [
   },
 ];
 
-export const getServiceById = (id: string): Service | undefined => {
-  return services.find((service) => service.id === id);
-};
+export const getServiceById = (id: string) =>
+  services.find((service: any) => service.id === id);
 
-export const getServicesByCategory = (category: string): Service[] => {
-  return services.filter((service) => service.category === category);
-};
+export const getServicesByCategory = (category: string) =>
+  services.filter((service: any) => service.category === category);
 
 export const getServiceCategories = (): string[] => {
   const categories = new Set(services.map((service) => service.category));

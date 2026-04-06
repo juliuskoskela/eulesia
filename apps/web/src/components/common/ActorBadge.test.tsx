@@ -2,13 +2,12 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { ActorBadge } from "./ActorBadge";
-import type { User } from "../../types";
 
 const renderWithRouter = (ui: React.ReactElement) => {
   return render(<BrowserRouter>{ui}</BrowserRouter>);
 };
 
-const mockCitizen: User = {
+const mockCitizen = {
   id: "1",
   name: "Maria Virtanen",
   role: "citizen",
@@ -16,7 +15,7 @@ const mockCitizen: User = {
   verified: true,
 };
 
-const mockInstitution: User = {
+const mockInstitution = {
   id: "2",
   name: "City of Helsinki",
   role: "institution",

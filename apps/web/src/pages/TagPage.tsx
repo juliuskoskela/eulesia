@@ -17,7 +17,7 @@ function transformThread(thread: ApiThread) {
     municipalityId: thread.municipality?.id,
     municipalityName: thread.municipality?.name,
     tags: thread.tags,
-    authorId: thread.authorId ?? thread.author.id ?? "",
+    authorId: thread.authorId ?? thread.author?.id ?? "",
     content: thread.content,
     contentHtml: thread.contentHtml,
     createdAt: thread.createdAt,
@@ -167,7 +167,7 @@ export function TagPage() {
             <ThreadCard
               key={thread.id}
               thread={transformThread(thread)}
-              author={transformAuthor(thread.author)}
+              author={transformAuthor(thread.author ?? { id: "", name: "", role: "" })}
               onVote={handleVote}
               isVoting={voteMutation.isPending}
             />

@@ -107,7 +107,7 @@ export function ClubViewPage() {
     setEditIsPublic(club.isPublic);
     setEditCoverImage(club.coverImageUrl || null);
     setEditAddress(club.address || "");
-    setEditRules(club.rules || []);
+    setEditRules(Array.isArray(club.rules) ? club.rules : []);
     setEditRuleInput("");
     setEditLocation(null);
     setShowSettings(true);
@@ -846,7 +846,7 @@ export function ClubViewPage() {
             </div>
             <div className="p-4">
               <ol className="space-y-2">
-                {club.rules.map((rule, i) => (
+                {(Array.isArray(club.rules) ? club.rules : []).map((rule: string, i: number) => (
                   <li
                     key={i}
                     className="flex gap-2 text-sm text-gray-700 dark:text-gray-300"

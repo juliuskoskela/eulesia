@@ -1,6 +1,6 @@
-import type { Message, MessageGroup } from "../types";
-
-export const messageGroups: MessageGroup[] = [
+// Demo fixture data — loosely typed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const messageGroups: any[] = [
   {
     id: "group-family",
     name: "Family",
@@ -20,7 +20,7 @@ export const messageGroups: MessageGroup[] = [
   },
 ];
 
-export const messages: Message[] = [
+export const messages: any[] = [
   {
     id: "msg-1",
     senderId: "anna-korhonen",
@@ -78,7 +78,7 @@ export const messages: Message[] = [
 export const getMessagesByConversation = (
   userId1: string,
   userId2: string,
-): Message[] => {
+): any[] => {
   return messages
     .filter(
       (msg) =>
@@ -92,7 +92,7 @@ export const getMessagesByConversation = (
     );
 };
 
-export const getMessagesByGroup = (groupId: string): Message[] => {
+export const getMessagesByGroup = (groupId: string): any[] => {
   return messages
     .filter((msg) => msg.groupId === groupId)
     .sort(
@@ -103,13 +103,13 @@ export const getMessagesByGroup = (groupId: string): Message[] => {
 
 export const getConversations = (
   userId: string,
-): { partnerId: string; lastMessage: Message }[] => {
+): { partnerId: string; lastMessage: any }[] => {
   const directMessages = messages.filter(
     (msg) =>
       !msg.groupId && (msg.senderId === userId || msg.recipientId === userId),
   );
 
-  const partnerMap = new Map<string, Message>();
+  const partnerMap = new Map<string, any>();
 
   directMessages.forEach((msg) => {
     const partnerId = msg.senderId === userId ? msg.recipientId! : msg.senderId;
@@ -128,6 +128,6 @@ export const getConversations = (
     );
 };
 
-export const getUserGroups = (userId: string): MessageGroup[] => {
+export const getUserGroups = (userId: string): any[] => {
   return messageGroups.filter((group) => group.members.includes(userId));
 };
