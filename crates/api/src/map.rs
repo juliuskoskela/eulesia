@@ -400,7 +400,7 @@ async fn map_location_detail(
 
     let result = match location_type.as_str() {
         "thread" | "club" => serde_json::json!({
-            "type": "thread",
+            "type": location_type,
             "id": id,
             "title": row.try_get_by_index::<String>(1).ok(),
             "content": row.try_get_by_index::<String>(2).ok(),

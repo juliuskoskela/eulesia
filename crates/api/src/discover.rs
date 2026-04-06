@@ -50,7 +50,7 @@ async fn explore(
 
     // Build dynamic WHERE clauses.
     let mut conditions = Vec::new();
-    let mut values: Vec<sea_orm::Value> = Vec::new();
+    let mut filter_values: Vec<sea_orm::Value> = Vec::new();
     let mut idx = 1u32;
 
     // Always-present conditions.
@@ -60,16 +60,31 @@ async fn explore(
 
     if let Some(ref scope) = params.scope {
         conditions.push(format!("scope = ${idx}"));
-        values.push(scope.clone().into());
+        filter_values.push(scope.clone().into());
         idx += 1;
     }
     if let Some(ref language) = params.language {
         conditions.push(format!("language = ${idx}"));
-        values.push(language.clone().into());
+        filter_values.push(language.clone().into());
         idx += 1;
     }
 
     let where_clause = conditions.join(" AND ");
+
+    // Count total matching rows for pagination.
+    let count_sql = format!("SELECT COUNT(*)::bigint FROM threads WHERE {where_clause}");
+    let total: i64 = state
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            &count_sql,
+            filter_values.clone(),
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("explore count: {e}")))?
+        .and_then(|r| r.try_get_by_index::<i64>(0).ok())
+        .unwrap_or(0);
+
+    let mut values = filter_values;
     let limit_param = format!("${idx}");
     values.push(limit.into());
     idx += 1;
@@ -131,8 +146,7 @@ async fn explore(
         .collect();
 
     let page = if limit > 0 { offset / limit + 1 } else { 1 };
-    let total = results.len() as i64 + offset; // approximate — exact count would need a separate query
-    let has_more = results.len() as i64 == limit;
+    let has_more = offset + limit < total;
     Ok(Json(DiscoverListResponse {
         items: results,
         total,
