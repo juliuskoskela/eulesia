@@ -238,4 +238,5 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/uploads/avatar", post(upload_avatar).delete(delete_avatar))
         .route("/uploads/image", post(upload_image))
+        .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024)) // 10 MB
 }
