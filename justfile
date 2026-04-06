@@ -65,7 +65,7 @@ generate-types:
 check-types:
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo test -p eulesia-api --features ts --test ts_export 2>/dev/null
+    cargo test -p eulesia-api --features ts --test ts_export
     if ! git diff --quiet apps/web/src/types/generated/; then
         echo "Generated TypeScript types are stale. Run: just generate-types"
         git diff --stat apps/web/src/types/generated/

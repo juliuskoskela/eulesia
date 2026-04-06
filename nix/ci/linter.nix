@@ -142,7 +142,7 @@ _: {
       text = ''
         set -euo pipefail
         ${shellFunctions}
-        cargo test -p eulesia-api --features ts --test ts_export 2>/dev/null
+        cargo test -p eulesia-api --features ts --test ts_export
         if ! git diff --quiet apps/web/src/types/generated/; then
           echo "Generated TypeScript types are stale!"
           echo "Run: just generate-types"

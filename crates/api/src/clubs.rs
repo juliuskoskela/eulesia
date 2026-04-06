@@ -1368,10 +1368,10 @@ pub async fn create_club_thread(
         title: thread.title,
         content: thread.content,
         content_html: thread.content_html,
-        scope: thread
-            .scope
-            .parse()
-            .unwrap_or(eulesia_common::types::ThreadScope::Club),
+        scope: thread.scope.parse().unwrap_or_else(|_| {
+            tracing::warn!(thread_id = %thread.id, scope = %thread.scope, "unknown scope");
+            eulesia_common::types::ThreadScope::Club
+        }),
         author,
         tags: req.tags.unwrap_or_default(),
         reply_count: thread.reply_count,
@@ -1383,10 +1383,10 @@ pub async fn create_club_thread(
         is_locked: thread.is_locked,
         municipality_id: thread.municipality_id,
         institutional_context: thread.institutional_context,
-        source: thread
-            .source
-            .parse()
-            .unwrap_or(eulesia_common::types::ThreadSource::User),
+        source: thread.source.parse().unwrap_or_else(|_| {
+            tracing::warn!(thread_id = %thread.id, source = %thread.source, "unknown source");
+            eulesia_common::types::ThreadSource::User
+        }),
         source_url: thread.source_url,
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
@@ -1557,10 +1557,10 @@ pub async fn get_club_thread(
         title: thread.title,
         content: thread.content,
         content_html: thread.content_html,
-        scope: thread
-            .scope
-            .parse()
-            .unwrap_or(eulesia_common::types::ThreadScope::Club),
+        scope: thread.scope.parse().unwrap_or_else(|_| {
+            tracing::warn!(thread_id = %thread.id, scope = %thread.scope, "unknown scope");
+            eulesia_common::types::ThreadScope::Club
+        }),
         author: thread_author,
         tags,
         reply_count: thread.reply_count,
@@ -1572,10 +1572,10 @@ pub async fn get_club_thread(
         is_locked: thread.is_locked,
         municipality_id: thread.municipality_id,
         institutional_context: thread.institutional_context,
-        source: thread
-            .source
-            .parse()
-            .unwrap_or(eulesia_common::types::ThreadSource::User),
+        source: thread.source.parse().unwrap_or_else(|_| {
+            tracing::warn!(thread_id = %thread.id, source = %thread.source, "unknown source");
+            eulesia_common::types::ThreadSource::User
+        }),
         source_url: thread.source_url,
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
