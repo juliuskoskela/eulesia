@@ -2253,7 +2253,10 @@ mod tests {
         // Thread fields at top level (not nested under "thread")
         assert!(obj.contains_key("id"), "id must be at top level");
         assert!(obj.contains_key("title"), "title must be at top level");
-        assert!(!obj.contains_key("thread"), "must NOT have nested 'thread' key");
+        assert!(
+            !obj.contains_key("thread"),
+            "must NOT have nested 'thread' key"
+        );
 
         // Required frontend fields
         assert!(obj.contains_key("comments"), "must have comments array");

@@ -221,7 +221,9 @@ export function ThreadPage() {
     );
   }
 
-  const author = transformAuthor(thread.author ?? { id: "", name: "", role: "" });
+  const author = transformAuthor(
+    thread.author ?? { id: "", name: "", role: "" },
+  );
   const isInstitutional = thread.author?.role === "institution";
   const comments = thread.comments?.map(transformComment) || [];
 

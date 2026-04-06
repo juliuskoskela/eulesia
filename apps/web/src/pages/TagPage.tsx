@@ -167,7 +167,9 @@ export function TagPage() {
             <ThreadCard
               key={thread.id}
               thread={transformThread(thread)}
-              author={transformAuthor(thread.author ?? { id: "", name: "", role: "" })}
+              author={transformAuthor(
+                thread.author ?? { id: "", name: "", role: "" },
+              )}
               onVote={handleVote}
               isVoting={voteMutation.isPending}
             />

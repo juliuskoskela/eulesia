@@ -107,7 +107,10 @@ mod tests {
         // Simulate what axum's () IntoResponse produces: no content-type,
         // no content-length header. The wrapper should NOT skip this.
         let has_body = None::<usize>.is_some_and(|len: usize| len > 0);
-        assert!(!has_body, "empty response must not be treated as having a body");
+        assert!(
+            !has_body,
+            "empty response must not be treated as having a body"
+        );
     }
 
     /// Regression: binary uploads (content-length > 0, not JSON) should pass through.
@@ -117,4 +120,3 @@ mod tests {
         assert!(has_body, "non-empty binary response must pass through");
     }
 }
-

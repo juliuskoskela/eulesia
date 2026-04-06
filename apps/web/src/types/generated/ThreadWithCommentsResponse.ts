@@ -2,4 +2,22 @@
 import type { AuthorSummary } from "./AuthorSummary";
 import type { CommentResponse } from "./CommentResponse";
 
-export type ThreadWithCommentsResponse = { comments: Array<CommentResponse>, id: string, title: string, content: string, contentHtml: string | null, scope: string, author: AuthorSummary, tags: Array<string>, replyCount: number, score: number, viewCount: number, userVote: number | null, isBookmarked: boolean, isPinned: boolean, isLocked: boolean, createdAt: string, updatedAt: string, };
+export type ThreadWithCommentsResponse = {
+  comments: Array<CommentResponse>;
+  id: string;
+  title: string;
+  content: string;
+  contentHtml: string | null;
+  scope: string;
+  author: AuthorSummary;
+  tags: Array<string>;
+  replyCount: number;
+  score: number;
+  viewCount: number;
+  userVote: number | null;
+  isBookmarked: boolean;
+  isPinned: boolean;
+  isLocked: boolean;
+  createdAt: string;
+  updatedAt: string;
+};

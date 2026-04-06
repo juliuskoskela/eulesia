@@ -321,6 +321,8 @@ export const getCommentsByThread = (threadId: string) =>
 
 export const getAllTags = (): string[] => {
   const tagSet = new Set<string>();
-  threads.forEach((thread: any) => thread.tags?.forEach((tag: string) => tagSet.add(tag)));
+  threads.forEach((thread: any) =>
+    thread.tags?.forEach((tag: string) => tagSet.add(tag)),
+  );
   return Array.from(tagSet).sort();
 };

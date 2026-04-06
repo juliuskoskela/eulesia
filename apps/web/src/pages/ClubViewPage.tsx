@@ -846,17 +846,19 @@ export function ClubViewPage() {
             </div>
             <div className="p-4">
               <ol className="space-y-2">
-                {(Array.isArray(club.rules) ? club.rules : []).map((rule: string, i: number) => (
-                  <li
-                    key={i}
-                    className="flex gap-2 text-sm text-gray-700 dark:text-gray-300"
-                  >
-                    <span className="text-gray-400 dark:text-gray-500 font-medium">
-                      {i + 1}.
-                    </span>
-                    <span>{rule}</span>
-                  </li>
-                ))}
+                {(Array.isArray(club.rules) ? club.rules : []).map(
+                  (rule: string, i: number) => (
+                    <li
+                      key={i}
+                      className="flex gap-2 text-sm text-gray-700 dark:text-gray-300"
+                    >
+                      <span className="text-gray-400 dark:text-gray-500 font-medium">
+                        {i + 1}.
+                      </span>
+                      <span>{rule}</span>
+                    </li>
+                  ),
+                )}
               </ol>
             </div>
           </div>
