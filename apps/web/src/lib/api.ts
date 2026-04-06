@@ -987,7 +987,7 @@ class ApiClient {
       throw new Error(data.error || "Upload failed");
     }
 
-    return data;
+    return data.data;
   }
 
   async deleteAvatar(): Promise<void> {
@@ -1014,7 +1014,7 @@ class ApiClient {
       throw new Error(data.error || "Upload failed");
     }
 
-    return data;
+    return data.data;
   }
 
   // ─── Admin API ────────────────────────────────────────────
