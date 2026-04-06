@@ -418,8 +418,10 @@ in {
               enableACME = cfg.tls.enable;
               forceSSL = cfg.tls.enable;
               locations = {
-                # Hashed assets (js/css) — immutable, cache forever
-                "~* \.(?:js|css|woff2?|webp|svg|png|jpg|ico)$" = {
+                # Only fingerprinted Vite assets are immutable. Root-level
+                # files such as sw.js, manifest.webmanifest, sw-push.js, and
+                # locale JSON must revalidate across deploys.
+                "/assets/" = {
                   extraConfig = ''
                     add_header Cache-Control "public, max-age=31536000, immutable";
                     try_files $uri =404;
@@ -476,7 +478,7 @@ in {
                 "= /" = {
                   return = "302 https://${cfg.adminDomain}/admin";
                 };
-                "~* \.(?:js|css|woff2?|webp|svg|png|jpg|ico)$" = {
+                "/assets/" = {
                   extraConfig = ''
                     add_header Cache-Control "public, max-age=31536000, immutable";
                     try_files $uri =404;

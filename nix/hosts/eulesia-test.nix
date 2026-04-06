@@ -164,7 +164,7 @@
 
     eulesia = {
       enable = true;
-      frontendPackage = eulesiaPackages.frontend;
+      frontendPackage = eulesiaPackages.frontendTest;
       nginx.enable = false; # Traefik → Rust server directly, no nginx
       appDomain = "test.eulesia.org";
       apiDomain = "api.test.eulesia.org";
@@ -219,7 +219,7 @@
     eulesia-server = {
       enable = true;
       package = eulesiaPackages.server;
-      frontendDir = "${eulesiaPackages.frontend}";
+      frontendDir = "${eulesiaPackages.frontendTest}";
       frontendOrigin = "https://test.eulesia.org";
       cookieDomain = ".test.eulesia.org";
       cookieSecure = true;

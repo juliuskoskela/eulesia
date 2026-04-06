@@ -15,6 +15,11 @@
       inherit pkgs pnpmDeps;
       src = repoSrc;
     };
+    frontendTest = import ./frontend.nix {
+      inherit pkgs pnpmDeps;
+      src = repoSrc;
+      pwaMode = "self-destroying";
+    };
     fullBuild = pkgs.runCommand "eulesia-build" {} ''
       mkdir -p $out
       ln -s ${frontend} $out/frontend
@@ -33,7 +38,7 @@
     server = rustBuilds.package;
   in {
     packages = {
-      inherit frontend server pnpmDeps;
+      inherit frontend frontendTest server pnpmDeps;
       build = fullBuild;
       generate-idura-jwks = generateIduraJwks;
       default = fullBuild;

@@ -247,7 +247,7 @@ async fn bootstrap_admins(db: &sea_orm::DatabaseConnection, path: &str) -> anyho
 }
 
 /// Middleware: set `Cache-Control` based on request path.
-/// - Hashed assets (contain a `.` + extension): immutable, cached 1 year
+/// - Fingerprinted Vite assets under `/assets/`: immutable, cached 1 year
 /// - HTML / SPA fallback routes: never cached
 async fn cache_headers(req: axum::extract::Request, next: Next) -> Response {
     let path = req.uri().path().to_string();
@@ -258,7 +258,7 @@ async fn cache_headers(req: axum::extract::Request, next: Next) -> Response {
         return resp;
     }
 
-    let is_hashed_asset = path.contains('.') && !path.ends_with(".html");
+    let is_hashed_asset = path.starts_with("/assets/");
 
     let value = if is_hashed_asset {
         "public, max-age=31536000, immutable"
