@@ -53,11 +53,23 @@
 
 6. **Implement the change.** Write code, tests, and update documentation as needed. Keep commits atomic and well-messaged.
 
+   **Scope discipline:**
+   - If you find yourself fixing something unrelated to the PR title, stop and create a separate branch.
+   - One concern per PR: API contract fixes, infra changes, and new features are separate.
+   - Never use `--no-verify` on commits. If a hook is broken, fix the hook first.
+
+   **When changing Rust response types:**
+   - Run `just generate-types` to regenerate TypeScript types from Rust.
+   - Run `just check-types` to verify generated types are fresh.
+   - Update any manual frontend types in `api.ts` to match.
+
 7. **Run the full quality gate.**
 
    ```bash
    just ci-check
    ```
+
+   All commands go through `just` — never invoke bare pnpm/npx/cargo.
 
    If any step fails, run `/fix-fast` for obvious issues or `/fix` for deeper problems.
 

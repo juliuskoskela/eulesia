@@ -149,6 +149,33 @@ pub enum Session {
 }
 ```
 
+**Corollary: Enum discriminators, never string matching.**
+
+Any closed set of values (roles, statuses, scopes, types) must be a proper
+enum, not raw strings. If you see a `match` on string literals, replace it
+with an enum.
+
+```rust
+// BAD: invalid state only caught at runtime
+fn role_level(role: &str) -> u8 {
+    match role {
+        "owner" => 3,
+        "moderator" => 2,
+        "member" => 1,
+        _ => 0,  // what states are valid? who knows
+    }
+}
+
+// GOOD: ClubRole enum — "admin".parse::<ClubRole>() returns Err
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClubRole { Member, Moderator, Owner }
+```
+
+Pattern: `derive(Serialize, Deserialize, Display, FromStr, PartialOrd)` +
+`#[cfg_attr(feature = "ts", derive(ts_rs::TS))]` for TypeScript export.
+Convert at API boundary (entity stays String, request/response uses enum).
+
 ### 4. Own at the core, borrow at the edge
 
 Core data structures own their data. API boundaries borrow.
@@ -198,3 +225,22 @@ pub struct EncryptedEnvelope {
 // - Plaintext content
 // - Message content types
 ```
+
+### 7. Response types are contracts
+
+Every API response struct must have:
+
+- `#[cfg_attr(feature = "ts", derive(ts_rs::TS))]` for TypeScript generation
+- A contract test (serde_json shape verification) that asserts required fields
+- All fields the frontend actually accesses (check `api.ts` when in doubt)
+
+When adding or removing fields from a response type:
+
+1. Update the Rust struct
+2. Run `just generate-types` to regenerate TypeScript
+3. Run `just check-types` to verify freshness
+4. Update manual frontend types in `api.ts` if they duplicate the struct
+
+The response wrapper adds `{success: true, data: <body>}` to all JSON responses.
+Handlers returning `()` get wrapped as `{success: true, data: null}`.
+Never add `success` to handler return values — that's the wrapper's job.

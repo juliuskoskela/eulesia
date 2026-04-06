@@ -16,11 +16,16 @@
 
 Run each step sequentially. **Exit on first failure.**
 
-1. **Format**
+All commands go through `just` — never invoke bare `pnpm`/`npx`/`cargo`.
+
+1. **Format** (must match CI exactly)
 
    ```bash
-   just fmt
+   just check-format
    ```
+
+   If this fails, run `just fmt` to fix, then re-stage. Never use
+   `--no-verify` on commits — if a pre-commit hook is broken, fix the hook.
 
 2. **Lint**
 
@@ -28,23 +33,21 @@ Run each step sequentially. **Exit on first failure.**
    just lint
    ```
 
-3. **Typecheck** (detect which components have changes)
+3. **Typecheck**
 
    ```bash
-   # Frontend (TypeScript)
-   pnpm run typecheck
+   # Generated types staleness check (Rust → TypeScript)
+   just check-types
 
-   # v2 Server (Rust) -- only if crates/ has changes
-   cargo clippy --all-targets -- --deny warnings
+   # Rust clippy -- only if crates/ has changes
+   just server-clippy
    ```
 
 4. **Test**
 
    ```bash
-   just test
-
-   # Rust tests (fast, local)
-   cargo test
+   just server-test    # Rust unit + integration tests
+   just test           # Frontend tests
    ```
 
 5. **Build**
@@ -91,14 +94,16 @@ If any step fails, stop the pipeline and enter plan mode:
 
 Detect which components are affected by uncommitted or staged changes:
 
-| Path pattern   | Component      | Toolchain                                     |
-| -------------- | -------------- | --------------------------------------------- |
-| `crates/**`    | v2 Rust server | `cargo build`, `cargo test`, `cargo clippy`   |
-| `src/**`       | Frontend       | `pnpm run lint:web && pnpm run typecheck:web` |
-| `nix/**`       | Nix infra      | `nix flake check`                             |
-| `tests/e2e/**` | E2E tests      | `pnpm exec playwright test`                   |
+| Path pattern         | Component      | Toolchain                                        |
+| -------------------- | -------------- | ------------------------------------------------ |
+| `crates/**`          | v2 Rust server | `cargo build`, `cargo test`, `cargo clippy`      |
+| `apps/web/src/**`    | Frontend       | `npx tsc -b apps/web/tsconfig.json`              |
+| `crates/api/*types*` | Shared types   | `just check-types` (verifies generated TS fresh) |
+| `nix/**`             | Nix infra      | `nix flake check`                                |
+| `tests/e2e/**`       | E2E tests      | `pnpm exec playwright test`                      |
 
 When changes span multiple components, run all relevant checks.
+When Rust response types change, always run `just generate-types` then `just check-types`.
 
 ## Decision Points
 
