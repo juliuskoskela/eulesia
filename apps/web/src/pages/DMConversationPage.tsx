@@ -85,7 +85,7 @@ function MessageBubble({
           >
             {message.author?.name}
           </span>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             {formatRelativeTime(message.createdAt)}
           </span>
           {message.editedAt && <EditedIndicator editedAt={message.editedAt} />}
@@ -128,7 +128,9 @@ function MessageBubble({
               {message.contentHtml ? (
                 <ContentWithPreviews
                   html={message.contentHtml}
-                  className="prose prose-sm max-w-none"
+                  className={`prose prose-sm max-w-none ${
+                    isOwnMessage ? "prose-invert" : "dark:prose-invert"
+                  }`}
                 />
               ) : (
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -328,9 +330,9 @@ export function DMConversationPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-white dark:bg-gray-950">
           {messages.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
               <p>{t("noMessagesYet")}</p>
               <p className="text-sm mt-1">{t("sendFirstMessage")}</p>
             </div>
