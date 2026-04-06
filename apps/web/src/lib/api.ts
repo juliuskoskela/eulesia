@@ -2169,8 +2169,8 @@ export interface SearchResults {
 }
 
 // Tag types — TagWithCategory is an alias for the generated TagWithCount
-import type { TagWithCount } from "../types/generated/TagWithCount";
-export type TagWithCategory = TagWithCount;
+export type TagWithCategory =
+  import("../types/generated/TagWithCount").TagWithCount;
 
 export interface TagPageResponse {
   tag: string;

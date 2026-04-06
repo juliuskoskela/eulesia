@@ -104,11 +104,11 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
 
             {point.pointType === "club" && (
               <Link
-                to={`/clubs/${point.id}`}
+                to={`/agora/thread/${point.id}`}
                 className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
               >
                 <span className="font-medium text-green-700 dark:text-green-400">
-                  View club
+                  View club thread
                 </span>
                 <ChevronRight className="w-5 h-5 text-green-600 dark:text-green-400" />
               </Link>
