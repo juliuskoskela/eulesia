@@ -265,8 +265,10 @@ export function DMConversationPage() {
     );
   }
 
-  const { otherUser, messages, encryption } = conversationData;
-  const isEncrypted = encryption === "e2ee";
+  const { otherUser, messages } = conversationData;
+  // E2EE is not yet implemented on the frontend — all messages are plaintext
+  // regardless of the conversation's encryption field in the database.
+  const isEncrypted = false;
   const canLinkToOtherUserProfile =
     Boolean(otherUser?.id) && (otherUser?.canViewProfile ?? true);
 
