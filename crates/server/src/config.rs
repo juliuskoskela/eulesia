@@ -50,6 +50,10 @@ pub struct Config {
     /// Meilisearch API key (optional)
     #[arg(long, env = "MEILI_API_KEY")]
     pub meili_api_key: Option<String>,
+
+    /// Path to JSON file with admin accounts to bootstrap on startup
+    #[arg(long, env = "ADMIN_BOOTSTRAP_FILE")]
+    pub admin_bootstrap_file: Option<String>,
 }
 
 impl Config {
