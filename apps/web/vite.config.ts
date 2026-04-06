@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: "prompt",
+      registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "icons/*.webp"],
       manifest: {
         name: "Eulesia",
@@ -43,6 +43,9 @@ export default defineConfig({
       workbox: {
         importScripts: ["/sw-push.js"],
         globPatterns: ["**/*.{js,css,html,svg,webp,woff,woff2}"],
+        // Activate new SW immediately — don't wait for all tabs to close
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             // Cache locale files

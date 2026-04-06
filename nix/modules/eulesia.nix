@@ -418,8 +418,18 @@ in {
               enableACME = cfg.tls.enable;
               forceSSL = cfg.tls.enable;
               locations = {
+                # Hashed assets (js/css) — immutable, cache forever
+                "~* \.(?:js|css|woff2?|webp|svg|png|jpg|ico)$" = {
+                  extraConfig = ''
+                    add_header Cache-Control "public, max-age=31536000, immutable";
+                    try_files $uri =404;
+                  '';
+                };
+                # index.html + SW manifest — always revalidate
                 "/" = {
                   extraConfig = ''
+                    add_header Cache-Control "no-cache, no-store, must-revalidate";
+                    add_header Pragma "no-cache";
                     try_files $uri $uri/ /index.html;
                   '';
                 };
@@ -446,6 +456,7 @@ in {
                 };
                 "~ ^/(agora|clubs/|kunnat/|user/|aiheet)" = {
                   extraConfig = ''
+                    add_header Cache-Control "no-cache, no-store, must-revalidate";
                     if ($eulesia_og_bot) {
                       proxy_pass ${apiProxy};
                       break;
@@ -465,8 +476,16 @@ in {
                 "= /" = {
                   return = "302 https://${cfg.adminDomain}/admin";
                 };
+                "~* \.(?:js|css|woff2?|webp|svg|png|jpg|ico)$" = {
+                  extraConfig = ''
+                    add_header Cache-Control "public, max-age=31536000, immutable";
+                    try_files $uri =404;
+                  '';
+                };
                 "/" = {
                   extraConfig = ''
+                    add_header Cache-Control "no-cache, no-store, must-revalidate";
+                    add_header Pragma "no-cache";
                     try_files $uri $uri/ /index.html;
                   '';
                 };
