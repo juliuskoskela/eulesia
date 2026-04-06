@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -39,18 +40,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sanction, setSanction] = useState<SanctionInfo | null>(null);
   const queryClient = useQueryClient();
 
+  // Only install the 401 handler after initial auth check completes.
+  // Before that, background requests firing 401 are expected (user may
+  // not be logged in yet) and should not nuke auth state.
+  const authCheckedRef = useRef(false);
+  const sessionLostRef = useRef(false);
+
   useEffect(() => {
+    if (!authCheckedRef.current) return;
+
     setUnauthorizedHandler(() => {
+      if (sessionLostRef.current) return;
+      sessionLostRef.current = true;
+
       setCurrentUser(null);
       setIsAuthenticated(false);
       setSanction(null);
-      queryClient.clear();
+
+      setTimeout(() => {
+        sessionLostRef.current = false;
+      }, 1000);
     });
 
     return () => {
       setUnauthorizedHandler(null);
     };
-  }, [queryClient]);
+  }, [isLoading]); // re-run when isLoading changes (auth check completes)
 
   const checkAuth = useCallback(async () => {
     try {
@@ -90,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       setIsLoading(false);
+      authCheckedRef.current = true;
     }
   }, []);
 
