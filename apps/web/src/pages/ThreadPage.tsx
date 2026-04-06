@@ -221,8 +221,10 @@ export function ThreadPage() {
     );
   }
 
-  const author = transformAuthor(thread.author);
-  const isInstitutional = thread.author.role === "institution";
+  const author = transformAuthor(
+    thread.author ?? { id: "", name: "", role: "" },
+  );
+  const isInstitutional = thread.author?.role === "institution";
   const comments = thread.comments?.map(transformComment) || [];
 
   const threadJsonLd = {

@@ -180,10 +180,9 @@ export function RoomThreadPage() {
 
   const author = transformAuthor(
     thread.author ?? {
-      id: null,
+      id: "",
       name: "Unknown user",
       role: "citizen",
-      canViewProfile: false,
     },
   );
   const comments = thread.comments?.map(transformComment) || [];

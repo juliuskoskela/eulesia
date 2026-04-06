@@ -76,12 +76,12 @@ export function PWAProvider({ children }: { children: ReactNode }) {
           onRegisteredSW(_swUrl, r) {
             if (r) {
               setRegistration(r);
-              // Check for updates periodically (every hour)
+              // Check for updates periodically (every 10 minutes)
               setInterval(
                 () => {
                   r.update();
                 },
-                60 * 60 * 1000,
+                10 * 60 * 1000,
               );
             }
           },
@@ -89,7 +89,10 @@ export function PWAProvider({ children }: { children: ReactNode }) {
             setOfflineReady(true);
           },
           onNeedRefresh() {
-            setNeedRefresh(true);
+            // With registerType: "autoUpdate" + skipWaiting + clientsClaim,
+            // the new SW activates immediately. Auto-reload instead of
+            // showing an update banner — users should never need to click.
+            window.location.reload();
           },
         });
       } catch {

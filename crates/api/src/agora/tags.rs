@@ -24,9 +24,23 @@ pub async fn list_tags(State(state): State<AppState>) -> Result<Json<Vec<TagWith
 
     let response = tags
         .into_iter()
-        .map(|t| TagWithCount {
-            tag: t.tag,
-            count: t.count,
+        .map(|t| {
+            // Derive display name: capitalize first letter
+            let display_name = {
+                let mut chars = t.tag.chars();
+                match chars.next() {
+                    Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+                    None => String::new(),
+                }
+            };
+            TagWithCount {
+                tag: t.tag,
+                count: t.count,
+                display_name,
+                category: None,
+                description: None,
+                scope: None,
+            }
         })
         .collect();
 
@@ -77,6 +91,7 @@ pub async fn get_tag_threads(
         Some(&tag_thread_ids),
         &excluded,
         sort,
+        None,
         offset,
         limit,
     )
@@ -85,10 +100,15 @@ pub async fn get_tag_threads(
 
     let data = enrich_threads(&state.db, threads, user_id).await?;
 
+    let page = offset / limit + 1;
+    let has_more = offset + limit < total;
     Ok(Json(ThreadListResponse {
         data,
         total,
-        offset,
+        page,
         limit,
+        has_more,
+        feed_scope: None,
+        has_subscriptions: false,
     }))
 }

@@ -30,17 +30,27 @@ const fn default_limit() -> i64 {
 // Handlers
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DiscoverListResponse {
+    items: Vec<serde_json::Value>,
+    total: i64,
+    page: i64,
+    limit: i64,
+    has_more: bool,
+}
+
 /// GET /discover/explore -- CVS-ranked thread feed.
 async fn explore(
     State(state): State<AppState>,
     Query(params): Query<ExploreParams>,
-) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
-    let limit = params.limit.min(100);
-    let offset = params.offset;
+) -> Result<Json<DiscoverListResponse>, ApiError> {
+    let limit = params.limit.clamp(1, 100);
+    let offset = params.offset.max(0);
 
     // Build dynamic WHERE clauses.
     let mut conditions = Vec::new();
-    let mut values: Vec<sea_orm::Value> = Vec::new();
+    let mut filter_values: Vec<sea_orm::Value> = Vec::new();
     let mut idx = 1u32;
 
     // Always-present conditions.
@@ -50,16 +60,31 @@ async fn explore(
 
     if let Some(ref scope) = params.scope {
         conditions.push(format!("scope = ${idx}"));
-        values.push(scope.clone().into());
+        filter_values.push(scope.clone().into());
         idx += 1;
     }
     if let Some(ref language) = params.language {
         conditions.push(format!("language = ${idx}"));
-        values.push(language.clone().into());
+        filter_values.push(language.clone().into());
         idx += 1;
     }
 
     let where_clause = conditions.join(" AND ");
+
+    // Count total matching rows for pagination.
+    let count_sql = format!("SELECT COUNT(*)::bigint FROM threads WHERE {where_clause}");
+    let total: i64 = state
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            &count_sql,
+            filter_values.clone(),
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("explore count: {e}")))?
+        .and_then(|r| r.try_get_by_index::<i64>(0).ok())
+        .unwrap_or(0);
+
+    let mut values = filter_values;
     let limit_param = format!("${idx}");
     values.push(limit.into());
     idx += 1;
@@ -120,11 +145,19 @@ async fn explore(
         })
         .collect();
 
-    Ok(Json(results))
+    let page = if limit > 0 { offset / limit + 1 } else { 1 };
+    let has_more = offset + limit < total;
+    Ok(Json(DiscoverListResponse {
+        items: results,
+        total,
+        page,
+        limit,
+        has_more,
+    }))
 }
 
 /// GET /discover/trending -- recent high-engagement threads.
-async fn trending(State(state): State<AppState>) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+async fn trending(State(state): State<AppState>) -> Result<Json<DiscoverListResponse>, ApiError> {
     let rows = state
         .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
@@ -162,7 +195,14 @@ async fn trending(State(state): State<AppState>) -> Result<Json<Vec<serde_json::
         })
         .collect();
 
-    Ok(Json(results))
+    let total = results.len() as i64;
+    Ok(Json(DiscoverListResponse {
+        items: results,
+        total,
+        page: 1,
+        limit: 20,
+        has_more: false,
+    }))
 }
 
 /// GET /discover/algorithm -- static JSON explaining ranking factors.
@@ -220,4 +260,34 @@ pub fn routes() -> Router<AppState> {
         .route("/discover/explore", get(explore))
         .route("/discover/trending", get(trending))
         .route("/discover/algorithm", get(algorithm))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: DiscoverListResponse has pagination wrapper.
+    #[test]
+    fn discover_list_response_shape() {
+        let resp = DiscoverListResponse {
+            items: vec![serde_json::json!({"id": "abc", "title": "Test"})],
+            total: 10,
+            page: 1,
+            limit: 20,
+            has_more: false,
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let keys = ["items", "total", "page", "limit", "hasMore"];
+        for key in &keys {
+            assert!(obj.contains_key(*key), "missing discover field: {key}");
+        }
+
+        assert!(obj["items"].is_array());
+        assert_eq!(obj["total"], 10);
+        assert_eq!(obj["page"], 1);
+        assert_eq!(obj["hasMore"], false);
+    }
 }

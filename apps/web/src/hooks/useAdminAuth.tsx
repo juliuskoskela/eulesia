@@ -29,10 +29,13 @@ const AdminAuthContext = createContext<AdminAuthContextType | undefined>(
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [admin, setAdmin] = useState<AdminUser | null>(null);
+  const [checked, setChecked] = useState(false);
 
   const checkAuth = useCallback(async () => {
+    if (checked) return;
+    setIsLoading(true);
     try {
       const data = await api.adminMe();
       setAdmin(data);
@@ -42,11 +45,16 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
+      setChecked(true);
     }
-  }, []);
+  }, [checked]);
 
   useEffect(() => {
-    checkAuth();
+    // Only check admin auth on /admin paths — no wasted request for
+    // regular users visiting the agora, clubs, DMs, etc.
+    if (window.location.pathname.startsWith("/admin")) {
+      checkAuth();
+    }
   }, [checkAuth]);
 
   const login = async (username: string, password: string) => {

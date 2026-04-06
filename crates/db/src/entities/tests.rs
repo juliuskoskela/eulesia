@@ -339,3 +339,44 @@ fn all_entities_have_correct_table_names() {
         assert_eq!(name, expected, "table name mismatch for {expected}");
     }
 }
+
+/// Verify clubs entity has the enrichment columns added by migration 000013.
+#[test]
+fn clubs_entity_has_enrichment_columns() {
+    use sea_orm::ColumnTrait;
+
+    // These columns must exist in the entity for the migration to be useful.
+    let _ = clubs::Column::CoverImageUrl.as_str();
+    let _ = clubs::Column::Rules.as_str();
+    let _ = clubs::Column::Address.as_str();
+    let _ = clubs::Column::Latitude.as_str();
+    let _ = clubs::Column::Longitude.as_str();
+}
+
+/// Verify clubs ActiveModel can be constructed with new fields defaulting.
+#[test]
+fn clubs_active_model_defaults_new_fields() {
+    use sea_orm::ActiveValue::Set;
+
+    let am = clubs::ActiveModel {
+        id: Set(uuid::Uuid::now_v7()),
+        name: Set("Test".into()),
+        slug: Set("test".into()),
+        description: Set(None),
+        category: Set(None),
+        is_public: Set(true),
+        creator_id: Set(uuid::Uuid::now_v7()),
+        avatar_url: Set(None),
+        cover_image_url: Set(None),
+        rules: Set(None),
+        address: Set(None),
+        latitude: Set(None),
+        longitude: Set(None),
+        member_count: Set(0),
+        created_at: Set(chrono::Utc::now().fixed_offset()),
+        updated_at: Set(chrono::Utc::now().fixed_offset()),
+    };
+
+    // If this compiles and runs, the ActiveModel is complete
+    let _ = am;
+}

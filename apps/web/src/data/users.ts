@@ -1,6 +1,6 @@
-import type { User } from "../types";
-
-export const users: User[] = [
+// Demo fixture data — loosely typed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const users: any[] = [
   // Institutions
   {
     id: "tampere-municipality",
@@ -91,14 +91,11 @@ export const users: User[] = [
   },
 ];
 
-export const getUserById = (id: string): User | undefined => {
-  return users.find((user) => user.id === id);
-};
+export const getUserById = (id: string) =>
+  users.find((user: any) => user.id === id);
 
-export const getInstitutions = (): User[] => {
-  return users.filter((user) => user.role === "institution");
-};
+export const getInstitutions = () =>
+  users.filter((user: any) => user.role === "institution");
 
-export const getCitizens = (): User[] => {
-  return users.filter((user) => user.role === "citizen");
-};
+export const getCitizens = () =>
+  users.filter((user: any) => user.role === "citizen");

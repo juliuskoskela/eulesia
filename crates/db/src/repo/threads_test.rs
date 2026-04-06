@@ -89,9 +89,10 @@ mod tests {
             .append_query_results([vec![t1.clone(), t2.clone()]])
             .into_connection();
 
-        let (items, total) = ThreadRepo::list(&db, None, None, None, None, &[], "recent", 0, 20)
-            .await
-            .unwrap();
+        let (items, total) =
+            ThreadRepo::list(&db, None, None, None, None, &[], "recent", None, 0, 20)
+                .await
+                .unwrap();
 
         assert_eq!(items.len(), 2);
         assert_eq!(total, 2);
@@ -105,10 +106,168 @@ mod tests {
             .append_query_results([Vec::<threads::Model>::new()])
             .into_connection();
 
-        let (items, total) = ThreadRepo::list(&db, None, None, None, None, &[], "recent", 0, 20)
+        let (items, total) =
+            ThreadRepo::list(&db, None, None, None, None, &[], "recent", None, 0, 20)
+                .await
+                .unwrap();
+
+        assert!(items.is_empty());
+        assert_eq!(total, 0);
+    }
+
+    // ── list sort variants ──
+
+    #[tokio::test]
+    async fn list_with_sort_new() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        let (items, total) = ThreadRepo::list(&db, None, None, None, None, &[], "new", None, 0, 20)
             .await
             .unwrap();
+        assert!(items.is_empty());
+        assert_eq!(total, 0);
+    }
 
+    #[tokio::test]
+    async fn list_with_sort_top() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        let (items, total) = ThreadRepo::list(&db, None, None, None, None, &[], "top", None, 0, 20)
+            .await
+            .unwrap();
+        assert!(items.is_empty());
+        assert_eq!(total, 0);
+    }
+
+    #[tokio::test]
+    async fn list_with_sort_active() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        let (items, total) =
+            ThreadRepo::list(&db, None, None, None, None, &[], "active", None, 0, 20)
+                .await
+                .unwrap();
+        assert!(items.is_empty());
+        assert_eq!(total, 0);
+    }
+
+    #[tokio::test]
+    async fn list_with_top_period_day() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        let (items, total) =
+            ThreadRepo::list(&db, None, None, None, None, &[], "top", Some("day"), 0, 20)
+                .await
+                .unwrap();
+        assert!(items.is_empty());
+        assert_eq!(total, 0);
+    }
+
+    #[tokio::test]
+    async fn list_with_top_period_week() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        let (_, _) = ThreadRepo::list(&db, None, None, None, None, &[], "top", Some("week"), 0, 20)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_with_top_period_month() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        let (_, _) = ThreadRepo::list(
+            &db,
+            None,
+            None,
+            None,
+            None,
+            &[],
+            "top",
+            Some("month"),
+            0,
+            20,
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_with_top_period_year() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        let (_, _) = ThreadRepo::list(&db, None, None, None, None, &[], "top", Some("year"), 0, 20)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_with_top_period_all() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        // "all" means no cutoff filter — same query as top without period
+        let (_, _) = ThreadRepo::list(&db, None, None, None, None, &[], "top", Some("all"), 0, 20)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_top_period_ignored_for_non_top_sort() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(0)]])
+            .append_query_results([Vec::<threads::Model>::new()])
+            .into_connection();
+
+        // top_period should be ignored when sort != "top"
+        let (_, _) = ThreadRepo::list(
+            &db,
+            None,
+            None,
+            None,
+            None,
+            &[],
+            "recent",
+            Some("day"),
+            0,
+            20,
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_empty_thread_ids_returns_empty() {
+        // When thread_ids is Some(&[]) (empty slice), should short-circuit
+        let db = MockDatabase::new(DatabaseBackend::Postgres).into_connection();
+
+        let (items, total) =
+            ThreadRepo::list(&db, None, None, None, Some(&[]), &[], "recent", None, 0, 20)
+                .await
+                .unwrap();
         assert!(items.is_empty());
         assert_eq!(total, 0);
     }

@@ -193,7 +193,7 @@ export function ClubThreadPage() {
   const author = transformAuthor(thread.author);
   const comments = thread.comments?.map(transformComment) || [];
   const memberRole = thread.memberRole;
-  const isModOrAdmin = memberRole === "admin" || memberRole === "moderator";
+  const isModOrAdmin = memberRole === "owner" || memberRole === "moderator";
   const isThreadAuthor =
     currentUser?.id === (thread.authorId ?? thread.author.id);
 

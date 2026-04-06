@@ -353,6 +353,11 @@ async fn create_room(
         is_public: Set(is_public),
         creator_id: Set(auth.user_id.0),
         avatar_url: Set(None),
+        cover_image_url: Set(None),
+        rules: Set(None),
+        address: Set(None),
+        latitude: Set(None),
+        longitude: Set(None),
         member_count: Set(1),
         created_at: Set(now),
         updated_at: Set(now),
@@ -365,7 +370,7 @@ async fn create_room(
     club_members::ActiveModel {
         club_id: Set(id),
         user_id: Set(auth.user_id.0),
-        role: Set("admin".into()),
+        role: Set("owner".into()),
         joined_at: Set(now),
     }
     .insert(&*state.db)
@@ -463,6 +468,84 @@ async fn room_invitations(
 }
 
 // ---------------------------------------------------------------------------
+// Room member direct-add (not invitation flow)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddRoomMemberRequest {
+    user_id: Uuid,
+}
+
+/// POST /home/rooms/{id}/members — directly add a member to the room.
+/// Unlike clubs which use invitation flow, rooms add members immediately.
+async fn add_room_member(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Path(room_id): Path<Uuid>,
+    Json(req): Json<AddRoomMemberRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    use crate::clubs::require_club_role;
+    use eulesia_common::types::ClubRole;
+    use eulesia_db::repo::users::UserRepo;
+
+    let _member =
+        require_club_role(&state.db, room_id, auth.user_id.0, ClubRole::Moderator).await?;
+
+    // Verify target user exists.
+    UserRepo::find_by_id(&state.db, req.user_id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
+
+    // Check if already a member.
+    let existing = club_members::Entity::find()
+        .filter(club_members::Column::ClubId.eq(room_id))
+        .filter(club_members::Column::UserId.eq(req.user_id))
+        .one(&*state.db)
+        .await
+        .map_err(db_err)?;
+
+    if existing.is_some() {
+        return Err(ApiError::Conflict("user is already a member".into()));
+    }
+
+    let now = chrono::Utc::now().fixed_offset();
+    let insert_result = club_members::ActiveModel {
+        club_id: Set(room_id),
+        user_id: Set(req.user_id),
+        role: Set("member".into()),
+        joined_at: Set(now),
+    }
+    .insert(&*state.db)
+    .await;
+
+    match insert_result {
+        Ok(_) => {}
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("unique") || msg.contains("duplicate") {
+                return Err(ApiError::Conflict("user is already a member".into()));
+            }
+            return Err(db_err(e));
+        }
+    }
+
+    // Increment member count.
+    clubs::Entity::update_many()
+        .filter(clubs::Column::Id.eq(room_id))
+        .col_expr(
+            clubs::Column::MemberCount,
+            sea_orm::prelude::Expr::col(clubs::Column::MemberCount).add(1),
+        )
+        .exec(&*state.db)
+        .await
+        .map_err(db_err)?;
+
+    Ok(Json(serde_json::json!({ "added": true })))
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
@@ -503,7 +586,7 @@ pub fn routes() -> Router<AppState> {
         )
         .route(
             "/home/rooms/{id}/members",
-            get(clubs::list_club_members).post(clubs::invite_user),
+            get(clubs::list_club_members).post(add_room_member),
         )
         .route(
             "/home/rooms/{id}/members/{userId}",

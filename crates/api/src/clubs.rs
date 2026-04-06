@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::{AuthUser, OptionalAuth};
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{UserRole, new_id};
+use eulesia_common::types::{ClubRole, UserRole, new_id};
 use eulesia_db::entities::{club_invitations, club_members, clubs, threads};
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::comments::CommentRepo;
@@ -103,6 +103,12 @@ pub struct CreateClubRequest {
     pub category: Option<String>,
     pub is_public: Option<bool>,
     pub avatar_url: Option<String>,
+    pub cover_image_url: Option<String>,
+    /// Accepts both a JSON string and a string[] array from the frontend.
+    pub rules: Option<serde_json::Value>,
+    pub address: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,6 +119,12 @@ pub struct UpdateClubRequest {
     pub category: Option<String>,
     pub is_public: Option<bool>,
     pub avatar_url: Option<String>,
+    pub cover_image_url: Option<String>,
+    /// Accepts both a JSON string and a string[] array from the frontend.
+    pub rules: Option<serde_json::Value>,
+    pub address: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -120,8 +132,19 @@ pub struct UpdateClubRequest {
 pub struct ClubListParams {
     pub search: Option<String>,
     pub category: Option<String>,
+    pub membership: Option<String>,
+    pub page: Option<u64>,
     pub limit: Option<u64>,
     pub offset: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClubMemberSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    pub role: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -134,9 +157,20 @@ pub struct ClubResponse {
     pub category: Option<String>,
     pub is_public: bool,
     pub creator_id: Uuid,
+    pub creator: Option<ClubMemberSummary>,
     pub avatar_url: Option<String>,
+    pub cover_image_url: Option<String>,
+    pub rules: Option<String>,
+    pub address: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
     pub member_count: i32,
+    pub is_member: bool,
     pub member_role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moderators: Option<Vec<ClubMemberSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub members: Option<Vec<ClubMemberSummary>>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -146,8 +180,9 @@ pub struct ClubResponse {
 pub struct ClubListResponse {
     pub items: Vec<ClubResponse>,
     pub total: u64,
-    pub offset: u64,
+    pub page: u64,
     pub limit: u64,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,12 +193,32 @@ pub struct InviteRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct InvitationClubSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvitationUserSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InvitationResponse {
     pub id: Uuid,
     pub club_id: Uuid,
     pub club_name: Option<String>,
+    pub club: Option<InvitationClubSummary>,
     pub user_id: Uuid,
+    pub invitee: Option<InvitationUserSummary>,
     pub invited_by: Uuid,
+    pub inviter: Option<InvitationUserSummary>,
     pub status: String,
     pub created_at: String,
 }
@@ -224,17 +279,27 @@ fn slugify(name: &str) -> String {
         .join("-")
 }
 
-/// Club role hierarchy: admin (3) > moderator (2) > member (1).
-fn role_level(role: &str) -> u8 {
-    match role {
-        "admin" => 3,
-        "moderator" => 2,
-        "member" => 1,
-        _ => 0,
+/// Normalize rules from the frontend: accepts string, string[], or null.
+/// Stores as a JSON string in the DB.
+fn normalize_rules(val: Option<serde_json::Value>) -> Option<String> {
+    match val {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::String(s)) => {
+            if s.is_empty() {
+                None
+            } else {
+                Some(s)
+            }
+        }
+        Some(v @ serde_json::Value::Array(_)) => Some(v.to_string()),
+        Some(other) => Some(other.to_string()),
     }
 }
 
-const VALID_CLUB_ROLES: &[&str] = &["member", "moderator", "admin"];
+/// Parse a club member's stored role string into a `ClubRole`.
+fn parse_club_role(role: &str) -> Result<ClubRole, ApiError> {
+    role.parse::<ClubRole>().map_err(|e| ApiError::Internal(e))
+}
 
 /// Fetch the club member record for a user. Returns `None` if not a member.
 async fn get_membership(
@@ -252,17 +317,18 @@ async fn get_membership(
 
 /// Require that the user is a member of the club with at least `min_role`.
 /// Returns the member record on success, `ApiError::Forbidden` otherwise.
-async fn require_club_role(
+pub async fn require_club_role(
     db: &DatabaseConnection,
     club_id: Uuid,
     user_id: Uuid,
-    min_role: &str,
+    min_role: ClubRole,
 ) -> Result<club_members::Model, ApiError> {
     let member = get_membership(db, club_id, user_id)
         .await?
         .ok_or(ApiError::Forbidden)?;
 
-    if role_level(&member.role) < role_level(min_role) {
+    let actual = parse_club_role(&member.role)?;
+    if actual < min_role {
         return Err(ApiError::Forbidden);
     }
 
@@ -271,7 +337,12 @@ async fn require_club_role(
 
 /// Helper to build a `ClubResponse` from a club model, optionally including
 /// the requesting user's role.
+fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> Option<f64> {
+    d.to_string().parse::<f64>().ok()
+}
+
 fn club_to_response(club: clubs::Model, member_role: Option<String>) -> ClubResponse {
+    let is_member = member_role.is_some();
     ClubResponse {
         id: club.id,
         name: club.name,
@@ -280,9 +351,18 @@ fn club_to_response(club: clubs::Model, member_role: Option<String>) -> ClubResp
         category: club.category,
         is_public: club.is_public,
         creator_id: club.creator_id,
+        creator: None, // populated in detail view
         avatar_url: club.avatar_url,
+        cover_image_url: club.cover_image_url,
+        rules: club.rules,
+        address: club.address,
+        latitude: club.latitude.and_then(decimal_to_f64),
+        longitude: club.longitude.and_then(decimal_to_f64),
         member_count: club.member_count,
+        is_member,
         member_role,
+        moderators: None,
+        members: None,
         created_at: club.created_at.to_rfc3339(),
         updated_at: club.updated_at.to_rfc3339(),
     }
@@ -353,6 +433,13 @@ pub async fn create_club(
     let now = chrono::Utc::now().fixed_offset();
     let is_public = req.is_public.unwrap_or(true);
 
+    let latitude = req
+        .latitude
+        .and_then(sea_orm::prelude::Decimal::from_f64_retain);
+    let longitude = req
+        .longitude
+        .and_then(sea_orm::prelude::Decimal::from_f64_retain);
+
     let club = clubs::ActiveModel {
         id: Set(club_id),
         name: Set(name),
@@ -362,6 +449,11 @@ pub async fn create_club(
         is_public: Set(is_public),
         creator_id: Set(auth.user_id.0),
         avatar_url: Set(req.avatar_url),
+        cover_image_url: Set(req.cover_image_url),
+        rules: Set(normalize_rules(req.rules)),
+        address: Set(req.address),
+        latitude: Set(latitude),
+        longitude: Set(longitude),
         member_count: Set(1),
         created_at: Set(now),
         updated_at: Set(now),
@@ -370,18 +462,18 @@ pub async fn create_club(
     .await
     .map_err(db_err)?;
 
-    // Add creator as admin member.
+    // Add creator as owner member.
     club_members::ActiveModel {
         club_id: Set(club_id),
         user_id: Set(auth.user_id.0),
-        role: Set("admin".into()),
+        role: Set("owner".into()),
         joined_at: Set(now),
     }
     .insert(&*state.db)
     .await
     .map_err(db_err)?;
 
-    Ok(Json(club_to_response(club, Some("admin".into()))))
+    Ok(Json(club_to_response(club, Some("owner".into()))))
 }
 
 async fn list_clubs(
@@ -390,26 +482,41 @@ async fn list_clubs(
     Query(params): Query<ClubListParams>,
 ) -> Result<Json<ClubListResponse>, ApiError> {
     let user_id = opt_auth.0.as_ref().map(|a| a.user_id.0);
-    let offset = params.offset.unwrap_or(0);
     let limit = clamp_limit(params.limit);
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = params.offset.unwrap_or_else(|| (page - 1) * limit);
 
     let mut query = clubs::Entity::find();
 
-    // Filter: public clubs + user's own private clubs.
-    if let Some(uid) = user_id {
+    // membership=mine filter: only show clubs the user is a member of
+    if params.membership.as_deref() == Some("mine") {
+        let uid = user_id.ok_or(ApiError::Unauthorized)?;
         query = query.filter(
-            Condition::any().add(clubs::Column::IsPublic.eq(true)).add(
-                clubs::Column::Id.in_subquery(
-                    sea_orm::sea_query::Query::select()
-                        .column(club_members::Column::ClubId)
-                        .from(club_members::Entity)
-                        .and_where(club_members::Column::UserId.eq(uid))
-                        .to_owned(),
-                ),
+            clubs::Column::Id.in_subquery(
+                sea_orm::sea_query::Query::select()
+                    .column(club_members::Column::ClubId)
+                    .from(club_members::Entity)
+                    .and_where(club_members::Column::UserId.eq(uid))
+                    .to_owned(),
             ),
         );
     } else {
-        query = query.filter(clubs::Column::IsPublic.eq(true));
+        // Default: public clubs + user's own private clubs.
+        if let Some(uid) = user_id {
+            query = query.filter(
+                Condition::any().add(clubs::Column::IsPublic.eq(true)).add(
+                    clubs::Column::Id.in_subquery(
+                        sea_orm::sea_query::Query::select()
+                            .column(club_members::Column::ClubId)
+                            .from(club_members::Entity)
+                            .and_where(club_members::Column::UserId.eq(uid))
+                            .to_owned(),
+                    ),
+                ),
+            );
+        } else {
+            query = query.filter(clubs::Column::IsPublic.eq(true));
+        }
     }
 
     if let Some(ref search) = params.search {
@@ -464,11 +571,13 @@ async fn list_clubs(
         })
         .collect();
 
+    let has_more = offset + limit < total;
     Ok(Json(ClubListResponse {
         items,
         total,
-        offset,
+        page,
         limit,
+        has_more,
     }))
 }
 
@@ -496,7 +605,58 @@ pub async fn get_club(
         return Err(ApiError::NotFound("club not found".into()));
     }
 
-    Ok(Json(club_to_response(club, member_role)))
+    let creator_id = club.creator_id;
+    let mut resp = club_to_response(club, member_role);
+
+    // Fetch all members for moderators/members lists + creator role
+    let all_members = club_members::Entity::find()
+        .filter(club_members::Column::ClubId.eq(id))
+        .all(&*state.db)
+        .await
+        .map_err(db_err)?;
+
+    // Resolve creator with their actual role from club_members
+    let creator_role = all_members
+        .iter()
+        .find(|m| m.user_id == creator_id)
+        .map(|m| m.role.clone())
+        .unwrap_or_else(|| "owner".into());
+    if let Ok(Some(creator_user)) = UserRepo::find_by_id(&state.db, creator_id).await {
+        resp.creator = Some(ClubMemberSummary {
+            id: creator_user.id,
+            name: creator_user.name,
+            avatar_url: creator_user.avatar_url,
+            role: creator_role,
+        });
+    }
+
+    let member_user_ids: Vec<Uuid> = all_members.iter().map(|m| m.user_id).collect();
+    let member_users = UserRepo::find_by_ids(&state.db, &member_user_ids)
+        .await
+        .map_err(db_err)?;
+    let user_lookup: HashMap<Uuid, _> = member_users.into_iter().map(|u| (u.id, u)).collect();
+
+    let mut moderators = Vec::new();
+    let mut members = Vec::new();
+    for m in &all_members {
+        if let Some(u) = user_lookup.get(&m.user_id) {
+            let summary = ClubMemberSummary {
+                id: u.id,
+                name: u.name.clone(),
+                avatar_url: u.avatar_url.clone(),
+                role: m.role.clone(),
+            };
+            if parse_club_role(&m.role).is_ok_and(|r| r.is_at_least_moderator()) {
+                moderators.push(summary.clone());
+            }
+            members.push(summary);
+        }
+    }
+
+    resp.moderators = Some(moderators);
+    resp.members = Some(members);
+
+    Ok(Json(resp))
 }
 
 pub async fn update_club(
@@ -505,7 +665,7 @@ pub async fn update_club(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateClubRequest>,
 ) -> Result<Json<ClubResponse>, ApiError> {
-    let _member = require_club_role(&state.db, id, auth.user_id.0, "moderator").await?;
+    let _member = require_club_role(&state.db, id, auth.user_id.0, ClubRole::Moderator).await?;
 
     let club = clubs::Entity::find_by_id(id)
         .one(&*state.db)
@@ -554,6 +714,21 @@ pub async fn update_club(
     if let Some(avatar_url) = req.avatar_url {
         am.avatar_url = Set(Some(avatar_url));
     }
+    if let Some(cover_image_url) = req.cover_image_url {
+        am.cover_image_url = Set(Some(cover_image_url));
+    }
+    if req.rules.is_some() {
+        am.rules = Set(normalize_rules(req.rules));
+    }
+    if let Some(address) = req.address {
+        am.address = Set(Some(address));
+    }
+    if let Some(lat) = req.latitude {
+        am.latitude = Set(sea_orm::prelude::Decimal::from_f64_retain(lat));
+    }
+    if let Some(lon) = req.longitude {
+        am.longitude = Set(sea_orm::prelude::Decimal::from_f64_retain(lon));
+    }
 
     let updated = am.update(&*state.db).await.map_err(db_err)?;
 
@@ -566,7 +741,7 @@ pub async fn delete_club(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<(), ApiError> {
-    let _member = require_club_role(&state.db, id, auth.user_id.0, "admin").await?;
+    let _member = require_club_role(&state.db, id, auth.user_id.0, ClubRole::Owner).await?;
 
     // Delete invitations, members, then the club.
     club_invitations::Entity::delete_many()
@@ -672,17 +847,17 @@ pub async fn leave_club(
         .await?
         .ok_or_else(|| ApiError::NotFound("not a member".into()))?;
 
-    // Prevent last admin from leaving.
-    if member.role == "admin" {
-        let admin_count = club_members::Entity::find()
+    // Prevent last owner from leaving.
+    if parse_club_role(&member.role)? == ClubRole::Owner {
+        let owner_count = club_members::Entity::find()
             .filter(club_members::Column::ClubId.eq(id))
-            .filter(club_members::Column::Role.eq("admin"))
+            .filter(club_members::Column::Role.eq(ClubRole::Owner.as_str()))
             .count(&*state.db)
             .await
             .map_err(db_err)?;
-        if admin_count <= 1 {
+        if owner_count <= 1 {
             return Err(ApiError::BadRequest(
-                "cannot leave: you are the only admin".into(),
+                "cannot leave: you are the only owner".into(),
             ));
         }
     }
@@ -720,14 +895,14 @@ async fn change_member_role(
     Path(path): Path<MemberPath>,
     Json(req): Json<ChangeRoleRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let _admin = require_club_role(&state.db, path.id, auth.user_id.0, "admin").await?;
+    let _admin = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Owner).await?;
 
-    if !VALID_CLUB_ROLES.contains(&req.role.as_str()) {
-        return Err(ApiError::BadRequest(format!(
-            "invalid role '{}': must be member, moderator, or admin",
+    let _: ClubRole = req.role.parse().map_err(|_| {
+        ApiError::BadRequest(format!(
+            "invalid role '{}': must be member, moderator, or owner",
             req.role
-        )));
-    }
+        ))
+    })?;
 
     // Cannot change own role.
     if path.user_id == auth.user_id.0 {
@@ -754,7 +929,7 @@ pub async fn kick_member(
     State(state): State<AppState>,
     Path(path): Path<MemberPath>,
 ) -> Result<(), ApiError> {
-    let actor = require_club_role(&state.db, path.id, auth.user_id.0, "moderator").await?;
+    let actor = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator).await?;
 
     if path.user_id == auth.user_id.0 {
         return Err(ApiError::BadRequest("cannot kick yourself".into()));
@@ -765,7 +940,9 @@ pub async fn kick_member(
         .ok_or_else(|| ApiError::NotFound("user is not a member".into()))?;
 
     // Cannot kick someone with equal or higher role.
-    if role_level(&target.role) >= role_level(&actor.role) {
+    let actor_role = parse_club_role(&actor.role)?;
+    let target_role = parse_club_role(&target.role)?;
+    if target_role >= actor_role {
         return Err(ApiError::Forbidden);
     }
 
@@ -799,7 +976,8 @@ pub async fn invite_user(
     Path(club_id): Path<Uuid>,
     Json(req): Json<InviteRequest>,
 ) -> Result<Json<InvitationResponse>, ApiError> {
-    let _member = require_club_role(&state.db, club_id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, club_id, auth.user_id.0, ClubRole::Moderator).await?;
 
     // Verify target user exists.
     UserRepo::find_by_id(&state.db, req.user_id)
@@ -846,8 +1024,11 @@ pub async fn invite_user(
         id: inv.id,
         club_id: inv.club_id,
         club_name: None,
+        club: None,
         user_id: inv.user_id,
+        invitee: None,
         invited_by: inv.invited_by,
+        inviter: None,
         status: inv.status,
         created_at: inv.created_at.to_rfc3339(),
     }))
@@ -858,7 +1039,8 @@ async fn list_invitations(
     State(state): State<AppState>,
     Path(club_id): Path<Uuid>,
 ) -> Result<Json<Vec<InvitationResponse>>, ApiError> {
-    let _member = require_club_role(&state.db, club_id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, club_id, auth.user_id.0, ClubRole::Moderator).await?;
 
     let invitations = club_invitations::Entity::find()
         .filter(club_invitations::Column::ClubId.eq(club_id))
@@ -868,16 +1050,45 @@ async fn list_invitations(
         .await
         .map_err(db_err)?;
 
+    // Resolve invitees and inviters
+    let user_ids: Vec<Uuid> = invitations
+        .iter()
+        .flat_map(|inv| [inv.user_id, inv.invited_by])
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let users = UserRepo::find_by_ids(&state.db, &user_ids)
+        .await
+        .map_err(db_err)?;
+    let user_map: HashMap<Uuid, _> = users.into_iter().map(|u| (u.id, u)).collect();
+
     let items = invitations
         .into_iter()
-        .map(|inv| InvitationResponse {
-            id: inv.id,
-            club_id: inv.club_id,
-            club_name: None,
-            user_id: inv.user_id,
-            invited_by: inv.invited_by,
-            status: inv.status,
-            created_at: inv.created_at.to_rfc3339(),
+        .map(|inv| {
+            let invitee = user_map.get(&inv.user_id).map(|u| InvitationUserSummary {
+                id: u.id,
+                name: u.name.clone(),
+                avatar_url: u.avatar_url.clone(),
+            });
+            let inviter = user_map
+                .get(&inv.invited_by)
+                .map(|u| InvitationUserSummary {
+                    id: u.id,
+                    name: u.name.clone(),
+                    avatar_url: u.avatar_url.clone(),
+                });
+            InvitationResponse {
+                id: inv.id,
+                club_id: inv.club_id,
+                club_name: None,
+                club: None,
+                user_id: inv.user_id,
+                invitee,
+                invited_by: inv.invited_by,
+                inviter,
+                status: inv.status,
+                created_at: inv.created_at.to_rfc3339(),
+            }
         })
         .collect();
 
@@ -896,7 +1107,8 @@ async fn revoke_invitation(
     State(state): State<AppState>,
     Path(path): Path<ClubInvitationPath>,
 ) -> Result<(), ApiError> {
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator).await?;
 
     let inv = club_invitations::Entity::find_by_id(path.invitation_id)
         .one(&*state.db)
@@ -928,9 +1140,9 @@ async fn my_invitations(
         .await
         .map_err(db_err)?;
 
-    // Fetch club names for enrichment.
+    // Fetch clubs for enrichment.
     let club_ids: Vec<Uuid> = invitations.iter().map(|inv| inv.club_id).collect();
-    let club_names: HashMap<Uuid, String> = if club_ids.is_empty() {
+    let club_map: HashMap<Uuid, clubs::Model> = if club_ids.is_empty() {
         HashMap::new()
     } else {
         clubs::Entity::find()
@@ -939,20 +1151,49 @@ async fn my_invitations(
             .await
             .map_err(db_err)?
             .into_iter()
-            .map(|c| (c.id, c.name))
+            .map(|c| (c.id, c))
             .collect()
     };
+
+    // Fetch inviters for enrichment.
+    let inviter_ids: Vec<Uuid> = invitations
+        .iter()
+        .map(|inv| inv.invited_by)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let inviter_users = UserRepo::find_by_ids(&state.db, &inviter_ids)
+        .await
+        .map_err(db_err)?;
+    let inviter_map: HashMap<Uuid, _> = inviter_users.into_iter().map(|u| (u.id, u)).collect();
 
     let items = invitations
         .into_iter()
         .map(|inv| {
-            let club_name = club_names.get(&inv.club_id).cloned();
+            let club = club_map.get(&inv.club_id);
+            let club_name = club.map(|c| c.name.clone());
+            let club_summary = club.map(|c| InvitationClubSummary {
+                id: c.id,
+                name: c.name.clone(),
+                slug: c.slug.clone(),
+                avatar_url: c.avatar_url.clone(),
+            });
+            let inviter = inviter_map
+                .get(&inv.invited_by)
+                .map(|u| InvitationUserSummary {
+                    id: u.id,
+                    name: u.name.clone(),
+                    avatar_url: u.avatar_url.clone(),
+                });
             InvitationResponse {
                 id: inv.id,
                 club_id: inv.club_id,
                 club_name,
+                club: club_summary,
                 user_id: inv.user_id,
+                invitee: None, // caller is the invitee, frontend knows who they are
                 invited_by: inv.invited_by,
+                inviter,
                 status: inv.status,
                 created_at: inv.created_at.to_rfc3339(),
             }
@@ -1054,7 +1295,7 @@ pub async fn create_club_thread(
     Path(club_id): Path<Uuid>,
     Json(req): Json<CreateThreadRequest>,
 ) -> Result<Json<ThreadResponse>, ApiError> {
-    let _member = require_club_role(&state.db, club_id, auth.user_id.0, "member").await?;
+    let _member = require_club_role(&state.db, club_id, auth.user_id.0, ClubRole::Member).await?;
 
     if req.title.trim().is_empty() {
         return Err(ApiError::BadRequest("title must not be empty".into()));
@@ -1066,6 +1307,7 @@ pub async fn create_club_thread(
     let thread_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
+    let scope = req.scope.unwrap_or_else(|| "club".into());
     let thread = ThreadRepo::create(
         &state.db,
         threads::ActiveModel {
@@ -1073,7 +1315,7 @@ pub async fn create_club_thread(
             title: Set(req.title),
             content: Set(req.content),
             author_id: Set(auth.user_id.0),
-            scope: Set(req.scope),
+            scope: Set(scope),
             municipality_id: Set(req.municipality_id),
             language: Set(req.language),
             club_id: Set(Some(club_id)),
@@ -1122,6 +1364,12 @@ pub async fn create_club_thread(
         is_bookmarked: false,
         is_pinned: thread.is_pinned,
         is_locked: thread.is_locked,
+        municipality_id: thread.municipality_id,
+        institutional_context: thread.institutional_context,
+        source: thread.source,
+        source_url: thread.source_url,
+        source_institution_id: thread.source_institution_id,
+        ai_generated: thread.ai_generated,
         created_at: thread.created_at.to_rfc3339(),
         updated_at: thread.updated_at.to_rfc3339(),
     }))
@@ -1144,7 +1392,7 @@ async fn list_club_threads(
 
     if !club.is_public {
         let uid = user_id.ok_or(ApiError::Forbidden)?;
-        let _member = require_club_role(&state.db, club_id, uid, "member").await?;
+        let _member = require_club_role(&state.db, club_id, uid, ClubRole::Member).await?;
     }
 
     let sort = params.sort.as_deref().unwrap_or("recent");
@@ -1174,11 +1422,16 @@ async fn list_club_threads(
 
     let data = enrich_threads(&state.db, thread_models, user_id).await?;
 
+    let page = offset / limit + 1;
+    let has_more = offset + limit < total;
     Ok(Json(ThreadListResponse {
         data,
         total,
-        offset,
+        page,
         limit,
+        has_more,
+        feed_scope: None,
+        has_subscriptions: false,
     }))
 }
 
@@ -1225,7 +1478,7 @@ pub async fn get_club_thread(
 
     if !club.is_public {
         let uid = user_id.ok_or(ApiError::Forbidden)?;
-        let _member = require_club_role(&state.db, path.id, uid, "member").await?;
+        let _member = require_club_role(&state.db, path.id, uid, ClubRole::Member).await?;
     }
 
     let thread = verify_club_thread(&state.db, path.id, path.thread_id).await?;
@@ -1294,6 +1547,12 @@ pub async fn get_club_thread(
         is_bookmarked,
         is_pinned: thread.is_pinned,
         is_locked: thread.is_locked,
+        municipality_id: thread.municipality_id,
+        institutional_context: thread.institutional_context,
+        source: thread.source,
+        source_url: thread.source_url,
+        source_institution_id: thread.source_institution_id,
+        ai_generated: thread.ai_generated,
         created_at: thread.created_at.to_rfc3339(),
         updated_at: thread.updated_at.to_rfc3339(),
     };
@@ -1321,15 +1580,44 @@ pub async fn get_club_thread(
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "thread": thread_resp,
-        "comments": {
-            "data": comment_resps,
-            "total": comments_total,
-            "offset": offset,
-            "limit": limit,
+    // Resolve the caller's club membership role (for memberRole / isRoomOwner)
+    let member_role = if let Some(uid) = user_id {
+        club_members::Entity::find()
+            .filter(club_members::Column::ClubId.eq(path.id))
+            .filter(club_members::Column::UserId.eq(uid))
+            .one(&*state.db)
+            .await
+            .map_err(db_err)?
+            .map(|m| m.role)
+    } else {
+        None
+    };
+
+    // Flatten: thread fields at top level + comments array + memberRole
+    let mut resp =
+        serde_json::to_value(&thread_resp).map_err(|e| ApiError::Internal(e.to_string()))?;
+    let obj = resp.as_object_mut().unwrap();
+
+    // Inject authorId on each comment — frontend checks comment.authorId === currentUser.id
+    let mut comments_json = serde_json::to_value(&comment_resps).unwrap();
+    if let Some(arr) = comments_json.as_array_mut() {
+        for c in arr {
+            if let Some(author_id) = c.get("author").and_then(|a| a.get("id")).cloned() {
+                c.as_object_mut()
+                    .unwrap()
+                    .insert("authorId".into(), author_id);
+            }
         }
-    })))
+    }
+    obj.insert("comments".into(), comments_json);
+    obj.insert("memberRole".into(), serde_json::json!(member_role));
+    let is_owner = member_role
+        .as_deref()
+        .and_then(|r| r.parse::<ClubRole>().ok())
+        .is_some_and(|r| r.is_owner());
+    obj.insert("isRoomOwner".into(), serde_json::json!(is_owner));
+
+    Ok(Json(resp))
 }
 
 pub async fn update_club_thread(
@@ -1338,7 +1626,8 @@ pub async fn update_club_thread(
     Path(path): Path<ClubThreadPath>,
     Json(req): Json<UpdateClubThreadRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "moderator").await?;
+    let _member =
+        require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator).await?;
 
     let _thread = verify_club_thread(&state.db, path.id, path.thread_id).await?;
 
@@ -1374,7 +1663,7 @@ pub async fn delete_club_thread(
 
     // Allow author or club moderator+.
     let is_author = thread.author_id == auth.user_id.0;
-    let is_club_mod = require_club_role(&state.db, path.id, auth.user_id.0, "moderator")
+    let is_club_mod = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator)
         .await
         .is_ok();
 
@@ -1409,7 +1698,7 @@ pub async fn vote_club_thread(
         ));
     }
 
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "member").await?;
+    let _member = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Member).await?;
     let thread = verify_club_thread(&state.db, path.id, path.thread_id).await?;
 
     VoteRepo::upsert_thread_vote(&state.db, path.thread_id, auth.user_id.0, req.value)
@@ -1437,7 +1726,7 @@ pub async fn create_club_comment(
     Path(path): Path<ClubThreadPath>,
     Json(req): Json<CreateCommentRequest>,
 ) -> Result<Json<CommentResponse>, ApiError> {
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "member").await?;
+    let _member = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Member).await?;
 
     if req.content.trim().is_empty() {
         return Err(ApiError::BadRequest("content must not be empty".into()));
@@ -1545,7 +1834,7 @@ pub async fn delete_club_comment(
 
     // Allow author, club moderator+, or platform moderator.
     let is_author = comment.author_id == auth.user_id.0;
-    let is_club_mod = require_club_role(&state.db, path.id, auth.user_id.0, "moderator")
+    let is_club_mod = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Moderator)
         .await
         .is_ok();
 
@@ -1583,7 +1872,7 @@ pub async fn vote_club_comment(
         ));
     }
 
-    let _member = require_club_role(&state.db, path.id, auth.user_id.0, "member").await?;
+    let _member = require_club_role(&state.db, path.id, auth.user_id.0, ClubRole::Member).await?;
     let _thread = verify_club_thread(&state.db, path.id, path.thread_id).await?;
 
     let comment = CommentRepo::find_by_id(&state.db, path.comment_id)
@@ -1647,4 +1936,394 @@ async fn list_categories(
         .collect();
 
     Ok(Json(items))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: ClubResponse has all fields the frontend ClubViewPage needs.
+    #[test]
+    fn club_response_matches_frontend_contract() {
+        let resp = ClubResponse {
+            id: Uuid::nil(),
+            name: "Test Club".into(),
+            slug: "test-club".into(),
+            description: Some("A test club".into()),
+            category: Some("sports".into()),
+            is_public: true,
+            creator_id: Uuid::nil(),
+            creator: Some(ClubMemberSummary {
+                id: Uuid::nil(),
+                name: "Owner".into(),
+                avatar_url: None,
+                role: "owner".into(),
+            }),
+            avatar_url: Some("https://example.com/avatar.png".into()),
+            cover_image_url: Some("https://example.com/cover.png".into()),
+            rules: Some("Be nice".into()),
+            address: Some("Helsinki".into()),
+            latitude: Some(60.1699),
+            longitude: Some(24.9384),
+            member_count: 42,
+            is_member: true,
+            member_role: Some("member".into()),
+            moderators: Some(vec![ClubMemberSummary {
+                id: Uuid::nil(),
+                name: "Mod".into(),
+                avatar_url: None,
+                role: "moderator".into(),
+            }]),
+            members: Some(vec![]),
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-02T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        // All required frontend fields
+        let required_keys = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "category",
+            "isPublic",
+            "creatorId",
+            "creator",
+            "avatarUrl",
+            "coverImageUrl",
+            "rules",
+            "address",
+            "latitude",
+            "longitude",
+            "memberCount",
+            "isMember",
+            "memberRole",
+            "moderators",
+            "members",
+            "createdAt",
+            "updatedAt",
+        ];
+        for key in &required_keys {
+            assert!(obj.contains_key(*key), "missing club field: {key}");
+        }
+
+        // creator is an object with expected shape
+        let creator = obj["creator"].as_object().unwrap();
+        for key in &["id", "name", "avatarUrl", "role"] {
+            assert!(creator.contains_key(*key), "missing creator.{key}");
+        }
+
+        // moderators is an array
+        assert!(obj["moderators"].as_array().is_some());
+    }
+
+    /// When detail fields are omitted (list view), moderators/members are absent.
+    #[test]
+    fn club_response_list_view_omits_detail_fields() {
+        let resp = ClubResponse {
+            id: Uuid::nil(),
+            name: "Test".into(),
+            slug: "test".into(),
+            description: None,
+            category: None,
+            is_public: true,
+            creator_id: Uuid::nil(),
+            creator: None,
+            avatar_url: None,
+            cover_image_url: None,
+            rules: None,
+            address: None,
+            latitude: None,
+            longitude: None,
+            member_count: 0,
+            is_member: false,
+            member_role: None,
+            moderators: None,
+            members: None,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        // skip_serializing_if = Option::is_none on moderators/members
+        assert!(!obj.contains_key("moderators"));
+        assert!(!obj.contains_key("members"));
+        assert_eq!(obj["isMember"], false);
+    }
+
+    /// Contract test: ClubListResponse has page-based pagination.
+    #[test]
+    fn club_list_response_has_pagination() {
+        let resp = ClubListResponse {
+            items: vec![],
+            total: 100,
+            page: 3,
+            limit: 20,
+            has_more: true,
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        assert_eq!(obj["total"], 100);
+        assert_eq!(obj["page"], 3);
+        assert_eq!(obj["limit"], 20);
+        assert_eq!(obj["hasMore"], true);
+        assert!(!obj.contains_key("offset"));
+    }
+
+    /// Contract test: InvitationResponse has nested club/inviter/invitee objects.
+    #[test]
+    fn invitation_response_matches_frontend_contract() {
+        let resp = InvitationResponse {
+            id: Uuid::nil(),
+            club_id: Uuid::nil(),
+            club_name: Some("Test Club".into()),
+            club: Some(InvitationClubSummary {
+                id: Uuid::nil(),
+                name: "Test Club".into(),
+                slug: "test-club".into(),
+                avatar_url: None,
+            }),
+            user_id: Uuid::nil(),
+            invitee: Some(InvitationUserSummary {
+                id: Uuid::nil(),
+                name: "Bob".into(),
+                avatar_url: None,
+            }),
+            invited_by: Uuid::nil(),
+            inviter: Some(InvitationUserSummary {
+                id: Uuid::nil(),
+                name: "Alice".into(),
+                avatar_url: Some("https://example.com/a.png".into()),
+            }),
+            status: "pending".into(),
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let required_keys = [
+            "id",
+            "clubId",
+            "clubName",
+            "club",
+            "userId",
+            "invitee",
+            "invitedBy",
+            "inviter",
+            "status",
+            "createdAt",
+        ];
+        for key in &required_keys {
+            assert!(obj.contains_key(*key), "missing invitation field: {key}");
+        }
+
+        // club object shape
+        let club = obj["club"].as_object().unwrap();
+        for key in &["id", "name", "slug", "avatarUrl"] {
+            assert!(club.contains_key(*key), "missing club.{key}");
+        }
+
+        // inviter object shape
+        let inviter = obj["inviter"].as_object().unwrap();
+        for key in &["id", "name", "avatarUrl"] {
+            assert!(inviter.contains_key(*key), "missing inviter.{key}");
+        }
+    }
+
+    /// Verify CreateClubRequest accepts enrichment fields with rules as string.
+    #[test]
+    fn create_club_request_accepts_rules_string() {
+        let json = r#"{
+            "name": "Test",
+            "coverImageUrl": "https://example.com/cover.png",
+            "rules": "Be nice",
+            "address": "Helsinki",
+            "latitude": 60.17,
+            "longitude": 24.94
+        }"#;
+        let req: CreateClubRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            req.cover_image_url.as_deref(),
+            Some("https://example.com/cover.png")
+        );
+        assert_eq!(normalize_rules(req.rules), Some("Be nice".into()));
+        assert_eq!(req.latitude, Some(60.17));
+    }
+
+    /// Verify CreateClubRequest accepts rules as string[] (frontend format).
+    #[test]
+    fn create_club_request_accepts_rules_array() {
+        let json = r#"{"name": "Test", "rules": ["Be nice", "No spam"]}"#;
+        let req: CreateClubRequest = serde_json::from_str(json).unwrap();
+        let stored = normalize_rules(req.rules);
+        assert!(stored.is_some());
+        // Array is serialized as JSON string
+        let parsed: Vec<String> = serde_json::from_str(&stored.unwrap()).unwrap();
+        assert_eq!(parsed, vec!["Be nice", "No spam"]);
+    }
+
+    /// Verify null rules are handled.
+    #[test]
+    fn create_club_request_accepts_null_rules() {
+        let json = r#"{"name": "Test", "rules": null}"#;
+        let req: CreateClubRequest = serde_json::from_str(json).unwrap();
+        assert!(normalize_rules(req.rules).is_none());
+    }
+
+    /// ClubRole is a proper enum — "admin" does not parse.
+    #[test]
+    fn club_role_rejects_admin() {
+        assert!("admin".parse::<ClubRole>().is_err());
+    }
+
+    /// ClubRole ordering: Owner > Moderator > Member.
+    #[test]
+    fn club_role_ordering() {
+        assert!(ClubRole::Owner > ClubRole::Moderator);
+        assert!(ClubRole::Moderator > ClubRole::Member);
+    }
+
+    /// ClubRole roundtrips through as_str / parse.
+    #[test]
+    fn club_role_roundtrip() {
+        for role in [ClubRole::Member, ClubRole::Moderator, ClubRole::Owner] {
+            let s = role.as_str();
+            let parsed: ClubRole = s.parse().unwrap();
+            assert_eq!(parsed, role);
+        }
+    }
+
+    /// ClubRole serializes to lowercase via serde.
+    #[test]
+    fn club_role_serde() {
+        let json = serde_json::to_value(ClubRole::Owner).unwrap();
+        assert_eq!(json, "owner");
+        let parsed: ClubRole = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed, ClubRole::Owner);
+    }
+
+    /// isRoomOwner derived from ClubRole::is_owner().
+    #[test]
+    fn is_room_owner_via_enum() {
+        assert!(ClubRole::Owner.is_owner());
+        assert!(!ClubRole::Moderator.is_owner());
+        assert!(!ClubRole::Member.is_owner());
+    }
+
+    /// is_at_least_moderator covers Owner and Moderator.
+    #[test]
+    fn is_at_least_moderator() {
+        assert!(ClubRole::Owner.is_at_least_moderator());
+        assert!(ClubRole::Moderator.is_at_least_moderator());
+        assert!(!ClubRole::Member.is_at_least_moderator());
+    }
+
+    /// Verify flattened comment payload includes authorId.
+    #[test]
+    fn flattened_comment_has_author_id() {
+        use crate::agora::types::{AuthorSummary, CommentResponse};
+
+        let comment = CommentResponse {
+            id: Uuid::nil(),
+            thread_id: Uuid::nil(),
+            parent_id: None,
+            author: AuthorSummary {
+                id: Uuid::from_u128(42),
+                username: "alice".into(),
+                name: "Alice".into(),
+                avatar_url: None,
+                role: "citizen".into(),
+            },
+            content: "Hello".into(),
+            content_html: None,
+            depth: 0,
+            score: 1,
+            user_vote: None,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        // Simulate the injection logic from get_club_thread
+        let mut json = serde_json::to_value(&comment).unwrap();
+        if let Some(author_id) = json.get("author").and_then(|a| a.get("id")).cloned() {
+            json.as_object_mut()
+                .unwrap()
+                .insert("authorId".into(), author_id);
+        }
+
+        let obj = json.as_object().unwrap();
+        assert!(obj.contains_key("authorId"), "must have authorId");
+        assert_eq!(
+            obj["authorId"],
+            serde_json::json!(Uuid::from_u128(42)),
+            "authorId must match author.id"
+        );
+    }
+
+    /// Regression #3: Club/room thread detail must be FLAT (not nested under "thread").
+    /// Frontend destructures {id, title, comments, memberRole, isRoomOwner} at top level.
+    #[test]
+    fn club_thread_detail_is_flat() {
+        use crate::agora::types::{AuthorSummary, ThreadResponse};
+
+        let thread = ThreadResponse {
+            id: Uuid::nil(),
+            title: "Test".into(),
+            content: "Body".into(),
+            content_html: None,
+            scope: "club".into(),
+            author: AuthorSummary {
+                id: Uuid::nil(),
+                username: "test".into(),
+                name: "Test".into(),
+                avatar_url: None,
+                role: "citizen".into(),
+            },
+            tags: vec![],
+            municipality_id: None,
+            institutional_context: None,
+            reply_count: 0,
+            score: 0,
+            view_count: 0,
+            user_vote: None,
+            is_bookmarked: false,
+            is_pinned: false,
+            is_locked: false,
+            source: "user".into(),
+            source_url: None,
+            source_institution_id: None,
+            ai_generated: false,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        // Simulate the flattening logic from get_club_thread
+        let mut resp = serde_json::to_value(&thread).unwrap();
+        let obj = resp.as_object_mut().unwrap();
+        obj.insert("comments".into(), serde_json::json!([]));
+        obj.insert("memberRole".into(), serde_json::json!("owner"));
+        obj.insert("isRoomOwner".into(), serde_json::json!(true));
+
+        // Thread fields at top level (not nested under "thread")
+        assert!(obj.contains_key("id"), "id must be at top level");
+        assert!(obj.contains_key("title"), "title must be at top level");
+        assert!(
+            !obj.contains_key("thread"),
+            "must NOT have nested 'thread' key"
+        );
+
+        // Required frontend fields
+        assert!(obj.contains_key("comments"), "must have comments array");
+        assert!(obj.contains_key("memberRole"), "must have memberRole");
+        assert!(obj.contains_key("isRoomOwner"), "must have isRoomOwner");
+        assert_eq!(obj["isRoomOwner"], true);
+    }
 }

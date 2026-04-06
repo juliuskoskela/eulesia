@@ -1,6 +1,6 @@
 pub mod appeals;
 pub mod reports;
-mod sanctions;
+pub mod sanctions;
 pub mod types;
 
 use axum::extract::State;

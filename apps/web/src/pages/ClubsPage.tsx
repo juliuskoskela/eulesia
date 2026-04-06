@@ -587,7 +587,7 @@ export function ClubsPage() {
                 key={inv.id}
                 className="bg-white dark:bg-gray-900 rounded-xl border border-amber-200 dark:border-amber-800 p-3 flex items-center gap-3"
               >
-                {inv.club.coverImageUrl ? (
+                {inv.club?.coverImageUrl ? (
                   <img
                     src={inv.club.coverImageUrl}
                     alt=""
@@ -595,15 +595,15 @@ export function ClubsPage() {
                   />
                 ) : (
                   <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                    {inv.club.name.charAt(0)}
+                    {(inv.club?.name ?? inv.clubName ?? "?").charAt(0)}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">
-                    {inv.club.name}
+                    {inv.club?.name ?? inv.clubName ?? ""}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t("invitedBy", { name: inv.inviter.name })}
+                    {t("invitedBy", { name: inv.inviter?.name ?? "" })}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">

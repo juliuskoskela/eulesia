@@ -30,10 +30,11 @@ impl ThreadRepo {
         db: &DatabaseConnection,
         scope: Option<&str>,
         municipality_id: Option<Uuid>,
-        author_id: Option<Uuid>,
+        author_ids: Option<&[Uuid]>,
         thread_ids: Option<&[Uuid]>,
         excluded_author_ids: &[Uuid],
         sort: &str,
+        top_period: Option<&str>,
         offset: u64,
         limit: u64,
     ) -> Result<(Vec<threads::Model>, u64), DbErr> {
@@ -48,8 +49,15 @@ impl ThreadRepo {
         if let Some(mid) = municipality_id {
             query = query.filter(threads::Column::MunicipalityId.eq(mid));
         }
-        if let Some(aid) = author_id {
-            query = query.filter(threads::Column::AuthorId.eq(aid));
+        if let Some(aids) = author_ids {
+            if aids.is_empty() {
+                return Ok((vec![], 0));
+            }
+            if aids.len() == 1 {
+                query = query.filter(threads::Column::AuthorId.eq(aids[0]));
+            } else {
+                query = query.filter(threads::Column::AuthorId.is_in(aids.to_vec()));
+            }
         }
         if let Some(ids) = thread_ids {
             if ids.is_empty() {
@@ -61,11 +69,29 @@ impl ThreadRepo {
             query = query.filter(threads::Column::AuthorId.is_not_in(excluded_author_ids.to_vec()));
         }
 
+        // For "top" sort with a time period, filter by created_at cutoff
+        if sort == "top" {
+            if let Some(period) = top_period {
+                let now = chrono::Utc::now();
+                let cutoff = match period {
+                    "day" => Some(now - chrono::Duration::days(1)),
+                    "week" => Some(now - chrono::Duration::weeks(1)),
+                    "month" => Some(now - chrono::Duration::days(30)),
+                    "year" => Some(now - chrono::Duration::days(365)),
+                    _ => None, // "all" — no cutoff
+                };
+                if let Some(cutoff) = cutoff {
+                    query = query.filter(threads::Column::CreatedAt.gte(cutoff.fixed_offset()));
+                }
+            }
+        }
+
         let total = query.clone().count(db).await?;
 
         let query = match sort {
             "top" => query.order_by_desc(threads::Column::Score),
             "active" => query.order_by_desc(threads::Column::UpdatedAt),
+            "new" => query.order_by_desc(threads::Column::CreatedAt),
             _ => query.order_by_desc(threads::Column::CreatedAt), // "recent" default
         };
 

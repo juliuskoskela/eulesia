@@ -31,8 +31,16 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
         .and_then(|v| v.to_str().ok())
         .is_some_and(|ct| ct.starts_with("application/json"));
 
-    // Non-JSON success responses (e.g. binary uploads) — pass through.
-    if !is_json && status.is_success() {
+    // Non-JSON success with a real body (e.g. binary uploads) — pass through.
+    // Empty-body successes (unit `()` returns) are wrapped below so the
+    // frontend always receives `{ "success": true, "data": null }`.
+    let has_body = response
+        .headers()
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<usize>().ok())
+        .is_some_and(|len| len > 0);
+    if !is_json && has_body && status.is_success() {
         return response;
     }
 
@@ -87,4 +95,95 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
     );
 
     Response::from_parts(parts, Body::from(json_bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::Router;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use axum::middleware::{self, Next};
+    use axum::response::IntoResponse;
+    use axum::routing::get;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    /// Helper: build a router with wrap_response middleware and a handler.
+    fn app_with<F, R>(handler: F) -> Router
+    where
+        F: axum::handler::Handler<(), ()> + Clone,
+        R: IntoResponse,
+    {
+        Router::new()
+            .route("/test", get(handler))
+            .layer(middleware::from_fn(wrap_response))
+    }
+
+    /// Empty `()` response gets wrapped as {success:true, data:null}.
+    #[tokio::test]
+    async fn wraps_empty_body_as_json_null() {
+        let app = Router::new()
+            .route("/test", get(|| async {}))
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["success"], true);
+        assert!(json["data"].is_null());
+    }
+
+    /// JSON success response gets wrapped in {success:true, data:...}.
+    #[tokio::test]
+    async fn wraps_json_success() {
+        let app = Router::new()
+            .route(
+                "/test",
+                get(|| async { axum::Json(serde_json::json!({"foo": "bar"})) }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["success"], true);
+        assert_eq!(json["data"]["foo"], "bar");
+    }
+
+    /// Health endpoint is NOT wrapped (skip list).
+    #[tokio::test]
+    async fn skips_health_endpoint() {
+        let app = Router::new()
+            .route(
+                "/health",
+                get(|| async { axum::Json(serde_json::json!({"status": "ok"})) }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/health").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // Not wrapped — raw JSON
+        assert_eq!(json["status"], "ok");
+        assert!(!json.as_object().unwrap().contains_key("success"));
+    }
 }

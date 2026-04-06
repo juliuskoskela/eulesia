@@ -2,10 +2,15 @@ mod config;
 
 use std::sync::Arc;
 
+use axum::http::{HeaderValue, header};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
 use config::Config;
 use eulesia_api::{AppConfig, AppState};
 use tokio_util::sync::CancellationToken;
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
@@ -82,8 +87,50 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(AllowHeaders::mirror_request())
         .allow_credentials(true);
 
-    let app = eulesia_api::router(state)
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into());
+    let mut app = eulesia_api::router(state).nest_service("/uploads", ServeDir::new(upload_dir));
+
+    // Optionally serve the built frontend — eliminates the need for a
+    // separate webserver (nginx). Hashed assets get immutable caching;
+    // index.html is never cached so deploys take effect immediately.
+    if let Some(ref frontend_dir) = config.frontend_dir {
+        info!(dir = %frontend_dir, "serving frontend");
+        let frontend_dir = frontend_dir.clone();
+        let index_path = std::path::PathBuf::from(&frontend_dir).join("index.html");
+
+        // Serve static files WITHOUT SPA fallback — missing assets return 404,
+        // not index.html. This prevents stale hashed asset URLs from being
+        // cached as HTML with immutable headers.
+        let static_files = ServeDir::new(&frontend_dir).fallback(axum::routing::get(
+            move |req: axum::extract::Request| {
+                let index = index_path.clone();
+                async move {
+                    let path = req.uri().path();
+                    // /api/* and /assets/* miss → 404 (not SPA fallback)
+                    if path.starts_with("/api/")
+                        || path.starts_with("/assets/")
+                        || path.starts_with("/ws/")
+                        || path.starts_with("/uploads/")
+                    {
+                        return axum::http::StatusCode::NOT_FOUND.into_response();
+                    }
+                    // Everything else → SPA index.html (navigation routes)
+                    match tokio::fs::read(&index).await {
+                        Ok(body) => axum::response::Html(body).into_response(),
+                        Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    }
+                }
+            },
+        ));
+
+        app = app
+            .fallback_service(static_files)
+            .layer(middleware::from_fn(cache_headers));
+    }
+
+    let app = app
         .layer(cors)
+        .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http());
 
     // Build outbox worker context with optional integrations
@@ -222,4 +269,31 @@ async fn bootstrap_admins(db: &sea_orm::DatabaseConnection, path: &str) -> anyho
     }
 
     Ok(())
+}
+
+/// Middleware: set `Cache-Control` based on request path.
+/// - Fingerprinted Vite assets under `/assets/`: immutable, cached 1 year
+/// - HTML / SPA fallback routes: never cached
+async fn cache_headers(req: axum::extract::Request, next: Next) -> Response {
+    let path = req.uri().path().to_string();
+    let mut resp = next.run(req).await;
+
+    // Skip API routes, uploads, and websocket — they set their own headers
+    if path.starts_with("/api/") || path.starts_with("/uploads/") || path.starts_with("/ws/") {
+        return resp;
+    }
+
+    // Only cache successful responses for hashed assets — never cache 404/5xx
+    let is_hashed_asset = path.starts_with("/assets/") && resp.status().is_success();
+
+    let value = if is_hashed_asset {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-cache, no-store, must-revalidate"
+    };
+
+    resp.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static(value));
+
+    resp
 }

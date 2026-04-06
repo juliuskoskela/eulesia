@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Scope } from "../../types";
 
 interface ScopeBadgeProps {
-  scope: Scope;
+  scope: Scope | string;
   municipalityName?: string;
   municipalityId?: string;
   countryName?: string;
@@ -37,7 +37,7 @@ export function ScopeBadge({
   countryName,
 }: ScopeBadgeProps) {
   const { t } = useTranslation();
-  const config = scopeConfig[scope];
+  const config = scopeConfig[scope as Scope] ?? scopeConfig.national;
   const Icon = config.icon;
 
   // Determine display label

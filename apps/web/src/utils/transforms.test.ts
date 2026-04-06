@@ -106,14 +106,18 @@ describe("transformComment", () => {
   it("prefers the top-level authorId when the public author summary is scrubbed", () => {
     const result = transformComment({
       id: "comment-1",
+      threadId: "thread-1",
       authorId: "user-1",
       content: "Managed operator comment",
+      score: 0,
+      depth: 0,
       author: {
-        id: null,
+        id: "",
         name: "Eulesia Operator",
         role: "citizen",
       },
       createdAt: "2026-04-02T00:00:00.000Z",
+      updatedAt: "2026-04-02T00:00:00.000Z",
     } as Comment);
 
     expect(result.authorId).toBe("user-1");

@@ -14,6 +14,7 @@ use eulesia_common::types::{UserRole, new_id};
 use eulesia_db::repo::blocks::BlockRepo;
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::comments::CommentRepo;
+use eulesia_db::repo::follows::FollowRepo;
 use eulesia_db::repo::outbox_helpers::emit_event;
 use eulesia_db::repo::tags::TagRepo;
 use eulesia_db::repo::thread_views::ThreadViewRepo;
@@ -166,6 +167,8 @@ pub async fn enrich_threads(
                 scope: t.scope,
                 author,
                 tags: tags_map.remove(&t.id).unwrap_or_default(),
+                municipality_id: t.municipality_id,
+                institutional_context: t.institutional_context,
                 reply_count: t.reply_count,
                 score: t.score,
                 view_count: t.view_count,
@@ -173,6 +176,10 @@ pub async fn enrich_threads(
                 is_bookmarked: bookmark_set.contains(&t.id),
                 is_pinned: t.is_pinned,
                 is_locked: t.is_locked,
+                source: t.source,
+                source_url: t.source_url,
+                source_institution_id: t.source_institution_id,
+                ai_generated: t.ai_generated,
                 created_at: t.created_at.to_rfc3339(),
                 updated_at: t.updated_at.to_rfc3339(),
             }
@@ -191,7 +198,9 @@ pub async fn list_threads(
     State(state): State<AppState>,
     Query(params): Query<ThreadListParams>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
-    // "all" means no scope filter (v1 compat)
+    let is_following = params.scope.as_deref() == Some("following");
+
+    // "all" and "following" mean no scope filter in the DB query
     let scope_filter = params
         .scope
         .as_deref()
@@ -207,8 +216,48 @@ pub async fn list_threads(
     };
 
     let sort = params.sort.as_deref().unwrap_or("recent");
-    let offset = params.offset.unwrap_or(0);
     let limit = clamp_limit(params.limit);
+    // Support both page-based and offset-based pagination
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = params.offset.unwrap_or_else(|| (page - 1) * limit);
+
+    // Check if user has any subscriptions (follows)
+    let has_subscriptions = match user_id {
+        Some(uid) => {
+            FollowRepo::count_following(&state.db, uid)
+                .await
+                .map_err(db_err)?
+                > 0
+        }
+        None => false,
+    };
+
+    // For "following" feed, resolve followed author IDs and use author_id filter
+    let following_author_id = if is_following {
+        if let Some(uid) = user_id {
+            let (follows, _) = FollowRepo::following_of(&state.db, uid, 0, 10_000)
+                .await
+                .map_err(db_err)?;
+            let ids: Vec<Uuid> = follows.iter().map(|f| f.followed_id).collect();
+            if ids.is_empty() {
+                // No follows — return empty result immediately
+                return Ok(Json(ThreadListResponse {
+                    data: vec![],
+                    total: 0,
+                    page,
+                    limit,
+                    has_more: false,
+                    feed_scope: Some("following".into()),
+                    has_subscriptions: false,
+                }));
+            }
+            Some(ids)
+        } else {
+            return Err(ApiError::Unauthorized);
+        }
+    } else {
+        None
+    };
 
     // If filtering by tag, resolve thread IDs first, then pass them into
     // ThreadRepo::list so that sorting, visibility, and pagination are applied
@@ -224,12 +273,17 @@ pub async fn list_threads(
 
     let (threads, total) = ThreadRepo::list(
         &state.db,
-        scope_filter,
+        if following_author_id.is_some() {
+            None
+        } else {
+            scope_filter
+        },
         params.municipality_id,
-        None,
+        following_author_id.as_deref(),
         tag_ids.as_deref(),
         &excluded,
         sort,
+        params.top_period.as_deref(),
         offset,
         limit,
     )
@@ -237,12 +291,16 @@ pub async fn list_threads(
     .map_err(db_err)?;
 
     let data = enrich_threads(&state.db, threads, user_id).await?;
+    let has_more = offset + limit < total;
 
     Ok(Json(ThreadListResponse {
         data,
         total,
-        offset,
+        page,
         limit,
+        has_more,
+        feed_scope: params.scope.clone(),
+        has_subscriptions,
     }))
 }
 
@@ -338,6 +396,12 @@ pub async fn get_thread(
         is_bookmarked,
         is_pinned: thread.is_pinned,
         is_locked: thread.is_locked,
+        source: thread.source,
+        source_url: thread.source_url,
+        source_institution_id: thread.source_institution_id,
+        ai_generated: thread.ai_generated,
+        municipality_id: thread.municipality_id,
+        institutional_context: thread.institutional_context,
         created_at: thread.created_at.to_rfc3339(),
         updated_at: thread.updated_at.to_rfc3339(),
     };
@@ -376,9 +440,13 @@ pub async fn create_thread(
     State(state): State<AppState>,
     Json(req): Json<CreateThreadRequest>,
 ) -> Result<Json<ThreadResponse>, ApiError> {
-    validate_scope(&req.scope)?;
+    let scope = req
+        .scope
+        .as_deref()
+        .ok_or_else(|| ApiError::BadRequest("scope is required".into()))?;
+    validate_scope(scope)?;
 
-    if req.scope == "local" && req.municipality_id.is_none() {
+    if scope == "local" && req.municipality_id.is_none() {
         return Err(ApiError::BadRequest(
             "municipality_id is required for local scope".into(),
         ));
@@ -390,6 +458,7 @@ pub async fn create_thread(
         return Err(ApiError::BadRequest("content must not be empty".into()));
     }
 
+    let scope = scope.to_string();
     let thread_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
@@ -400,9 +469,12 @@ pub async fn create_thread(
             title: Set(req.title),
             content: Set(req.content),
             author_id: Set(auth.user_id.0),
-            scope: Set(req.scope),
+            scope: Set(scope),
             municipality_id: Set(req.municipality_id),
             language: Set(req.language),
+            country: Set(req.country),
+            location_id: Set(req.location_id),
+            institutional_context: Set(req.institutional_context),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -467,6 +539,12 @@ pub async fn create_thread(
         is_bookmarked: false,
         is_pinned: thread.is_pinned,
         is_locked: thread.is_locked,
+        source: thread.source,
+        source_url: thread.source_url,
+        source_institution_id: thread.source_institution_id,
+        ai_generated: thread.ai_generated,
+        municipality_id: thread.municipality_id,
+        institutional_context: thread.institutional_context,
         created_at: thread.created_at.to_rfc3339(),
         updated_at: thread.updated_at.to_rfc3339(),
     }))
@@ -593,6 +671,12 @@ pub async fn update_thread(
         is_bookmarked: false,
         is_pinned: updated.is_pinned,
         is_locked: updated.is_locked,
+        municipality_id: updated.municipality_id,
+        institutional_context: updated.institutional_context,
+        source: updated.source,
+        source_url: updated.source_url,
+        source_institution_id: updated.source_institution_id,
+        ai_generated: updated.ai_generated,
         created_at: updated.created_at.to_rfc3339(),
         updated_at: updated.updated_at.to_rfc3339(),
     }))

@@ -987,7 +987,7 @@ class ApiClient {
       throw new Error(data.error || "Upload failed");
     }
 
-    return data;
+    return data.data;
   }
 
   async deleteAvatar(): Promise<void> {
@@ -1014,7 +1014,7 @@ class ApiClient {
       throw new Error(data.error || "Upload failed");
     }
 
-    return data;
+    return data.data;
   }
 
   // ─── Admin API ────────────────────────────────────────────
@@ -1450,16 +1450,17 @@ class ApiClient {
 // Types
 export interface User {
   id: string;
-  email: string | null;
+  email?: string | null;
   name: string;
+  username?: string;
   verifiedName?: string;
-  avatarUrl?: string;
-  role: "citizen" | "institution" | "moderator";
-  institutionType?: "municipality" | "agency" | "ministry";
+  avatarUrl?: string | null;
+  role: string;
+  institutionType?: string;
   institutionName?: string;
   municipality?: Municipality;
-  identityVerified: boolean;
-  identityLevel: "basic" | "substantial" | "high";
+  identityVerified?: boolean;
+  identityLevel?: "basic" | "substantial" | "high";
   settings?: {
     notificationReplies: boolean;
     notificationMentions: boolean;
@@ -1468,7 +1469,11 @@ export interface User {
   };
   onboardingCompletedAt?: string | null;
   hasPassword?: boolean;
-  createdAt: string;
+  createdAt?: string;
+  // UI-computed fields (added by transformAuthor or component logic)
+  avatarInitials?: string;
+  verified?: boolean;
+  canViewProfile?: boolean;
 }
 
 export interface Municipality {
@@ -1484,22 +1489,28 @@ export interface Thread {
   title: string;
   content: string;
   contentHtml?: string;
-  scope: "local" | "national" | "european";
+  scope: "local" | "national" | "european" | "club";
   tags: string[];
-  author: UserSummary;
+  author?: UserSummary;
   authorId?: string | null;
   municipality?: Municipality;
+  municipalityId?: string;
+  municipalityName?: string;
   institutionalContext?: InstitutionalContext;
   replyCount: number;
-  score: number;
+  score?: number;
+  viewCount?: number;
   userVote?: number;
+  isBookmarked?: boolean;
+  isPinned?: boolean;
+  isLocked?: boolean;
   editedAt?: string | null;
   editedBy?: string | null;
   editorName?: string | null;
   createdAt: string;
   updatedAt: string;
   // AI/Import source tracking
-  source?: "user" | "minutes_import" | "rss_import";
+  source?: string;
   sourceUrl?: string;
   sourceId?: string;
   aiGenerated?: boolean;
@@ -1508,8 +1519,6 @@ export interface Thread {
 }
 
 export interface ThreadWithComments extends Thread {
-  isBookmarked?: boolean;
-  viewCount?: number;
   comments: Comment[];
 }
 
@@ -1559,35 +1568,37 @@ export interface AlgorithmDocumentation {
   }[];
 }
 
-export type BookmarksResponse = PaginatedResponse<
-  Thread & { isBookmarked: true; bookmarkedAt: string }
->;
+export type BookmarksResponse = ThreadsResponse;
 
 export interface Comment {
   id: string;
+  threadId: string;
   content: string;
   contentHtml?: string;
   author: UserSummary | null;
   authorId?: string | null;
   parentId?: string | null;
-  score?: number;
-  depth?: number;
+  score: number;
+  depth: number;
   userVote?: number;
   editedAt?: string | null;
   editedBy?: string | null;
   isHidden?: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface UserSummary {
-  id: string | null;
+  id: string;
+  username?: string;
   name: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
+  role: string;
+  // Present on full user profiles, absent on embedded author summaries
+  identityVerified?: boolean;
   canViewProfile?: boolean;
-  role: "citizen" | "institution" | "moderator";
   institutionType?: string;
   institutionName?: string;
-  identityVerified?: boolean;
 }
 
 export interface InstitutionalContext {
@@ -1601,66 +1612,61 @@ export interface Club {
   id: string;
   name: string;
   slug: string;
-  description?: string;
-  rules?: string[];
-  category?: string;
-  coverImageUrl?: string;
+  description?: string | null;
+  category?: string | null;
   isPublic: boolean;
-  latitude?: string;
-  longitude?: string;
-  address?: string;
-  municipalityId?: string;
+  creatorId: string;
+  creator?: ClubMemberSummary | null;
+  avatarUrl?: string | null;
+  coverImageUrl?: string | null;
+  rules?: string[] | string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   memberCount: number;
-  creator: UserSummary;
   isMember: boolean;
+  memberRole?: string | null;
+  moderators?: ClubMemberSummary[];
+  members?: ClubMemberSummary[];
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface ClubMember {
-  id: string | null;
+export interface ClubMemberSummary {
+  id: string;
   name: string;
-  avatarUrl?: string;
-  canViewProfile?: boolean;
+  avatarUrl?: string | null;
   role: string;
+  canViewProfile?: boolean;
 }
+
+export type ClubMember = ClubMemberSummary;
 
 export interface ClubWithThreads extends Club {
-  moderators: UserSummary[];
-  members: ClubMember[];
   threads: ClubThread[];
-  memberRole?: string;
 }
 
 export interface ClubInvitation {
   id: string;
-  clubId?: string;
-  status: string;
-  createdAt: string;
-  invitee?: {
-    id: string;
-    name: string;
-    username: string;
-    avatarUrl?: string;
-  };
-}
-
-export interface ClubInvitationWithDetails {
-  id: string;
-  status: string;
-  createdAt: string;
-  club: {
+  clubId: string;
+  clubName?: string | null;
+  club?: {
     id: string;
     name: string;
     slug: string;
-    coverImageUrl?: string;
-    memberCount: number;
-  };
-  inviter: {
-    id: string;
-    name: string;
-    avatarUrl?: string;
-  };
+    avatarUrl?: string | null;
+    coverImageUrl?: string | null;
+    memberCount?: number;
+  } | null;
+  userId: string;
+  invitee?: { id: string; name: string; avatarUrl?: string | null } | null;
+  invitedBy: string;
+  inviter?: { id: string; name: string; avatarUrl?: string | null } | null;
+  status: string;
+  createdAt: string;
 }
+
+export type ClubInvitationWithDetails = ClubInvitation;
 
 export interface ClubThread {
   id: string;
@@ -1680,6 +1686,7 @@ export interface ClubThread {
 
 export interface ClubThreadWithComments extends ClubThread {
   memberRole?: string | null;
+  isRoomOwner?: boolean;
   comments: ClubComment[];
 }
 
@@ -1732,6 +1739,7 @@ export interface RoomComment {
   contentHtml?: string;
   author: UserSummary | null;
   score: number;
+  depth: number;
   userVote: number;
   isHidden?: boolean;
   createdAt: string;
@@ -1784,9 +1792,18 @@ export interface AppNotification {
 // Direct Message types
 export interface Conversation {
   id: string;
-  otherUser: UserSummary | null;
-  lastMessage?: DirectMessage | null;
+  conversationType: string;
+  name?: string | null;
+  currentEpoch: number;
+  otherUser: { id: string; name: string; avatarUrl?: string | null } | null;
+  lastMessage: {
+    id: string;
+    content?: string | null;
+    senderId: string;
+    createdAt: string;
+  } | null;
   unreadCount: number;
+  createdAt: string;
   updatedAt: string;
 }
 
@@ -1838,9 +1855,14 @@ export interface ThreadFilters {
   limit?: number;
 }
 
-export interface ThreadsResponse extends PaginatedResponse<Thread> {
-  feedScope: FeedScope;
-  hasSubscriptions?: boolean;
+export interface ThreadsResponse {
+  items: Thread[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  feedScope?: FeedScope | null;
+  hasSubscriptions: boolean;
 }
 
 export interface ClubFilters {

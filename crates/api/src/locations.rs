@@ -31,6 +31,13 @@ pub struct LocationResponse {
     pub source: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocationSearchResponse {
+    results: Vec<LocationResponse>,
+    source: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SearchParams {
@@ -76,9 +83,8 @@ fn model_to_response(m: locations::Model) -> LocationResponse {
         admin_level: m.admin_level,
         location_type: m.r#type.unwrap_or_else(|| "unknown".into()),
         country: m.country,
-        // Decimal to f64 via string — acceptable for lat/lon precision
-        latitude: m.latitude.map(|d| d.to_string().parse().unwrap_or(0.0)),
-        longitude: m.longitude.map(|d| d.to_string().parse().unwrap_or(0.0)),
+        latitude: m.latitude.and_then(|d| d.to_string().parse::<f64>().ok()),
+        longitude: m.longitude.and_then(|d| d.to_string().parse::<f64>().ok()),
         source: "cache".into(),
     }
 }
@@ -153,7 +159,7 @@ async fn fetch_nominatim(query: &str, country: &str, limit: u64) -> Vec<Location
 async fn search_locations(
     State(state): State<AppState>,
     Query(params): Query<SearchParams>,
-) -> Result<Json<Vec<LocationResponse>>, ApiError> {
+) -> Result<Json<LocationSearchResponse>, ApiError> {
     let query = params.q.trim().to_string();
     if query.is_empty() {
         return Err(ApiError::BadRequest(
@@ -193,6 +199,8 @@ async fn search_locations(
         let local_osm_ids: std::collections::HashSet<i64> =
             local_results.iter().filter_map(|r| r.osm_id).collect();
 
+        let has_local = !local_results.is_empty();
+        let has_nominatim = !nominatim_results.is_empty();
         let mut combined = local_results;
         for nr in nominatim_results {
             if let Some(osm_id) = nr.osm_id {
@@ -206,9 +214,21 @@ async fn search_locations(
             combined.push(nr);
         }
 
-        Ok(Json(combined))
+        let source = match (has_local, has_nominatim) {
+            (true, true) => "mixed",
+            (false, true) => "nominatim",
+            _ => "cache",
+        };
+
+        Ok(Json(LocationSearchResponse {
+            results: combined,
+            source: source.into(),
+        }))
     } else {
-        Ok(Json(local_results))
+        Ok(Json(LocationSearchResponse {
+            results: local_results,
+            source: "cache".into(),
+        }))
     }
 }
 
@@ -291,4 +311,75 @@ pub fn routes() -> Router<AppState> {
         .route("/locations/search", get(search_locations))
         .route("/locations/osm/{osm_type}/{osm_id}", get(osm_lookup))
         .route("/locations/{id}", get(get_location))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: LocationSearchResponse wraps results in {results, source}.
+    #[test]
+    fn location_search_response_shape() {
+        let resp = LocationSearchResponse {
+            results: vec![LocationResponse {
+                id: Uuid::nil(),
+                name: "Helsinki".into(),
+                name_fi: Some("Helsinki".into()),
+                name_sv: Some("Helsingfors".into()),
+                osm_id: Some(34914),
+                osm_type: Some("relation".into()),
+                admin_level: Some(8),
+                location_type: "municipality".into(),
+                country: Some("FI".into()),
+                latitude: Some(60.1699),
+                longitude: Some(24.9384),
+                source: "cache".into(),
+            }],
+            source: "cache".into(),
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        // Must have {results, source} — NOT a bare array
+        assert!(obj.contains_key("results"), "must have 'results' key");
+        assert!(obj.contains_key("source"), "must have 'source' key");
+        assert!(obj["results"].is_array());
+        assert_eq!(obj["source"], "cache");
+
+        let items = obj["results"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+
+        let loc = items[0].as_object().unwrap();
+        let loc_keys = [
+            "id",
+            "name",
+            "nameFi",
+            "nameSv",
+            "osmId",
+            "osmType",
+            "adminLevel",
+            "locationType",
+            "country",
+            "latitude",
+            "longitude",
+            "source",
+        ];
+        for key in &loc_keys {
+            assert!(loc.contains_key(*key), "missing location field: {key}");
+        }
+    }
+
+    /// Verify source detection: mixed when both local and nominatim results.
+    #[test]
+    fn location_search_source_values() {
+        for source in &["cache", "nominatim", "mixed"] {
+            let resp = LocationSearchResponse {
+                results: vec![],
+                source: (*source).to_string(),
+            };
+            let json = serde_json::to_value(&resp).unwrap();
+            assert_eq!(json["source"], *source);
+        }
+    }
 }
