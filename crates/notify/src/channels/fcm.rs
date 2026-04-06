@@ -77,12 +77,11 @@ impl FcmClient {
     }
 
     pub async fn send(&self, device_token: &str, title: &str, body: &str) {
-        let config = match &self.config {
-            Some(c) => c,
-            None => {
-                info!(token = device_token, title, "FCM not configured, skipping");
-                return;
-            }
+        let config = if let Some(c) = &self.config {
+            c
+        } else {
+            info!(token = device_token, title, "FCM not configured, skipping");
+            return;
         };
 
         let jwt = match self.create_access_token(config) {

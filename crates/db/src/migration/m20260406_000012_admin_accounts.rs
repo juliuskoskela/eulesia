@@ -11,7 +11,7 @@ impl MigrationTrait for Migration {
         manager
             .get_connection()
             .execute_unprepared(
-                r#"
+                r"
                 CREATE TABLE IF NOT EXISTS admin_accounts (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                     username VARCHAR(50) UNIQUE NOT NULL,
@@ -37,7 +37,7 @@ impl MigrationTrait for Migration {
 
                 CREATE INDEX IF NOT EXISTS admin_sessions_admin_idx ON admin_sessions(admin_id);
                 CREATE INDEX IF NOT EXISTS admin_sessions_token_idx ON admin_sessions(token_hash);
-                "#,
+                ",
             )
             .await?;
 

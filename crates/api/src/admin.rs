@@ -999,7 +999,7 @@ async fn admin_get_settings(
         .await
         .map_err(db_err)?;
 
-    let registration_open = row.map_or(true, |r| r.value == "true");
+    let registration_open = row.is_none_or(|r| r.value == "true");
 
     Ok(Json(SiteSettingsResponse { registration_open }))
 }
@@ -1248,8 +1248,7 @@ async fn admin_modlog(
         ))
         .await
         .map_err(db_err)?
-        .map(|r| r.try_get_by_index::<i64>(0).unwrap_or(0))
-        .unwrap_or(0);
+        .map_or(0, |r| r.try_get_by_index::<i64>(0).unwrap_or(0));
 
     let data_sql = r"SELECT ma.id, ma.admin_id, COALESCE(u.name, aa.name, 'system') AS admin_name,
                  ma.action_type, ma.target_type, ma.target_id, ma.reason, ma.created_at
@@ -1324,8 +1323,7 @@ async fn admin_transparency(
         ))
         .await
         .map_err(db_err)?
-        .map(|r| r.try_get_by_index::<i64>(0).unwrap_or(0))
-        .unwrap_or(0);
+        .map_or(0, |r| r.try_get_by_index::<i64>(0).unwrap_or(0));
 
     let type_rows = state
         .db

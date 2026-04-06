@@ -103,22 +103,10 @@ mod tests {
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use axum::middleware::{self, Next};
-    use axum::response::IntoResponse;
+    use axum::middleware::{self};
     use axum::routing::get;
     use http_body_util::BodyExt;
     use tower::ServiceExt;
-
-    /// Helper: build a router with wrap_response middleware and a handler.
-    fn app_with<F, R>(handler: F) -> Router
-    where
-        F: axum::handler::Handler<(), ()> + Clone,
-        R: IntoResponse,
-    {
-        Router::new()
-            .route("/test", get(handler))
-            .layer(middleware::from_fn(wrap_response))
-    }
 
     /// Empty `()` response gets wrapped as {success:true, data:null}.
     #[tokio::test]

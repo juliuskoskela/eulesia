@@ -343,8 +343,6 @@ fn all_entities_have_correct_table_names() {
 /// Verify clubs entity has the enrichment columns added by migration 000013.
 #[test]
 fn clubs_entity_has_enrichment_columns() {
-    use sea_orm::ColumnTrait;
-
     // These columns must exist in the entity for the migration to be useful.
     let _ = clubs::Column::CoverImageUrl.as_str();
     let _ = clubs::Column::Rules.as_str();

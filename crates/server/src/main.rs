@@ -241,15 +241,15 @@ async fn bootstrap_admins(db: &sea_orm::DatabaseConnection, path: &str) -> anyho
             .await??;
 
         let sql = if entry.reseed_password {
-            r#"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
+            r"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
                VALUES (gen_random_uuid(), $1, $2, $3, $4, 'sops', $5, NOW(), NOW())
                ON CONFLICT (username) DO UPDATE SET
-                 password_hash = $3, name = $4, email = $2, updated_at = NOW()"#
+                 password_hash = $3, name = $4, email = $2, updated_at = NOW()"
         } else {
-            r#"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
+            r"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
                VALUES (gen_random_uuid(), $1, $2, $3, $4, 'sops', $5, NOW(), NOW())
                ON CONFLICT (username) DO UPDATE SET
-                 name = $4, email = $2, updated_at = NOW()"#
+                 name = $4, email = $2, updated_at = NOW()"
         };
 
         db.execute(Statement::from_sql_and_values(

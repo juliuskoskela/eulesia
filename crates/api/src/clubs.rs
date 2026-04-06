@@ -310,7 +310,7 @@ fn normalize_rules(val: Option<serde_json::Value>) -> Option<String> {
 
 /// Parse a club member's stored role string into a `ClubRole`.
 fn parse_club_role(role: &str) -> Result<ClubRole, ApiError> {
-    role.parse::<ClubRole>().map_err(|e| ApiError::Internal(e))
+    role.parse::<ClubRole>().map_err(ApiError::Internal)
 }
 
 /// Fetch the club member record for a user. Returns `None` if not a member.
@@ -631,8 +631,7 @@ pub async fn get_club(
     let creator_role = all_members
         .iter()
         .find(|m| m.user_id == creator_id)
-        .map(|m| m.role.clone())
-        .unwrap_or_else(|| "owner".into());
+        .map_or_else(|| "owner".into(), |m| m.role.clone());
     if let Ok(Some(creator_user)) = UserRepo::find_by_id(&state.db, creator_id).await {
         resp.creator = Some(ClubMemberSummary {
             id: creator_user.id,
@@ -1507,7 +1506,7 @@ pub async fn get_club_thread(
     let offset = comment_params.offset.unwrap_or(0);
     let limit = clamp_limit(comment_params.limit);
 
-    let (comments, comments_total) =
+    let (comments, _comments_total) =
         CommentRepo::list_for_thread(&state.db, path.thread_id, &[], sort, offset, limit)
             .await
             .map_err(db_err)?;

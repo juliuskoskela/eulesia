@@ -339,7 +339,7 @@ pub async fn get_thread(
     let offset = comment_params.offset.unwrap_or(0);
     let limit = clamp_limit(comment_params.limit);
 
-    let (comments, comments_total) =
+    let (comments, _comments_total) =
         CommentRepo::list_for_thread(&state.db, id, &excluded, sort, offset, limit)
             .await
             .map_err(db_err)?;
