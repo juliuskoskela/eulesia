@@ -194,7 +194,6 @@ async fn join_waitlist(
         .map_err(|e| ApiError::Database(format!("insert waitlist: {e}")))?;
 
     Ok(Json(serde_json::json!({
-        "success": true,
         "message": "You have been added to the waitlist"
     })))
 }
@@ -551,14 +550,15 @@ mod tests {
     /// Contract test: join_waitlist returns simple success (not full entry).
     #[test]
     fn join_response_is_simple_success() {
+        // Handler returns just {message}, response wrapper adds the envelope.
         let resp = serde_json::json!({
-            "success": true,
             "message": "You have been added to the waitlist"
         });
 
         let obj = resp.as_object().unwrap();
-        assert_eq!(obj["success"], true);
         assert!(obj.contains_key("message"));
+        // Must NOT contain its own "success" — that's the wrapper's job
+        assert!(!obj.contains_key("success"));
         // Must NOT contain full waitlist entry fields
         assert!(!obj.contains_key("email"));
         assert!(!obj.contains_key("status"));
