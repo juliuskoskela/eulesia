@@ -139,6 +139,8 @@ pub struct ClubListParams {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ClubMemberSummary {
     pub id: Uuid,
@@ -148,6 +150,8 @@ pub struct ClubMemberSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ClubResponse {
     pub id: Uuid,
@@ -176,6 +180,8 @@ pub struct ClubResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ClubListResponse {
     pub items: Vec<ClubResponse>,
@@ -192,6 +198,8 @@ pub struct InviteRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationClubSummary {
     pub id: Uuid,
@@ -201,6 +209,8 @@ pub struct InvitationClubSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationUserSummary {
     pub id: Uuid,
@@ -209,6 +219,8 @@ pub struct InvitationUserSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationResponse {
     pub id: Uuid,

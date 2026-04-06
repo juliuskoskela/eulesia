@@ -20,6 +20,8 @@ use eulesia_db::entities::{municipalities, places};
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct MapPoint {
     pub id: Uuid,
@@ -37,6 +39,8 @@ struct MapPointsResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct PlaceResponse {
     pub id: Uuid,
@@ -95,6 +99,8 @@ pub struct CategoryCount {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct MunicipalityResponse {
     pub id: Uuid,
