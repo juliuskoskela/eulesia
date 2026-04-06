@@ -220,7 +220,10 @@ pub async fn send(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    let is_plaintext = encryption == "none";
+    // Use plaintext path if conversation is plaintext OR if the sender has
+    // no registered device (frontend doesn't implement E2EE device registration
+    // yet, so all browser-sent messages go through the plaintext path).
+    let is_plaintext = encryption == "none" || auth.device_id.is_none();
 
     if is_plaintext {
         // Plaintext path — no device binding, no ciphertext, no device queue.
