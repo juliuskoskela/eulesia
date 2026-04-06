@@ -31,8 +31,16 @@ pub async fn wrap_response(req: Request<Body>, next: Next) -> Response {
         .and_then(|v| v.to_str().ok())
         .is_some_and(|ct| ct.starts_with("application/json"));
 
-    // Non-JSON success responses (e.g. binary uploads) — pass through.
-    if !is_json && status.is_success() {
+    // Non-JSON success with a real body (e.g. binary uploads) — pass through.
+    // Empty-body successes (unit `()` returns) are wrapped below so the
+    // frontend always receives `{ "success": true, "data": null }`.
+    let has_body = response
+        .headers()
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<usize>().ok())
+        .is_some_and(|len| len > 0);
+    if !is_json && has_body && status.is_success() {
         return response;
     }
 
