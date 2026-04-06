@@ -166,12 +166,10 @@ async fn shutdown_signal(cancel: CancellationToken) {
 
 /// Bootstrap admin accounts from a SOPS-managed JSON file.
 ///
-/// Idempotent: inserts new accounts, optionally reseeds passwords for
-/// existing ones when `reseedPassword` is true.
+/// Idempotent: inserts new accounts, reseeds passwords when
+/// `reseedPassword` is true. Safe to run on every server start.
 async fn bootstrap_admins(db: &sea_orm::DatabaseConnection, path: &str) -> anyhow::Result<()> {
     use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
-
-    let content = tokio::fs::read_to_string(path).await?;
 
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
@@ -185,47 +183,40 @@ async fn bootstrap_admins(db: &sea_orm::DatabaseConnection, path: &str) -> anyho
         reseed_password: bool,
     }
 
+    let content = tokio::fs::read_to_string(path).await?;
     let entries: Vec<AdminEntry> = serde_json::from_str(&content)?;
     info!(count = entries.len(), "bootstrapping admin accounts");
 
     for entry in &entries {
-        let hash = eulesia_auth::password::hash_password(&entry.password)?;
-        let email_val: Option<&str> = entry.email.as_deref();
+        // Argon2 is CPU-intensive — run off the async executor.
+        let pw = entry.password.clone();
+        let hash = tokio::task::spawn_blocking(move || eulesia_auth::password::hash_password(&pw))
+            .await??;
 
-        // Upsert: insert if not exists, optionally reseed password.
-        if entry.reseed_password {
-            db.execute(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                r#"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
-                   VALUES (gen_random_uuid(), $1, $2, $3, $4, 'sops', $5, NOW(), NOW())
-                   ON CONFLICT (username) DO UPDATE SET
-                     password_hash = $3, name = $4, email = $2, updated_at = NOW()"#,
-                [
-                    entry.username.clone().into(),
-                    email_val.map(|s| s.to_string()).into(),
-                    hash.clone().into(),
-                    entry.name.clone().into(),
-                    entry.managed_key.clone().into(),
-                ],
-            ))
-            .await?;
+        let sql = if entry.reseed_password {
+            r#"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, $4, 'sops', $5, NOW(), NOW())
+               ON CONFLICT (username) DO UPDATE SET
+                 password_hash = $3, name = $4, email = $2, updated_at = NOW()"#
         } else {
-            db.execute(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                r#"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
-                   VALUES (gen_random_uuid(), $1, $2, $3, $4, 'sops', $5, NOW(), NOW())
-                   ON CONFLICT (username) DO UPDATE SET
-                     name = $4, email = $2, updated_at = NOW()"#,
-                [
-                    entry.username.clone().into(),
-                    email_val.map(|s| s.to_string()).into(),
-                    hash.clone().into(),
-                    entry.name.clone().into(),
-                    entry.managed_key.clone().into(),
-                ],
-            ))
-            .await?;
-        }
+            r#"INSERT INTO admin_accounts (id, username, email, password_hash, name, managed_by, managed_key, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1, $2, $3, $4, 'sops', $5, NOW(), NOW())
+               ON CONFLICT (username) DO UPDATE SET
+                 name = $4, email = $2, updated_at = NOW()"#
+        };
+
+        db.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            sql,
+            [
+                entry.username.as_str().into(),
+                entry.email.as_deref().into(),
+                hash.as_str().into(),
+                entry.name.as_str().into(),
+                entry.managed_key.as_str().into(),
+            ],
+        ))
+        .await?;
 
         info!(username = %entry.username, reseed = entry.reseed_password, "admin account synced");
     }
