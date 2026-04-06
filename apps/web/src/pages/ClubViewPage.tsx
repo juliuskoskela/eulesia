@@ -66,7 +66,7 @@ export function ClubViewPage() {
   const { data: categoriesData } = useClubCategories();
   const availableCategories = categoriesData?.map((c) => c.category) || [];
   const canManageInvitations =
-    club?.memberRole === "admin" || club?.memberRole === "moderator";
+    club?.memberRole === "owner" || club?.memberRole === "moderator";
   const { data: pendingInvitations } = useClubInvitations(
     clubId || "",
     canManageInvitations,
@@ -107,7 +107,19 @@ export function ClubViewPage() {
     setEditIsPublic(club.isPublic);
     setEditCoverImage(club.coverImageUrl || null);
     setEditAddress(club.address || "");
-    setEditRules(Array.isArray(club.rules) ? club.rules : []);
+    setEditRules(() => {
+      if (Array.isArray(club.rules)) return club.rules;
+      if (typeof club.rules === "string") {
+        try {
+          const parsed = JSON.parse(club.rules);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          /* not JSON */
+        }
+        return [club.rules];
+      }
+      return [];
+    });
     setEditRuleInput("");
     setEditLocation(null);
     setShowSettings(true);
@@ -269,7 +281,7 @@ export function ClubViewPage() {
   }
 
   const isAdminOrMod =
-    club.memberRole === "admin" || club.memberRole === "moderator";
+    club.memberRole === "owner" || club.memberRole === "moderator";
   const moderators = club.moderators || [];
   const members = club.members || [];
   const threads = club.threads || [];
@@ -789,7 +801,7 @@ export function ClubViewPage() {
               </div>
 
               {/* Danger Zone — Delete Club */}
-              {club.memberRole === "admin" && (
+              {club.memberRole === "owner" && (
                 <div className="border-t border-gray-200 dark:border-gray-800 pt-4 mt-4">
                   <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">
                     {t("dangerZone")}
@@ -846,19 +858,29 @@ export function ClubViewPage() {
             </div>
             <div className="p-4">
               <ol className="space-y-2">
-                {(Array.isArray(club.rules) ? club.rules : []).map(
-                  (rule: string, i: number) => (
-                    <li
-                      key={i}
-                      className="flex gap-2 text-sm text-gray-700 dark:text-gray-300"
-                    >
-                      <span className="text-gray-400 dark:text-gray-500 font-medium">
-                        {i + 1}.
-                      </span>
-                      <span>{rule}</span>
-                    </li>
-                  ),
-                )}
+                {(() => {
+                  if (Array.isArray(club.rules)) return club.rules as string[];
+                  if (typeof club.rules === "string") {
+                    try {
+                      const parsed = JSON.parse(club.rules);
+                      if (Array.isArray(parsed)) return parsed as string[];
+                    } catch {
+                      /* not JSON — treat as single rule */
+                    }
+                    return [club.rules];
+                  }
+                  return [] as string[];
+                })().map((rule: string, i: number) => (
+                  <li
+                    key={i}
+                    className="flex gap-2 text-sm text-gray-700 dark:text-gray-300"
+                  >
+                    <span className="text-gray-400 dark:text-gray-500 font-medium">
+                      {i + 1}.
+                    </span>
+                    <span>{rule}</span>
+                  </li>
+                ))}
               </ol>
             </div>
           </div>
@@ -927,7 +949,7 @@ export function ClubViewPage() {
                       <span className="text-gray-700 dark:text-gray-300">
                         {member.name}
                       </span>
-                      {member.role === "admin" && (
+                      {member.role === "owner" && (
                         <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">
                           {t("moderation.admin")}
                         </span>
@@ -954,7 +976,7 @@ export function ClubViewPage() {
                       <span className="text-gray-700 dark:text-gray-300">
                         {member.name}
                       </span>
-                      {member.role === "admin" && (
+                      {member.role === "owner" && (
                         <span className="text-[10px] text-teal-700 bg-teal-100 px-1 rounded">
                           {t("moderation.admin")}
                         </span>
@@ -991,12 +1013,12 @@ export function ClubViewPage() {
                       />
                       <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 py-1 z-20">
                         {/* Role change - admin only */}
-                        {club.memberRole === "admin" && (
+                        {club.memberRole === "owner" && (
                           <>
                             <div className="px-3 py-1.5 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase">
                               {t("moderation.changeRole")}
                             </div>
-                            {(["member", "moderator", "admin"] as const).map(
+                            {(["member", "moderator", "owner"] as const).map(
                               (role) => (
                                 <button
                                   key={role}
@@ -1025,7 +1047,7 @@ export function ClubViewPage() {
                         {/* Remove member - admin + mod (mod can't remove admin/mod) */}
                         {!(
                           club.memberRole === "moderator" &&
-                          (member.role === "admin" ||
+                          (member.role === "owner" ||
                             member.role === "moderator")
                         ) && (
                           <button

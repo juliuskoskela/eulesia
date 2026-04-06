@@ -104,7 +104,8 @@ pub struct CreateClubRequest {
     pub is_public: Option<bool>,
     pub avatar_url: Option<String>,
     pub cover_image_url: Option<String>,
-    pub rules: Option<String>,
+    /// Accepts both a JSON string and a string[] array from the frontend.
+    pub rules: Option<serde_json::Value>,
     pub address: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
@@ -119,7 +120,8 @@ pub struct UpdateClubRequest {
     pub is_public: Option<bool>,
     pub avatar_url: Option<String>,
     pub cover_image_url: Option<String>,
-    pub rules: Option<String>,
+    /// Accepts both a JSON string and a string[] array from the frontend.
+    pub rules: Option<serde_json::Value>,
     pub address: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
@@ -277,6 +279,23 @@ fn slugify(name: &str) -> String {
         .join("-")
 }
 
+/// Normalize rules from the frontend: accepts string, string[], or null.
+/// Stores as a JSON string in the DB.
+fn normalize_rules(val: Option<serde_json::Value>) -> Option<String> {
+    match val {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::String(s)) => {
+            if s.is_empty() {
+                None
+            } else {
+                Some(s)
+            }
+        }
+        Some(v @ serde_json::Value::Array(_)) => Some(v.to_string()),
+        Some(other) => Some(other.to_string()),
+    }
+}
+
 /// Parse a club member's stored role string into a `ClubRole`.
 fn parse_club_role(role: &str) -> Result<ClubRole, ApiError> {
     role.parse::<ClubRole>().map_err(|e| ApiError::Internal(e))
@@ -431,7 +450,7 @@ pub async fn create_club(
         creator_id: Set(auth.user_id.0),
         avatar_url: Set(req.avatar_url),
         cover_image_url: Set(req.cover_image_url),
-        rules: Set(req.rules),
+        rules: Set(normalize_rules(req.rules)),
         address: Set(req.address),
         latitude: Set(latitude),
         longitude: Set(longitude),
@@ -693,8 +712,8 @@ pub async fn update_club(
     if let Some(cover_image_url) = req.cover_image_url {
         am.cover_image_url = Set(Some(cover_image_url));
     }
-    if let Some(rules) = req.rules {
-        am.rules = Set(Some(rules));
+    if req.rules.is_some() {
+        am.rules = Set(normalize_rules(req.rules));
     }
     if let Some(address) = req.address {
         am.address = Set(Some(address));
@@ -2102,9 +2121,9 @@ mod tests {
         }
     }
 
-    /// Verify CreateClubRequest accepts new enrichment fields.
+    /// Verify CreateClubRequest accepts enrichment fields with rules as string.
     #[test]
-    fn create_club_request_accepts_enrichment_fields() {
+    fn create_club_request_accepts_rules_string() {
         let json = r#"{
             "name": "Test",
             "coverImageUrl": "https://example.com/cover.png",
@@ -2118,8 +2137,28 @@ mod tests {
             req.cover_image_url.as_deref(),
             Some("https://example.com/cover.png")
         );
-        assert_eq!(req.rules.as_deref(), Some("Be nice"));
+        assert_eq!(normalize_rules(req.rules), Some("Be nice".into()));
         assert_eq!(req.latitude, Some(60.17));
+    }
+
+    /// Verify CreateClubRequest accepts rules as string[] (frontend format).
+    #[test]
+    fn create_club_request_accepts_rules_array() {
+        let json = r#"{"name": "Test", "rules": ["Be nice", "No spam"]}"#;
+        let req: CreateClubRequest = serde_json::from_str(json).unwrap();
+        let stored = normalize_rules(req.rules);
+        assert!(stored.is_some());
+        // Array is serialized as JSON string
+        let parsed: Vec<String> = serde_json::from_str(&stored.unwrap()).unwrap();
+        assert_eq!(parsed, vec!["Be nice", "No spam"]);
+    }
+
+    /// Verify null rules are handled.
+    #[test]
+    fn create_club_request_accepts_null_rules() {
+        let json = r#"{"name": "Test", "rules": null}"#;
+        let req: CreateClubRequest = serde_json::from_str(json).unwrap();
+        assert!(normalize_rules(req.rules).is_none());
     }
 
     /// ClubRole is a proper enum — "admin" does not parse.
