@@ -112,8 +112,8 @@ pub struct MunicipalityResponse {
 // ---------------------------------------------------------------------------
 
 /// Decimal to f64 via string — acceptable for lat/lon precision.
-fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> f64 {
-    d.to_string().parse().unwrap_or(0.0)
+fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> Option<f64> {
+    d.to_string().parse::<f64>().ok()
 }
 
 fn place_to_response(p: places::Model) -> PlaceResponse {
@@ -122,8 +122,8 @@ fn place_to_response(p: places::Model) -> PlaceResponse {
         name: p.name,
         name_fi: p.name_fi,
         description: p.description,
-        latitude: p.latitude.map(decimal_to_f64),
-        longitude: p.longitude.map(decimal_to_f64),
+        latitude: p.latitude.and_then(decimal_to_f64),
+        longitude: p.longitude.and_then(decimal_to_f64),
         place_type: p.r#type,
         category: p.category,
         municipality_id: p.municipality_id,
@@ -140,8 +140,8 @@ fn municipality_to_response(m: municipalities::Model) -> MunicipalityResponse {
         region: m.region,
         country: m.country,
         population: m.population,
-        latitude: m.latitude.map(decimal_to_f64),
-        longitude: m.longitude.map(decimal_to_f64),
+        latitude: m.latitude.and_then(decimal_to_f64),
+        longitude: m.longitude.and_then(decimal_to_f64),
     }
 }
 

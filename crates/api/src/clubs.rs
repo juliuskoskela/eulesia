@@ -337,8 +337,8 @@ pub async fn require_club_role(
 
 /// Helper to build a `ClubResponse` from a club model, optionally including
 /// the requesting user's role.
-fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> f64 {
-    d.to_string().parse().unwrap_or(0.0)
+fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> Option<f64> {
+    d.to_string().parse::<f64>().ok()
 }
 
 fn club_to_response(club: clubs::Model, member_role: Option<String>) -> ClubResponse {
@@ -356,8 +356,8 @@ fn club_to_response(club: clubs::Model, member_role: Option<String>) -> ClubResp
         cover_image_url: club.cover_image_url,
         rules: club.rules,
         address: club.address,
-        latitude: club.latitude.map(decimal_to_f64),
-        longitude: club.longitude.map(decimal_to_f64),
+        latitude: club.latitude.and_then(decimal_to_f64),
+        longitude: club.longitude.and_then(decimal_to_f64),
         member_count: club.member_count,
         is_member,
         member_role,

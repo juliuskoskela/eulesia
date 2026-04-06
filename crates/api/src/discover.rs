@@ -45,8 +45,8 @@ async fn explore(
     State(state): State<AppState>,
     Query(params): Query<ExploreParams>,
 ) -> Result<Json<DiscoverListResponse>, ApiError> {
-    let limit = params.limit.min(100);
-    let offset = params.offset;
+    let limit = params.limit.clamp(1, 100);
+    let offset = params.offset.max(0);
 
     // Build dynamic WHERE clauses.
     let mut conditions = Vec::new();

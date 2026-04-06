@@ -258,7 +258,8 @@ async fn cache_headers(req: axum::extract::Request, next: Next) -> Response {
         return resp;
     }
 
-    let is_hashed_asset = path.starts_with("/assets/");
+    // Only cache successful responses for hashed assets — never cache 404/5xx
+    let is_hashed_asset = path.starts_with("/assets/") && resp.status().is_success();
 
     let value = if is_hashed_asset {
         "public, max-age=31536000, immutable"
