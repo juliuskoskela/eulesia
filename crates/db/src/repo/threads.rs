@@ -30,7 +30,7 @@ impl ThreadRepo {
         db: &DatabaseConnection,
         scope: Option<&str>,
         municipality_id: Option<Uuid>,
-        author_id: Option<Uuid>,
+        author_ids: Option<&[Uuid]>,
         thread_ids: Option<&[Uuid]>,
         excluded_author_ids: &[Uuid],
         sort: &str,
@@ -49,8 +49,15 @@ impl ThreadRepo {
         if let Some(mid) = municipality_id {
             query = query.filter(threads::Column::MunicipalityId.eq(mid));
         }
-        if let Some(aid) = author_id {
-            query = query.filter(threads::Column::AuthorId.eq(aid));
+        if let Some(aids) = author_ids {
+            if aids.is_empty() {
+                return Ok((vec![], 0));
+            }
+            if aids.len() == 1 {
+                query = query.filter(threads::Column::AuthorId.eq(aids[0]));
+            } else {
+                query = query.filter(threads::Column::AuthorId.is_in(aids.to_vec()));
+            }
         }
         if let Some(ids) = thread_ids {
             if ids.is_empty() {

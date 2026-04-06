@@ -265,51 +265,6 @@ pub async fn list_threads(
         None
     };
 
-    // For following feed, we need to filter by author IDs.
-    // Use thread_ids approach: fetch thread IDs for followed authors first.
-    let following_thread_ids = if let Some(ref author_ids) = following_author_id {
-        // Get all thread IDs by these authors (using a list query with each author)
-        // More efficient: use a single query
-        let mut all_ids = Vec::new();
-        for aid in author_ids {
-            let (threads, _) = ThreadRepo::list(
-                &state.db,
-                scope_filter,
-                params.municipality_id,
-                Some(*aid),
-                None,
-                &excluded,
-                "recent",
-                None,
-                0,
-                10_000,
-            )
-            .await
-            .map_err(db_err)?;
-            all_ids.extend(threads.iter().map(|t| t.id));
-        }
-        Some(all_ids)
-    } else {
-        None
-    };
-
-    // Merge tag_ids and following_thread_ids if both present
-    let merged_ids = match (&tag_ids, &following_thread_ids) {
-        (Some(tags), Some(follows)) => {
-            let tag_set: HashSet<Uuid> = tags.iter().copied().collect();
-            Some(
-                follows
-                    .iter()
-                    .copied()
-                    .filter(|id| tag_set.contains(id))
-                    .collect::<Vec<_>>(),
-            )
-        }
-        (Some(tags), None) => Some(tags.clone()),
-        (None, Some(follows)) => Some(follows.clone()),
-        (None, None) => None,
-    };
-
     let (threads, total) = ThreadRepo::list(
         &state.db,
         if following_author_id.is_some() {
@@ -318,8 +273,8 @@ pub async fn list_threads(
             scope_filter
         },
         params.municipality_id,
-        None,
-        merged_ids.as_deref(),
+        following_author_id.as_deref(),
+        tag_ids.as_deref(),
         &excluded,
         sort,
         params.top_period.as_deref(),

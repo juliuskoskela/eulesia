@@ -617,38 +617,42 @@ pub async fn list(
         std::collections::HashMap::new();
 
     if !direct_conv_ids.is_empty() {
-        // Get all memberships for direct conversations to find the other user
-        let mut other_ids: Vec<Uuid> = Vec::new();
-        for &conv_id in &direct_conv_ids {
-            let members = ConversationRepo::active_members(&state.db, conv_id)
-                .await
-                .map_err(db_err)?;
-            if let Some(other) = members.iter().find(|m| m.user_id != caller) {
-                other_ids.push(other.user_id);
+        // Single batch query: fetch all memberships for direct conversations.
+        use eulesia_db::entities::memberships;
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        let all_direct_members = memberships::Entity::find()
+            .filter(memberships::Column::ConversationId.is_in(direct_conv_ids.clone()))
+            .filter(memberships::Column::LeftAt.is_null())
+            .all(&*state.db)
+            .await
+            .map_err(db_err)?;
+
+        // Build conv_id → other_user_id map (the member who isn't the caller).
+        let mut conv_to_other: std::collections::HashMap<Uuid, Uuid> =
+            std::collections::HashMap::new();
+        for m in &all_direct_members {
+            if m.user_id != caller {
+                conv_to_other.insert(m.conversation_id, m.user_id);
             }
         }
 
+        let other_ids: Vec<Uuid> = conv_to_other.values().copied().collect();
         let other_users = UserRepo::find_by_ids(&state.db, &other_ids)
             .await
             .map_err(db_err)?;
         let user_lookup: std::collections::HashMap<Uuid, _> =
             other_users.into_iter().map(|u| (u.id, u)).collect();
 
-        for &conv_id in &direct_conv_ids {
-            let members = ConversationRepo::active_members(&state.db, conv_id)
-                .await
-                .map_err(db_err)?;
-            if let Some(other) = members.iter().find(|m| m.user_id != caller) {
-                if let Some(u) = user_lookup.get(&other.user_id) {
-                    other_user_map.insert(
-                        conv_id,
-                        ConversationUserSummary {
-                            id: u.id,
-                            name: u.name.clone(),
-                            avatar_url: u.avatar_url.clone(),
-                        },
-                    );
-                }
+        for (conv_id, other_uid) in &conv_to_other {
+            if let Some(u) = user_lookup.get(other_uid) {
+                other_user_map.insert(
+                    *conv_id,
+                    ConversationUserSummary {
+                        id: u.id,
+                        name: u.name.clone(),
+                        avatar_url: u.avatar_url.clone(),
+                    },
+                );
             }
         }
     }

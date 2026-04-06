@@ -513,15 +513,27 @@ async fn add_room_member(
     }
 
     let now = chrono::Utc::now().fixed_offset();
-    club_members::ActiveModel {
+    let insert_result = club_members::ActiveModel {
         club_id: Set(room_id),
         user_id: Set(req.user_id),
         role: Set("member".into()),
         joined_at: Set(now),
     }
     .insert(&*state.db)
-    .await
-    .map_err(db_err)?;
+    .await;
+
+    match insert_result {
+        Ok(_) => {}
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("unique") || msg.contains("duplicate") {
+                return Ok(Json(
+                    serde_json::json!({ "added": false, "reason": "already a member" }),
+                ));
+            }
+            return Err(db_err(e));
+        }
+    }
 
     // Increment member count.
     clubs::Entity::update_many()

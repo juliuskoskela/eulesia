@@ -1,4 +1,3 @@
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::{info, warn};
@@ -111,6 +110,13 @@ impl FcmClient {
                 return;
             }
         };
+
+        if !token_resp.status().is_success() {
+            let status = token_resp.status();
+            let body = token_resp.text().await.unwrap_or_default();
+            warn!(status = %status, body = %body, "FCM OAuth2 token exchange returned error");
+            return;
+        }
 
         #[derive(Deserialize)]
         struct TokenResponse {

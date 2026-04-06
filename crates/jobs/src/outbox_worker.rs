@@ -128,9 +128,10 @@ async fn process_event(
                     .send_email(email, subject, &body)
                     .await
                     .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
+                info!(email = %email, "magic link email sent");
+            } else {
+                info!(email = %email, "magic link email skipped (dispatcher not configured)");
             }
-
-            info!(email = %email, "magic link email sent");
             Ok(())
         }
         other => {

@@ -44,6 +44,14 @@ impl ConnectionRegistry {
         instance_id: Uuid,
         user_id: Uuid,
     ) {
+        // If this connection_id already exists (reconnect), remove the old
+        // user→connection mapping before inserting the replacement.
+        if let Some((_, old)) = self.connections.remove(&connection_id) {
+            if let Some(mut ids) = self.user_connections.get_mut(&old.user_id) {
+                ids.retain(|id| *id != connection_id);
+            }
+        }
+
         self.connections.insert(
             connection_id,
             Connection {
@@ -52,10 +60,10 @@ impl ConnectionRegistry {
                 user_id,
             },
         );
-        self.user_connections
-            .entry(user_id)
-            .or_default()
-            .push(connection_id);
+        let mut ids = self.user_connections.entry(user_id).or_default();
+        if !ids.contains(&connection_id) {
+            ids.push(connection_id);
+        }
     }
 
     /// Unregister only if the stored instance matches. This prevents a
@@ -65,10 +73,13 @@ impl ConnectionRegistry {
             .connections
             .remove_if(connection_id, |_, conn| conn.instance_id == instance_id)
         {
-            // Clean up user→connection index.
-            if let Some(mut ids) = self.user_connections.get_mut(&conn.user_id) {
+            // Clean up user→connection index; remove entry when empty.
+            let user_id = conn.user_id;
+            if let Some(mut ids) = self.user_connections.get_mut(&user_id) {
                 ids.retain(|id| id != connection_id);
             }
+            self.user_connections
+                .remove_if(&user_id, |_, ids| ids.is_empty());
         }
     }
 

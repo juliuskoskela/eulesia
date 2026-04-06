@@ -71,7 +71,7 @@ async fn list_bookmarks(
     Query(params): Query<PaginationParams>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
     let offset = u64::try_from(params.offset).unwrap_or(0);
-    let limit = u64::try_from(params.limit).unwrap_or(50);
+    let limit = u64::try_from(params.limit).unwrap_or(50).max(1);
 
     let (bookmarks, total) = BookmarkRepo::list_for_user(&state.db, auth.user_id.0, offset, limit)
         .await

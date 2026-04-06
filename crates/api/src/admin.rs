@@ -1234,37 +1234,39 @@ async fn admin_modlog(
 
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(50).min(200);
+    let action_type = params.action_type.clone();
 
-    let type_filter = params
-        .action_type
-        .as_deref()
-        .map(|t| format!("AND ma.action_type = '{}'", t.replace('\'', "''")))
-        .unwrap_or_default();
-
-    let count_sql =
-        format!("SELECT COUNT(*)::bigint FROM moderation_actions ma WHERE true {type_filter}");
+    let count_sql = r"SELECT COUNT(*)::bigint
+          FROM moderation_actions ma
+          WHERE ($1::text IS NULL OR ma.action_type = $1)";
     let total: i64 = state
         .db
-        .query_one(Statement::from_string(DatabaseBackend::Postgres, count_sql))
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            count_sql,
+            [action_type.clone().into()],
+        ))
         .await
         .map_err(db_err)?
         .map(|r| r.try_get_by_index::<i64>(0).unwrap_or(0))
         .unwrap_or(0);
 
-    let data_sql = format!(
-        r"SELECT ma.id, ma.admin_id, COALESCE(u.name, aa.name, 'system') AS admin_name,
+    let data_sql = r"SELECT ma.id, ma.admin_id, COALESCE(u.name, aa.name, 'system') AS admin_name,
                  ma.action_type, ma.target_type, ma.target_id, ma.reason, ma.created_at
           FROM moderation_actions ma
           LEFT JOIN users u ON u.id = ma.admin_id
           LEFT JOIN admin_accounts aa ON aa.id = ma.admin_id
-          WHERE true {type_filter}
+          WHERE ($1::text IS NULL OR ma.action_type = $1)
           ORDER BY ma.created_at DESC
-          OFFSET {offset} LIMIT {limit}"
-    );
+          OFFSET $2 LIMIT $3";
 
     let rows = state
         .db
-        .query_all(Statement::from_string(DatabaseBackend::Postgres, data_sql))
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            data_sql,
+            [action_type.into(), offset.into(), limit.into()],
+        ))
         .await
         .map_err(db_err)?;
 
