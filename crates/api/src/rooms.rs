@@ -507,9 +507,7 @@ async fn add_room_member(
         .map_err(db_err)?;
 
     if existing.is_some() {
-        return Ok(Json(
-            serde_json::json!({ "added": false, "reason": "already a member" }),
-        ));
+        return Err(ApiError::Conflict("user is already a member".into()));
     }
 
     let now = chrono::Utc::now().fixed_offset();
@@ -527,9 +525,7 @@ async fn add_room_member(
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("unique") || msg.contains("duplicate") {
-                return Ok(Json(
-                    serde_json::json!({ "added": false, "reason": "already a member" }),
-                ));
+                return Err(ApiError::Conflict("user is already a member".into()));
             }
             return Err(db_err(e));
         }

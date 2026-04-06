@@ -21,7 +21,10 @@ function ConversationItem({ conversation }: { conversation: Conversation }) {
   const { t } = useTranslation("messages");
   const { otherUser, lastMessage, unreadCount, updatedAt } = conversation;
 
-  if (!otherUser) return null;
+  // For DMs use the other user's info; for groups use conversation name
+  const displayName =
+    otherUser?.name || conversation.name || t("groupConversation");
+  const avatarUrl = otherUser?.avatarUrl;
 
   return (
     <Link
@@ -30,15 +33,15 @@ function ConversationItem({ conversation }: { conversation: Conversation }) {
     >
       {/* Avatar */}
       <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-        {otherUser.avatarUrl ? (
+        {avatarUrl ? (
           <img
-            src={otherUser.avatarUrl}
+            src={avatarUrl}
             alt=""
             className="w-full h-full rounded-full object-cover"
           />
         ) : (
           <span className="text-white text-sm font-bold">
-            {getAvatarInitials(otherUser.name)}
+            {getAvatarInitials(displayName)}
           </span>
         )}
       </div>
@@ -49,7 +52,7 @@ function ConversationItem({ conversation }: { conversation: Conversation }) {
           <span
             className={`text-sm truncate ${unreadCount > 0 ? "font-bold text-gray-900 dark:text-gray-100" : "font-medium text-gray-900 dark:text-gray-100"}`}
           >
-            {otherUser.name}
+            {displayName}
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2">
             {formatMessageDate(lastMessage?.createdAt || updatedAt)}

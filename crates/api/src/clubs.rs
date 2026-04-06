@@ -608,22 +608,27 @@ pub async fn get_club(
     let creator_id = club.creator_id;
     let mut resp = club_to_response(club, member_role);
 
-    // Resolve creator
-    if let Ok(Some(creator_user)) = UserRepo::find_by_id(&state.db, creator_id).await {
-        resp.creator = Some(ClubMemberSummary {
-            id: creator_user.id,
-            name: creator_user.name,
-            avatar_url: creator_user.avatar_url,
-            role: "owner".into(),
-        });
-    }
-
-    // Fetch all members for moderators/members lists
+    // Fetch all members for moderators/members lists + creator role
     let all_members = club_members::Entity::find()
         .filter(club_members::Column::ClubId.eq(id))
         .all(&*state.db)
         .await
         .map_err(db_err)?;
+
+    // Resolve creator with their actual role from club_members
+    let creator_role = all_members
+        .iter()
+        .find(|m| m.user_id == creator_id)
+        .map(|m| m.role.clone())
+        .unwrap_or_else(|| "owner".into());
+    if let Ok(Some(creator_user)) = UserRepo::find_by_id(&state.db, creator_id).await {
+        resp.creator = Some(ClubMemberSummary {
+            id: creator_user.id,
+            name: creator_user.name,
+            avatar_url: creator_user.avatar_url,
+            role: creator_role,
+        });
+    }
 
     let member_user_ids: Vec<Uuid> = all_members.iter().map(|m| m.user_id).collect();
     let member_users = UserRepo::find_by_ids(&state.db, &member_user_ids)
