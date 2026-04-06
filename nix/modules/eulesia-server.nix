@@ -149,7 +149,7 @@ in {
 
     bootstrapAdminAccountsFile = mkOption {
       type = types.nullOr types.path;
-      default = config.services.eulesia.bootstrapAdminAccountsFile or null;
+      default = config.services.eulesia.auth.bootstrapAdminAccountsFile or null;
       description = "SOPS-managed JSON file with admin accounts to bootstrap on startup.";
     };
 
