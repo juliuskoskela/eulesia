@@ -445,6 +445,14 @@ pub async fn create_thread(
         .scope
         .ok_or_else(|| ApiError::BadRequest("scope is required".into()))?;
 
+    // Public threads must use local/national/european — "club" scope is only
+    // valid through the club thread creation endpoint.
+    if scope == ThreadScope::Club {
+        return Err(ApiError::BadRequest(
+            "scope 'club' is not valid for public threads; use POST /clubs/{id}/threads".into(),
+        ));
+    }
+
     if scope == ThreadScope::Local && req.municipality_id.is_none() {
         return Err(ApiError::BadRequest(
             "municipality_id is required for local scope".into(),

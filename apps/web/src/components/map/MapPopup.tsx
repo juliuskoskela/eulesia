@@ -39,7 +39,8 @@ export function MapPopup({ point, onViewDetails }: MapPopupProps) {
       case "thread":
         return `/agora/thread/${point.id}`;
       case "club":
-        return `/clubs/${point.id}`;
+        // Club map points are threads with a club_id — the id is the thread id
+        return `/agora/thread/${point.id}`;
       case "municipality":
         return `/kunnat/${point.id}`;
       default:

@@ -128,10 +128,16 @@ _: {
       '';
     };
 
+    rustToolchain = pkgs.rust-bin.stable.latest.default;
+
     checkGeneratedTypes = pkgs.writeShellApplication {
       name = "check-generated-types";
       runtimeInputs = with pkgs; [
         git
+        rustToolchain
+        pkg-config
+        openssl
+        libwebp
       ];
       text = ''
         set -euo pipefail
