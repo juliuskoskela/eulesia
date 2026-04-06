@@ -277,17 +277,17 @@ fn slugify(name: &str) -> String {
         .join("-")
 }
 
-/// Club role hierarchy: admin (3) > moderator (2) > member (1).
+/// Club role hierarchy: owner (3) > moderator (2) > member (1).
 fn role_level(role: &str) -> u8 {
     match role {
-        "admin" => 3,
+        "owner" => 3,
         "moderator" => 2,
         "member" => 1,
         _ => 0,
     }
 }
 
-const VALID_CLUB_ROLES: &[&str] = &["member", "moderator", "admin"];
+const VALID_CLUB_ROLES: &[&str] = &["member", "moderator", "owner"];
 
 /// Fetch the club member record for a user. Returns `None` if not a member.
 async fn get_membership(
@@ -449,18 +449,18 @@ pub async fn create_club(
     .await
     .map_err(db_err)?;
 
-    // Add creator as admin member.
+    // Add creator as owner member.
     club_members::ActiveModel {
         club_id: Set(club_id),
         user_id: Set(auth.user_id.0),
-        role: Set("admin".into()),
+        role: Set("owner".into()),
         joined_at: Set(now),
     }
     .insert(&*state.db)
     .await
     .map_err(db_err)?;
 
-    Ok(Json(club_to_response(club, Some("admin".into()))))
+    Ok(Json(club_to_response(club, Some("owner".into()))))
 }
 
 async fn list_clubs(
@@ -601,7 +601,7 @@ pub async fn get_club(
             id: creator_user.id,
             name: creator_user.name,
             avatar_url: creator_user.avatar_url,
-            role: "admin".into(),
+            role: "owner".into(),
         });
     }
 
@@ -723,7 +723,7 @@ pub async fn delete_club(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<(), ApiError> {
-    let _member = require_club_role(&state.db, id, auth.user_id.0, "admin").await?;
+    let _member = require_club_role(&state.db, id, auth.user_id.0, "owner").await?;
 
     // Delete invitations, members, then the club.
     club_invitations::Entity::delete_many()
@@ -829,17 +829,17 @@ pub async fn leave_club(
         .await?
         .ok_or_else(|| ApiError::NotFound("not a member".into()))?;
 
-    // Prevent last admin from leaving.
-    if member.role == "admin" {
-        let admin_count = club_members::Entity::find()
+    // Prevent last owner from leaving.
+    if member.role == "owner" {
+        let owner_count = club_members::Entity::find()
             .filter(club_members::Column::ClubId.eq(id))
-            .filter(club_members::Column::Role.eq("admin"))
+            .filter(club_members::Column::Role.eq("owner"))
             .count(&*state.db)
             .await
             .map_err(db_err)?;
-        if admin_count <= 1 {
+        if owner_count <= 1 {
             return Err(ApiError::BadRequest(
-                "cannot leave: you are the only admin".into(),
+                "cannot leave: you are the only owner".into(),
             ));
         }
     }
@@ -877,7 +877,7 @@ async fn change_member_role(
     Path(path): Path<MemberPath>,
     Json(req): Json<ChangeRoleRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let _admin = require_club_role(&state.db, path.id, auth.user_id.0, "admin").await?;
+    let _admin = require_club_role(&state.db, path.id, auth.user_id.0, "owner").await?;
 
     if !VALID_CLUB_ROLES.contains(&req.role.as_str()) {
         return Err(ApiError::BadRequest(format!(
@@ -1576,8 +1576,7 @@ pub async fn get_club_thread(
     }
     obj.insert("comments".into(), comments_json);
     obj.insert("memberRole".into(), serde_json::json!(member_role));
-    // Club/room owners are stored with the "admin" role, not "owner"
-    let is_owner = matches!(member_role.as_deref(), Some("admin" | "owner"));
+    let is_owner = member_role.as_deref() == Some("owner");
     obj.insert("isRoomOwner".into(), serde_json::json!(is_owner));
 
     Ok(Json(resp))
@@ -1917,9 +1916,9 @@ mod tests {
             creator_id: Uuid::nil(),
             creator: Some(ClubMemberSummary {
                 id: Uuid::nil(),
-                name: "Admin".into(),
+                name: "Owner".into(),
                 avatar_url: None,
-                role: "admin".into(),
+                role: "owner".into(),
             }),
             avatar_url: Some("https://example.com/avatar.png".into()),
             cover_image_url: Some("https://example.com/cover.png".into()),
@@ -2120,20 +2119,19 @@ mod tests {
         assert_eq!(req.latitude, Some(60.17));
     }
 
-    /// Room owners are stored as "admin" role — isRoomOwner must be true for them.
+    /// Club/room owners use the "owner" role — isRoomOwner true.
     #[test]
-    fn is_room_owner_true_for_admin_role() {
-        // Simulate what get_club_thread does when building the flattened response
-        let member_role: Option<&str> = Some("admin");
-        let is_owner = matches!(member_role, Some("admin" | "owner"));
-        assert!(is_owner, "admin role must be treated as owner");
+    fn is_room_owner_true_for_owner_role() {
+        let member_role: Option<&str> = Some("owner");
+        let is_owner = member_role == Some("owner");
+        assert!(is_owner);
     }
 
     /// Regular members should not have isRoomOwner=true.
     #[test]
     fn is_room_owner_false_for_member_role() {
         let member_role: Option<&str> = Some("member");
-        let is_owner = matches!(member_role, Some("admin" | "owner"));
+        let is_owner = member_role == Some("owner");
         assert!(!is_owner);
     }
 
@@ -2141,7 +2139,7 @@ mod tests {
     #[test]
     fn is_room_owner_false_for_moderator_role() {
         let member_role: Option<&str> = Some("moderator");
-        let is_owner = matches!(member_role, Some("admin" | "owner"));
+        let is_owner = member_role == Some("owner");
         assert!(!is_owner);
     }
 
@@ -2149,8 +2147,17 @@ mod tests {
     #[test]
     fn is_room_owner_false_for_no_role() {
         let member_role: Option<&str> = None;
-        let is_owner = matches!(member_role, Some("admin" | "owner"));
+        let is_owner = member_role == Some("owner");
         assert!(!is_owner);
+    }
+
+    /// role_level: owner > moderator > member > unknown.
+    #[test]
+    fn role_level_hierarchy() {
+        assert!(role_level("owner") > role_level("moderator"));
+        assert!(role_level("moderator") > role_level("member"));
+        assert!(role_level("member") > role_level("unknown"));
+        assert_eq!(role_level("admin"), 0, "admin is not a valid club role");
     }
 
     /// Verify flattened comment payload includes authorId.

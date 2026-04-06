@@ -370,7 +370,7 @@ async fn create_room(
     club_members::ActiveModel {
         club_id: Set(id),
         user_id: Set(auth.user_id.0),
-        role: Set("admin".into()),
+        role: Set("owner".into()),
         joined_at: Set(now),
     }
     .insert(&*state.db)
