@@ -1817,6 +1817,7 @@ export interface EditHistoryEntry {
 
 export interface ConversationWithMessages {
   id: string;
+  encryption?: "e2ee" | "none";
   otherUser: UserSummary | null;
   messages: DirectMessage[];
 }

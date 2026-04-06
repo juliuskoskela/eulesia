@@ -735,6 +735,7 @@ pub(crate) struct V1DirectMessage {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct V1ConversationWithMessages {
     id: Uuid,
+    encryption: String,
     other_user: Option<V1UserSummary>,
     messages: Vec<V1DirectMessage>,
 }
@@ -830,6 +831,7 @@ pub async fn get_dm_v1(
 
     Ok(Json(V1ConversationWithMessages {
         id: conv.id,
+        encryption: conv.encryption,
         other_user,
         messages,
     }))
