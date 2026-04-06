@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::http::{HeaderValue, header};
 use axum::middleware::{self, Next};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use config::Config;
 use eulesia_api::{AppConfig, AppState};
 use tokio_util::sync::CancellationToken;
@@ -95,11 +95,36 @@ async fn main() -> anyhow::Result<()> {
     // index.html is never cached so deploys take effect immediately.
     if let Some(ref frontend_dir) = config.frontend_dir {
         info!(dir = %frontend_dir, "serving frontend");
-        let index_path = std::path::PathBuf::from(frontend_dir).join("index.html");
-        let spa_fallback =
-            ServeDir::new(frontend_dir).fallback(tower_http::services::ServeFile::new(&index_path));
+        let frontend_dir = frontend_dir.clone();
+        let index_path = std::path::PathBuf::from(&frontend_dir).join("index.html");
+
+        // Serve static files WITHOUT SPA fallback — missing assets return 404,
+        // not index.html. This prevents stale hashed asset URLs from being
+        // cached as HTML with immutable headers.
+        let static_files = ServeDir::new(&frontend_dir).fallback(axum::routing::get(
+            move |req: axum::extract::Request| {
+                let index = index_path.clone();
+                async move {
+                    let path = req.uri().path();
+                    // /api/* and /assets/* miss → 404 (not SPA fallback)
+                    if path.starts_with("/api/")
+                        || path.starts_with("/assets/")
+                        || path.starts_with("/ws/")
+                        || path.starts_with("/uploads/")
+                    {
+                        return axum::http::StatusCode::NOT_FOUND.into_response();
+                    }
+                    // Everything else → SPA index.html (navigation routes)
+                    match tokio::fs::read(&index).await {
+                        Ok(body) => axum::response::Html(body).into_response(),
+                        Err(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    }
+                }
+            },
+        ));
+
         app = app
-            .fallback_service(spa_fallback)
+            .fallback_service(static_files)
             .layer(middleware::from_fn(cache_headers));
     }
 

@@ -68,9 +68,11 @@ impl EmailClient {
         let transport = match &self.transport {
             Some(t) => t,
             None => {
-                // SMTP not configured — treat as success (nothing to deliver to).
-                info!(to, subject, "SMTP not configured, skipping email");
-                return Ok(());
+                warn!(
+                    to,
+                    subject, "SMTP not configured — email cannot be delivered"
+                );
+                return Err("SMTP not configured".into());
             }
         };
 

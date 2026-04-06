@@ -249,6 +249,11 @@ in {
         // optionalAttrs (cfg.frontendDir != null) {
           EULESIA_FRONTEND_DIR = cfg.frontendDir;
         }
+        // optionalAttrs ((config.services.eulesia.email.smtp.host or null) != null) {
+          SMTP_HOST = config.services.eulesia.email.smtp.host;
+          SMTP_PORT = toString config.services.eulesia.email.smtp.port;
+          SMTP_FROM = config.services.eulesia.email.from;
+        }
         // cfg.extraEnvironment;
 
       serviceConfig = {
@@ -273,6 +278,8 @@ in {
         ${optionalString (cfg.meilisearch.masterKeyFile != null) (readSecret cfg.meilisearch.masterKeyFile "MEILI_API_KEY")}
         ${optionalString (cfg.idura.enable && cfg.idura.signingKeyFile != null) "export IDURA_SIGNING_KEY_FILE=\"${cfg.idura.signingKeyFile}\""}
         ${optionalString (cfg.idura.enable && cfg.idura.encryptionKeyFile != null) "export IDURA_ENCRYPTION_KEY_FILE=\"${cfg.idura.encryptionKeyFile}\""}
+        ${optionalString ((config.services.eulesia.email.smtp.userFile or null) != null) (readSecret config.services.eulesia.email.smtp.userFile "SMTP_USERNAME")}
+        ${optionalString ((config.services.eulesia.email.smtp.passFile or null) != null) (readSecret config.services.eulesia.email.smtp.passFile "SMTP_PASSWORD")}
         exec ${cfg.package}/bin/eulesia-server
       '';
     };
