@@ -16,6 +16,8 @@
 !crates/**
 !.claude/
 !.claude/**
+# Personal agent memory — per-user, not shared
+.claude/projects/
 !.codex/
 !.codex/**
 !.github/
