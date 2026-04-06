@@ -1575,3 +1575,91 @@ pub fn routes() -> Router<AppState> {
             post(admin_restore_content),
         )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: ModlogResponse has paginated shape.
+    #[test]
+    fn modlog_response_shape() {
+        let resp = ModlogResponse {
+            items: vec![ModlogEntry {
+                id: Uuid::nil(),
+                admin_id: Uuid::nil(),
+                admin_name: "Admin".into(),
+                action_type: "warn".into(),
+                target_type: "user".into(),
+                target_id: Uuid::nil(),
+                reason: Some("spam".into()),
+                created_at: "2026-01-01T00:00:00+00:00".into(),
+            }],
+            total: 1,
+            offset: 0,
+            limit: 50,
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let keys = ["items", "total", "offset", "limit"];
+        for key in &keys {
+            assert!(obj.contains_key(*key), "missing modlog field: {key}");
+        }
+
+        let entry = obj["items"].as_array().unwrap()[0].as_object().unwrap();
+        let entry_keys = [
+            "id",
+            "adminId",
+            "adminName",
+            "actionType",
+            "targetType",
+            "targetId",
+            "reason",
+            "createdAt",
+        ];
+        for key in &entry_keys {
+            assert!(
+                entry.contains_key(*key),
+                "missing modlog entry field: {key}"
+            );
+        }
+    }
+
+    /// Contract test: TransparencyResponse has summary + anonymized recent actions.
+    #[test]
+    fn transparency_response_shape() {
+        let resp = TransparencyResponse {
+            total_actions: 42,
+            actions_by_type: vec![TransparencyActionCount {
+                action_type: "warn".into(),
+                count: 20,
+            }],
+            recent_actions: vec![ModlogEntry {
+                id: Uuid::nil(),
+                admin_id: Uuid::nil(),
+                admin_name: "moderator".into(),
+                action_type: "warn".into(),
+                target_type: "user".into(),
+                target_id: Uuid::nil(),
+                reason: None,
+                created_at: "2026-01-01T00:00:00+00:00".into(),
+            }],
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let keys = ["totalActions", "actionsByType", "recentActions"];
+        for key in &keys {
+            assert!(obj.contains_key(*key), "missing transparency field: {key}");
+        }
+
+        // actionsByType shape
+        let abt = obj["actionsByType"].as_array().unwrap()[0]
+            .as_object()
+            .unwrap();
+        assert!(abt.contains_key("actionType"));
+        assert!(abt.contains_key("count"));
+    }
+}

@@ -1889,3 +1889,224 @@ async fn list_categories(
 
     Ok(Json(items))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: ClubResponse has all fields the frontend ClubViewPage needs.
+    #[test]
+    fn club_response_matches_frontend_contract() {
+        let resp = ClubResponse {
+            id: Uuid::nil(),
+            name: "Test Club".into(),
+            slug: "test-club".into(),
+            description: Some("A test club".into()),
+            category: Some("sports".into()),
+            is_public: true,
+            creator_id: Uuid::nil(),
+            creator: Some(ClubMemberSummary {
+                id: Uuid::nil(),
+                name: "Admin".into(),
+                avatar_url: None,
+                role: "admin".into(),
+            }),
+            avatar_url: Some("https://example.com/avatar.png".into()),
+            cover_image_url: Some("https://example.com/cover.png".into()),
+            rules: Some("Be nice".into()),
+            address: Some("Helsinki".into()),
+            latitude: Some(60.1699),
+            longitude: Some(24.9384),
+            member_count: 42,
+            is_member: true,
+            member_role: Some("member".into()),
+            moderators: Some(vec![ClubMemberSummary {
+                id: Uuid::nil(),
+                name: "Mod".into(),
+                avatar_url: None,
+                role: "moderator".into(),
+            }]),
+            members: Some(vec![]),
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-02T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        // All required frontend fields
+        let required_keys = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "category",
+            "isPublic",
+            "creatorId",
+            "creator",
+            "avatarUrl",
+            "coverImageUrl",
+            "rules",
+            "address",
+            "latitude",
+            "longitude",
+            "memberCount",
+            "isMember",
+            "memberRole",
+            "moderators",
+            "members",
+            "createdAt",
+            "updatedAt",
+        ];
+        for key in &required_keys {
+            assert!(obj.contains_key(*key), "missing club field: {key}");
+        }
+
+        // creator is an object with expected shape
+        let creator = obj["creator"].as_object().unwrap();
+        for key in &["id", "name", "avatarUrl", "role"] {
+            assert!(creator.contains_key(*key), "missing creator.{key}");
+        }
+
+        // moderators is an array
+        assert!(obj["moderators"].as_array().is_some());
+    }
+
+    /// When detail fields are omitted (list view), moderators/members are absent.
+    #[test]
+    fn club_response_list_view_omits_detail_fields() {
+        let resp = ClubResponse {
+            id: Uuid::nil(),
+            name: "Test".into(),
+            slug: "test".into(),
+            description: None,
+            category: None,
+            is_public: true,
+            creator_id: Uuid::nil(),
+            creator: None,
+            avatar_url: None,
+            cover_image_url: None,
+            rules: None,
+            address: None,
+            latitude: None,
+            longitude: None,
+            member_count: 0,
+            is_member: false,
+            member_role: None,
+            moderators: None,
+            members: None,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        // skip_serializing_if = Option::is_none on moderators/members
+        assert!(!obj.contains_key("moderators"));
+        assert!(!obj.contains_key("members"));
+        assert_eq!(obj["isMember"], false);
+    }
+
+    /// Contract test: ClubListResponse has page-based pagination.
+    #[test]
+    fn club_list_response_has_pagination() {
+        let resp = ClubListResponse {
+            items: vec![],
+            total: 100,
+            page: 3,
+            limit: 20,
+            has_more: true,
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        assert_eq!(obj["total"], 100);
+        assert_eq!(obj["page"], 3);
+        assert_eq!(obj["limit"], 20);
+        assert_eq!(obj["hasMore"], true);
+        assert!(!obj.contains_key("offset"));
+    }
+
+    /// Contract test: InvitationResponse has nested club/inviter/invitee objects.
+    #[test]
+    fn invitation_response_matches_frontend_contract() {
+        let resp = InvitationResponse {
+            id: Uuid::nil(),
+            club_id: Uuid::nil(),
+            club_name: Some("Test Club".into()),
+            club: Some(InvitationClubSummary {
+                id: Uuid::nil(),
+                name: "Test Club".into(),
+                slug: "test-club".into(),
+                avatar_url: None,
+            }),
+            user_id: Uuid::nil(),
+            invitee: Some(InvitationUserSummary {
+                id: Uuid::nil(),
+                name: "Bob".into(),
+                avatar_url: None,
+            }),
+            invited_by: Uuid::nil(),
+            inviter: Some(InvitationUserSummary {
+                id: Uuid::nil(),
+                name: "Alice".into(),
+                avatar_url: Some("https://example.com/a.png".into()),
+            }),
+            status: "pending".into(),
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let required_keys = [
+            "id",
+            "clubId",
+            "clubName",
+            "club",
+            "userId",
+            "invitee",
+            "invitedBy",
+            "inviter",
+            "status",
+            "createdAt",
+        ];
+        for key in &required_keys {
+            assert!(obj.contains_key(*key), "missing invitation field: {key}");
+        }
+
+        // club object shape
+        let club = obj["club"].as_object().unwrap();
+        for key in &["id", "name", "slug", "avatarUrl"] {
+            assert!(club.contains_key(*key), "missing club.{key}");
+        }
+
+        // inviter object shape
+        let inviter = obj["inviter"].as_object().unwrap();
+        for key in &["id", "name", "avatarUrl"] {
+            assert!(inviter.contains_key(*key), "missing inviter.{key}");
+        }
+    }
+
+    /// Verify CreateClubRequest accepts new enrichment fields.
+    #[test]
+    fn create_club_request_accepts_enrichment_fields() {
+        let json = r#"{
+            "name": "Test",
+            "coverImageUrl": "https://example.com/cover.png",
+            "rules": "Be nice",
+            "address": "Helsinki",
+            "latitude": 60.17,
+            "longitude": 24.94
+        }"#;
+        let req: CreateClubRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            req.cover_image_url.as_deref(),
+            Some("https://example.com/cover.png")
+        );
+        assert_eq!(req.rules.as_deref(), Some("Be nice"));
+        assert_eq!(req.latitude, Some(60.17));
+    }
+}

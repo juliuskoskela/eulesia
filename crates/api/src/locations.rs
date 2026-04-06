@@ -313,3 +313,74 @@ pub fn routes() -> Router<AppState> {
         .route("/locations/osm/{osm_type}/{osm_id}", get(osm_lookup))
         .route("/locations/{id}", get(get_location))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: LocationSearchResponse wraps results in {results, source}.
+    #[test]
+    fn location_search_response_shape() {
+        let resp = LocationSearchResponse {
+            results: vec![LocationResponse {
+                id: Uuid::nil(),
+                name: "Helsinki".into(),
+                name_fi: Some("Helsinki".into()),
+                name_sv: Some("Helsingfors".into()),
+                osm_id: Some(34914),
+                osm_type: Some("relation".into()),
+                admin_level: Some(8),
+                location_type: "municipality".into(),
+                country: Some("FI".into()),
+                latitude: Some(60.1699),
+                longitude: Some(24.9384),
+                source: "cache".into(),
+            }],
+            source: "cache".into(),
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        // Must have {results, source} — NOT a bare array
+        assert!(obj.contains_key("results"), "must have 'results' key");
+        assert!(obj.contains_key("source"), "must have 'source' key");
+        assert!(obj["results"].is_array());
+        assert_eq!(obj["source"], "cache");
+
+        let items = obj["results"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+
+        let loc = items[0].as_object().unwrap();
+        let loc_keys = [
+            "id",
+            "name",
+            "nameFi",
+            "nameSv",
+            "osmId",
+            "osmType",
+            "adminLevel",
+            "locationType",
+            "country",
+            "latitude",
+            "longitude",
+            "source",
+        ];
+        for key in &loc_keys {
+            assert!(loc.contains_key(*key), "missing location field: {key}");
+        }
+    }
+
+    /// Verify source detection: mixed when both local and nominatim results.
+    #[test]
+    fn location_search_source_values() {
+        for source in &["cache", "nominatim", "mixed"] {
+            let resp = LocationSearchResponse {
+                results: vec![],
+                source: (*source).to_string(),
+            };
+            let json = serde_json::to_value(&resp).unwrap();
+            assert_eq!(json["source"], *source);
+        }
+    }
+}

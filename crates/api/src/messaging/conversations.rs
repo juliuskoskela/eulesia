@@ -1134,3 +1134,78 @@ pub async fn send_dm_message_v1(
         created_at: msg.server_ts.to_rfc3339(),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: V1DirectMessage has the shape the frontend expects.
+    #[test]
+    fn v1_direct_message_shape() {
+        let msg = V1DirectMessage {
+            id: Uuid::nil(),
+            conversation_id: Uuid::nil(),
+            content: Some("Hello!".into()),
+            author: Some(V1UserSummary {
+                id: Uuid::nil(),
+                name: "Alice".into(),
+                avatar_url: Some("https://example.com/a.png".into()),
+                role: "citizen".into(),
+            }),
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&msg).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let keys = ["id", "conversationId", "content", "author", "createdAt"];
+        for key in &keys {
+            assert!(obj.contains_key(*key), "missing DirectMessage field: {key}");
+        }
+
+        // Must NOT have v2 fields
+        assert!(!obj.contains_key("senderId"));
+        assert!(!obj.contains_key("serverTs"));
+        assert!(!obj.contains_key("ciphertext"));
+        assert!(!obj.contains_key("messageType"));
+        assert!(!obj.contains_key("epoch"));
+
+        // Author shape
+        let author = obj["author"].as_object().unwrap();
+        for key in &["id", "name", "avatarUrl", "role"] {
+            assert!(author.contains_key(*key), "missing author.{key}");
+        }
+    }
+
+    /// Contract test: V1ConversationWithMessages has expected shape.
+    #[test]
+    fn v1_conversation_with_messages_shape() {
+        let conv = V1ConversationWithMessages {
+            id: Uuid::nil(),
+            encryption: "none".into(),
+            other_user: Some(V1UserSummary {
+                id: Uuid::nil(),
+                name: "Bob".into(),
+                avatar_url: None,
+                role: "citizen".into(),
+            }),
+            messages: vec![V1DirectMessage {
+                id: Uuid::nil(),
+                conversation_id: Uuid::nil(),
+                content: Some("Hi".into()),
+                author: None,
+                created_at: "2026-01-01T00:00:00+00:00".into(),
+            }],
+        };
+
+        let json = serde_json::to_value(&conv).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let keys = ["id", "encryption", "otherUser", "messages"];
+        for key in &keys {
+            assert!(obj.contains_key(*key), "missing field: {key}");
+        }
+
+        assert!(obj["messages"].as_array().unwrap().len() == 1);
+    }
+}

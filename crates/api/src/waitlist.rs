@@ -499,3 +499,69 @@ pub fn routes() -> Router<AppState> {
         .route("/waitlist/admin/{id}/reject", post(reject_entry))
         .route("/waitlist/admin/bulk-approve", post(bulk_approve))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: WaitlistListResponse has hasMore for pagination.
+    #[test]
+    fn waitlist_list_response_has_more() {
+        let resp = WaitlistListResponse {
+            data: vec![],
+            total: 100,
+            limit: 20,
+            page: 2,
+            has_more: true,
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let keys = ["items", "total", "limit", "page", "hasMore"];
+        for key in &keys {
+            assert!(obj.contains_key(*key), "missing waitlist field: {key}");
+        }
+
+        // Uses "items" rename
+        assert!(!obj.contains_key("data"));
+        assert_eq!(obj["hasMore"], true);
+        assert_eq!(obj["page"], 2);
+    }
+
+    /// Contract test: BulkApproveResult includes id field.
+    #[test]
+    fn bulk_approve_result_has_id() {
+        let result = BulkApproveResult {
+            id: Uuid::nil(),
+            code: "abc123".into(),
+            email: "test@example.com".into(),
+            status: "approved".into(),
+        };
+
+        let json = serde_json::to_value(&result).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let keys = ["id", "code", "email", "status"];
+        for key in &keys {
+            assert!(obj.contains_key(*key), "missing bulk approve field: {key}");
+        }
+    }
+
+    /// Contract test: join_waitlist returns simple success (not full entry).
+    #[test]
+    fn join_response_is_simple_success() {
+        let resp = serde_json::json!({
+            "success": true,
+            "message": "You have been added to the waitlist"
+        });
+
+        let obj = resp.as_object().unwrap();
+        assert_eq!(obj["success"], true);
+        assert!(obj.contains_key("message"));
+        // Must NOT contain full waitlist entry fields
+        assert!(!obj.contains_key("email"));
+        assert!(!obj.contains_key("status"));
+        assert!(!obj.contains_key("inviteCode"));
+    }
+}

@@ -247,3 +247,33 @@ pub fn routes() -> Router<AppState> {
         .route("/discover/trending", get(trending))
         .route("/discover/algorithm", get(algorithm))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: DiscoverListResponse has pagination wrapper.
+    #[test]
+    fn discover_list_response_shape() {
+        let resp = DiscoverListResponse {
+            items: vec![serde_json::json!({"id": "abc", "title": "Test"})],
+            total: 10,
+            page: 1,
+            limit: 20,
+            has_more: false,
+        };
+
+        let json = serde_json::to_value(&resp).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let keys = ["items", "total", "page", "limit", "hasMore"];
+        for key in &keys {
+            assert!(obj.contains_key(*key), "missing discover field: {key}");
+        }
+
+        assert!(obj["items"].is_array());
+        assert_eq!(obj["total"], 10);
+        assert_eq!(obj["page"], 1);
+        assert_eq!(obj["hasMore"], false);
+    }
+}

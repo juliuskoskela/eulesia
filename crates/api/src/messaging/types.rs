@@ -198,3 +198,89 @@ pub struct EpochResponse {
     pub reason: String,
     pub created_at: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Contract test: ConversationListItem has the enrichment fields
+    /// the frontend MessagesPage needs for DM list rendering.
+    #[test]
+    fn conversation_list_item_matches_frontend_contract() {
+        let item = ConversationListItem {
+            id: Uuid::nil(),
+            conversation_type: "direct".into(),
+            name: None,
+            current_epoch: 0,
+            other_user: Some(ConversationUserSummary {
+                id: Uuid::nil(),
+                name: "Alice".into(),
+                avatar_url: Some("https://example.com/a.png".into()),
+            }),
+            last_message: Some(LastMessageSummary {
+                id: Uuid::nil(),
+                content: Some("Hello!".into()),
+                sender_id: Uuid::nil(),
+                created_at: "2026-01-01T00:00:00+00:00".into(),
+            }),
+            unread_count: 3,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-02T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&item).unwrap();
+        let obj = json.as_object().unwrap();
+
+        let required_keys = [
+            "id",
+            "conversationType",
+            "currentEpoch",
+            "otherUser",
+            "lastMessage",
+            "unreadCount",
+            "createdAt",
+            "updatedAt",
+        ];
+        for key in &required_keys {
+            assert!(obj.contains_key(*key), "missing field: {key}");
+        }
+
+        // otherUser shape
+        let other = obj["otherUser"].as_object().unwrap();
+        for key in &["id", "name", "avatarUrl"] {
+            assert!(other.contains_key(*key), "missing otherUser.{key}");
+        }
+
+        // lastMessage shape
+        let msg = obj["lastMessage"].as_object().unwrap();
+        for key in &["id", "content", "senderId", "createdAt"] {
+            assert!(msg.contains_key(*key), "missing lastMessage.{key}");
+        }
+
+        assert_eq!(obj["unreadCount"], 3);
+        assert_eq!(obj["updatedAt"], "2026-01-02T00:00:00+00:00");
+    }
+
+    /// Verify null otherUser/lastMessage serialise correctly for group convos.
+    #[test]
+    fn conversation_list_item_group_has_null_other_user() {
+        let item = ConversationListItem {
+            id: Uuid::nil(),
+            conversation_type: "group".into(),
+            name: Some("Test Group".into()),
+            current_epoch: 0,
+            other_user: None,
+            last_message: None,
+            unread_count: 0,
+            created_at: "2026-01-01T00:00:00+00:00".into(),
+            updated_at: "2026-01-01T00:00:00+00:00".into(),
+        };
+
+        let json = serde_json::to_value(&item).unwrap();
+        let obj = json.as_object().unwrap();
+
+        assert!(obj["otherUser"].is_null());
+        assert!(obj["lastMessage"].is_null());
+        assert_eq!(obj["name"], "Test Group");
+    }
+}
