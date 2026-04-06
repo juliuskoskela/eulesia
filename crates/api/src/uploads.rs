@@ -5,7 +5,7 @@ use axum::Router;
 use axum::extract::{Multipart, State};
 use axum::routing::post;
 use image::imageops::FilterType;
-use image::{DynamicImage, ImageFormat, ImageReader};
+use image::{DynamicImage, ImageReader};
 use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use serde::Serialize;
 use tokio::fs;
@@ -52,14 +52,14 @@ fn file_name(user_id: Uuid) -> String {
     )
 }
 
-/// Encode a `DynamicImage` as WebP (lossless — the pure-Rust encoder
-/// in image 0.25 doesn't support lossy quality. Lossless WebP is still
-/// smaller than PNG and preserves full detail.)
-fn encode_webp(img: &DynamicImage) -> Result<Vec<u8>, ApiError> {
-    let mut buf = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::WebP)
-        .map_err(|e| ApiError::Internal(format!("WebP encode: {e}")))?;
-    Ok(buf)
+/// Encode a `DynamicImage` as lossy WebP via libwebp.
+///
+/// Quality 0–100. At 80, a typical 8MB phone JPEG becomes ~150-300KB.
+fn encode_lossy_webp(img: &DynamicImage, quality: f32) -> Result<Vec<u8>, ApiError> {
+    let encoder = webp::Encoder::from_image(img)
+        .map_err(|e| ApiError::Internal(format!("WebP encoder init: {e}")))?;
+    let mem = encoder.encode(quality);
+    Ok(mem.to_vec())
 }
 
 /// Decode image bytes (any supported format) on a blocking thread.
@@ -143,7 +143,7 @@ async fn upload_avatar(
             .map_err(|e| ApiError::BadRequest(format!("invalid image: {e}")))?;
 
         let img = img.resize_to_fill(AVATAR_SIZE, AVATAR_SIZE, FilterType::Lanczos3);
-        encode_webp(&img)
+        encode_lossy_webp(&img, 80.0)
     })
     .await
     .map_err(|_| ApiError::Internal("avatar processing task failed".into()))??;
@@ -237,11 +237,11 @@ async fn upload_image(
         let main_img = img.resize(MAIN_MAX_WIDTH, MAIN_MAX_HEIGHT, FilterType::Lanczos3);
         let w = main_img.width();
         let h = main_img.height();
-        let main_buf = encode_webp(&main_img)?;
+        let main_buf = encode_lossy_webp(&main_img, 82.0)?;
 
         // Thumbnail: cover crop
         let thumb_img = img.resize_to_fill(THUMB_WIDTH, THUMB_HEIGHT, FilterType::Lanczos3);
-        let thumb_buf = encode_webp(&thumb_img)?;
+        let thumb_buf = encode_lossy_webp(&thumb_img, 75.0)?;
 
         Ok::<_, ApiError>((main_buf, thumb_buf, w, h))
     })

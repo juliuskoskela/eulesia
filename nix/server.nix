@@ -11,7 +11,7 @@
     strictDeps = true;
     # josekit depends on openssl-sys for JWE/JWT crypto
     nativeBuildInputs = [pkgs.pkg-config];
-    buildInputs = [pkgs.openssl];
+    buildInputs = [pkgs.openssl pkgs.libwebp];
   };
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;

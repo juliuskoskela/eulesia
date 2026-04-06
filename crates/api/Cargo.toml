@@ -26,6 +26,7 @@ sha2 = { workspace = true }
 rand = { workspace = true }
 hex = "0.4"
 image = "0.25"
+webp = { workspace = true }
 urlencoding = "2"
 sea-orm = { workspace = true }
 serde = { workspace = true }
