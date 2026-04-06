@@ -8,6 +8,7 @@ use axum::response::Response;
 use config::Config;
 use eulesia_api::{AppConfig, AppState};
 use tokio_util::sync::CancellationToken;
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowHeaders, AllowMethods, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
@@ -102,7 +103,10 @@ async fn main() -> anyhow::Result<()> {
             .layer(middleware::from_fn(cache_headers));
     }
 
-    let app = app.layer(cors).layer(TraceLayer::new_for_http());
+    let app = app
+        .layer(cors)
+        .layer(CompressionLayer::new())
+        .layer(TraceLayer::new_for_http());
 
     // Build outbox worker context with optional integrations
     let dispatcher = Arc::new(eulesia_notify::dispatch::NotificationDispatcher::new(
