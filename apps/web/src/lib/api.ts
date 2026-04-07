@@ -1768,39 +1768,45 @@ class ApiClient {
 // Do NOT manually duplicate fields that exist in the generated types.
 // =============================================================================
 
-// Re-export pure generated types that need no frontend extension
-export type { ClubRole } from "../types/generated/ClubRole";
-export type { GroupRole } from "../types/generated/GroupRole";
-export type { ThreadScope } from "../types/generated/ThreadScope";
-export type { ThreadSource } from "../types/generated/ThreadSource";
-export type { MapPointType } from "../types/generated/MapPointType";
-export type { InvitationStatus } from "../types/generated/InvitationStatus";
-export type { TagWithCount } from "../types/generated/TagWithCount";
-export type { VoteResponse } from "../types/generated/VoteResponse";
-export type { EpochResponse } from "../types/generated/EpochResponse";
-export type { MemberSummary } from "../types/generated/MemberSummary";
-export type { ConversationUserSummary } from "../types/generated/ConversationUserSummary";
-export type { LastMessageSummary } from "../types/generated/LastMessageSummary";
-export type { MessageResponse } from "../types/generated/MessageResponse";
-export type { ConversationResponse } from "../types/generated/ConversationResponse";
-export type { ConversationListItem as ConversationListItemGenerated } from "../types/generated/ConversationListItem";
-export type { ClubResponse as ClubResponseGenerated } from "../types/generated/ClubResponse";
-export type { ClubListResponse } from "../types/generated/ClubListResponse";
-export type { ClubMemberSummary as ClubMemberSummaryGenerated } from "../types/generated/ClubMemberSummary";
-export type { InvitationResponse as InvitationResponseGenerated } from "../types/generated/InvitationResponse";
-export type { InvitationClubSummary } from "../types/generated/InvitationClubSummary";
-export type { InvitationUserSummary } from "../types/generated/InvitationUserSummary";
-export type { MapPoint } from "../types/generated/MapPoint";
-export type { PlaceResponse } from "../types/generated/PlaceResponse";
-export type { MunicipalityResponse } from "../types/generated/MunicipalityResponse";
-export type { LocationResponse } from "../types/generated/LocationResponse";
-export type { UserProfileResponse } from "../types/generated/UserProfileResponse";
-export type { ReportResponse } from "../types/generated/ReportResponse";
-export type { SanctionResponse } from "../types/generated/SanctionResponse";
-export type { AppealResponse as AppealResponseGenerated } from "../types/generated/AppealResponse";
-
-// Re-export frontend-only and admin types so existing imports keep working.
-// New code should import from ../types/frontend or ../types/admin directly.
+// Re-export all types so existing `import { X } from "../lib/api"` keeps working.
+// New code should import types from ../types/api, ../types/frontend, or ../types/admin.
+//
+// Generated types (types/api) — skip names that collide with frontend overrides.
+export type {
+  ClubRole,
+  GroupRole,
+  ThreadScope,
+  ThreadSource,
+  MapPointType,
+  InvitationStatus,
+  ThreadResponse,
+  ThreadListResponse,
+  ThreadWithCommentsResponse,
+  CommentResponse,
+  AuthorSummary,
+  TagWithCount,
+  VoteResponse,
+  ClubResponse,
+  ClubListResponse,
+  InvitationResponse,
+  InvitationClubSummary,
+  InvitationUserSummary,
+  ConversationListItem,
+  ConversationResponse,
+  ConversationUserSummary,
+  LastMessageSummary,
+  MemberSummary,
+  MessageResponse,
+  EpochResponse,
+  MapPoint,
+  PlaceResponse,
+  MunicipalityResponse,
+  LocationResponse,
+  UserProfileResponse,
+  ReportResponse,
+  SanctionResponse,
+} from "../types/api";
+// Frontend-only and admin types.
 export * from "../types/frontend";
 export * from "../types/admin";
 
