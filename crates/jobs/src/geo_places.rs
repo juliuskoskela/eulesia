@@ -13,7 +13,14 @@ use thiserror::Error;
 use tracing::info;
 use uuid::Uuid;
 
+use eulesia_common::types::SyncStatus;
 use eulesia_db::entities::{municipalities, places};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpsertOutcome {
+    Inserted,
+    Updated,
+}
 
 #[derive(Debug, Clone)]
 pub struct LipasImportConfig {
@@ -235,10 +242,9 @@ pub async fn sync_lipas_places(
             continue;
         };
 
-        if upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
-            report.updated += 1;
-        } else {
-            report.inserted += 1;
+        match upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
+            UpsertOutcome::Updated => report.updated += 1,
+            UpsertOutcome::Inserted => report.inserted += 1,
         }
     }
 
@@ -259,10 +265,9 @@ pub async fn sync_lipas_places(
             }
         }
 
-        if upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
-            report.updated += 1;
-        } else {
-            report.inserted += 1;
+        match upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
+            UpsertOutcome::Updated => report.updated += 1,
+            UpsertOutcome::Inserted => report.inserted += 1,
         }
     }
 
@@ -343,10 +348,9 @@ pub async fn sync_osm_places(
             metadata: json!({ "tags": element.tags }),
         };
 
-        if upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
-            report.updated += 1;
-        } else {
-            report.inserted += 1;
+        match upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
+            UpsertOutcome::Updated => report.updated += 1,
+            UpsertOutcome::Inserted => report.inserted += 1,
         }
     }
 
@@ -509,12 +513,12 @@ fn loi_candidate(loi: &LipasLoi, base_url: &str) -> Option<PlaceCandidate> {
     })
 }
 
-/// Returns `true` if an existing row was updated, `false` if a new row was inserted.
+/// Returns the outcome of the upsert operation.
 async fn upsert_place(
     db: &DatabaseConnection,
     existing: Option<&places::Model>,
     candidate: PlaceCandidate,
-) -> Result<bool, PlaceImportError> {
+) -> Result<UpsertOutcome, PlaceImportError> {
     let now = Utc::now().fixed_offset();
 
     let mut active = match existing {
@@ -548,18 +552,17 @@ async fn upsert_place(
     active.source_url = Set(candidate.source_url);
     active.osm_id = Set(candidate.osm_id);
     active.last_synced = Set(Some(now));
-    active.sync_status = Set(String::from("synced"));
+    active.sync_status = Set(SyncStatus::Synced);
     active.metadata = Set(Some(candidate.metadata));
     active.updated_at = Set(now);
 
-    let updated = existing.is_some();
-    if updated {
+    if existing.is_some() {
         active.update(db).await?;
+        Ok(UpsertOutcome::Updated)
     } else {
         active.insert(db).await?;
+        Ok(UpsertOutcome::Inserted)
     }
-
-    Ok(updated)
 }
 
 async fn nearest_municipality_id(

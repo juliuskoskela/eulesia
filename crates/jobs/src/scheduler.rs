@@ -14,6 +14,7 @@ use tracing::{error, info, warn};
 use crate::geo_places::{
     LipasImportConfig, LipasImportReport, OsmImportConfig, OsmImportReport, PlaceImportError,
 };
+use eulesia_common::types::JobStatus;
 use eulesia_db::repo::jobs::JobRepo;
 use eulesia_db::seed::{self, MunicipalitySyncReport};
 
@@ -214,7 +215,7 @@ where
         JobRepo::record_finished(
             &ctx.db,
             skipped,
-            "skipped",
+            JobStatus::Skipped,
             Some(serde_json::json!({"reason": "advisory_lock_busy"})),
             None,
         )
@@ -231,11 +232,15 @@ where
 
     let finish_result: Result<(), SchedulerError> = match &result {
         Ok(report) => {
+            let details = serde_json::to_value(report).unwrap_or_else(|e| {
+                warn!("failed to serialize job report: {e}");
+                serde_json::json!({})
+            });
             JobRepo::record_finished(
                 &ctx.db,
                 run_record,
-                "succeeded",
-                Some(serde_json::to_value(report).unwrap_or_else(|_| serde_json::json!({}))),
+                JobStatus::Succeeded,
+                Some(details),
                 None,
             )
             .await?;
@@ -244,8 +249,14 @@ where
             Ok(())
         }
         Err(error) => {
-            JobRepo::record_finished(&ctx.db, run_record, "failed", None, Some(error.to_string()))
-                .await?;
+            JobRepo::record_finished(
+                &ctx.db,
+                run_record,
+                JobStatus::Failed,
+                None,
+                Some(error.to_string()),
+            )
+            .await?;
             error!(job_name, error = %error, "job failed");
             Ok(())
         }

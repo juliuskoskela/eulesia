@@ -1,3 +1,4 @@
+use eulesia_common::types::JobStatus;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseConnection, DbErr, EntityTrait};
 use uuid::Uuid;
 
@@ -15,7 +16,7 @@ impl JobRepo {
         job_runs::ActiveModel {
             id: Set(Uuid::now_v7()),
             job_name: Set(job_name.to_owned()),
-            status: Set(String::from("running")),
+            status: Set(JobStatus::Running),
             started_at: Set(now),
             finished_at: Set(None),
             details: Set(None),
@@ -28,12 +29,12 @@ impl JobRepo {
     pub async fn record_finished(
         db: &DatabaseConnection,
         run: job_runs::Model,
-        status: &str,
+        status: JobStatus,
         details: Option<serde_json::Value>,
         error: Option<String>,
     ) -> Result<job_runs::Model, DbErr> {
         let mut active: job_runs::ActiveModel = run.into();
-        active.status = Set(status.to_owned());
+        active.status = Set(status);
         active.finished_at = Set(Some(chrono::Utc::now().fixed_offset()));
         active.details = Set(details);
         active.error = Set(error);

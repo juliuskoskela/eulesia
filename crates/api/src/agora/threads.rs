@@ -45,6 +45,51 @@ fn clamp_limit(limit: Option<u64>) -> u64 {
     limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT)
 }
 
+async fn resolve_municipality_id(
+    db: &sea_orm::DatabaseConnection,
+    scope: ThreadScope,
+    req_municipality_id: Option<Uuid>,
+    resolved_location: Option<&eulesia_db::entities::locations::Model>,
+) -> Result<Option<Uuid>, ApiError> {
+    if scope != ThreadScope::Local {
+        return Ok(req_municipality_id);
+    }
+
+    if let Some(id) = req_municipality_id {
+        return Ok(Some(id));
+    }
+
+    let Some(location) = resolved_location else {
+        return Err(ApiError::BadRequest(
+            "municipalityId is required for local scope".into(),
+        ));
+    };
+
+    let latitude = location
+        .latitude
+        .and_then(crate::locations::decimal_to_f64)
+        .ok_or_else(|| {
+            ApiError::BadRequest(
+                "local threads require municipalityId or a location with coordinates".into(),
+            )
+        })?;
+
+    let longitude = location
+        .longitude
+        .and_then(crate::locations::decimal_to_f64)
+        .ok_or_else(|| {
+            ApiError::BadRequest(
+                "local threads require municipalityId or a location with coordinates".into(),
+            )
+        })?;
+
+    let municipality = crate::locations::nearest_municipality(db, latitude, longitude).await?;
+    municipality
+        .map(|m| m.id)
+        .ok_or_else(|| ApiError::BadRequest("municipalityId is required for local scope".into()))
+        .map(Some)
+}
+
 fn author_map(users: Vec<eulesia_db::entities::users::Model>) -> HashMap<Uuid, AuthorSummary> {
     users
         .into_iter()
@@ -502,40 +547,13 @@ pub async fn create_thread(
         (None, None, None) => None,
     };
 
-    let mut municipality_id = req.municipality_id;
-    if scope == ThreadScope::Local && municipality_id.is_none() {
-        municipality_id = match resolved_location.as_ref() {
-            Some(location) => {
-                let Some(latitude) = location.latitude.and_then(crate::locations::decimal_to_f64)
-                else {
-                    return Err(ApiError::BadRequest(
-                        "local threads require municipalityId or a location with coordinates"
-                            .into(),
-                    ));
-                };
-                let Some(longitude) = location
-                    .longitude
-                    .and_then(crate::locations::decimal_to_f64)
-                else {
-                    return Err(ApiError::BadRequest(
-                        "local threads require municipalityId or a location with coordinates"
-                            .into(),
-                    ));
-                };
-
-                crate::locations::nearest_municipality(&state.db, latitude, longitude)
-                    .await?
-                    .map(|municipality| municipality.id)
-            }
-            None => None,
-        };
-    }
-
-    if scope == ThreadScope::Local && municipality_id.is_none() {
-        return Err(ApiError::BadRequest(
-            "municipalityId is required for local scope".into(),
-        ));
-    }
+    let municipality_id = resolve_municipality_id(
+        &state.db,
+        scope,
+        req.municipality_id,
+        resolved_location.as_ref(),
+    )
+    .await?;
 
     let scope_str = scope.to_string();
     let thread_id = new_id();

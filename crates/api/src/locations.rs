@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::map::{MunicipalityResponse, municipality_to_response};
 use eulesia_common::error::ApiError;
-use eulesia_common::types::new_id;
+use eulesia_common::types::{LocationStatus, LocationType, new_id};
 use eulesia_db::entities::{locations, municipalities};
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ pub struct LocationBounds {
 pub struct LocationParentResponse {
     pub name: String,
     #[serde(rename = "type")]
-    pub r#type: String,
+    pub r#type: LocationType,
     pub admin_level: Option<i32>,
 }
 
@@ -57,13 +57,13 @@ pub struct LocationResponse {
     pub osm_type: Option<String>,
     pub admin_level: Option<i32>,
     #[serde(rename = "type")]
-    pub r#type: String,
+    pub r#type: LocationType,
     pub country: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
     pub bounds: Option<LocationBounds>,
     pub population: Option<i64>,
-    pub status: String,
+    pub status: LocationStatus,
     pub content_count: i32,
     pub parent: Option<LocationParentResponse>,
 }
@@ -180,7 +180,7 @@ fn parse_nominatim_bounds(bounds: Option<&Vec<String>>) -> Option<LocationBounds
 
 fn location_parent_response(
     name: String,
-    location_type: String,
+    location_type: LocationType,
     admin_level: Option<i32>,
 ) -> LocationParentResponse {
     LocationParentResponse {
@@ -193,10 +193,7 @@ fn location_parent_response(
 fn location_parent_from_model(model: &locations::Model) -> LocationParentResponse {
     location_parent_response(
         model.name.clone(),
-        model
-            .r#type
-            .clone()
-            .unwrap_or_else(|| String::from("unknown")),
+        model.r#type.unwrap_or(LocationType::Other),
         model.admin_level,
     )
 }
@@ -225,38 +222,39 @@ fn nominatim_parent(address: Option<&NominatimAddress>) -> Option<LocationParent
     address
         .municipality
         .as_ref()
-        .map(|name| location_parent_response(name.clone(), String::from("municipality"), Some(8)))
+        .map(|name| location_parent_response(name.clone(), LocationType::Municipality, Some(8)))
         .or_else(|| {
             address
                 .city
                 .as_ref()
-                .map(|name| location_parent_response(name.clone(), String::from("city"), None))
+                .map(|name| location_parent_response(name.clone(), LocationType::Other, None))
         })
         .or_else(|| {
             address
                 .town
                 .as_ref()
-                .map(|name| location_parent_response(name.clone(), String::from("town"), None))
+                .map(|name| location_parent_response(name.clone(), LocationType::Other, None))
         })
         .or_else(|| {
             address
                 .county
                 .as_ref()
-                .map(|name| location_parent_response(name.clone(), String::from("county"), None))
+                .map(|name| location_parent_response(name.clone(), LocationType::Other, None))
         })
         .or_else(|| {
             address
                 .state
                 .as_ref()
-                .map(|name| location_parent_response(name.clone(), String::from("region"), None))
+                .map(|name| location_parent_response(name.clone(), LocationType::Region, None))
         })
 }
 
-fn nominatim_type(result: &NominatimResult) -> String {
+fn nominatim_type(result: &NominatimResult) -> LocationType {
     result
         .place_type
-        .clone()
-        .unwrap_or_else(|| String::from("place"))
+        .as_deref()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(LocationType::Other)
 }
 
 async fn parent_response(
@@ -287,7 +285,7 @@ pub(crate) async fn model_to_response(
         osm_id: model.osm_id,
         osm_type: model.osm_type,
         admin_level: model.admin_level,
-        r#type: model.r#type.unwrap_or_else(|| String::from("unknown")),
+        r#type: model.r#type.unwrap_or(LocationType::Other),
         country: model.country,
         latitude: model.latitude.and_then(decimal_to_f64),
         longitude: model.longitude.and_then(decimal_to_f64),
@@ -321,18 +319,21 @@ fn nominatim_to_response(n: NominatimResult) -> LocationResponse {
             .address
             .as_ref()
             .and_then(|address| address.country_code.clone()),
-        latitude: n.lat.and_then(|value| value.parse().ok()),
-        longitude: n.lon.and_then(|value| value.parse().ok()),
+        latitude: n.lat.as_ref().and_then(|value| value.parse().ok()),
+        longitude: n.lon.as_ref().and_then(|value| value.parse().ok()),
         bounds: parse_nominatim_bounds(n.boundingbox.as_ref()),
         population: None,
-        status: String::from("available"),
+        status: LocationStatus::Active,
         content_count: 0,
         parent: nominatim_parent(n.address.as_ref()),
     }
 }
 
-fn location_matches_type_filter(location_type: &str, types: &[String]) -> bool {
-    types.is_empty() || types.iter().any(|candidate| candidate == location_type)
+fn location_matches_type_filter(location_type: LocationType, type_filters: &[String]) -> bool {
+    type_filters.is_empty()
+        || type_filters
+            .iter()
+            .any(|f| f.parse::<LocationType>().ok() == Some(location_type))
 }
 
 async fn fetch_nominatim(query: &str, country: &str, limit: u64) -> Vec<LocationResponse> {
@@ -472,7 +473,7 @@ async fn persist_nominatim_location(
         )),
         bounds: Set(parse_nominatim_bounds(result.boundingbox.as_ref()).map(bounds_to_json)),
         population: Set(None),
-        status: Set(String::from("active")),
+        status: Set(LocationStatus::Active),
         content_count: Set(0),
         ..Default::default()
     };
@@ -673,7 +674,7 @@ async fn search_locations(
     let mut combined = local_results.clone();
     let nominatim_results = fetch_nominatim(query, &country, limit).await;
     for result in nominatim_results {
-        if !location_matches_type_filter(&result.r#type, &type_filters) {
+        if !location_matches_type_filter(result.r#type, &type_filters) {
             continue;
         }
 
@@ -765,13 +766,13 @@ mod tests {
                 osm_id: Some(34914),
                 osm_type: Some(String::from("relation")),
                 admin_level: Some(8),
-                r#type: String::from("municipality"),
+                r#type: LocationType::Municipality,
                 country: Some(String::from("FI")),
                 latitude: Some(60.1699),
                 longitude: Some(24.9384),
                 bounds: None,
                 population: Some(674_500),
-                status: String::from("active"),
+                status: LocationStatus::Active,
                 content_count: 3,
                 parent: None,
             }],

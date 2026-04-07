@@ -1,3 +1,4 @@
+use eulesia_common::types::JobStatus;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +8,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub job_name: String,
-    pub status: String,
+    pub status: JobStatus,
     pub started_at: DateTimeWithTimeZone,
     pub finished_at: Option<DateTimeWithTimeZone>,
     pub details: Option<Json>,

@@ -1,4 +1,6 @@
 use chrono::{DateTime, Utc};
+use sea_orm::entity::prelude::EnumIter;
+use sea_orm::DeriveActiveEnum;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -790,6 +792,139 @@ impl std::str::FromStr for MapPointType {
             "place" => Ok(Self::Place),
             "municipality" => Ok(Self::Municipality),
             other => Err(format!("invalid map point type: {other}")),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JobStatus enum
+// ---------------------------------------------------------------------------
+
+/// Execution status of a background job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "lowercase")]
+pub enum JobStatus {
+    #[sea_orm(string_value = "running")]
+    Running,
+    #[sea_orm(string_value = "skipped")]
+    Skipped,
+    #[sea_orm(string_value = "succeeded")]
+    Succeeded,
+    #[sea_orm(string_value = "failed")]
+    Failed,
+}
+
+impl JobStatus {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::Skipped => "skipped",
+            Self::Succeeded => "succeeded",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Location enums
+// ---------------------------------------------------------------------------
+
+/// Type of location (OSM-inspired).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "lowercase")]
+pub enum LocationType {
+    #[sea_orm(string_value = "municipality")]
+    Municipality,
+    #[sea_orm(string_value = "place")]
+    Place,
+    #[sea_orm(string_value = "region")]
+    Region,
+    #[sea_orm(string_value = "country")]
+    Country,
+    #[sea_orm(string_value = "district")]
+    District,
+    #[sea_orm(string_value = "locality")]
+    Locality,
+    #[sea_orm(string_value = "neighborhood")]
+    Neighborhood,
+    #[sea_orm(string_value = "other")]
+    Other,
+}
+
+impl LocationType {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Municipality => "municipality",
+            Self::Place => "place",
+            Self::Region => "region",
+            Self::Country => "country",
+            Self::District => "district",
+            Self::Locality => "locality",
+            Self::Neighborhood => "neighborhood",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// Operational status of a location.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "lowercase")]
+pub enum LocationStatus {
+    #[sea_orm(string_value = "active")]
+    Active,
+    #[sea_orm(string_value = "inactive")]
+    Inactive,
+    #[sea_orm(string_value = "archived")]
+    Archived,
+}
+
+impl LocationStatus {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Inactive => "inactive",
+            Self::Archived => "archived",
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SyncStatus enum
+// ---------------------------------------------------------------------------
+
+/// Synchronization status for external data sources.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "lowercase")]
+pub enum SyncStatus {
+    #[sea_orm(string_value = "pending")]
+    Pending,
+    #[sea_orm(string_value = "synced")]
+    Synced,
+    #[sea_orm(string_value = "failed")]
+    Failed,
+    #[sea_orm(string_value = "manual")]
+    Manual,
+}
+
+impl SyncStatus {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Synced => "synced",
+            Self::Failed => "failed",
+            Self::Manual => "manual",
         }
     }
 }

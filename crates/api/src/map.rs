@@ -158,8 +158,8 @@ struct PaginatedPlacesResponse {
 struct LocationDetailsResponse {
     id: Uuid,
     name: String,
-    latitude: Option<String>,
-    longitude: Option<String>,
+    latitude: Option<f64>,
+    longitude: Option<f64>,
     threads: Vec<MapThreadSummary>,
     clubs: Vec<MapClubSummary>,
     municipality: Option<MunicipalityResponse>,
@@ -171,7 +171,8 @@ struct LocationDetailsResponse {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> Option<f64> {
-    d.to_string().parse::<f64>().ok()
+    use rust_decimal::prelude::ToPrimitive;
+    d.to_f64()
 }
 
 fn decimal_from_f64(value: Option<f64>) -> Option<sea_orm::prelude::Decimal> {
@@ -287,14 +288,12 @@ fn append_thread_filters(
     values: &mut Vec<Value>,
     params: &BoundsParams,
     table_alias: &str,
-    club_only: Option<bool>,
+    club_only: bool,
 ) {
-    if let Some(club_only) = club_only {
-        if club_only {
-            let _ = write!(sql, " AND {table_alias}.club_id IS NOT NULL");
-        } else {
-            let _ = write!(sql, " AND {table_alias}.club_id IS NULL");
-        }
+    if club_only {
+        let _ = write!(sql, " AND {table_alias}.club_id IS NOT NULL");
+    } else {
+        let _ = write!(sql, " AND {table_alias}.club_id IS NULL");
     }
 
     if let Some(scope) = params.scope.as_deref() {
@@ -432,7 +431,7 @@ async fn query_thread_points(
         params.east.into(),
     ];
 
-    append_thread_filters(&mut sql, &mut values, params, "t", Some(club_only));
+    append_thread_filters(&mut sql, &mut values, params, "t", club_only);
 
     sql.push_str(" ORDER BY t.created_at DESC LIMIT 500");
 
@@ -832,8 +831,8 @@ async fn map_location_detail(
             Ok(Json(LocationDetailsResponse {
                 id: thread.id,
                 name: thread.title,
-                latitude: thread.latitude.map(|value| value.to_string()),
-                longitude: thread.longitude.map(|value| value.to_string()),
+                latitude: thread.latitude.and_then(decimal_to_f64),
+                longitude: thread.longitude.and_then(decimal_to_f64),
                 threads: related_threads,
                 clubs,
                 municipality,
@@ -855,8 +854,8 @@ async fn map_location_detail(
             Ok(Json(LocationDetailsResponse {
                 id: place.id,
                 name: place.name,
-                latitude: place.latitude.map(|value| value.to_string()),
-                longitude: place.longitude.map(|value| value.to_string()),
+                latitude: place.latitude.and_then(decimal_to_f64),
+                longitude: place.longitude.and_then(decimal_to_f64),
                 threads,
                 clubs: vec![],
                 municipality,
@@ -877,8 +876,8 @@ async fn map_location_detail(
             Ok(Json(LocationDetailsResponse {
                 id: municipality.id,
                 name: municipality.name,
-                latitude: municipality.latitude.map(|value| value.to_string()),
-                longitude: municipality.longitude.map(|value| value.to_string()),
+                latitude: municipality.latitude.and_then(decimal_to_f64),
+                longitude: municipality.longitude.and_then(decimal_to_f64),
                 threads: related_threads,
                 clubs: vec![],
                 municipality: Some(municipality_response),
@@ -972,9 +971,9 @@ mod tests {
 
         let mut sql = String::from("SELECT COUNT(*) FROM threads t WHERE 1 = 1");
         let mut values = Vec::new();
-        append_thread_filters(&mut sql, &mut values, &params, "t", None);
+        append_thread_filters(&mut sql, &mut values, &params, "t", false);
 
-        assert!(!sql.contains("club_id"));
+        assert!(sql.contains("club_id IS NULL"));
         assert!(sql.contains("t.scope = $1"));
         assert!(sql.contains("t.language = $2"));
         assert!(sql.contains("t.created_at >= $3"));
