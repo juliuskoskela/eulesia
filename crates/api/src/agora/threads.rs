@@ -55,7 +55,7 @@ fn author_map(users: Vec<eulesia_db::entities::users::Model>) -> HashMap<Uuid, A
                     username: u.username,
                     name: u.name,
                     avatar_url: u.avatar_url,
-                    role: u.role,
+                    role: u.role.parse().unwrap_or(UserRole::Citizen),
                 },
             )
         })
@@ -68,7 +68,7 @@ fn deleted_author() -> AuthorSummary {
         username: "[deleted]".into(),
         name: "[deleted]".into(),
         avatar_url: None,
-        role: "user".into(),
+        role: UserRole::Citizen,
     }
 }
 
@@ -539,7 +539,7 @@ pub async fn create_thread(
         username: user.username,
         name: user.name,
         avatar_url: user.avatar_url,
-        role: user.role,
+        role: user.role.parse().unwrap_or(UserRole::Citizen),
     };
 
     Ok(Json(ThreadResponse {
@@ -677,7 +677,7 @@ pub async fn update_thread(
         username: user.username,
         name: user.name,
         avatar_url: user.avatar_url,
-        role: user.role,
+        role: user.role.parse().unwrap_or(UserRole::Citizen),
     };
 
     Ok(Json(ThreadResponse {
@@ -858,7 +858,7 @@ mod tests {
         assert_eq!(author.username, "[deleted]");
         assert_eq!(author.name, "[deleted]");
         assert!(author.avatar_url.is_none());
-        assert_eq!(author.role, "user");
+        assert_eq!(author.role, UserRole::Citizen);
     }
 
     #[test]
@@ -893,7 +893,7 @@ mod tests {
                 username: "alice".into(),
                 name: "Alice".into(),
                 avatar_url: Some("https://example.com/alice.png".into()),
-                role: "user".into(),
+                role: "citizen".into(),
                 email: Some("alice@example.com".into()),
                 password_hash: Some(String::new()),
                 municipality_id: None,
@@ -958,11 +958,11 @@ mod tests {
             alice.avatar_url.as_deref(),
             Some("https://example.com/alice.png")
         );
-        assert_eq!(alice.role, "user");
+        assert_eq!(alice.role, UserRole::Citizen);
 
         let bob = map.get(&id2).expect("bob should be in map");
         assert_eq!(bob.username, "bob");
-        assert_eq!(bob.role, "moderator");
+        assert_eq!(bob.role, UserRole::Moderator);
         assert!(bob.avatar_url.is_none());
     }
 }

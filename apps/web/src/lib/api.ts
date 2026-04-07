@@ -1,7 +1,73 @@
 import { API_BASE_URL } from "./runtimeConfig";
 // Import generated types used in class method signatures before the class.
-// These are also re-exported below for consumers.
 import type { MapPoint as MapPointImport } from "../types/generated/MapPoint";
+// Import frontend and admin types used by ApiClient method signatures.
+import type {
+  Thread,
+  User,
+  Club,
+  ClubThread,
+  ClubComment,
+  Comment,
+  Room,
+  RoomThread,
+  RoomComment,
+  RoomInvitation,
+  RoomInvitationWithDetails,
+  UserSummary,
+  DirectMessage,
+  ExploreThread,
+  FeedScope,
+  LocationResult,
+  Place,
+  Municipality,
+  ThreadWithComments,
+  ThreadFilters,
+  ClubFilters,
+  CreateThreadData,
+  CreateCommentData,
+  CreateClubData,
+  CreateClubThreadData,
+  CreateRoomData,
+  ClubInvitation,
+  ClubInvitationWithDetails,
+  AppNotification,
+  Conversation,
+  MapBounds,
+  OsmType,
+  LocationDetails,
+  EntityType,
+  Subscription,
+  SubscribeData,
+  SubscriptionCheck,
+  SearchUserResult,
+  SearchResults,
+  TagWithCategory,
+  SubmitReportData,
+  SubmitAppealData,
+  AppealResponse,
+  MySanction,
+} from "../types/frontend";
+import type {
+  AdminDashboard,
+  AdminUser,
+  AdminUserDetail,
+  AdminReport,
+  AdminReportDetail,
+  AdminAppeal,
+  AdminAnnouncement,
+  AdminInvite,
+  AdminSanction,
+  GeneratedAdminInvite,
+  SystemAnnouncement,
+  IssueSanctionData,
+  TransparencyStats,
+  AvailableInstitution,
+  InstitutionClaim,
+  WaitlistEntry,
+  WaitlistStats,
+} from "../types/admin";
+import type { SearchThreadResult, SearchPlaceResult } from "../types/frontend";
 
 const API_URL = API_BASE_URL;
 
@@ -52,6 +118,252 @@ export interface RegisterRequest {
   name: string;
   ftnToken?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Private types — used only as return types by ApiClient methods.
+// Not exported; callers get the types via TypeScript inference.
+// These will be replaced with generated types as Rust structs gain ts-rs.
+// ---------------------------------------------------------------------------
+
+interface ThreadsResponse {
+  items: Thread[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  feedScope?: FeedScope | null;
+  hasSubscriptions: boolean;
+}
+
+interface ExploreResponse extends PaginatedResponse<ExploreThread> {
+  feedScope: "explore";
+}
+
+interface ClubWithThreads extends Club {
+  threads: ClubThread[];
+}
+
+interface ClubThreadWithComments extends ClubThread {
+  memberRole?: string | null;
+  isRoomOwner?: boolean;
+  comments: ClubComment[];
+}
+
+interface RoomThreadWithComments extends RoomThread {
+  isRoomOwner: boolean;
+  comments: RoomComment[];
+}
+
+interface RoomWithThreads extends Room {
+  owner: UserSummary;
+  members: UserSummary[];
+  threads: RoomThread[];
+  isOwner: boolean;
+  canPost: boolean;
+}
+
+interface HomeData {
+  owner: UserSummary;
+  rooms: Room[];
+  recentActivity: {
+    threads: { id: string; title: string; scope: string; createdAt: string }[];
+    clubs: { id: string; name: string; slug: string }[];
+  };
+  isOwnHome: boolean;
+}
+
+interface EditHistoryEntry {
+  id: string;
+  contentType: string;
+  previousContent: string;
+  previousContentHtml?: string | null;
+  previousTitle?: string | null;
+  editedAt: string;
+  editor: { id: string; name: string; avatarUrl?: string };
+}
+
+interface ConversationWithMessages {
+  id: string;
+  encryption?: "e2ee" | "none";
+  otherUser: UserSummary | null;
+  messages: DirectMessage[];
+}
+
+interface CreatePlaceData {
+  name: string;
+  nameFi?: string;
+  nameSv?: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number;
+  geojson?: unknown;
+  type: "poi" | "area" | "route" | "landmark";
+  category?: string;
+  municipalityId?: string;
+}
+
+interface LocationSearchResponse {
+  results: LocationResult[];
+  source: "cache" | "nominatim" | "mixed";
+}
+
+interface LocationWithHierarchy extends LocationResult {
+  hierarchy: LocationHierarchyItem[];
+}
+
+interface TagPageResponse {
+  tag: string;
+  tagMeta: {
+    tag: string;
+    category: string;
+    displayName: string | null;
+    description: string | null;
+    scope: string | null;
+  } | null;
+  institution: {
+    institutionId: string;
+    topicTag: string;
+    relatedTags: string[];
+    description: string | null;
+    institutionName: string | null;
+    institutionType: string | null;
+  } | null;
+  items: Thread[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+interface UploadAvatarResponse {
+  success: boolean;
+  avatarUrl: string;
+}
+
+interface UploadImageResponse {
+  success: boolean;
+  url: string;
+  thumbnailUrl: string;
+  width: number;
+  height: number;
+}
+
+interface ModLogEntry {
+  id: string;
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  reason: string;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+  adminName: string;
+  adminUserId: string;
+}
+
+interface LocationHierarchyItem {
+  name: string;
+  type: string;
+  adminLevel: number | null;
+}
+
+interface TrendingItem {
+  entityId: string;
+  score: number;
+  metadata: Record<string, unknown>;
+  computedAt: string | null;
+}
+
+interface TrendingResponse {
+  type: "threads" | "tags";
+  items: TrendingItem[];
+  computedAt: string | null;
+}
+
+interface AlgorithmDocumentation {
+  name: string;
+  version: string;
+  updatedAt: string;
+  description: Record<string, string>;
+  formula: string;
+  components: Record<string, unknown>;
+  whatIsNotUsed: Record<string, string[]>;
+  transparency: Record<string, string>;
+  changelog: {
+    date: string;
+    version: string;
+    description: Record<string, string>;
+  }[];
+}
+
+type BookmarksResponse = ThreadsResponse;
+
+interface LinkPreviewData {
+  url: string;
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  siteName: string | null;
+  faviconUrl: string | null;
+}
+
+interface InstitutionManager {
+  id: string;
+  role: "owner" | "editor";
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  approvedAt: string | null;
+  institution: {
+    id: string;
+    name: string;
+    username: string;
+    institutionType: "municipality" | "agency" | "ministry";
+    institutionName: string;
+    avatarUrl: string | null;
+    municipalityId: string | null;
+  };
+}
+
+interface CreateOrganizationData {
+  name: string;
+  institutionName: string;
+  businessId?: string;
+  businessIdCountry?: string;
+  websiteUrl?: string;
+  description?: string;
+  institutionType?: "organization" | "agency";
+}
+
+interface CreatedOrganization {
+  id: string;
+  name: string;
+  username: string;
+  institutionType: string;
+  institutionName: string;
+  businessId: string | null;
+}
+
+interface InstitutionClaimWithUser {
+  id: string;
+  role: "owner" | "editor";
+  status: "pending";
+  createdAt: string;
+  institution: {
+    id: string;
+    name: string;
+    institutionName: string;
+    institutionType: string;
+  };
+  user: { id: string; name: string; email: string };
+}
+
+interface ContentReportResponse {
+  id: string;
+  status: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
 
 class ApiClient {
   private baseUrl: string;
@@ -1456,1058 +1768,47 @@ class ApiClient {
 // Do NOT manually duplicate fields that exist in the generated types.
 // =============================================================================
 
-// Re-export pure generated types that need no frontend extension
-export type { ClubRole } from "../types/generated/ClubRole";
-export type { GroupRole } from "../types/generated/GroupRole";
-export type { ThreadScope } from "../types/generated/ThreadScope";
-export type { ThreadSource } from "../types/generated/ThreadSource";
-export type { MapPointType } from "../types/generated/MapPointType";
-export type { InvitationStatus } from "../types/generated/InvitationStatus";
-export type { TagWithCount } from "../types/generated/TagWithCount";
-export type { VoteResponse } from "../types/generated/VoteResponse";
-export type { EpochResponse } from "../types/generated/EpochResponse";
-export type { MemberSummary } from "../types/generated/MemberSummary";
-export type { ConversationUserSummary } from "../types/generated/ConversationUserSummary";
-export type { LastMessageSummary } from "../types/generated/LastMessageSummary";
-export type { MessageResponse } from "../types/generated/MessageResponse";
-export type { ConversationResponse } from "../types/generated/ConversationResponse";
-export type { ConversationListItem as ConversationListItemGenerated } from "../types/generated/ConversationListItem";
-export type { ClubResponse as ClubResponseGenerated } from "../types/generated/ClubResponse";
-export type { ClubListResponse } from "../types/generated/ClubListResponse";
-export type { ClubMemberSummary as ClubMemberSummaryGenerated } from "../types/generated/ClubMemberSummary";
-export type { InvitationResponse as InvitationResponseGenerated } from "../types/generated/InvitationResponse";
-export type { InvitationClubSummary } from "../types/generated/InvitationClubSummary";
-export type { InvitationUserSummary } from "../types/generated/InvitationUserSummary";
-export type { MapPoint } from "../types/generated/MapPoint";
-export type { PlaceResponse } from "../types/generated/PlaceResponse";
-export type { MunicipalityResponse } from "../types/generated/MunicipalityResponse";
-export type { LocationResponse } from "../types/generated/LocationResponse";
-export type { UserProfileResponse } from "../types/generated/UserProfileResponse";
-export type { ReportResponse } from "../types/generated/ReportResponse";
-export type { SanctionResponse } from "../types/generated/SanctionResponse";
-export type { AppealResponse as AppealResponseGenerated } from "../types/generated/AppealResponse";
-
-// Types below extend generated bases with frontend-specific fields.
-// As generated types become complete, these manual extensions shrink.
-
-export interface User {
-  id: string;
-  email?: string | null;
-  name: string;
-  username?: string;
-  verifiedName?: string;
-  avatarUrl?: string | null;
-  role: string;
-  institutionType?: string;
-  institutionName?: string;
-  municipality?: Municipality;
-  identityVerified?: boolean;
-  identityLevel?: "basic" | "substantial" | "high";
-  settings?: {
-    notificationReplies: boolean;
-    notificationMentions: boolean;
-    notificationOfficial: boolean;
-    locale: string;
-  };
-  onboardingCompletedAt?: string | null;
-  hasPassword?: boolean;
-  createdAt?: string;
-  // UI-computed fields (added by transformAuthor or component logic)
-  avatarInitials?: string;
-  verified?: boolean;
-  canViewProfile?: boolean;
-}
-
-export interface Municipality {
-  id: string;
-  name: string;
-  nameFi?: string;
-  nameSv?: string;
-  region?: string;
-}
-
-export interface Thread {
-  id: string;
-  title: string;
-  content: string;
-  contentHtml?: string;
-  scope: "local" | "national" | "european" | "club";
-  tags: string[];
-  author?: UserSummary;
-  authorId?: string | null;
-  municipality?: Municipality;
-  municipalityId?: string;
-  municipalityName?: string;
-  institutionalContext?: InstitutionalContext;
-  replyCount: number;
-  score?: number;
-  viewCount?: number;
-  userVote?: number;
-  isBookmarked?: boolean;
-  isPinned?: boolean;
-  isLocked?: boolean;
-  editedAt?: string | null;
-  editedBy?: string | null;
-  editorName?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  // AI/Import source tracking
-  source?: string;
-  sourceUrl?: string;
-  sourceId?: string;
-  aiGenerated?: boolean;
-  sourceInstitutionId?: string;
-  sourceInstitutionName?: string;
-}
-
-export interface ThreadWithComments extends Thread {
-  comments: Comment[];
-}
-
-// Discovery types
-export interface CvsBreakdown {
-  engagement: number;
-  sourceQuality: number;
-  freshness: number;
-  total: number;
-}
-
-export interface ExploreThread extends Thread {
-  cvsScore: number;
-  scoreBreakdown: CvsBreakdown;
-}
-
-export interface ExploreResponse extends PaginatedResponse<ExploreThread> {
-  feedScope: "explore";
-}
-
-export interface TrendingItem {
-  entityId: string;
-  score: number;
-  metadata: Record<string, unknown>;
-  computedAt: string | null;
-}
-
-export interface TrendingResponse {
-  type: "threads" | "tags";
-  items: TrendingItem[];
-  computedAt: string | null;
-}
-
-export interface AlgorithmDocumentation {
-  name: string;
-  version: string;
-  updatedAt: string;
-  description: Record<string, string>;
-  formula: string;
-  components: Record<string, unknown>;
-  whatIsNotUsed: Record<string, string[]>;
-  transparency: Record<string, string>;
-  changelog: {
-    date: string;
-    version: string;
-    description: Record<string, string>;
-  }[];
-}
-
-export type BookmarksResponse = ThreadsResponse;
-
-export interface Comment {
-  id: string;
-  threadId: string;
-  content: string;
-  contentHtml?: string;
-  author: UserSummary | null;
-  authorId?: string | null;
-  parentId?: string | null;
-  score: number;
-  depth: number;
-  userVote?: number;
-  editedAt?: string | null;
-  editedBy?: string | null;
-  isHidden?: boolean;
-  createdAt: string;
-  updatedAt?: string;
-}
-
-export interface UserSummary {
-  id: string;
-  username?: string;
-  name: string;
-  avatarUrl?: string | null;
-  role: string;
-  // Present on full user profiles, absent on embedded author summaries
-  identityVerified?: boolean;
-  canViewProfile?: boolean;
-  institutionType?: string;
-  institutionName?: string;
-}
-
-export interface InstitutionalContext {
-  docs?: { title: string; url: string }[];
-  timeline?: { date: string; event: string }[];
-  faq?: { q: string; a: string }[];
-  contact?: string;
-}
-
-export interface Club {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string | null;
-  category?: string | null;
-  isPublic: boolean;
-  creatorId: string;
-  creator?: ClubMemberSummary | null;
-  avatarUrl?: string | null;
-  coverImageUrl?: string | null;
-  rules?: string[] | string | null;
-  address?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  memberCount: number;
-  isMember: boolean;
-  memberRole?: string | null;
-  moderators?: ClubMemberSummary[];
-  members?: ClubMemberSummary[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ClubMemberSummary {
-  id: string;
-  name: string;
-  avatarUrl?: string | null;
-  role: string;
-  canViewProfile?: boolean;
-}
-
-export type ClubMember = ClubMemberSummary;
-
-export interface ClubWithThreads extends Club {
-  threads: ClubThread[];
-}
-
-export interface ClubInvitation {
-  id: string;
-  clubId: string;
-  clubName?: string | null;
-  club?: {
-    id: string;
-    name: string;
-    slug: string;
-    avatarUrl?: string | null;
-    coverImageUrl?: string | null;
-    memberCount?: number;
-  } | null;
-  userId: string;
-  invitee?: { id: string; name: string; avatarUrl?: string | null } | null;
-  invitedBy: string;
-  inviter?: { id: string; name: string; avatarUrl?: string | null } | null;
-  status: string;
-  createdAt: string;
-}
-
-export type ClubInvitationWithDetails = ClubInvitation;
-
-export interface ClubThread {
-  id: string;
-  title: string;
-  content: string;
-  contentHtml?: string;
-  author: UserSummary;
-  authorId?: string | null;
-  isPinned: boolean;
-  isLocked: boolean;
-  replyCount: number;
-  score?: number;
-  userVote?: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ClubThreadWithComments extends ClubThread {
-  memberRole?: string | null;
-  isRoomOwner?: boolean;
-  comments: ClubComment[];
-}
-
-export type ClubComment = Comment;
-
-// Home types
-export interface Room {
-  id: string;
-  name: string;
-  description?: string;
-  visibility: "public" | "private";
-  isPinned: boolean;
-  threadCount: number;
-  createdAt: string;
-  updatedAt: string;
-  canAccess?: boolean;
-}
-
-export interface RoomThread {
-  id: string;
-  roomId: string;
-  title: string;
-  content: string;
-  contentHtml?: string;
-  author: UserSummary | null;
-  authorId?: string | null;
-  editedAt?: string | null;
-  editedBy?: string | null;
-  isPinned: boolean;
-  isLocked: boolean;
-  replyCount: number;
-  score: number;
-  userVote: number;
-  isHidden?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface RoomThreadWithComments extends RoomThread {
-  isRoomOwner: boolean;
-  comments: RoomComment[];
-}
-
-export interface RoomComment {
-  id: string;
-  threadId: string;
-  parentId?: string | null;
-  authorId: string;
-  content: string;
-  contentHtml?: string;
-  author: UserSummary | null;
-  score: number;
-  depth: number;
-  userVote: number;
-  isHidden?: boolean;
-  createdAt: string;
-  updatedAt?: string;
-}
-
-export interface RoomWithThreads extends Room {
-  owner: UserSummary;
-  members: UserSummary[];
-  threads: RoomThread[];
-  isOwner: boolean;
-  canPost: boolean;
-}
-
-export interface RoomInvitation {
-  id: string;
-  roomId: string;
-  inviterId: string;
-  inviteeId: string;
-  status: "pending" | "accepted" | "declined";
-  createdAt: string;
-}
-
-export interface RoomInvitationWithDetails extends RoomInvitation {
-  room: { id: string; name: string; description?: string };
-  inviter: UserSummary;
-}
-
-export interface HomeData {
-  owner: UserSummary;
-  rooms: Room[];
-  recentActivity: {
-    threads: { id: string; title: string; scope: string; createdAt: string }[];
-    clubs: { id: string; name: string; slug: string }[];
-  };
-  isOwnHome: boolean;
-}
-
-// Notification types
-export interface AppNotification {
-  id: string;
-  type: string;
-  title: string;
-  body?: string;
-  link?: string;
-  read: boolean;
-  createdAt: string;
-}
-
-// Direct Message types
-export interface Conversation {
-  id: string;
-  conversationType: string;
-  name?: string | null;
-  currentEpoch: number;
-  otherUser: { id: string; name: string; avatarUrl?: string | null } | null;
-  lastMessage: {
-    id: string;
-    content?: string | null;
-    senderId: string;
-    createdAt: string;
-  } | null;
-  unreadCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface DirectMessage {
-  id: string;
-  conversationId: string;
-  content: string;
-  contentHtml?: string;
-  author: UserSummary | null;
-  editedAt?: string | null;
-  isHidden?: boolean;
-  createdAt: string;
-}
-
-export interface EditHistoryEntry {
-  id: string;
-  contentType: string;
-  previousContent: string;
-  previousContentHtml?: string | null;
-  previousTitle?: string | null;
-  editedAt: string;
-  editor: {
-    id: string;
-    name: string;
-    avatarUrl?: string;
-  };
-}
-
-export interface ConversationWithMessages {
-  id: string;
-  encryption?: "e2ee" | "none";
-  otherUser: UserSummary | null;
-  messages: DirectMessage[];
-}
-
-// Filter types - all scopes filter WITHIN subscriptions, never shows all content globally
-export type FeedScope = "following" | "local" | "national" | "european" | "all";
-export type SortBy = "recent" | "new" | "top";
-export type TopPeriod = "day" | "week" | "month" | "year";
-
-export interface ThreadFilters {
-  scope?: "local" | "national" | "european";
-  municipalityId?: string;
-  tags?: string[];
-  feedScope?: FeedScope;
-  sortBy?: SortBy;
-  topPeriod?: TopPeriod;
-  page?: number;
-  limit?: number;
-}
-
-export interface ThreadsResponse {
-  items: Thread[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-  feedScope?: FeedScope | null;
-  hasSubscriptions: boolean;
-}
-
-export interface ClubFilters {
-  category?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
-  membership?: "mine";
-}
-
-// Create types
-export interface CreateThreadData {
-  title: string;
-  content: string;
-  scope: "local" | "national" | "european";
-  country?: string;
-  municipalityId?: string;
-  // Location support: either locationId (existing) or locationOsmId (to be activated)
-  locationId?: string;
-  locationOsmId?: number;
-  locationOsmType?: OsmType;
-  tags?: string[];
-  language?: string;
-  institutionalContext?: InstitutionalContext;
-}
-
-export interface CreateCommentData {
-  content: string;
-  parentId?: string;
-  language?: string;
-}
-
-export interface CreateClubData {
-  name: string;
-  slug?: string;
-  description?: string;
-  rules?: string[];
-  category?: string;
-  coverImageUrl?: string;
-  isPublic?: boolean;
-  latitude?: number;
-  longitude?: number;
-  address?: string;
-  municipalityId?: string;
-}
-
-export interface CreateClubThreadData {
-  title: string;
-  content: string;
-  language?: string;
-}
-
-export interface CreateRoomData {
-  name: string;
-  description?: string;
-  visibility?: "public" | "private";
-}
-
-// Map types
-// MapPoint is re-exported from generated types above
-
-export interface MapBounds {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
-  types?: string;
-  categories?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  timePreset?: "week" | "month" | "year" | "all";
-  scope?: string;
-  language?: string;
-  tags?: string;
-}
-
-export interface Place {
-  id: string;
-  name: string;
-  nameFi?: string;
-  nameSv?: string;
-  description?: string;
-  latitude?: string;
-  longitude?: string;
-  radiusKm?: string;
-  geojson?: unknown;
-  type: "poi" | "area" | "route" | "landmark";
-  category?: string;
-  municipalityId?: string;
-  municipality?: Municipality;
-  createdAt: string;
-}
-
-export interface CreatePlaceData {
-  name: string;
-  nameFi?: string;
-  nameSv?: string;
-  description?: string;
-  latitude?: number;
-  longitude?: number;
-  radiusKm?: number;
-  geojson?: unknown;
-  type: "poi" | "area" | "route" | "landmark";
-  category?: string;
-  municipalityId?: string;
-}
-
-export interface LocationDetails {
-  id: string;
-  name: string;
-  latitude?: string;
-  longitude?: string;
-  threads?: Thread[];
-  clubs?: Club[];
-  municipality?: Municipality;
-  place?: Place;
-}
-
-// Dynamic Location types (Nominatim integration)
-export type OsmType = "node" | "way" | "relation";
-export type LocationStatus = "active" | "available";
-
-export interface LocationResult {
-  id: string | null; // DB ID (null if from Nominatim only)
-  osmId: number;
-  osmType: OsmType;
-  name: string;
-  nameFi: string | null;
-  nameSv: string | null;
-  nameEn: string | null;
-  displayName: string;
-  type: string; // 'municipality', 'village', 'region', etc.
-  adminLevel: number | null;
-  country: string;
-  latitude: number;
-  longitude: number;
-  bounds: { south: number; north: number; west: number; east: number } | null;
-  population: number | null;
-  status: LocationStatus; // 'active' = in DB, 'available' = from Nominatim
-  contentCount: number;
-  parent: {
-    name: string;
-    type: string;
-  } | null;
-}
-
-export interface LocationSearchResponse {
-  results: LocationResult[];
-  source: "cache" | "nominatim" | "mixed";
-}
-
-export interface LocationHierarchyItem {
-  name: string;
-  type: string;
-  adminLevel: number | null;
-}
-
-export interface LocationWithHierarchy extends LocationResult {
-  hierarchy: LocationHierarchyItem[];
-}
-
-// Subscription types
-export type EntityType = "user" | "municipality" | "place" | "club" | "tag";
-export type NotifyLevel = "all" | "none" | "highlights";
-
-export interface Subscription {
-  entityType: EntityType;
-  entityId: string;
-  notify: NotifyLevel;
-  createdAt: string;
-  entity: Record<string, unknown> | null;
-}
-
-export interface SubscribeData {
-  entityType: EntityType;
-  entityId: string;
-  notify?: NotifyLevel;
-}
-
-export interface SubscriptionCheck {
-  subscribed: boolean;
-  notify: NotifyLevel | null;
-}
-
-// Search types
-export interface SearchUserResult {
-  id: string;
-  name: string;
-  username: string;
-  role: "citizen" | "institution" | "moderator";
-  avatarUrl?: string;
-  institutionType?: string;
-  institutionName?: string;
-  municipalityName?: string;
-}
-
-export interface SearchThreadResult {
-  id: string;
-  title: string;
-  content: string;
-  scope: "local" | "national" | "european";
-  authorName: string;
-  municipalityName?: string;
-  tags: string[];
-  score: number;
-  replyCount: number;
-  createdAt: string;
-}
-
-export interface SearchPlaceResult {
-  id: string;
-  name: string;
-  description?: string;
-  category?: string;
-  municipalityName?: string;
-}
-
-export interface SearchMunicipalityResult {
-  id: string;
-  name: string;
-  nameFi: string;
-  region?: string;
-}
-
-export interface SearchTagResult {
-  tag: string;
-  count: number;
-}
-
-export interface SearchLocationResult {
-  id: string;
-  osmId: number;
-  osmType: string;
-  name: string;
-  nameFi?: string;
-  displayName: string;
-  type: string;
-  country: string;
-  contentCount: number;
-  parentName?: string;
-}
-
-export interface SearchClubResult {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  category?: string;
-  memberCount: number;
-}
-
-export interface SearchResults {
-  users: SearchUserResult[];
-  threads: SearchThreadResult[];
-  places: SearchPlaceResult[];
-  municipalities: SearchMunicipalityResult[];
-  locations: SearchLocationResult[];
-  tags: SearchTagResult[];
-  clubs: SearchClubResult[];
-  query: string;
-  processingTimeMs: number;
-}
-
-// Tag types — TagWithCategory is an alias for the generated TagWithCount
-export type TagWithCategory =
-  import("../types/generated/TagWithCount").TagWithCount;
-
-export interface TagPageResponse {
-  tag: string;
-  tagMeta: {
-    tag: string;
-    category: string;
-    displayName: string | null;
-    description: string | null;
-    scope: string | null;
-  } | null;
-  institution: {
-    institutionId: string;
-    topicTag: string;
-    relatedTags: string[];
-    description: string | null;
-    institutionName: string | null;
-    institutionType: string | null;
-  } | null;
-  items: Thread[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-}
-
-// Upload types
-export interface UploadAvatarResponse {
-  success: boolean;
-  avatarUrl: string;
-}
-
-export interface UploadImageResponse {
-  success: boolean;
-  url: string;
-  thumbnailUrl: string;
-  width: number;
-  height: number;
-}
-
-// ─── Admin types ──────────────────────────────────────────
-
-export interface AdminDashboard {
-  stats: {
-    totalUsers: number;
-    totalThreads: number;
-    totalClubs: number;
-    pendingReports: number;
-    pendingAppeals: number;
-  };
-  recentReports: {
-    id: string;
-    contentType: string;
-    reason: string;
-    status: string;
-    createdAt: string;
-    reporterName: string;
-  }[];
-  recentActions: {
-    id: string;
-    actionType: string;
-    targetType: string;
-    reason: string;
-    createdAt: string;
-    adminName: string;
-  }[];
-}
-
-export interface AdminUser {
-  id: string;
-  email: string | null;
-  username: string;
-  name: string;
-  avatarUrl?: string;
-  role: "citizen" | "institution" | "moderator";
-  institutionType?: string;
-  institutionName?: string;
-  identityVerified: boolean;
-  createdAt: string;
-  lastSeenAt?: string;
-}
-
-export interface AdminSanction {
-  id: string;
-  sanctionType: "warning" | "suspension" | "ban";
-  reason: string;
-  issuedAt: string;
-  expiresAt?: string;
-  revokedAt?: string;
-  issuerName?: string;
-}
-
-export interface AdminUserDetail extends AdminUser {
-  sanctions: AdminSanction[];
-  threadCount: number;
-  commentCount: number;
-  inviteCodesRemaining: number;
-}
-
-export interface IssueSanctionData {
-  sanctionType: "warning" | "suspension" | "ban";
-  reason: string;
-  expiresAt?: string;
-}
-
-export interface AdminReport {
-  id: string;
-  contentType: string;
-  contentId: string;
-  reason: string;
-  description?: string;
-  status: string;
-  createdAt: string;
-  resolvedAt?: string;
-  reporterName: string;
-  reporterUserId: string;
-}
-
-export interface AdminReportDetail extends AdminReport {
-  content: AdminReportContentPreview | null;
-  assignedTo?: string;
-}
-
-export interface AdminReportContentPreview {
-  title?: string;
-  content?: string;
-  name?: string;
-  authorId?: string;
-  [key: string]: unknown;
-}
-
-export interface ModLogEntry {
-  id: string;
-  actionType: string;
-  targetType: string;
-  targetId: string;
-  reason: string;
-  metadata?: Record<string, unknown> | null;
-  createdAt: string;
-  adminName: string;
-  adminUserId: string;
-}
-
-export interface TransparencyStats {
-  period: { from: string; to: string };
-  reports: {
-    byStatus: { status: string; count: number }[];
-    byReason: { reason: string; count: number }[];
-    byContentType: { contentType: string; count: number }[];
-    avgResponseTimeHours: number | null;
-  };
-  actions: {
-    byType: { actionType: string; count: number }[];
-  };
-  sanctions: {
-    byType: { sanctionType: string; count: number }[];
-  };
-  appeals: {
-    byStatus: { status: string; count: number }[];
-  };
-}
-
-export interface AdminAppeal {
-  id: string;
-  reason: string;
-  status: "pending" | "accepted" | "rejected";
-  adminResponse?: string;
-  createdAt: string;
-  respondedAt?: string;
-  sanctionId?: string;
-  reportId?: string;
-  actionId?: string;
-  userId: string;
-  userName: string;
-}
-
-export interface SubmitReportData {
-  contentType: string;
-  contentId: string;
-  reason: string;
-  description?: string;
-}
-
-export interface ContentReportResponse {
-  id: string;
-  status: string;
-  createdAt: string;
-}
-
-export interface SubmitAppealData {
-  sanctionId?: string;
-  reportId?: string;
-  actionId?: string;
-  reason: string;
-}
-
-export interface AppealResponse {
-  id: string;
-  status: string;
-  createdAt: string;
-}
-
-export interface MySanction {
-  id: string;
-  sanctionType: "warning" | "suspension" | "ban";
-  reason?: string;
-  issuedAt: string;
-  expiresAt?: string;
-  revokedAt?: string;
-}
-
-export interface LinkPreviewData {
-  url: string;
-  title: string | null;
-  description: string | null;
-  imageUrl: string | null;
-  siteName: string | null;
-  faviconUrl: string | null;
-}
-
-export interface SystemAnnouncement {
-  id: string;
-  title: string;
-  message: string;
-  type: "info" | "warning" | "critical";
-  createdAt: string;
-  expiresAt: string | null;
-}
-
-export interface AdminAnnouncement extends SystemAnnouncement {
-  active: boolean;
-  createdByName: string | null;
-}
-
-export interface GeneratedAdminInvite {
-  id: string;
-  code: string;
-  createdAt: string;
-}
-
-export interface AdminInvite extends GeneratedAdminInvite {
-  status: "available" | "used" | "revoked";
-  usedAt: string | null;
-  usedBy: { name: string } | null;
-}
-
-// Institution management types
-export interface InstitutionManager {
-  id: string;
-  role: "owner" | "editor";
-  status: "pending" | "approved" | "rejected";
-  createdAt: string;
-  approvedAt: string | null;
-  institution: {
-    id: string;
-    name: string;
-    username: string;
-    institutionType: "municipality" | "agency" | "ministry";
-    institutionName: string;
-    avatarUrl: string | null;
-    municipalityId: string | null;
-  };
-}
-
-export interface AvailableInstitution {
-  id: string;
-  name: string;
-  institutionType: "municipality" | "agency" | "ministry";
-  institutionName: string;
-  municipalityId: string | null;
-  identityProvider: string;
-}
-
-export interface InstitutionClaim {
-  id: string;
-  institutionId: string;
-  userId: string;
-  role: "owner" | "editor";
-  status: "pending" | "approved" | "rejected";
-  createdAt: string;
-}
-
-export interface InstitutionClaimWithUser {
-  id: string;
-  role: "owner" | "editor";
-  status: "pending";
-  createdAt: string;
-  institution: {
-    id: string;
-    name: string;
-    institutionName: string;
-    institutionType: string;
-  };
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
-}
-
-export interface CreateOrganizationData {
-  name: string;
-  institutionName: string;
-  businessId?: string;
-  businessIdCountry?: string;
-  websiteUrl?: string;
-  description?: string;
-  institutionType?: "organization" | "agency";
-}
-
-export interface CreatedOrganization {
-  id: string;
-  name: string;
-  username: string;
-  institutionType: string;
-  institutionName: string;
-  businessId: string | null;
-}
-
-export interface WaitlistEntry {
-  id: string;
-  email: string;
-  name: string | null;
-  status: "pending" | "approved" | "rejected";
-  locale: string;
-  createdAt: string;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  emailSentAt: string | null;
-  note: string | null;
-}
-
-export interface WaitlistStats {
-  pending: number;
-  approved: number;
-  rejected: number;
-  total: number;
-}
+// Re-export all types so existing `import { X } from "../lib/api"` keeps working.
+// New code should import types from ../types/api, ../types/frontend, or ../types/admin.
+//
+// Generated types (types/api) — skip names that collide with frontend overrides.
+export type {
+  ClubRole,
+  GroupRole,
+  ThreadScope,
+  ThreadSource,
+  MapPointType,
+  InvitationStatus,
+  ThreadResponse,
+  ThreadListResponse,
+  ThreadWithCommentsResponse,
+  CommentResponse,
+  AuthorSummary,
+  TagWithCount,
+  VoteResponse,
+  ClubResponse,
+  ClubListResponse,
+  InvitationResponse,
+  InvitationClubSummary,
+  InvitationUserSummary,
+  ConversationListItem,
+  ConversationResponse,
+  ConversationUserSummary,
+  LastMessageSummary,
+  MemberSummary,
+  MessageResponse,
+  EpochResponse,
+  MapPoint,
+  PlaceResponse,
+  MunicipalityResponse,
+  LocationResponse,
+  UserProfileResponse,
+  ReportResponse,
+  SanctionResponse,
+} from "../types/api";
+// Frontend-only and admin types.
+export * from "../types/frontend";
+export * from "../types/admin";
 
 // Export singleton instance
 export const api = new ApiClient(API_URL);

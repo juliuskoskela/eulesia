@@ -1,7 +1,8 @@
 import { MapPin, Building2, Globe } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { Scope } from "../../types";
+// Public thread scopes (excludes "club" which is internal to club endpoints)
+type Scope = "local" | "national" | "european";
 
 interface ScopeBadgeProps {
   scope: Scope | string;

@@ -41,7 +41,7 @@ import type {
   ExploreThread,
   Municipality,
 } from "../lib/api";
-import { transformAuthor } from "../utils/transforms";
+import { getAvatarInitials } from "../utils/avatar";
 
 const DAILY_SUBTITLE_INDEX = Math.floor(Date.now() / 86400000) % 5;
 
@@ -167,7 +167,13 @@ export function AgoraPage() {
   const [allThreads, setAllThreads] = useState<
     {
       thread: ReturnType<typeof transformThread>;
-      author: ReturnType<typeof transformAuthor>;
+      author: {
+        id: string;
+        name: string;
+        role: string;
+        avatarInitials: string;
+        [key: string]: unknown;
+      };
     }[]
   >([]);
 
@@ -226,7 +232,10 @@ export function AgoraPage() {
     if (!threadsData?.items) return;
     const newItems = threadsData.items.map((item) => ({
       thread: transformThread(item),
-      author: transformAuthor(item.author ?? { id: "", name: "", role: "" }),
+      author: (() => {
+        const a = item.author ?? { id: "", name: "", role: "citizen" as const };
+        return { ...a, avatarInitials: getAvatarInitials(a.name) };
+      })(),
     }));
     if (page === 1) {
       setAllThreads(newItems);

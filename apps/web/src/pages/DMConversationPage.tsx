@@ -30,7 +30,7 @@ import { useSocket } from "../hooks/useSocket";
 import { useKeyboard } from "../hooks/useKeyboard";
 import { formatRelativeTime } from "../lib/formatTime";
 import type { DirectMessage } from "../lib/api";
-import { transformAuthor, getAvatarInitials } from "../utils/transforms";
+import { getAvatarInitials } from "../utils/avatar";
 
 interface DMMessageBubbleProps {
   message: DirectMessage;
@@ -79,7 +79,10 @@ function MessageBubble({
       <div className="flex-shrink-0">
         {message.author && (
           <ActorBadge
-            user={transformAuthor(message.author)}
+            user={{
+              ...message.author,
+              avatarInitials: getAvatarInitials(message.author.name),
+            }}
             showName={false}
             size="sm"
           />

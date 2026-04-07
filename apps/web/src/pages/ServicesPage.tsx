@@ -15,7 +15,65 @@ import {
 import { Layout } from "../components/layout";
 import { SEOHead } from "../components/SEOHead";
 import { ContentEndMarker } from "../components/common";
-import { services, getServiceCategories } from "../data";
+// Demo fixture data — inlined from deleted data/services.ts
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const services: any[] = [
+  {
+    id: "service-booking",
+    name: "Sports Facility Booking",
+    category: "Recreation",
+    provider: "City of Tampere",
+    description:
+      "Book time slots at municipal sports facilities, swimming pools, and outdoor courts.",
+    integrationDemoType: "booking",
+  },
+  {
+    id: "service-events",
+    name: "Local Events Calendar",
+    category: "Community",
+    provider: "Eulesia Foundation",
+    description:
+      "Discover public events, cultural activities, and community gatherings in your area.",
+    integrationDemoType: "events",
+  },
+  {
+    id: "service-volunteering",
+    name: "Volunteer Matching",
+    category: "Community",
+    provider: "Finnish Red Cross",
+    description:
+      "Find volunteering opportunities that match your skills and interests.",
+    integrationDemoType: "volunteering",
+  },
+  {
+    id: "service-library",
+    name: "Library Services",
+    category: "Culture",
+    provider: "Pirkanmaa Libraries",
+    description:
+      "Browse library collections, reserve books, and manage your library account.",
+    integrationDemoType: "booking",
+  },
+  {
+    id: "service-local-media",
+    name: "Local News Hub",
+    category: "Media",
+    provider: "Verified News Partners",
+    description: "Curated local news from verified regional media sources.",
+    integrationDemoType: "media",
+  },
+  {
+    id: "service-transit",
+    name: "Public Transport",
+    category: "Transport",
+    provider: "Nysse",
+    description:
+      "Plan routes, check schedules, and purchase tickets for Tampere region public transport.",
+    integrationDemoType: "booking",
+  },
+];
+const getServiceCategories = (): string[] =>
+  Array.from(new Set(services.map((s) => s.category))).sort();
 // Demo service type — not an API type, only used for the services demo page
 type Service = {
   id: string;

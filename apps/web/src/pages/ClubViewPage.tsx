@@ -49,7 +49,7 @@ import {
 import { api } from "../lib/api";
 import { formatRelativeTime } from "../lib/formatTime";
 import type { ClubThread, ClubMember, LocationResult } from "../lib/api";
-import { transformAuthor as transformUser } from "../utils/transforms";
+import { getAvatarInitials } from "../utils/avatar";
 
 export function ClubViewPage() {
   const { t } = useTranslation("clubs");
@@ -909,7 +909,7 @@ export function ClubViewPage() {
               {moderators.map((mod, index) => (
                 <ActorBadge
                   key={mod.id ?? `moderator-${index}`}
-                  user={transformUser(mod)}
+                  user={{ ...mod, avatarInitials: getAvatarInitials(mod.name) }}
                   size="sm"
                 />
               ))}
@@ -1158,7 +1158,13 @@ export function ClubViewPage() {
                     {thread.content.substring(0, 150)}...
                   </p>
                   <div className="flex items-center justify-between">
-                    <ActorBadge user={transformUser(thread.author)} size="sm" />
+                    <ActorBadge
+                      user={{
+                        ...thread.author,
+                        avatarInitials: getAvatarInitials(thread.author.name),
+                      }}
+                      size="sm"
+                    />
                     <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                       {(thread.score ?? 0) !== 0 && (
                         <span

@@ -33,7 +33,7 @@ import {
 } from "../hooks/useApi";
 import { useAuth } from "../hooks/useAuth";
 import { formatRelativeTime } from "../lib/formatTime";
-import { transformAuthor, transformComment } from "../utils/transforms";
+import { getAvatarInitials, enrichComments } from "../utils/avatar";
 import { api } from "../lib/api";
 
 export function ThreadPage() {
@@ -221,11 +221,17 @@ export function ThreadPage() {
     );
   }
 
-  const author = transformAuthor(
-    thread.author ?? { id: "", name: "", role: "" },
-  );
+  const rawAuthor = thread.author ?? {
+    id: "",
+    name: "",
+    role: "citizen" as const,
+  };
+  const author = {
+    ...rawAuthor,
+    avatarInitials: getAvatarInitials(rawAuthor.name),
+  };
   const isInstitutional = thread.author?.role === "institution";
-  const comments = thread.comments?.map(transformComment) || [];
+  const comments = enrichComments(thread.comments ?? []);
 
   const threadJsonLd = {
     "@context": "https://schema.org",

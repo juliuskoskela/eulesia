@@ -113,7 +113,7 @@ pub async fn create_comment(
         username: user.username,
         name: user.name,
         avatar_url: user.avatar_url,
-        role: user.role,
+        role: user.role.parse().unwrap_or(UserRole::Citizen),
     };
 
     Ok(Json(CommentResponse {
@@ -173,7 +173,7 @@ pub async fn update_comment(
         username: user.username,
         name: user.name,
         avatar_url: user.avatar_url,
-        role: user.role,
+        role: user.role.parse().unwrap_or(UserRole::Citizen),
     };
 
     Ok(Json(CommentResponse {

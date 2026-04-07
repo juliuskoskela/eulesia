@@ -1,7 +1,7 @@
 import { MessageSquare, Building2, Bot, Share2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { Thread, User } from "../../types";
+import type { Thread } from "../../lib/api";
 import type { CvsBreakdown } from "../../lib/api";
 import { ScopeBadge } from "../common/ScopeBadge";
 import { ThreadVoteButtons } from "./ThreadVoteButtons";
@@ -18,7 +18,12 @@ interface ThreadCardProps {
     scoreBreakdown?: CvsBreakdown;
     isBookmarked?: boolean;
   };
-  author: User;
+  author: {
+    name: string;
+    role: string;
+    avatarUrl?: string | null;
+    avatarInitials?: string;
+  };
   onVote?: (threadId: string, value: number) => void;
   isVoting?: boolean;
 }

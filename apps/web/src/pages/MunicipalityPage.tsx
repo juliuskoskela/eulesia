@@ -9,7 +9,7 @@ import { ContentEndMarker, FollowButton } from "../components/common";
 import { useThreads, useMunicipalities } from "../hooks/useApi";
 import { useAuth } from "../hooks/useAuth";
 import type { Thread as ApiThread, Municipality } from "../lib/api";
-import { transformAuthor } from "../utils/transforms";
+import { getAvatarInitials } from "../utils/avatar";
 
 // Transform API thread to component format
 function transformThread(thread: ApiThread) {
@@ -152,9 +152,14 @@ export function MunicipalityPage() {
               <ThreadCard
                 key={thread.id}
                 thread={transformThread(thread)}
-                author={transformAuthor(
-                  thread.author ?? { id: "", name: "", role: "" },
-                )}
+                author={(() => {
+                  const a = thread.author ?? {
+                    id: "",
+                    name: "",
+                    role: "citizen" as const,
+                  };
+                  return { ...a, avatarInitials: getAvatarInitials(a.name) };
+                })()}
               />
             ))}
           </div>

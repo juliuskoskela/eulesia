@@ -13,7 +13,8 @@ import { useTranslation } from "react-i18next";
 import { useCreateThread } from "../../hooks/useApi";
 import { useAuth } from "../../hooks/useAuth";
 import { LocationSearch } from "../common/LocationSearch";
-import type { Scope } from "../../types";
+// Public thread scopes (excludes "club" which is internal to club endpoints)
+type Scope = "local" | "national" | "european";
 import type { LocationResult } from "../../lib/api";
 
 const SUPPORTED_COUNTRIES: { code: string; flag: string; name: string }[] = [
