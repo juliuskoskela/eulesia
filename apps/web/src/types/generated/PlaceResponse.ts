@@ -4,6 +4,7 @@ export type PlaceResponse = {
   id: string;
   name: string;
   nameFi: string | null;
+  nameSv: string | null;
   description: string | null;
   latitude: number | null;
   longitude: number | null;

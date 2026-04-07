@@ -6,7 +6,6 @@
 }: let
   commonArgs = {
     inherit src;
-    pname = "eulesia-server";
     version = "0.1.0";
     strictDeps = true;
     # josekit depends on openssl-sys for JWE/JWT crypto
@@ -15,21 +14,36 @@
   };
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+  mkWorkspacePackage = {
+    pname,
+    cargoExtraArgs,
+  }:
+    craneLib.buildPackage (commonArgs
+      // {
+        inherit cargoArtifacts cargoExtraArgs pname;
+      });
 in {
-  package = craneLib.buildPackage (commonArgs
-    // {
-      inherit cargoArtifacts;
-    });
+  package = mkWorkspacePackage {
+    pname = "eulesia-server";
+    cargoExtraArgs = "-p eulesia-server";
+  };
+
+  jobs = mkWorkspacePackage {
+    pname = "eulesia-jobs";
+    cargoExtraArgs = "-p eulesia-jobs";
+  };
 
   clippy = craneLib.cargoClippy (commonArgs
     // {
       inherit cargoArtifacts;
-      cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+      cargoClippyExtraArgs = "--workspace --all-targets -- --deny warnings";
     });
 
   test = craneLib.cargoTest (commonArgs
     // {
       inherit cargoArtifacts;
+      cargoExtraArgs = "--workspace";
     });
 
   fmt = craneLib.cargoFmt {

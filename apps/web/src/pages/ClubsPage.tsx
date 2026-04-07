@@ -163,8 +163,8 @@ export function ClubsPage() {
             : newClubCategory.trim()) || undefined,
         coverImageUrl: newClubCoverImage || undefined,
         isPublic: newClubIsPublic,
-        latitude: newClubLocation ? newClubLocation.latitude : undefined,
-        longitude: newClubLocation ? newClubLocation.longitude : undefined,
+        latitude: newClubLocation?.latitude ?? undefined,
+        longitude: newClubLocation?.longitude ?? undefined,
         address: newClubLocation
           ? newClubLocation.displayName || newClubLocation.name
           : undefined,

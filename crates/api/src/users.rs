@@ -2,6 +2,7 @@ use axum::Json;
 use axum::Router;
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
+use sea_orm::EntityTrait;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, DatabaseBackend, Statement};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -10,6 +11,7 @@ use crate::AppState;
 use eulesia_auth::session::{AuthUser, OptionalAuth};
 use eulesia_common::error::ApiError;
 use eulesia_db::repo::sessions::SessionRepo;
+use eulesia_db::repo::subscriptions::SubscriptionRepo;
 use eulesia_db::repo::users::UserRepo;
 
 // ---------------------------------------------------------------------------
@@ -30,6 +32,8 @@ pub struct UserProfileResponse {
     pub institution_type: Option<String>,
     pub institution_name: Option<String>,
     pub identity_verified: bool,
+    pub municipality_id: Option<Uuid>,
+    pub municipality: Option<crate::map::MunicipalityResponse>,
     pub created_at: String,
     pub threads: Vec<serde_json::Value>,
 }
@@ -41,26 +45,45 @@ pub struct UpdateProfileRequest {
     pub bio: Option<String>,
     pub avatar_url: Option<String>,
     pub locale: Option<String>,
+    pub municipality_id: Option<Option<Uuid>>,
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn user_to_profile(u: eulesia_db::entities::users::Model) -> UserProfileResponse {
-    UserProfileResponse {
-        id: u.id,
-        username: u.username,
-        name: u.name,
-        avatar_url: u.avatar_url,
-        bio: u.bio,
-        role: u.role,
-        institution_type: u.institution_type,
-        institution_name: u.institution_name,
-        identity_verified: u.identity_verified,
-        created_at: u.created_at.to_rfc3339(),
+async fn user_to_profile(
+    db: &sea_orm::DatabaseConnection,
+    user: eulesia_db::entities::users::Model,
+) -> Result<UserProfileResponse, ApiError> {
+    let municipality = match user.municipality_id {
+        Some(municipality_id) => {
+            eulesia_db::entities::municipalities::Entity::find_by_id(municipality_id)
+                .one(db)
+                .await
+                .map_err(|e| {
+                    ApiError::Database(format!("find municipality for user profile: {e}"))
+                })?
+                .map(crate::map::municipality_to_response)
+        }
+        None => None,
+    };
+
+    Ok(UserProfileResponse {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        avatar_url: user.avatar_url,
+        bio: user.bio,
+        role: user.role,
+        institution_type: user.institution_type,
+        institution_name: user.institution_name,
+        identity_verified: user.identity_verified,
+        municipality_id: user.municipality_id,
+        municipality,
+        created_at: user.created_at.to_rfc3339(),
         threads: vec![],
-    }
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +144,7 @@ pub async fn get_user_profile(
         })
         .collect();
 
-    let mut profile = user_to_profile(user);
+    let mut profile = user_to_profile(&state.db, user).await?;
     profile.threads = thread_values;
     Ok(Json(profile))
 }
@@ -165,11 +188,38 @@ async fn update_my_profile(
     if let Some(locale) = req.locale {
         am.locale = Set(locale);
     }
+    if let Some(municipality_id) = req.municipality_id {
+        if let Some(municipality_id) = municipality_id {
+            let municipality =
+                eulesia_db::entities::municipalities::Entity::find_by_id(municipality_id)
+                    .one(&*state.db)
+                    .await
+                    .map_err(|e| {
+                        ApiError::Database(format!("find municipality for profile update: {e}"))
+                    })?;
+
+            if municipality.is_none() {
+                return Err(ApiError::BadRequest("municipalityId does not exist".into()));
+            }
+        }
+        am.municipality_id = Set(municipality_id);
+    }
 
     let updated = UserRepo::update(&state.db, am)
         .await
         .map_err(|e| ApiError::Database(format!("update user profile: {e}")))?;
-    Ok(Json(user_to_profile(updated)))
+    if let Some(Some(municipality_id)) = req.municipality_id {
+        SubscriptionRepo::upsert(
+            &state.db,
+            auth.user_id.0,
+            "municipality",
+            &municipality_id.to_string(),
+            "all",
+        )
+        .await
+        .map_err(|e| ApiError::Database(format!("auto-follow municipality: {e}")))?;
+    }
+    Ok(Json(user_to_profile(&state.db, updated).await?))
 }
 
 // ---------------------------------------------------------------------------

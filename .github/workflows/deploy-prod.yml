@@ -168,22 +168,45 @@ jobs:
           )
 
           EXPECTED_MIGRATIONS="$(find crates/db/src/migration -maxdepth 1 -name 'm[0-9]*.rs' | wc -l | tr -d ' ')"
+          EXPECTED_FI_MUNICIPALITIES="$(jq length crates/db/data/fi_municipalities_2026.json)"
 
           ssh "${SSH_OPTS[@]}" root@"$EULESIA_PROD_TARGET_HOST" \
-            "EXPECTED_MIGRATIONS=$EXPECTED_MIGRATIONS bash -se" <<'REMOTE'
+            "EXPECTED_MIGRATIONS=$EXPECTED_MIGRATIONS EXPECTED_FI_MUNICIPALITIES=$EXPECTED_FI_MUNICIPALITIES bash -se" <<'REMOTE'
           set -euo pipefail
 
           PSQL="sudo -u postgres psql -X -A -t -v ON_ERROR_STOP=1"
           psql_tsv() {
             sudo -u postgres psql -X -A -t -F $'\t' -v ON_ERROR_STOP=1 "$@"
           }
+
+          if ! systemctl is-active --quiet eulesia-jobs.service; then
+            echo "::error::eulesia-jobs.service is not active after deploy"
+            systemctl --no-pager --full status eulesia-jobs.service || true
+            exit 1
+          fi
+
           actual_migrations="$($PSQL -d eulesia_v2 -c 'SELECT COUNT(*) FROM seaql_migrations;')"
+          fi_municipalities="$($PSQL -d eulesia_v2 -c "SELECT COUNT(*) FROM municipalities WHERE official_code IS NOT NULL;")"
+          fi_municipalities_missing_coords="$($PSQL -d eulesia_v2 -c "SELECT COUNT(*) FROM municipalities WHERE official_code IS NOT NULL AND (latitude IS NULL OR longitude IS NULL);")"
 
           echo "Expected migrations: $EXPECTED_MIGRATIONS"
           echo "Applied migrations: $actual_migrations"
+          echo "Expected FI municipalities: $EXPECTED_FI_MUNICIPALITIES"
+          echo "Seeded FI municipalities: $fi_municipalities"
+          echo "FI municipalities missing coords: $fi_municipalities_missing_coords"
 
           if [ "$actual_migrations" -ne "$EXPECTED_MIGRATIONS" ]; then
             echo "::error::Migration count mismatch on production host"
+            exit 1
+          fi
+
+          if [ "$fi_municipalities" -ne "$EXPECTED_FI_MUNICIPALITIES" ]; then
+            echo "::error::Finnish municipality seed is incomplete on production host"
+            exit 1
+          fi
+
+          if [ "$fi_municipalities_missing_coords" -ne 0 ]; then
+            echo "::error::Finnish municipalities are missing usable coordinates on production host"
             exit 1
           fi
 

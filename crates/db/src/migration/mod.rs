@@ -17,6 +17,7 @@ mod m20260406_000014_club_role_owner;
 mod m20260407_000015_admin_actor_fks;
 mod m20260407_000016_modlog_indexes;
 mod m20260407_000017_thread_scope_club;
+mod m20260407_000018_jobs_geo_foundation;
 
 pub struct Migrator;
 
@@ -41,6 +42,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260407_000015_admin_actor_fks::Migration),
             Box::new(m20260407_000016_modlog_indexes::Migration),
             Box::new(m20260407_000017_thread_scope_club::Migration),
+            Box::new(m20260407_000018_jobs_geo_foundation::Migration),
         ]
     }
 }

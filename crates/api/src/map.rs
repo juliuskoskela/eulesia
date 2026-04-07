@@ -1,10 +1,12 @@
+use std::fmt::Write;
+
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
 use eulesia_common::types::MapPointType;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect, Statement,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait,
+    QueryFilter, QueryOrder, QuerySelect, Statement, Value,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,7 +15,7 @@ use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
 use eulesia_common::types::new_id;
-use eulesia_db::entities::{municipalities, places};
+use eulesia_db::entities::{clubs, municipalities, places, threads};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +48,7 @@ pub struct PlaceResponse {
     pub id: Uuid,
     pub name: String,
     pub name_fi: Option<String>,
+    pub name_sv: Option<String>,
     pub description: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
@@ -62,15 +65,25 @@ struct BoundsParams {
     south: f64,
     east: f64,
     west: f64,
+    types: Option<String>,
+    categories: Option<String>,
+    time_preset: Option<String>,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    scope: Option<String>,
+    language: Option<String>,
+    tags: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PlaceListParams {
+    page: Option<u64>,
     limit: Option<u64>,
-    offset: Option<u64>,
     r#type: Option<String>,
     category: Option<String>,
+    municipality_id: Option<Uuid>,
+    search: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,7 +111,7 @@ pub struct CategoryCount {
     pub count: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
@@ -114,143 +127,497 @@ pub struct MunicipalityResponse {
     pub longitude: Option<f64>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MapThreadSummary {
+    id: Uuid,
+    title: String,
+    created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MapClubSummary {
+    id: Uuid,
+    name: String,
+    member_count: i32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PaginatedPlacesResponse {
+    items: Vec<PlaceResponse>,
+    total: u64,
+    page: u64,
+    limit: u64,
+    has_more: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocationDetailsResponse {
+    id: Uuid,
+    name: String,
+    latitude: Option<String>,
+    longitude: Option<String>,
+    threads: Vec<MapThreadSummary>,
+    clubs: Vec<MapClubSummary>,
+    municipality: Option<MunicipalityResponse>,
+    place: Option<PlaceResponse>,
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Decimal to f64 via string — acceptable for lat/lon precision.
-fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> Option<f64> {
+pub(crate) fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> Option<f64> {
     d.to_string().parse::<f64>().ok()
 }
 
-fn place_to_response(p: places::Model) -> PlaceResponse {
+fn decimal_from_f64(value: Option<f64>) -> Option<sea_orm::prelude::Decimal> {
+    value.and_then(sea_orm::prelude::Decimal::from_f64_retain)
+}
+
+fn parse_csv(value: Option<&str>) -> Vec<String> {
+    value
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn parse_type_filters(value: Option<&str>) -> Vec<MapPointType> {
+    parse_csv(value)
+        .into_iter()
+        .filter_map(|item| item.parse().ok())
+        .collect()
+}
+
+fn effective_date_range(
+    time_preset: Option<&str>,
+    date_from: Option<&str>,
+    date_to: Option<&str>,
+) -> (
+    Option<chrono::DateTime<chrono::FixedOffset>>,
+    Option<chrono::DateTime<chrono::FixedOffset>>,
+) {
+    let explicit_from =
+        date_from.and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok());
+    let explicit_to = date_to.and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok());
+
+    if explicit_from.is_some() || explicit_to.is_some() {
+        return (explicit_from, explicit_to);
+    }
+
+    let now = chrono::Utc::now().fixed_offset();
+    let derived_from = match time_preset {
+        Some("week") => Some(now - chrono::Duration::days(7)),
+        Some("month") => Some(now - chrono::Duration::days(30)),
+        Some("year") => Some(now - chrono::Duration::days(365)),
+        _ => None,
+    };
+
+    (derived_from, None)
+}
+
+fn contains_type(filters: &[MapPointType], candidate: MapPointType) -> bool {
+    filters.is_empty() || filters.contains(&candidate)
+}
+
+fn place_to_response(place: places::Model) -> PlaceResponse {
     PlaceResponse {
-        id: p.id,
-        name: p.name,
-        name_fi: p.name_fi,
-        description: p.description,
-        latitude: p.latitude.and_then(decimal_to_f64),
-        longitude: p.longitude.and_then(decimal_to_f64),
-        place_type: p.r#type,
-        category: p.category,
-        municipality_id: p.municipality_id,
-        created_at: p.created_at.to_rfc3339(),
+        id: place.id,
+        name: place.name,
+        name_fi: place.name_fi,
+        name_sv: place.name_sv,
+        description: place.description,
+        latitude: place.latitude.and_then(decimal_to_f64),
+        longitude: place.longitude.and_then(decimal_to_f64),
+        place_type: place.r#type,
+        category: place.category,
+        municipality_id: place.municipality_id,
+        created_at: place.created_at.to_rfc3339(),
     }
 }
 
-fn municipality_to_response(m: municipalities::Model) -> MunicipalityResponse {
+pub(crate) fn municipality_to_response(
+    municipality: municipalities::Model,
+) -> MunicipalityResponse {
     MunicipalityResponse {
-        id: m.id,
-        name: m.name,
-        name_fi: m.name_fi,
-        name_sv: m.name_sv,
-        region: m.region,
-        country: m.country,
-        population: m.population,
-        latitude: m.latitude.and_then(decimal_to_f64),
-        longitude: m.longitude.and_then(decimal_to_f64),
+        id: municipality.id,
+        name: municipality.name,
+        name_fi: municipality.name_fi,
+        name_sv: municipality.name_sv,
+        region: municipality.region,
+        country: municipality.country,
+        population: municipality.population,
+        latitude: municipality.latitude.and_then(decimal_to_f64),
+        longitude: municipality.longitude.and_then(decimal_to_f64),
     }
+}
+
+fn push_value<T>(values: &mut Vec<Value>, value: T) -> usize
+where
+    T: Into<Value>,
+{
+    values.push(value.into());
+    values.len()
+}
+
+async fn query_thread_points(
+    db: &sea_orm::DatabaseConnection,
+    params: &BoundsParams,
+    club_only: bool,
+) -> Result<Vec<MapPoint>, ApiError> {
+    let mut sql = String::from(
+        r"
+        SELECT
+          t.id,
+          t.title AS name,
+          t.latitude::float8 AS lat,
+          t.longitude::float8 AS lon,
+          t.scope,
+          t.language,
+          t.reply_count,
+          t.score
+        FROM threads t
+        WHERE t.latitude IS NOT NULL
+          AND t.longitude IS NOT NULL
+          AND t.deleted_at IS NULL
+          AND t.is_hidden = false
+          AND t.latitude BETWEEN $1 AND $2
+          AND t.longitude BETWEEN $3 AND $4
+        ",
+    );
+
+    let mut values = vec![
+        params.south.into(),
+        params.north.into(),
+        params.west.into(),
+        params.east.into(),
+    ];
+
+    if club_only {
+        sql.push_str(" AND t.club_id IS NOT NULL");
+    } else {
+        sql.push_str(" AND t.club_id IS NULL");
+    }
+
+    if let Some(scope) = params.scope.as_deref() {
+        let position = push_value(&mut values, scope.to_owned());
+        let _ = write!(sql, " AND t.scope = ${position}");
+    }
+
+    if let Some(language) = params.language.as_deref() {
+        let position = push_value(&mut values, language.to_owned());
+        let _ = write!(sql, " AND t.language = ${position}");
+    }
+
+    let (date_from, date_to) = effective_date_range(
+        params.time_preset.as_deref(),
+        params.date_from.as_deref(),
+        params.date_to.as_deref(),
+    );
+    if let Some(date_from) = date_from {
+        let position = push_value(&mut values, date_from);
+        let _ = write!(sql, " AND t.created_at >= ${position}");
+    }
+    if let Some(date_to) = date_to {
+        let position = push_value(&mut values, date_to);
+        let _ = write!(sql, " AND t.created_at <= ${position}");
+    }
+
+    let tags = parse_csv(params.tags.as_deref());
+    if !tags.is_empty() {
+        let mut placeholders = Vec::with_capacity(tags.len());
+        for tag in tags {
+            let position = push_value(&mut values, tag);
+            placeholders.push(format!("${position}"));
+        }
+        let _ = write!(
+            sql,
+            " AND EXISTS (
+                SELECT 1
+                FROM thread_tags tt
+                WHERE tt.thread_id = t.id
+                  AND tt.tag IN ({})
+              )",
+            placeholders.join(",")
+        );
+    }
+
+    sql.push_str(" ORDER BY t.created_at DESC LIMIT 500");
+
+    let rows = db
+        .query_all(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            sql,
+            values,
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("map thread query: {e}")))?;
+
+    let point_type = if club_only {
+        MapPointType::Club
+    } else {
+        MapPointType::Thread
+    };
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(MapPoint {
+                id: row
+                    .try_get("", "id")
+                    .map_err(|e| ApiError::Database(format!("parse map thread id: {e}")))?,
+                point_type,
+                name: row
+                    .try_get("", "name")
+                    .map_err(|e| ApiError::Database(format!("parse map thread name: {e}")))?,
+                latitude: row
+                    .try_get("", "lat")
+                    .map_err(|e| ApiError::Database(format!("parse map thread lat: {e}")))?,
+                longitude: row
+                    .try_get("", "lon")
+                    .map_err(|e| ApiError::Database(format!("parse map thread lon: {e}")))?,
+                meta: serde_json::json!({
+                    "scope": row.try_get::<String>("", "scope").ok(),
+                    "language": row.try_get::<Option<String>>("", "language").ok().flatten(),
+                    "replyCount": row.try_get::<i32>("", "reply_count").ok(),
+                    "score": row.try_get::<i32>("", "score").ok(),
+                }),
+            })
+        })
+        .collect()
+}
+
+async fn query_place_points(
+    db: &sea_orm::DatabaseConnection,
+    params: &BoundsParams,
+) -> Result<Vec<MapPoint>, ApiError> {
+    let mut sql = String::from(
+        r"
+        SELECT
+          p.id,
+          p.name,
+          p.latitude::float8 AS lat,
+          p.longitude::float8 AS lon,
+          p.category
+        FROM places p
+        WHERE p.latitude IS NOT NULL
+          AND p.longitude IS NOT NULL
+          AND p.latitude BETWEEN $1 AND $2
+          AND p.longitude BETWEEN $3 AND $4
+        ",
+    );
+
+    let mut values = vec![
+        params.south.into(),
+        params.north.into(),
+        params.west.into(),
+        params.east.into(),
+    ];
+
+    let categories = parse_csv(params.categories.as_deref());
+    if !categories.is_empty() {
+        let mut placeholders = Vec::with_capacity(categories.len());
+        for category in categories {
+            let position = push_value(&mut values, category);
+            placeholders.push(format!("${position}"));
+        }
+        let _ = write!(sql, " AND p.category IN ({})", placeholders.join(","));
+    }
+
+    sql.push_str(" ORDER BY p.name ASC LIMIT 500");
+
+    let rows = db
+        .query_all(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            sql,
+            values,
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("map place query: {e}")))?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(MapPoint {
+                id: row
+                    .try_get("", "id")
+                    .map_err(|e| ApiError::Database(format!("parse map place id: {e}")))?,
+                point_type: MapPointType::Place,
+                name: row
+                    .try_get("", "name")
+                    .map_err(|e| ApiError::Database(format!("parse map place name: {e}")))?,
+                latitude: row
+                    .try_get("", "lat")
+                    .map_err(|e| ApiError::Database(format!("parse map place lat: {e}")))?,
+                longitude: row
+                    .try_get("", "lon")
+                    .map_err(|e| ApiError::Database(format!("parse map place lon: {e}")))?,
+                meta: serde_json::json!({
+                    "category": row.try_get::<Option<String>>("", "category").ok().flatten(),
+                }),
+            })
+        })
+        .collect()
+}
+
+async fn query_municipality_points(
+    db: &sea_orm::DatabaseConnection,
+    params: &BoundsParams,
+) -> Result<Vec<MapPoint>, ApiError> {
+    let rows = db
+        .query_all(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r"
+            SELECT
+              m.id,
+              m.name,
+              m.latitude::float8 AS lat,
+              m.longitude::float8 AS lon,
+              (
+                SELECT COUNT(*)
+                FROM threads t
+                WHERE t.municipality_id = m.id
+                  AND t.deleted_at IS NULL
+                  AND t.is_hidden = false
+              )::bigint AS thread_count
+            FROM municipalities m
+            WHERE m.latitude IS NOT NULL
+              AND m.longitude IS NOT NULL
+              AND m.latitude BETWEEN $1 AND $2
+              AND m.longitude BETWEEN $3 AND $4
+            ORDER BY m.name ASC
+            LIMIT 500
+            ",
+            [
+                params.south.into(),
+                params.north.into(),
+                params.west.into(),
+                params.east.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("map municipality query: {e}")))?;
+
+    rows.into_iter()
+        .map(|row| {
+            Ok(MapPoint {
+                id: row
+                    .try_get("", "id")
+                    .map_err(|e| ApiError::Database(format!("parse municipality id: {e}")))?,
+                point_type: MapPointType::Municipality,
+                name: row
+                    .try_get("", "name")
+                    .map_err(|e| ApiError::Database(format!("parse municipality name: {e}")))?,
+                latitude: row
+                    .try_get("", "lat")
+                    .map_err(|e| ApiError::Database(format!("parse municipality lat: {e}")))?,
+                longitude: row
+                    .try_get("", "lon")
+                    .map_err(|e| ApiError::Database(format!("parse municipality lon: {e}")))?,
+                meta: serde_json::json!({
+                    "threadCount": row.try_get::<i64>("", "thread_count").ok(),
+                }),
+            })
+        })
+        .collect()
+}
+
+async fn recent_threads_for_municipality(
+    db: &sea_orm::DatabaseConnection,
+    municipality_id: Uuid,
+    exclude_thread_id: Option<Uuid>,
+) -> Result<Vec<MapThreadSummary>, ApiError> {
+    let mut query = threads::Entity::find()
+        .filter(threads::Column::MunicipalityId.eq(municipality_id))
+        .filter(threads::Column::DeletedAt.is_null())
+        .filter(threads::Column::IsHidden.eq(false))
+        .order_by_desc(threads::Column::CreatedAt)
+        .limit(5);
+
+    if let Some(thread_id) = exclude_thread_id {
+        query = query.filter(threads::Column::Id.ne(thread_id));
+    }
+
+    query
+        .all(db)
+        .await
+        .map_err(|e| ApiError::Database(format!("list municipality threads: {e}")))?
+        .into_iter()
+        .map(|thread| {
+            Ok(MapThreadSummary {
+                id: thread.id,
+                title: thread.title,
+                created_at: thread.created_at.to_rfc3339(),
+            })
+        })
+        .collect()
+}
+
+async fn place_by_id(
+    db: &sea_orm::DatabaseConnection,
+    place_id: Uuid,
+) -> Result<Option<PlaceResponse>, ApiError> {
+    let place = places::Entity::find_by_id(place_id)
+        .one(db)
+        .await
+        .map_err(|e| ApiError::Database(format!("find place: {e}")))?;
+    Ok(place.map(place_to_response))
+}
+
+async fn municipality_by_id(
+    db: &sea_orm::DatabaseConnection,
+    municipality_id: Option<Uuid>,
+) -> Result<Option<MunicipalityResponse>, ApiError> {
+    let Some(municipality_id) = municipality_id else {
+        return Ok(None);
+    };
+
+    let municipality = municipalities::Entity::find_by_id(municipality_id)
+        .one(db)
+        .await
+        .map_err(|e| ApiError::Database(format!("find municipality: {e}")))?;
+
+    Ok(municipality.map(municipality_to_response))
 }
 
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
-/// GET /map/points?north=...&south=...&east=...&west=...
-///
-/// Spatial query returning threads, places, and municipalities within the
-/// given bounding box.
 async fn get_map_points(
     State(state): State<AppState>,
     Query(params): Query<BoundsParams>,
 ) -> Result<Json<MapPointsResponse>, ApiError> {
-    let db: &sea_orm::DatabaseConnection = &state.db;
+    let type_filters = parse_type_filters(params.types.as_deref());
+    let mut points = Vec::new();
 
-    // Use raw SQL to query threads and places within bounds in a single UNION ALL.
-    let sql = r"
-        SELECT id,
-               CASE WHEN club_id IS NOT NULL THEN 'club' ELSE 'thread' END AS point_type,
-               title AS name,
-               latitude::float8 AS lat, longitude::float8 AS lon
-        FROM threads
-        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
-          AND deleted_at IS NULL AND is_hidden = false
-          AND latitude BETWEEN $1 AND $2
-          AND longitude BETWEEN $3 AND $4
-
-        UNION ALL
-
-        SELECT id, 'place' AS point_type, name,
-               latitude::float8 AS lat, longitude::float8 AS lon
-        FROM places
-        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
-          AND latitude BETWEEN $1 AND $2
-          AND longitude BETWEEN $3 AND $4
-
-        UNION ALL
-
-        SELECT id, 'municipality' AS point_type, name,
-               latitude::float8 AS lat, longitude::float8 AS lon
-        FROM municipalities
-        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
-          AND latitude BETWEEN $1 AND $2
-          AND longitude BETWEEN $3 AND $4
-    ";
-
-    let stmt = Statement::from_sql_and_values(
-        sea_orm::DatabaseBackend::Postgres,
-        sql,
-        [
-            params.south.into(),
-            params.north.into(),
-            params.west.into(),
-            params.east.into(),
-        ],
-    );
-
-    let rows = db
-        .query_all(stmt)
-        .await
-        .map_err(|e| ApiError::Database(format!("map points query: {e}")))?;
-
-    let mut points = Vec::with_capacity(rows.len());
-    for row in &rows {
-        let id: Uuid = row
-            .try_get("", "id")
-            .map_err(|e| ApiError::Database(format!("parse map point id: {e}")))?;
-        let point_type: String = row
-            .try_get("", "point_type")
-            .map_err(|e| ApiError::Database(format!("parse map point type: {e}")))?;
-        let name: String = row
-            .try_get("", "name")
-            .map_err(|e| ApiError::Database(format!("parse map point name: {e}")))?;
-        let lat: f64 = row
-            .try_get("", "lat")
-            .map_err(|e| ApiError::Database(format!("parse map point lat: {e}")))?;
-        let lon: f64 = row
-            .try_get("", "lon")
-            .map_err(|e| ApiError::Database(format!("parse map point lon: {e}")))?;
-
-        points.push(MapPoint {
-            id,
-            point_type: point_type.parse().unwrap_or(MapPointType::Thread),
-            name,
-            latitude: lat,
-            longitude: lon,
-            meta: serde_json::json!({}),
-        });
+    if contains_type(&type_filters, MapPointType::Thread) {
+        points.extend(query_thread_points(&state.db, &params, false).await?);
+    }
+    if contains_type(&type_filters, MapPointType::Club) {
+        points.extend(query_thread_points(&state.db, &params, true).await?);
+    }
+    if contains_type(&type_filters, MapPointType::Place) {
+        points.extend(query_place_points(&state.db, &params).await?);
+    }
+    if contains_type(&type_filters, MapPointType::Municipality) {
+        points.extend(query_municipality_points(&state.db, &params).await?);
     }
 
     Ok(Json(MapPointsResponse { points }))
 }
 
-/// GET /map/places?limit=50&offset=0&type=...&category=...
 async fn list_places(
     State(state): State<AppState>,
     Query(params): Query<PlaceListParams>,
-) -> Result<Json<Vec<PlaceResponse>>, ApiError> {
+) -> Result<Json<PaginatedPlacesResponse>, ApiError> {
+    let page = params.page.unwrap_or(1).max(1);
     let limit = params.limit.unwrap_or(50).min(200);
-    let offset = params.offset.unwrap_or(0);
+    let offset = (page - 1) * limit;
 
     let mut query = places::Entity::find();
 
@@ -260,8 +627,27 @@ async fn list_places(
     if let Some(ref category) = params.category {
         query = query.filter(places::Column::Category.eq(category.as_str()));
     }
+    if let Some(municipality_id) = params.municipality_id {
+        query = query.filter(places::Column::MunicipalityId.eq(municipality_id));
+    }
+    if let Some(ref search) = params.search {
+        let pattern = format!("%{}%", search.trim());
+        if !search.trim().is_empty() {
+            query = query.filter(
+                places::Column::Name
+                    .like(&pattern)
+                    .or(places::Column::Description.like(&pattern)),
+            );
+        }
+    }
 
-    let results = query
+    let total = query
+        .clone()
+        .count(&*state.db)
+        .await
+        .map_err(|e| ApiError::Database(format!("count places: {e}")))?;
+
+    let items = query
         .order_by_asc(places::Column::Name)
         .offset(offset)
         .limit(limit)
@@ -269,10 +655,15 @@ async fn list_places(
         .await
         .map_err(|e| ApiError::Database(format!("list places: {e}")))?;
 
-    Ok(Json(results.into_iter().map(place_to_response).collect()))
+    Ok(Json(PaginatedPlacesResponse {
+        items: items.into_iter().map(place_to_response).collect(),
+        total,
+        page,
+        limit,
+        has_more: offset + limit < total,
+    }))
 }
 
-/// POST /map/places (auth required)
 async fn create_place(
     auth: AuthUser,
     State(state): State<AppState>,
@@ -280,165 +671,204 @@ async fn create_place(
 ) -> Result<Json<PlaceResponse>, ApiError> {
     let name = req.name.trim().to_string();
     if name.is_empty() {
-        return Err(ApiError::BadRequest("name must not be empty".into()));
+        return Err(ApiError::BadRequest(String::from("name must not be empty")));
     }
 
     let now = chrono::Utc::now().fixed_offset();
-    let id = new_id();
-
-    let latitude = req
-        .latitude
-        .and_then(sea_orm::prelude::Decimal::from_f64_retain);
-    let longitude = req
-        .longitude
-        .and_then(sea_orm::prelude::Decimal::from_f64_retain);
-
-    let am = places::ActiveModel {
-        id: Set(id),
+    let place = places::ActiveModel {
+        id: Set(new_id()),
         name: Set(name),
         name_fi: Set(req.name_fi),
         name_sv: Set(req.name_sv),
         name_en: Set(req.name_en),
         description: Set(req.description),
-        latitude: Set(latitude),
-        longitude: Set(longitude),
+        latitude: Set(decimal_from_f64(req.latitude)),
+        longitude: Set(decimal_from_f64(req.longitude)),
         r#type: Set(req.place_type),
         category: Set(req.category),
         municipality_id: Set(req.municipality_id),
         location_id: Set(req.location_id),
         country: Set(req.country),
         address: Set(req.address),
-        source: Set("user".into()),
+        source: Set(String::from("user")),
         created_by: Set(Some(auth.user_id.0)),
         created_at: Set(now),
         updated_at: Set(now),
         ..Default::default()
-    };
-
-    let place = am
-        .insert(&*state.db)
-        .await
-        .map_err(|e| ApiError::Database(format!("create place: {e}")))?;
+    }
+    .insert(&*state.db)
+    .await
+    .map_err(|e| ApiError::Database(format!("create place: {e}")))?;
 
     Ok(Json(place_to_response(place)))
 }
 
-/// GET /map/places/categories — list place categories with counts.
 async fn place_categories(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<CategoryCount>>, ApiError> {
-    let db: &sea_orm::DatabaseConnection = &state.db;
-    let sql = r"
-        SELECT category, COUNT(*) AS count
-        FROM places
-        WHERE category IS NOT NULL
-        GROUP BY category
-        ORDER BY count DESC
-    ";
-
-    let stmt = Statement::from_string(sea_orm::DatabaseBackend::Postgres, sql.to_string());
-    let rows = db
-        .query_all(stmt)
+    let rows = state
+        .db
+        .query_all(Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            String::from(
+                r"
+                SELECT category, COUNT(*) AS count
+                FROM places
+                WHERE category IS NOT NULL
+                GROUP BY category
+                ORDER BY count DESC
+                ",
+            ),
+        ))
         .await
         .map_err(|e| ApiError::Database(format!("place categories query: {e}")))?;
 
-    let mut categories = Vec::with_capacity(rows.len());
-    for row in &rows {
-        let category: String = row
-            .try_get("", "category")
-            .map_err(|e| ApiError::Database(format!("parse category: {e}")))?;
-        let count: i64 = row
-            .try_get("", "count")
-            .map_err(|e| ApiError::Database(format!("parse count: {e}")))?;
-        categories.push(CategoryCount { category, count });
-    }
-
-    Ok(Json(categories))
+    rows.into_iter()
+        .map(|row| {
+            Ok(CategoryCount {
+                category: row
+                    .try_get("", "category")
+                    .map_err(|e| ApiError::Database(format!("parse category: {e}")))?,
+                count: row
+                    .try_get("", "count")
+                    .map_err(|e| ApiError::Database(format!("parse count: {e}")))?,
+            })
+        })
+        .collect::<Result<Vec<_>, ApiError>>()
+        .map(Json)
 }
 
-/// GET /map/municipalities
 async fn list_municipalities(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MunicipalityResponse>>, ApiError> {
-    let results = municipalities::Entity::find()
+    let municipalities = municipalities::Entity::find()
         .order_by_asc(municipalities::Column::Name)
         .all(&*state.db)
         .await
         .map_err(|e| ApiError::Database(format!("list municipalities: {e}")))?;
 
     Ok(Json(
-        results.into_iter().map(municipality_to_response).collect(),
+        municipalities
+            .into_iter()
+            .map(municipality_to_response)
+            .collect(),
     ))
 }
-
-// ---------------------------------------------------------------------------
-// Map location detail
-// ---------------------------------------------------------------------------
 
 async fn map_location_detail(
     State(state): State<AppState>,
     Path((location_type, id)): Path<(String, Uuid)>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
-
-    let sql = match location_type.as_str() {
+) -> Result<Json<LocationDetailsResponse>, ApiError> {
+    match location_type.as_str() {
         "thread" | "club" => {
-            "SELECT id, title, content, author_id, scope, created_at FROM threads WHERE id = $1 AND deleted_at IS NULL"
+            let thread = threads::Entity::find_by_id(id)
+                .one(&*state.db)
+                .await
+                .map_err(|e| ApiError::Database(format!("find thread: {e}")))?
+                .filter(|thread| thread.deleted_at.is_none())
+                .ok_or_else(|| ApiError::NotFound(String::from("thread not found")))?;
+
+            let municipality = municipality_by_id(&state.db, thread.municipality_id).await?;
+            let place = place_by_id(&state.db, thread.place_id.unwrap_or(id))
+                .await?
+                .filter(|_| thread.place_id.is_some());
+            let related_threads = match thread.municipality_id {
+                Some(municipality_id) => {
+                    recent_threads_for_municipality(&state.db, municipality_id, Some(thread.id))
+                        .await?
+                }
+                None => vec![],
+            };
+            let clubs = if let Some(club_id) = thread.club_id {
+                clubs::Entity::find_by_id(club_id)
+                    .one(&*state.db)
+                    .await
+                    .map_err(|e| ApiError::Database(format!("find club: {e}")))?
+                    .map(|club| {
+                        vec![MapClubSummary {
+                            id: club.id,
+                            name: club.name,
+                            member_count: club.member_count,
+                        }]
+                    })
+                    .unwrap_or_default()
+            } else {
+                vec![]
+            };
+
+            Ok(Json(LocationDetailsResponse {
+                id: thread.id,
+                name: thread.title,
+                latitude: thread.latitude.map(|value| value.to_string()),
+                longitude: thread.longitude.map(|value| value.to_string()),
+                threads: related_threads,
+                clubs,
+                municipality,
+                place,
+            }))
         }
         "place" => {
-            "SELECT id, name, description, type, category, latitude, longitude FROM places WHERE id = $1"
+            let place = places::Entity::find_by_id(id)
+                .one(&*state.db)
+                .await
+                .map_err(|e| ApiError::Database(format!("find place: {e}")))?
+                .ok_or_else(|| ApiError::NotFound(String::from("place not found")))?;
+
+            let threads = threads::Entity::find()
+                .filter(threads::Column::PlaceId.eq(place.id))
+                .filter(threads::Column::DeletedAt.is_null())
+                .filter(threads::Column::IsHidden.eq(false))
+                .order_by_desc(threads::Column::CreatedAt)
+                .limit(5)
+                .all(&*state.db)
+                .await
+                .map_err(|e| ApiError::Database(format!("list place threads: {e}")))?
+                .into_iter()
+                .map(|thread| MapThreadSummary {
+                    id: thread.id,
+                    title: thread.title,
+                    created_at: thread.created_at.to_rfc3339(),
+                })
+                .collect();
+
+            let municipality = municipality_by_id(&state.db, place.municipality_id).await?;
+            let place_response = place_to_response(place.clone());
+
+            Ok(Json(LocationDetailsResponse {
+                id: place.id,
+                name: place.name,
+                latitude: place.latitude.map(|value| value.to_string()),
+                longitude: place.longitude.map(|value| value.to_string()),
+                threads,
+                clubs: vec![],
+                municipality,
+                place: Some(place_response),
+            }))
         }
         "municipality" => {
-            "SELECT id, name, name_fi, name_sv, latitude, longitude, population FROM municipalities WHERE id = $1"
+            let municipality = municipalities::Entity::find_by_id(id)
+                .one(&*state.db)
+                .await
+                .map_err(|e| ApiError::Database(format!("find municipality: {e}")))?
+                .ok_or_else(|| ApiError::NotFound(String::from("municipality not found")))?;
+
+            let related_threads =
+                recent_threads_for_municipality(&state.db, municipality.id, None).await?;
+            let municipality_response = municipality_to_response(municipality.clone());
+
+            Ok(Json(LocationDetailsResponse {
+                id: municipality.id,
+                name: municipality.name,
+                latitude: municipality.latitude.map(|value| value.to_string()),
+                longitude: municipality.longitude.map(|value| value.to_string()),
+                threads: related_threads,
+                clubs: vec![],
+                municipality: Some(municipality_response),
+                place: None,
+            }))
         }
-        _ => return Err(ApiError::NotFound("unknown location type".into())),
-    };
-
-    let row = state
-        .db
-        .query_one(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            sql,
-            [id.into()],
-        ))
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?
-        .ok_or_else(|| ApiError::NotFound("location not found".into()))?;
-
-    let result = match location_type.as_str() {
-        "thread" | "club" => serde_json::json!({
-            "type": location_type,
-            "id": id,
-            "title": row.try_get_by_index::<String>(1).ok(),
-            "content": row.try_get_by_index::<String>(2).ok(),
-            "authorId": row.try_get_by_index::<Uuid>(3).ok(),
-            "scope": row.try_get_by_index::<String>(4).ok(),
-            "createdAt": row.try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(5).ok().map(|t| t.to_rfc3339()),
-        }),
-        "place" => serde_json::json!({
-            "type": "place",
-            "id": id,
-            "name": row.try_get_by_index::<String>(1).ok(),
-            "description": row.try_get_by_index::<String>(2).ok(),
-            "placeType": row.try_get_by_index::<String>(3).ok(),
-            "category": row.try_get_by_index::<String>(4).ok(),
-            "latitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(5).ok().map(|d| d.to_string()),
-            "longitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(6).ok().map(|d| d.to_string()),
-        }),
-        "municipality" => serde_json::json!({
-            "type": "municipality",
-            "id": id,
-            "name": row.try_get_by_index::<String>(1).ok(),
-            "nameFi": row.try_get_by_index::<String>(2).ok(),
-            "nameSv": row.try_get_by_index::<String>(3).ok(),
-            "latitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(4).ok().map(|d| d.to_string()),
-            "longitude": row.try_get_by_index::<sea_orm::prelude::Decimal>(5).ok().map(|d| d.to_string()),
-            "population": row.try_get_by_index::<i32>(6).ok(),
-        }),
-        _ => return Err(ApiError::NotFound("unknown location type".into())),
-    };
-
-    Ok(Json(result))
+        _ => Err(ApiError::NotFound(String::from("unknown location type"))),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -458,13 +888,12 @@ pub fn routes() -> Router<AppState> {
 mod tests {
     use super::*;
 
-    /// MapPoint serializes to correct camelCase shape.
     #[test]
     fn map_point_serializes_correctly() {
         let point = MapPoint {
             id: Uuid::nil(),
             point_type: MapPointType::Club,
-            name: "Test Club".into(),
+            name: String::from("Test Club"),
             latitude: 60.17,
             longitude: 24.94,
             meta: serde_json::json!({}),
@@ -472,45 +901,37 @@ mod tests {
 
         let json = serde_json::to_value(&point).unwrap();
         let obj = json.as_object().unwrap();
-
-        let keys = ["id", "pointType", "name", "latitude", "longitude", "meta"];
-        for key in &keys {
-            assert!(obj.contains_key(*key), "missing map point field: {key}");
+        for key in ["id", "pointType", "name", "latitude", "longitude", "meta"] {
+            assert!(obj.contains_key(key), "missing map point field: {key}");
         }
         assert_eq!(obj["pointType"], "club");
     }
 
-    /// MapPointsResponse wraps points in a points array.
     #[test]
     fn map_points_response_shape() {
-        let resp = MapPointsResponse {
+        let response = MapPointsResponse {
             points: vec![MapPoint {
                 id: Uuid::nil(),
                 point_type: MapPointType::Thread,
-                name: "Test".into(),
+                name: String::from("Test"),
                 latitude: 60.0,
                 longitude: 25.0,
                 meta: serde_json::json!({}),
             }],
         };
 
-        let json = serde_json::to_value(&resp).unwrap();
+        let json = serde_json::to_value(&response).unwrap();
         let obj = json.as_object().unwrap();
         assert!(obj.contains_key("points"));
         assert_eq!(obj["points"].as_array().unwrap().len(), 1);
     }
 
-    /// Verify the SQL CASE expression assigns "club" type.
-    /// (This is a static check of the SQL string.)
     #[test]
-    fn map_sql_classifies_club_threads() {
-        // The SQL query in get_map_points uses CASE WHEN club_id IS NOT NULL
-        // to assign point_type "club". Verify the string contains this logic.
-        let sql = r"
-            CASE WHEN club_id IS NOT NULL THEN 'club' ELSE 'thread' END AS point_type
-        ";
-        assert!(sql.contains("club_id IS NOT NULL"));
-        assert!(sql.contains("'club'"));
-        assert!(sql.contains("'thread'"));
+    fn type_filter_parsing_accepts_known_point_types() {
+        let parsed = parse_type_filters(Some("thread,club,place"));
+        assert_eq!(parsed.len(), 3);
+        assert!(parsed.contains(&MapPointType::Thread));
+        assert!(parsed.contains(&MapPointType::Club));
+        assert!(parsed.contains(&MapPointType::Place));
     }
 }

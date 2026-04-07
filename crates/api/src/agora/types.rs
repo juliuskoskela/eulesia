@@ -17,6 +17,8 @@ pub struct CreateThreadRequest {
     pub language: Option<String>,
     pub country: Option<String>,
     pub location_id: Option<Uuid>,
+    pub location_osm_id: Option<i64>,
+    pub location_osm_type: Option<String>,
     pub institutional_context: Option<serde_json::Value>,
 }
 

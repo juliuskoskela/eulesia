@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use sea_orm::ActiveValue::Set;
+use sea_orm::EntityTrait;
 use uuid::Uuid;
 
 use tracing::warn;
@@ -470,16 +471,70 @@ pub async fn create_thread(
         ));
     }
 
-    if scope == ThreadScope::Local && req.municipality_id.is_none() {
-        return Err(ApiError::BadRequest(
-            "municipality_id is required for local scope".into(),
-        ));
-    }
     if req.title.trim().is_empty() {
         return Err(ApiError::BadRequest("title must not be empty".into()));
     }
     if req.content.trim().is_empty() {
         return Err(ApiError::BadRequest("content must not be empty".into()));
+    }
+
+    let resolved_location = match (
+        req.location_id,
+        req.location_osm_id,
+        req.location_osm_type.as_deref(),
+    ) {
+        (Some(location_id), _, _) => Some(
+            eulesia_db::entities::locations::Entity::find_by_id(location_id)
+                .one(&*state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| ApiError::BadRequest("location_id does not exist".into()))?,
+        ),
+        (None, Some(location_osm_id), Some(location_osm_type)) => Some(
+            crate::locations::ensure_location_by_osm(&state.db, location_osm_type, location_osm_id)
+                .await?,
+        ),
+        (None, Some(_), None) | (None, None, Some(_)) => {
+            return Err(ApiError::BadRequest(
+                "location_osm_id and location_osm_type must be provided together".into(),
+            ));
+        }
+        (None, None, None) => None,
+    };
+
+    let mut municipality_id = req.municipality_id;
+    if scope == ThreadScope::Local && municipality_id.is_none() {
+        municipality_id = match resolved_location.as_ref() {
+            Some(location) => {
+                let Some(latitude) = location.latitude.and_then(crate::locations::decimal_to_f64)
+                else {
+                    return Err(ApiError::BadRequest(
+                        "local threads require municipalityId or a location with coordinates"
+                            .into(),
+                    ));
+                };
+                let Some(longitude) = location
+                    .longitude
+                    .and_then(crate::locations::decimal_to_f64)
+                else {
+                    return Err(ApiError::BadRequest(
+                        "local threads require municipalityId or a location with coordinates"
+                            .into(),
+                    ));
+                };
+
+                crate::locations::nearest_municipality(&state.db, latitude, longitude)
+                    .await?
+                    .map(|municipality| municipality.id)
+            }
+            None => None,
+        };
+    }
+
+    if scope == ThreadScope::Local && municipality_id.is_none() {
+        return Err(ApiError::BadRequest(
+            "municipality_id is required for local scope".into(),
+        ));
     }
 
     let scope_str = scope.to_string();
@@ -494,10 +549,10 @@ pub async fn create_thread(
             content: Set(req.content),
             author_id: Set(auth.user_id.0),
             scope: Set(scope_str),
-            municipality_id: Set(req.municipality_id),
+            municipality_id: Set(municipality_id),
             language: Set(req.language),
             country: Set(req.country),
-            location_id: Set(req.location_id),
+            location_id: Set(resolved_location.as_ref().map(|location| location.id)),
             institutional_context: Set(req.institutional_context),
             created_at: Set(now),
             updated_at: Set(now),
@@ -532,6 +587,10 @@ pub async fn create_thread(
     .await
     {
         warn!("failed to emit thread_created event: {e}");
+    }
+
+    if let Some(location) = resolved_location {
+        crate::locations::increment_location_content_count(&state.db, location.id, 1).await?;
     }
 
     // Fetch author for response.
@@ -752,6 +811,12 @@ pub async fn delete_thread(
     ThreadRepo::soft_delete(&state.db, id)
         .await
         .map_err(db_err)?;
+
+    if thread.deleted_at.is_none() {
+        if let Some(location_id) = thread.location_id {
+            crate::locations::increment_location_content_count(&state.db, location_id, -1).await?;
+        }
+    }
 
     // Best-effort search index event
     if let Err(e) = emit_event(

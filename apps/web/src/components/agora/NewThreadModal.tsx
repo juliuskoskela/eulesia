@@ -191,11 +191,20 @@ export function NewThreadModal({
         scope === "local" && selectedLocation
           ? selectedLocation.status === "active" && selectedLocation.id
             ? { locationId: selectedLocation.id }
-            : {
-                locationOsmId: selectedLocation.osmId,
-                locationOsmType: selectedLocation.osmType,
-              }
+            : selectedLocation.osmId !== null &&
+                selectedLocation.osmType !== null
+              ? {
+                  locationOsmId: selectedLocation.osmId,
+                  locationOsmType: selectedLocation.osmType,
+                }
+              : null
           : {};
+
+      if (locationData === null) {
+        setError(t("threadForm.createError"));
+        setIsSubmitting(false);
+        return;
+      }
 
       const result = await createThreadMutation.mutateAsync({
         title: title.trim(),

@@ -11,10 +11,12 @@ export interface User {
   username?: string;
   verifiedName?: string;
   avatarUrl?: string | null;
+  bio?: string | null;
   role: "citizen" | "institution" | "moderator";
   institutionType?: string;
   institutionName?: string;
-  municipality?: Municipality;
+  municipalityId?: string | null;
+  municipality?: Municipality | null;
   identityVerified?: boolean;
   identityLevel?: "basic" | "substantial" | "high";
   settings?: {
@@ -38,6 +40,10 @@ export interface Municipality {
   nameFi?: string;
   nameSv?: string;
   region?: string;
+  country?: string;
+  population?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface Thread {
@@ -423,8 +429,8 @@ export type LocationStatus = "active" | "available";
 
 export interface LocationResult {
   id: string | null; // DB ID (null if from Nominatim only)
-  osmId: number;
-  osmType: OsmType;
+  osmId: number | null;
+  osmType: OsmType | null;
   name: string;
   nameFi: string | null;
   nameSv: string | null;
@@ -432,9 +438,9 @@ export interface LocationResult {
   displayName: string;
   type: string; // 'municipality', 'village', 'region', etc.
   adminLevel: number | null;
-  country: string;
-  latitude: number;
-  longitude: number;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
   bounds: { south: number; north: number; west: number; east: number } | null;
   population: number | null;
   status: LocationStatus; // 'active' = in DB, 'available' = from Nominatim
