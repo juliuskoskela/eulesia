@@ -836,3 +836,322 @@ impl std::str::FromStr for InvitationStatus {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    // -- Helper: round-trip as_str -> from_str for any type that has both ------
+
+    fn roundtrip<T>(variant: T, expected: &str)
+    where
+        T: std::fmt::Display + FromStr + PartialEq + std::fmt::Debug,
+        T::Err: std::fmt::Debug,
+    {
+        // Display == as_str
+        assert_eq!(variant.to_string(), expected);
+        // from_str round-trip
+        let parsed: T = expected.parse().unwrap();
+        assert_eq!(parsed, variant);
+    }
+
+    // ---- Platform -----------------------------------------------------------
+
+    #[test]
+    fn platform_roundtrip() {
+        roundtrip(Platform::Web, "web");
+        roundtrip(Platform::Android, "android");
+        roundtrip(Platform::Ios, "ios");
+        roundtrip(Platform::Desktop, "desktop");
+    }
+
+    #[test]
+    fn platform_invalid_string_fails() {
+        assert!(Platform::from_str("windows").is_err());
+    }
+
+    // ---- UserRole -----------------------------------------------------------
+
+    #[test]
+    fn user_role_roundtrip() {
+        roundtrip(UserRole::Citizen, "citizen");
+        roundtrip(UserRole::Institution, "institution");
+        roundtrip(UserRole::Moderator, "moderator");
+    }
+
+    #[test]
+    fn user_role_is_moderator() {
+        assert!(UserRole::Moderator.is_moderator());
+        assert!(!UserRole::Citizen.is_moderator());
+        assert!(!UserRole::Institution.is_moderator());
+    }
+
+    #[test]
+    fn user_role_invalid_string_fails() {
+        assert!(UserRole::from_str("admin").is_err());
+    }
+
+    // ---- ClubRole -----------------------------------------------------------
+
+    #[test]
+    fn club_role_roundtrip() {
+        roundtrip(ClubRole::Member, "member");
+        roundtrip(ClubRole::Moderator, "moderator");
+        roundtrip(ClubRole::Owner, "owner");
+    }
+
+    #[test]
+    fn club_role_is_owner() {
+        assert!(ClubRole::Owner.is_owner());
+        assert!(!ClubRole::Moderator.is_owner());
+        assert!(!ClubRole::Member.is_owner());
+    }
+
+    #[test]
+    fn club_role_is_at_least_moderator() {
+        assert!(ClubRole::Moderator.is_at_least_moderator());
+        assert!(ClubRole::Owner.is_at_least_moderator());
+        assert!(!ClubRole::Member.is_at_least_moderator());
+    }
+
+    #[test]
+    fn club_role_ord_member_lt_moderator_lt_owner() {
+        assert!(ClubRole::Member < ClubRole::Moderator);
+        assert!(ClubRole::Moderator < ClubRole::Owner);
+        assert!(ClubRole::Member < ClubRole::Owner);
+    }
+
+    #[test]
+    fn club_role_invalid_string_fails() {
+        assert!(ClubRole::from_str("admin").is_err());
+    }
+
+    // ---- ThreadScope --------------------------------------------------------
+
+    #[test]
+    fn thread_scope_roundtrip() {
+        roundtrip(ThreadScope::Local, "local");
+        roundtrip(ThreadScope::National, "national");
+        roundtrip(ThreadScope::European, "european");
+        roundtrip(ThreadScope::Club, "club");
+    }
+
+    #[test]
+    fn thread_scope_invalid_string_fails() {
+        assert!(ThreadScope::from_str("global").is_err());
+    }
+
+    // ---- ThreadSource -------------------------------------------------------
+
+    #[test]
+    fn thread_source_roundtrip() {
+        roundtrip(ThreadSource::User, "user");
+        roundtrip(ThreadSource::MinutesImport, "minutes_import");
+        roundtrip(ThreadSource::RssImport, "rss_import");
+    }
+
+    #[test]
+    fn thread_source_invalid_string_fails() {
+        assert!(ThreadSource::from_str("api").is_err());
+    }
+
+    // ---- MapPointType -------------------------------------------------------
+
+    #[test]
+    fn map_point_type_roundtrip() {
+        roundtrip(MapPointType::Thread, "thread");
+        roundtrip(MapPointType::Club, "club");
+        roundtrip(MapPointType::Place, "place");
+        roundtrip(MapPointType::Municipality, "municipality");
+    }
+
+    #[test]
+    fn map_point_type_invalid_string_fails() {
+        assert!(MapPointType::from_str("region").is_err());
+    }
+
+    // ---- InvitationStatus ---------------------------------------------------
+
+    #[test]
+    fn invitation_status_roundtrip() {
+        roundtrip(InvitationStatus::Pending, "pending");
+        roundtrip(InvitationStatus::Accepted, "accepted");
+        roundtrip(InvitationStatus::Declined, "declined");
+    }
+
+    #[test]
+    fn invitation_status_invalid_string_fails() {
+        assert!(InvitationStatus::from_str("expired").is_err());
+    }
+
+    // ---- new_id / UUIDv7 ----------------------------------------------------
+
+    #[test]
+    fn new_id_generates_valid_uuidv7() {
+        let id = new_id();
+        assert!(!id.is_nil());
+        assert_eq!(id.get_version(), Some(uuid::Version::SortRand));
+    }
+
+    #[test]
+    fn new_id_is_unique() {
+        let a = new_id();
+        let b = new_id();
+        assert_ne!(a, b);
+    }
+
+    // ---- ID newtype conversions ---------------------------------------------
+
+    #[test]
+    fn user_id_uuid_roundtrip() {
+        let raw = Uuid::now_v7();
+        let uid = UserId::from(raw);
+        let back: Uuid = uid.into();
+        assert_eq!(raw, back);
+    }
+
+    #[test]
+    fn device_id_uuid_roundtrip() {
+        let raw = Uuid::now_v7();
+        let did = DeviceId::from(raw);
+        let back: Uuid = did.into();
+        assert_eq!(raw, back);
+    }
+
+    #[test]
+    fn session_id_uuid_roundtrip() {
+        let raw = Uuid::now_v7();
+        let sid = SessionId::from(raw);
+        let back: Uuid = sid.into();
+        assert_eq!(raw, back);
+    }
+
+    #[test]
+    fn thread_id_uuid_roundtrip() {
+        let raw = Uuid::now_v7();
+        let tid = ThreadId::from(raw);
+        let back: Uuid = tid.into();
+        assert_eq!(raw, back);
+    }
+
+    #[test]
+    fn user_id_display() {
+        let raw = Uuid::now_v7();
+        let uid = UserId(raw);
+        assert_eq!(uid.to_string(), raw.to_string());
+    }
+
+    // ---- GroupRole ----------------------------------------------------------
+
+    #[test]
+    fn group_role_roundtrip() {
+        roundtrip(GroupRole::Member, "member");
+        roundtrip(GroupRole::Owner, "owner");
+    }
+
+    #[test]
+    fn group_role_is_owner() {
+        assert!(GroupRole::Owner.is_owner());
+        assert!(!GroupRole::Member.is_owner());
+    }
+
+    #[test]
+    fn group_role_invalid_string_fails() {
+        assert!(GroupRole::from_str("admin").is_err());
+    }
+
+    // ---- ConversationType ---------------------------------------------------
+
+    #[test]
+    fn conversation_type_roundtrip() {
+        roundtrip(ConversationType::Direct, "direct");
+        roundtrip(ConversationType::Group, "group");
+        roundtrip(ConversationType::Channel, "channel");
+    }
+
+    #[test]
+    fn conversation_type_invalid_string_fails() {
+        assert!(ConversationType::from_str("broadcast").is_err());
+    }
+
+    // ---- MessageType --------------------------------------------------------
+
+    #[test]
+    fn message_type_roundtrip() {
+        roundtrip(MessageType::Text, "text");
+        roundtrip(MessageType::Media, "media");
+        roundtrip(MessageType::System, "system");
+        roundtrip(MessageType::Reaction, "reaction");
+        roundtrip(MessageType::Redaction, "redaction");
+    }
+
+    #[test]
+    fn message_type_default_is_text() {
+        assert_eq!(MessageType::default(), MessageType::Text);
+    }
+
+    #[test]
+    fn message_type_invalid_string_fails() {
+        assert!(MessageType::from_str("audio").is_err());
+    }
+
+    // ---- ReportStatus -------------------------------------------------------
+
+    #[test]
+    fn report_status_roundtrip() {
+        roundtrip(ReportStatus::Pending, "pending");
+        roundtrip(ReportStatus::Reviewing, "reviewing");
+        roundtrip(ReportStatus::Resolved, "resolved");
+        roundtrip(ReportStatus::Dismissed, "dismissed");
+    }
+
+    #[test]
+    fn report_status_invalid_string_fails() {
+        assert!(ReportStatus::from_str("closed").is_err());
+    }
+
+    // ---- ReportReason -------------------------------------------------------
+
+    #[test]
+    fn report_reason_roundtrip() {
+        roundtrip(ReportReason::Illegal, "illegal");
+        roundtrip(ReportReason::Harassment, "harassment");
+        roundtrip(ReportReason::Spam, "spam");
+        roundtrip(ReportReason::Misinformation, "misinformation");
+        roundtrip(ReportReason::Other, "other");
+    }
+
+    #[test]
+    fn report_reason_invalid_string_fails() {
+        assert!(ReportReason::from_str("violence").is_err());
+    }
+
+    // ---- SanctionType -------------------------------------------------------
+
+    #[test]
+    fn sanction_type_roundtrip() {
+        roundtrip(SanctionType::Warning, "warning");
+        roundtrip(SanctionType::Suspension, "suspension");
+        roundtrip(SanctionType::Ban, "ban");
+    }
+
+    #[test]
+    fn sanction_type_invalid_string_fails() {
+        assert!(SanctionType::from_str("mute").is_err());
+    }
+
+    // ---- AppealStatus -------------------------------------------------------
+
+    #[test]
+    fn appeal_status_roundtrip() {
+        roundtrip(AppealStatus::Pending, "pending");
+        roundtrip(AppealStatus::Accepted, "accepted");
+        roundtrip(AppealStatus::Rejected, "rejected");
+    }
+
+    #[test]
+    fn appeal_status_invalid_string_fails() {
+        assert!(AppealStatus::from_str("withdrawn").is_err());
+    }
+}

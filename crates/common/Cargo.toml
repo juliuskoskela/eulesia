@@ -17,3 +17,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tokio = { workspace = true }

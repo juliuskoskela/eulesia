@@ -61,3 +61,68 @@ impl From<AuthError> for ApiError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_credentials_maps_to_unauthorized() {
+        let api: ApiError = AuthError::InvalidCredentials.into();
+        assert!(matches!(api, ApiError::Unauthorized));
+    }
+
+    #[test]
+    fn session_expired_maps_to_unauthorized() {
+        let api: ApiError = AuthError::SessionExpired.into();
+        assert!(matches!(api, ApiError::Unauthorized));
+    }
+
+    #[test]
+    fn username_taken_maps_to_conflict() {
+        let api: ApiError = AuthError::UsernameTaken("alice".into()).into();
+        match api {
+            ApiError::Conflict(msg) => assert!(msg.contains("username taken")),
+            other => panic!("expected Conflict, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn email_taken_maps_to_conflict() {
+        let api: ApiError = AuthError::EmailTaken("a@b.com".into()).into();
+        match api {
+            ApiError::Conflict(msg) => assert!(msg.contains("email taken")),
+            other => panic!("expected Conflict, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn weak_password_maps_to_bad_request() {
+        let api: ApiError = AuthError::WeakPassword {
+            reason: "too short".into(),
+        }
+        .into();
+        assert!(matches!(api, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn invalid_username_maps_to_bad_request() {
+        let api: ApiError = AuthError::InvalidUsername {
+            reason: "bad chars".into(),
+        }
+        .into();
+        assert!(matches!(api, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn identity_linked_maps_to_conflict() {
+        let api: ApiError = AuthError::IdentityAlreadyLinked.into();
+        assert!(matches!(api, ApiError::Conflict(_)));
+    }
+
+    #[test]
+    fn device_limit_maps_to_bad_request() {
+        let api: ApiError = AuthError::DeviceLimitExceeded.into();
+        assert!(matches!(api, ApiError::BadRequest(_)));
+    }
+}

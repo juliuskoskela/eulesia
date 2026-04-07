@@ -628,3 +628,88 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/ftn/callback", get(ftn_callback))
         .route("/auth/ftn/error", get(ftn_error))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- normalize_name --
+
+    #[test]
+    fn all_caps_normalized() {
+        assert_eq!(normalize_name("MATTI"), "Matti");
+    }
+
+    #[test]
+    fn already_mixed_case_unchanged() {
+        assert_eq!(normalize_name("Matti"), "Matti");
+    }
+
+    #[test]
+    fn all_caps_multi_word() {
+        assert_eq!(normalize_name("VIRTANEN"), "Virtanen");
+    }
+
+    #[test]
+    fn empty_string() {
+        assert_eq!(normalize_name(""), "");
+    }
+
+    #[test]
+    fn single_char_upper() {
+        assert_eq!(normalize_name("M"), "M");
+    }
+
+    #[test]
+    fn all_caps_with_hyphen() {
+        // Hyphen is non-alphabetic, so the all-caps check passes
+        assert_eq!(normalize_name("MATTI-PEKKA"), "Matti-pekka");
+    }
+
+    #[test]
+    fn lowercase_unchanged() {
+        // Has lowercase chars, so passes through unchanged
+        assert_eq!(normalize_name("matti"), "matti");
+    }
+
+    // -- classify_ftn_error --
+
+    #[test]
+    fn rate_limit_429() {
+        assert_eq!(classify_ftn_error("429", None), "ftn_registration_limit");
+    }
+
+    #[test]
+    fn quota_error() {
+        assert_eq!(
+            classify_ftn_error("quota_exceeded", None),
+            "ftn_registration_limit"
+        );
+    }
+
+    #[test]
+    fn rate_limit_in_desc() {
+        assert_eq!(
+            classify_ftn_error("error", Some("rate limit reached")),
+            "ftn_registration_limit"
+        );
+    }
+
+    #[test]
+    fn registration_limit() {
+        assert_eq!(
+            classify_ftn_error("registration", Some("limit exceeded")),
+            "ftn_registration_limit"
+        );
+    }
+
+    #[test]
+    fn generic_error() {
+        assert_eq!(classify_ftn_error("access_denied", None), "ftn_failed");
+    }
+
+    #[test]
+    fn unknown_error() {
+        assert_eq!(classify_ftn_error("something_weird", None), "ftn_failed");
+    }
+}

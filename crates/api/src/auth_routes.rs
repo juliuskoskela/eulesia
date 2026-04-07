@@ -426,11 +426,9 @@ async fn change_password(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     use eulesia_db::entities::users;
 
-    if req.new_password.len() < 6 {
-        return Err(ApiError::BadRequest(
-            "password must be at least 6 characters".into(),
-        ));
-    }
+    // Use the same validation as registration (8-128 chars).
+    eulesia_auth::password::validate_password_strength(&req.new_password)
+        .map_err(ApiError::from)?;
 
     let user = UserRepo::find_by_id(&state.db, auth.user_id.0)
         .await
@@ -499,4 +497,136 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/config", get(auth_config))
         .route("/users/me/change-password", post(change_password))
         .route("/users/me/password", post(change_password))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config(secure: bool, domain: Option<&str>) -> AppConfig {
+        AppConfig {
+            cookie_domain: domain.map(String::from),
+            cookie_secure: secure,
+            session_max_age_days: 30,
+            frontend_origin: "https://example.com".into(),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // sha256_hex
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn sha256_hex_deterministic() {
+        assert_eq!(sha256_hex("hello"), sha256_hex("hello"));
+    }
+
+    #[test]
+    fn sha256_hex_empty_string() {
+        let hash = sha256_hex("");
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn sha256_hex_length_is_64() {
+        for input in ["a", "hello world", "🦀 rust", "a".repeat(1000).as_str()] {
+            assert_eq!(sha256_hex(input).len(), 64);
+        }
+    }
+
+    #[test]
+    fn sha256_hex_different_inputs() {
+        assert_ne!(sha256_hex("hello"), sha256_hex("world"));
+    }
+
+    // -----------------------------------------------------------------------
+    // generate_token
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn generate_token_not_empty() {
+        assert!(!generate_token(32).is_empty());
+    }
+
+    #[test]
+    fn generate_token_unique() {
+        assert_ne!(generate_token(32), generate_token(32));
+    }
+
+    #[test]
+    fn generate_token_valid_base64url() {
+        let token = generate_token(48);
+        assert!(
+            token
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+            "token contained invalid base64url char: {token}"
+        );
+    }
+
+    #[test]
+    fn generate_token_zero_len() {
+        assert_eq!(generate_token(0), "");
+    }
+
+    // -----------------------------------------------------------------------
+    // build_session_cookie
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn cookie_name_is_session() {
+        let cfg = test_config(false, None);
+        let cookie = build_session_cookie("tok", &cfg);
+        assert_eq!(cookie.name(), "session");
+    }
+
+    #[test]
+    fn cookie_is_http_only() {
+        let cfg = test_config(false, None);
+        let cookie = build_session_cookie("tok", &cfg);
+        assert_eq!(cookie.http_only(), Some(true));
+    }
+
+    #[test]
+    fn cookie_path_is_root() {
+        let cfg = test_config(false, None);
+        let cookie = build_session_cookie("tok", &cfg);
+        assert_eq!(cookie.path(), Some("/"));
+    }
+
+    #[test]
+    fn cookie_same_site_lax() {
+        let cfg = test_config(false, None);
+        let cookie = build_session_cookie("tok", &cfg);
+        assert_eq!(cookie.same_site(), Some(SameSite::Lax));
+    }
+
+    #[test]
+    fn cookie_secure_when_configured() {
+        let cfg = test_config(true, None);
+        let cookie = build_session_cookie("tok", &cfg);
+        assert_eq!(cookie.secure(), Some(true));
+    }
+
+    #[test]
+    fn cookie_not_secure_when_unconfigured() {
+        let cfg = test_config(false, None);
+        let cookie = build_session_cookie("tok", &cfg);
+        assert_ne!(cookie.secure(), Some(true));
+    }
+
+    #[test]
+    fn cookie_domain_set_when_configured() {
+        let cfg = test_config(false, Some("example.com"));
+        let cookie = build_session_cookie("tok", &cfg);
+        assert_eq!(cookie.domain(), Some("example.com"));
+    }
+
+    #[test]
+    fn cookie_no_domain_when_unconfigured() {
+        let cfg = test_config(false, None);
+        let cookie = build_session_cookie("tok", &cfg);
+        assert!(cookie.domain().is_none());
+    }
 }

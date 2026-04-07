@@ -1656,4 +1656,100 @@ mod tests {
         assert!(abt.contains_key("actionType"));
         assert!(abt.contains_key("count"));
     }
+
+    // ---- sha256_hex ----
+
+    #[test]
+    fn sha256_hex_known_vector() {
+        // SHA-256 of empty string is well-known
+        let hash = sha256_hex("");
+        assert_eq!(
+            hash,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn sha256_hex_deterministic() {
+        let a = sha256_hex("hello");
+        let b = sha256_hex("hello");
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn sha256_hex_different_inputs_differ() {
+        let a = sha256_hex("hello");
+        let b = sha256_hex("world");
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn sha256_hex_length() {
+        // SHA-256 hex digest is always 64 characters
+        let hash = sha256_hex("test input");
+        assert_eq!(hash.len(), 64);
+    }
+
+    // ---- generate_admin_token ----
+
+    #[test]
+    fn admin_token_not_empty() {
+        let token = generate_admin_token();
+        assert!(!token.is_empty());
+    }
+
+    #[test]
+    fn admin_token_unique() {
+        let a = generate_admin_token();
+        let b = generate_admin_token();
+        assert_ne!(a, b, "two generated tokens should differ");
+    }
+
+    #[test]
+    fn admin_token_valid_base64url() {
+        let token = generate_admin_token();
+        // base64url uses [A-Za-z0-9_-], no padding (URL_SAFE_NO_PAD)
+        assert!(
+            token
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+            "token contains invalid base64url characters: {token}"
+        );
+    }
+
+    #[test]
+    fn admin_token_expected_length() {
+        // 32 bytes → base64url-no-pad → ceil(32 * 4 / 3) = 43 chars
+        let token = generate_admin_token();
+        assert_eq!(
+            token.len(),
+            43,
+            "32 bytes base64url-no-pad should be 43 chars"
+        );
+    }
+
+    // ---- generate_invite_code ----
+
+    #[test]
+    fn invite_code_length_12() {
+        let code = generate_invite_code();
+        assert_eq!(code.len(), 12, "invite code should be exactly 12 chars");
+    }
+
+    #[test]
+    fn invite_code_alphanumeric_lowercase() {
+        let code = generate_invite_code();
+        assert!(
+            code.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+            "invite code should only contain [0-9a-z], got: {code}"
+        );
+    }
+
+    #[test]
+    fn invite_code_unique() {
+        let a = generate_invite_code();
+        let b = generate_invite_code();
+        assert_ne!(a, b, "two generated invite codes should differ");
+    }
 }

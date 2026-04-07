@@ -174,4 +174,206 @@ mod tests {
         assert_eq!(json["status"], "ok");
         assert!(!json.as_object().unwrap().contains_key("success"));
     }
+
+    /// JSON error response with an "error" field is wrapped as {success:false, error:"..."}.
+    #[tokio::test]
+    async fn wraps_json_error_with_error_field() {
+        let app = Router::new()
+            .route(
+                "/test",
+                get(|| async {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        axum::Json(serde_json::json!({"error": "bad input"})),
+                    )
+                }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["success"], false);
+        assert_eq!(json["error"], "bad input");
+        assert!(!json.as_object().unwrap().contains_key("data"));
+    }
+
+    /// Plain-text error body is wrapped as {success:false, error:"<text>"}.
+    #[tokio::test]
+    async fn wraps_non_json_error_as_text() {
+        let app = Router::new()
+            .route(
+                "/test",
+                get(|| async { (StatusCode::UNPROCESSABLE_ENTITY, "missing required field") }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["success"], false);
+        assert_eq!(json["error"], "missing required field");
+    }
+
+    /// Binary response (image/png with content-length) passes through unwrapped.
+    #[tokio::test]
+    async fn passes_through_binary_upload() {
+        let png_bytes: &[u8] = &[0x89, 0x50, 0x4E, 0x47]; // PNG magic bytes
+
+        let app = Router::new()
+            .route(
+                "/test",
+                get(|| async {
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header("content-type", "image/png")
+                        .header("content-length", "4")
+                        .body(Body::from(png_bytes.to_vec()))
+                        .unwrap()
+                }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers().get("content-type").unwrap(), "image/png",);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        // Should be the raw bytes, not JSON-wrapped.
+        assert_eq!(&body[..], png_bytes);
+    }
+
+    /// /ready endpoint is NOT wrapped (skip list).
+    #[tokio::test]
+    async fn skips_ready_endpoint() {
+        let app = Router::new()
+            .route(
+                "/ready",
+                get(|| async { axum::Json(serde_json::json!({"status": "ready"})) }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/ready").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "ready");
+        assert!(!json.as_object().unwrap().contains_key("success"));
+    }
+
+    /// /uploads/ paths are NOT wrapped (skip list).
+    #[tokio::test]
+    async fn skips_uploads_path() {
+        let app = Router::new()
+            .route(
+                "/uploads/{filename}",
+                get(|| async {
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header("content-type", "image/jpeg")
+                        .header("content-length", "3")
+                        .body(Body::from(vec![0xFF, 0xD8, 0xFF]))
+                        .unwrap()
+                }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(
+                Request::get("/uploads/avatar.jpg")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers().get("content-type").unwrap(), "image/jpeg",);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        // Raw bytes, not wrapped.
+        assert_eq!(&body[..], &[0xFF, 0xD8, 0xFF]);
+    }
+
+    /// Error status code is preserved after wrapping.
+    #[tokio::test]
+    async fn preserves_status_code() {
+        let app = Router::new()
+            .route(
+                "/test",
+                get(|| async {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        axum::Json(serde_json::json!({"error": "nope"})),
+                    )
+                }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["success"], false);
+    }
+
+    /// Set-Cookie header survives wrapping.
+    #[tokio::test]
+    async fn preserves_set_cookie_header() {
+        let app = Router::new()
+            .route(
+                "/test",
+                get(|| async {
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header("content-type", "application/json")
+                        .header("set-cookie", "session=abc123; Path=/; HttpOnly")
+                        .body(Body::from(
+                            serde_json::to_vec(&serde_json::json!({"id": 1})).unwrap(),
+                        ))
+                        .unwrap()
+                }),
+            )
+            .layer(middleware::from_fn(wrap_response));
+
+        let resp = app
+            .oneshot(Request::get("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("set-cookie").unwrap(),
+            "session=abc123; Path=/; HttpOnly",
+        );
+
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["success"], true);
+        assert_eq!(json["data"]["id"], 1);
+    }
 }

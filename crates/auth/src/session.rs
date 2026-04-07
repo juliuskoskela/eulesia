@@ -43,3 +43,44 @@ where
         Ok(Self(parts.extensions.get::<AuthUser>().cloned()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Request;
+    use eulesia_common::types::new_id;
+
+    fn make_auth_user() -> AuthUser {
+        AuthUser {
+            user_id: UserId(new_id()),
+            device_id: None,
+            session_id: SessionId(new_id()),
+        }
+    }
+
+    #[tokio::test]
+    async fn auth_user_extractor_returns_401_without_extension() {
+        let (mut parts, _body) = Request::builder().body(()).unwrap().into_parts();
+        let result = AuthUser::from_request_parts(&mut parts, &()).await;
+        assert!(matches!(result, Err(ApiError::Unauthorized)));
+    }
+
+    #[tokio::test]
+    async fn optional_auth_returns_none_without_extension() {
+        let (mut parts, _body) = Request::builder().body(()).unwrap().into_parts();
+        let OptionalAuth(opt) = OptionalAuth::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
+        assert!(opt.is_none());
+    }
+
+    #[tokio::test]
+    async fn optional_auth_returns_some_with_extension() {
+        let (mut parts, _body) = Request::builder().body(()).unwrap().into_parts();
+        parts.extensions.insert(make_auth_user());
+        let OptionalAuth(opt) = OptionalAuth::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
+        assert!(opt.is_some());
+    }
+}

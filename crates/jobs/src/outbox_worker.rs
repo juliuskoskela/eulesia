@@ -143,5 +143,46 @@ async fn process_event(
 
 fn backoff_seconds(attempt: i16) -> i64 {
     // Exponential backoff: 30s, 60s, 120s, 240s, 480s
-    i64::from(30 * (1 << attempt.min(4)))
+    i64::from(30 * (1 << attempt.clamp(0, 4)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backoff_attempt_0() {
+        assert_eq!(backoff_seconds(0), 30);
+    }
+
+    #[test]
+    fn backoff_attempt_1() {
+        assert_eq!(backoff_seconds(1), 60);
+    }
+
+    #[test]
+    fn backoff_attempt_2() {
+        assert_eq!(backoff_seconds(2), 120);
+    }
+
+    #[test]
+    fn backoff_attempt_3() {
+        assert_eq!(backoff_seconds(3), 240);
+    }
+
+    #[test]
+    fn backoff_attempt_4() {
+        assert_eq!(backoff_seconds(4), 480);
+    }
+
+    #[test]
+    fn backoff_attempt_5_capped() {
+        assert_eq!(backoff_seconds(5), 480);
+    }
+
+    #[test]
+    fn backoff_negative_attempt_clamped() {
+        // Negative attempts are clamped to 0 → 30s base backoff.
+        assert_eq!(backoff_seconds(-1), 30);
+    }
 }
