@@ -143,7 +143,7 @@ async fn process_event(
 
 fn backoff_seconds(attempt: i16) -> i64 {
     // Exponential backoff: 30s, 60s, 120s, 240s, 480s
-    i64::from(30 * (1 << attempt.min(4)))
+    i64::from(30 * (1 << attempt.clamp(0, 4)))
 }
 
 #[cfg(test)]
@@ -181,9 +181,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "attempt to shift left with overflow")]
-    fn backoff_negative_attempt() {
-        // min(4) does not clamp from below; negative shift overflows.
-        backoff_seconds(-1);
+    fn backoff_negative_attempt_clamped() {
+        // Negative attempts are clamped to 0 → 30s base backoff.
+        assert_eq!(backoff_seconds(-1), 30);
     }
 }
