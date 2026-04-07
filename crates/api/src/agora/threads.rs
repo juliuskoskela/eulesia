@@ -11,7 +11,7 @@ use tracing::warn;
 use crate::AppState;
 use eulesia_auth::session::{AuthUser, OptionalAuth};
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{ThreadScope, ThreadSource, UserRole, new_id};
+use eulesia_common::types::{Coordinates, ThreadScope, ThreadSource, UserRole, new_id};
 use eulesia_db::repo::blocks::BlockRepo;
 use eulesia_db::repo::bookmarks::BookmarkRepo;
 use eulesia_db::repo::comments::CommentRepo;
@@ -65,25 +65,19 @@ async fn resolve_municipality_id(
         ));
     };
 
-    let latitude = location
-        .latitude
-        .and_then(crate::locations::decimal_to_f64)
-        .ok_or_else(|| {
-            ApiError::BadRequest(
-                "local threads require municipalityId or a location with coordinates".into(),
-            )
-        })?;
+    let coords = Coordinates::from_options(
+        location.latitude.and_then(crate::locations::decimal_to_f64),
+        location
+            .longitude
+            .and_then(crate::locations::decimal_to_f64),
+    )
+    .ok_or_else(|| {
+        ApiError::BadRequest(
+            "local threads require municipalityId or a location with coordinates".into(),
+        )
+    })?;
 
-    let longitude = location
-        .longitude
-        .and_then(crate::locations::decimal_to_f64)
-        .ok_or_else(|| {
-            ApiError::BadRequest(
-                "local threads require municipalityId or a location with coordinates".into(),
-            )
-        })?;
-
-    let municipality = crate::locations::nearest_municipality(db, latitude, longitude).await?;
+    let municipality = crate::locations::nearest_municipality(db, coords).await?;
     municipality
         .map(|m| m.id)
         .ok_or_else(|| ApiError::BadRequest("municipalityId is required for local scope".into()))

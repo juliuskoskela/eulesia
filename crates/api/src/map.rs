@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::new_id;
+use eulesia_common::types::{Coordinates, new_id};
 use eulesia_db::entities::{clubs, municipalities, places, threads};
 
 // ---------------------------------------------------------------------------
@@ -29,8 +29,7 @@ pub struct MapPoint {
     pub id: Uuid,
     pub point_type: MapPointType,
     pub name: String,
-    pub latitude: f64,
-    pub longitude: f64,
+    pub coordinates: Coordinates,
     pub meta: serde_json::Value,
 }
 
@@ -50,8 +49,7 @@ pub struct PlaceResponse {
     pub name_fi: Option<String>,
     pub name_sv: Option<String>,
     pub description: Option<String>,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
+    pub coordinates: Option<Coordinates>,
     pub place_type: String,
     pub category: Option<String>,
     pub municipality_id: Option<Uuid>,
@@ -123,8 +121,7 @@ pub struct MunicipalityResponse {
     pub region: Option<String>,
     pub country: Option<String>,
     pub population: Option<i32>,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
+    pub coordinates: Option<Coordinates>,
 }
 
 #[derive(Debug, Serialize)]
@@ -158,8 +155,7 @@ struct PaginatedPlacesResponse {
 struct LocationDetailsResponse {
     id: Uuid,
     name: String,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
+    coordinates: Option<Coordinates>,
     threads: Vec<MapThreadSummary>,
     clubs: Vec<MapClubSummary>,
     municipality: Option<MunicipalityResponse>,
@@ -233,8 +229,10 @@ fn place_to_response(place: places::Model) -> PlaceResponse {
         name_fi: place.name_fi,
         name_sv: place.name_sv,
         description: place.description,
-        latitude: place.latitude.and_then(decimal_to_f64),
-        longitude: place.longitude.and_then(decimal_to_f64),
+        coordinates: Coordinates::from_options(
+            place.latitude.and_then(decimal_to_f64),
+            place.longitude.and_then(decimal_to_f64),
+        ),
         place_type: place.r#type,
         category: place.category,
         municipality_id: place.municipality_id,
@@ -253,8 +251,10 @@ pub(crate) fn municipality_to_response(
         region: municipality.region,
         country: municipality.country,
         population: municipality.population,
-        latitude: municipality.latitude.and_then(decimal_to_f64),
-        longitude: municipality.longitude.and_then(decimal_to_f64),
+        coordinates: Coordinates::from_options(
+            municipality.latitude.and_then(decimal_to_f64),
+            municipality.longitude.and_then(decimal_to_f64),
+        ),
     }
 }
 
@@ -363,12 +363,14 @@ fn parse_map_point_fields(
         name: row
             .try_get("", "name")
             .map_err(|e| ApiError::Database(format!("parse {label} name: {e}")))?,
-        latitude: row
-            .try_get("", "lat")
-            .map_err(|e| ApiError::Database(format!("parse {label} lat: {e}")))?,
-        longitude: row
-            .try_get("", "lon")
-            .map_err(|e| ApiError::Database(format!("parse {label} lon: {e}")))?,
+        coordinates: Coordinates {
+            latitude: row
+                .try_get("", "lat")
+                .map_err(|e| ApiError::Database(format!("parse {label} lat: {e}")))?,
+            longitude: row
+                .try_get("", "lon")
+                .map_err(|e| ApiError::Database(format!("parse {label} lon: {e}")))?,
+        },
         meta,
     })
 }
@@ -830,8 +832,10 @@ async fn map_location_detail(
             Ok(Json(LocationDetailsResponse {
                 id: thread.id,
                 name: thread.title,
-                latitude: thread.latitude.and_then(decimal_to_f64),
-                longitude: thread.longitude.and_then(decimal_to_f64),
+                coordinates: Coordinates::from_options(
+                    thread.latitude.and_then(decimal_to_f64),
+                    thread.longitude.and_then(decimal_to_f64),
+                ),
                 threads: related_threads,
                 clubs,
                 municipality,
@@ -853,8 +857,10 @@ async fn map_location_detail(
             Ok(Json(LocationDetailsResponse {
                 id: place.id,
                 name: place.name,
-                latitude: place.latitude.and_then(decimal_to_f64),
-                longitude: place.longitude.and_then(decimal_to_f64),
+                coordinates: Coordinates::from_options(
+                    place.latitude.and_then(decimal_to_f64),
+                    place.longitude.and_then(decimal_to_f64),
+                ),
                 threads,
                 clubs: vec![],
                 municipality,
@@ -875,8 +881,10 @@ async fn map_location_detail(
             Ok(Json(LocationDetailsResponse {
                 id: municipality.id,
                 name: municipality.name,
-                latitude: municipality.latitude.and_then(decimal_to_f64),
-                longitude: municipality.longitude.and_then(decimal_to_f64),
+                coordinates: Coordinates::from_options(
+                    municipality.latitude.and_then(decimal_to_f64),
+                    municipality.longitude.and_then(decimal_to_f64),
+                ),
                 threads: related_threads,
                 clubs: vec![],
                 municipality: Some(municipality_response),
@@ -910,14 +918,16 @@ mod tests {
             id: Uuid::nil(),
             point_type: MapPointType::Club,
             name: String::from("Test Club"),
-            latitude: 60.17,
-            longitude: 24.94,
+            coordinates: Coordinates {
+                latitude: 60.17,
+                longitude: 24.94,
+            },
             meta: serde_json::json!({}),
         };
 
         let json = serde_json::to_value(&point).unwrap();
         let obj = json.as_object().unwrap();
-        for key in ["id", "pointType", "name", "latitude", "longitude", "meta"] {
+        for key in ["id", "pointType", "name", "coordinates", "meta"] {
             assert!(obj.contains_key(key), "missing map point field: {key}");
         }
         assert_eq!(obj["pointType"], "club");
@@ -930,8 +940,10 @@ mod tests {
                 id: Uuid::nil(),
                 point_type: MapPointType::Thread,
                 name: String::from("Test"),
-                latitude: 60.0,
-                longitude: 25.0,
+                coordinates: Coordinates {
+                    latitude: 60.0,
+                    longitude: 25.0,
+                },
                 meta: serde_json::json!({}),
             }],
         };

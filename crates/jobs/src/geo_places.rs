@@ -13,7 +13,7 @@ use thiserror::Error;
 use tracing::info;
 use uuid::Uuid;
 
-use eulesia_common::types::SyncStatus;
+use eulesia_common::types::{Coordinates, SyncStatus};
 use eulesia_db::entities::{municipalities, places};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,10 +61,16 @@ pub struct OsmImportReport {
 
 #[derive(Debug, Error)]
 pub enum PlaceImportError {
-    #[error("http error: {0}")]
-    Http(#[from] reqwest::Error),
-    #[error("database error: {0}")]
-    Database(#[from] sea_orm::DbErr),
+    #[error("http error ({context}): {source}")]
+    Http {
+        context: &'static str,
+        source: reqwest::Error,
+    },
+    #[error("database error ({context}): {source}")]
+    Database {
+        context: &'static str,
+        source: sea_orm::DbErr,
+    },
     #[error("row parse error: {0}")]
     Row(String),
 }
@@ -199,8 +205,7 @@ struct PlaceCandidate {
     name_sv: Option<String>,
     name_en: Option<String>,
     description: Option<String>,
-    latitude: f64,
-    longitude: f64,
+    coordinates: Coordinates,
     place_type: String,
     category: Option<String>,
     subcategory: Option<String>,
@@ -216,7 +221,13 @@ pub async fn sync_lipas_places(
     db: &DatabaseConnection,
     config: &LipasImportConfig,
 ) -> Result<LipasImportReport, PlaceImportError> {
-    let client = Client::builder().user_agent("eulesia-jobs/0.1.0").build()?;
+    let client = Client::builder()
+        .user_agent("eulesia-jobs/0.1.0")
+        .build()
+        .map_err(|e| PlaceImportError::Http {
+            context: "build client",
+            source: e,
+        })?;
     let municipalities_by_code = municipality_lookup(db).await?;
     let existing_places = existing_source_places(db, "lipas").await?;
 
@@ -258,8 +269,7 @@ pub async fn sync_lipas_places(
         };
 
         if candidate.municipality_id.is_none() {
-            candidate.municipality_id =
-                nearest_municipality_id(db, candidate.latitude, candidate.longitude).await?;
+            candidate.municipality_id = nearest_municipality_id(db, candidate.coordinates).await?;
             if candidate.municipality_id.is_some() {
                 report.nearest_municipality_backfills += 1;
             }
@@ -279,7 +289,13 @@ pub async fn sync_osm_places(
     db: &DatabaseConnection,
     config: &OsmImportConfig,
 ) -> Result<OsmImportReport, PlaceImportError> {
-    let client = Client::builder().user_agent("eulesia-jobs/0.1.0").build()?;
+    let client = Client::builder()
+        .user_agent("eulesia-jobs/0.1.0")
+        .build()
+        .map_err(|e| PlaceImportError::Http {
+            context: "build client",
+            source: e,
+        })?;
     let existing_places = existing_source_places(db, "osm").await?;
     let elements = fetch_overpass_elements(&client, config).await?;
 
@@ -298,7 +314,7 @@ pub async fn sync_osm_places(
     for element in elements {
         report.seen += 1;
 
-        let Some((latitude, longitude)) = overpass_coordinates(&element) else {
+        let Some(coordinates) = overpass_coordinates(&element) else {
             report.skipped_without_geometry += 1;
             continue;
         };
@@ -332,12 +348,11 @@ pub async fn sync_osm_places(
             name_sv: element.tags.get("name:sv").cloned(),
             name_en: element.tags.get("name:en").cloned(),
             description: element.tags.get("description").cloned(),
-            latitude,
-            longitude,
+            coordinates,
             place_type: osm_place_type(&element),
             category: Some(category),
             subcategory: Some(subcategory),
-            municipality_id: nearest_municipality_id(db, latitude, longitude).await?,
+            municipality_id: nearest_municipality_id(db, coordinates).await?,
             country: String::from("FI"),
             address: osm_address(&element.tags),
             source_url: Some(format!(
@@ -375,10 +390,22 @@ where
             .get(format!("{base_url}/{resource}"))
             .query(&[("page", page), ("page-size", page_size)])
             .send()
-            .await?
-            .error_for_status()?
+            .await
+            .map_err(|e| PlaceImportError::Http {
+                context: "send paged request",
+                source: e,
+            })?
+            .error_for_status()
+            .map_err(|e| PlaceImportError::Http {
+                context: "paged request status",
+                source: e,
+            })?
             .json::<LipasPage<T>>()
-            .await?;
+            .await
+            .map_err(|e| PlaceImportError::Http {
+                context: "parse paged response",
+                source: e,
+            })?;
 
         let total_pages = page_response.pagination.total_pages;
         items.extend(page_response.items);
@@ -402,10 +429,22 @@ async fn fetch_overpass_elements(
         )))
         .body(build_osm_query(config.timeout_seconds))
         .send()
-        .await?
-        .error_for_status()?
+        .await
+        .map_err(|e| PlaceImportError::Http {
+            context: "send overpass request",
+            source: e,
+        })?
+        .error_for_status()
+        .map_err(|e| PlaceImportError::Http {
+            context: "overpass request status",
+            source: e,
+        })?
         .json::<OverpassResponse>()
-        .await?;
+        .await
+        .map_err(|e| PlaceImportError::Http {
+            context: "parse overpass response",
+            source: e,
+        })?;
 
     Ok(response.elements)
 }
@@ -415,7 +454,11 @@ async fn municipality_lookup(
 ) -> Result<HashMap<String, Uuid>, PlaceImportError> {
     Ok(municipalities::Entity::find()
         .all(db)
-        .await?
+        .await
+        .map_err(|e| PlaceImportError::Database {
+            context: "lookup municipalities",
+            source: e,
+        })?
         .into_iter()
         .filter_map(|municipality| {
             municipality
@@ -432,18 +475,21 @@ async fn existing_source_places(
     Ok(places::Entity::find()
         .filter(places::Column::Source.eq(source))
         .all(db)
-        .await?
+        .await
+        .map_err(|e| PlaceImportError::Database {
+            context: "lookup existing source places",
+            source: e,
+        })?
         .into_iter()
         .filter_map(|place| place.source_id.clone().map(|source_id| (source_id, place)))
         .collect())
 }
-
 fn sports_site_candidate(
     site: &LipasSportsSite,
     base_url: &str,
     municipalities_by_code: &HashMap<String, Uuid>,
 ) -> Option<PlaceCandidate> {
-    let (place_type, latitude, longitude) = geometry_center(&site.location.geometries)?;
+    let (place_type, coordinates) = geometry_center(&site.location.geometries)?;
     let municipality_code = format!("{:03}", site.location.city.city_code);
 
     Some(PlaceCandidate {
@@ -454,8 +500,7 @@ fn sports_site_candidate(
         name_sv: None,
         name_en: None,
         description: site.comment.clone(),
-        latitude,
-        longitude,
+        coordinates,
         place_type,
         category: Some(String::from("lipas:sports-site")),
         subcategory: Some(format!("lipas:type:{}", site.kind.type_code)),
@@ -476,9 +521,8 @@ fn sports_site_candidate(
         }),
     })
 }
-
 fn loi_candidate(loi: &LipasLoi, base_url: &str) -> Option<PlaceCandidate> {
-    let (place_type, latitude, longitude) = geometry_center(&loi.geometries)?;
+    let (place_type, coordinates) = geometry_center(&loi.geometries)?;
     let name = loi
         .name
         .fi
@@ -495,8 +539,7 @@ fn loi_candidate(loi: &LipasLoi, base_url: &str) -> Option<PlaceCandidate> {
         name_sv: loi.name.se.clone(),
         name_en: loi.name.en.clone(),
         description: None,
-        latitude,
-        longitude,
+        coordinates,
         place_type,
         category: Some(format!("lipas:{}", loi.loi_category)),
         subcategory: Some(format!("lipas:{}", loi.loi_type)),
@@ -541,8 +584,8 @@ async fn upsert_place(
     active.name_sv = Set(candidate.name_sv);
     active.name_en = Set(candidate.name_en);
     active.description = Set(candidate.description);
-    active.latitude = Set(decimal_from_f64(candidate.latitude));
-    active.longitude = Set(decimal_from_f64(candidate.longitude));
+    active.latitude = Set(decimal_from_f64(candidate.coordinates.latitude));
+    active.longitude = Set(decimal_from_f64(candidate.coordinates.longitude));
     active.r#type = Set(candidate.place_type);
     active.category = Set(candidate.category);
     active.subcategory = Set(candidate.subcategory);
@@ -557,18 +600,29 @@ async fn upsert_place(
     active.updated_at = Set(now);
 
     if existing.is_some() {
-        active.update(db).await?;
+        active
+            .update(db)
+            .await
+            .map_err(|e| PlaceImportError::Database {
+                context: "update place",
+                source: e,
+            })?;
         Ok(UpsertOutcome::Updated)
     } else {
-        active.insert(db).await?;
+        active
+            .insert(db)
+            .await
+            .map_err(|e| PlaceImportError::Database {
+                context: "insert place",
+                source: e,
+            })?;
         Ok(UpsertOutcome::Inserted)
     }
 }
 
 async fn nearest_municipality_id(
     db: &DatabaseConnection,
-    latitude: f64,
-    longitude: f64,
+    coords: Coordinates,
 ) -> Result<Option<Uuid>, PlaceImportError> {
     let row = db
         .query_one(Statement::from_sql_and_values(
@@ -580,16 +634,20 @@ async fn nearest_municipality_id(
             ORDER BY POWER(latitude::float8 - $1, 2) + POWER(longitude::float8 - $2, 2)
             LIMIT 1
             ",
-            [latitude.into(), longitude.into()],
+            [coords.latitude.into(), coords.longitude.into()],
         ))
-        .await?;
+        .await
+        .map_err(|e| PlaceImportError::Database {
+            context: "nearest municipality query",
+            source: e,
+        })?;
 
     row.map(|row| row.try_get("", "id"))
         .transpose()
         .map_err(|error| PlaceImportError::Row(error.to_string()))
 }
 
-fn geometry_center(geometries: &LipasFeatureCollection) -> Option<(String, f64, f64)> {
+fn geometry_center(geometries: &LipasFeatureCollection) -> Option<(String, Coordinates)> {
     for feature in &geometries.features {
         let mut points = Vec::new();
         collect_points(&feature.geometry.coordinates, &mut points);
@@ -606,8 +664,10 @@ fn geometry_center(geometries: &LipasFeatureCollection) -> Option<(String, f64, 
 
         return Some((
             place_type_for_geometry(&feature.geometry.kind).to_owned(),
-            sum_lat / count,
-            sum_lon / count,
+            Coordinates {
+                latitude: sum_lat / count,
+                longitude: sum_lon / count,
+            },
         ));
     }
 
@@ -658,15 +718,18 @@ out center tags;"#
     )
 }
 
-fn overpass_coordinates(element: &OverpassElement) -> Option<(f64, f64)> {
+fn overpass_coordinates(element: &OverpassElement) -> Option<Coordinates> {
     if let (Some(lat), Some(lon)) = (element.lat, element.lon) {
-        return Some((lat, lon));
+        return Some(Coordinates {
+            latitude: lat,
+            longitude: lon,
+        });
     }
 
-    element
-        .center
-        .as_ref()
-        .map(|center| (center.lat, center.lon))
+    element.center.as_ref().map(|center| Coordinates {
+        latitude: center.lat,
+        longitude: center.lon,
+    })
 }
 
 fn osm_name(tags: &HashMap<String, String>) -> Option<String> {
@@ -781,12 +844,12 @@ mod tests {
         }))
         .expect("geometry fixture should deserialize");
 
-        let (place_type, latitude, longitude) =
+        let (place_type, coords) =
             geometry_center(&geometries).expect("geometry center should exist");
 
         assert_eq!(place_type, "area");
-        assert!((latitude - 62.0).abs() < f64::EPSILON);
-        assert!((longitude - 25.0).abs() < f64::EPSILON);
+        assert!((coords.latitude - 62.0).abs() < f64::EPSILON);
+        assert!((coords.longitude - 25.0).abs() < f64::EPSILON);
     }
 
     #[test]

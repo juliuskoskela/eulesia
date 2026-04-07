@@ -797,6 +797,40 @@ impl std::str::FromStr for MapPointType {
 }
 
 // ---------------------------------------------------------------------------
+// Geo types
+// ---------------------------------------------------------------------------
+
+/// Geographic coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+pub struct Coordinates {
+    pub latitude: f64,
+    pub longitude: f64,
+}
+
+impl Coordinates {
+    pub fn from_options(lat: Option<f64>, lon: Option<f64>) -> Option<Self> {
+        Some(Self {
+            latitude: lat?,
+            longitude: lon?,
+        })
+    }
+}
+
+/// Geographic bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct Bounds {
+    pub south: f64,
+    pub north: f64,
+    pub west: f64,
+    pub east: f64,
+}
+
+// ---------------------------------------------------------------------------
 // JobStatus enum
 // ---------------------------------------------------------------------------
 
@@ -824,6 +858,25 @@ impl JobStatus {
             Self::Skipped => "skipped",
             Self::Succeeded => "succeeded",
             Self::Failed => "failed",
+        }
+    }
+}
+
+impl std::fmt::Display for JobStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for JobStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "running" => Ok(Self::Running),
+            "skipped" => Ok(Self::Skipped),
+            "succeeded" => Ok(Self::Succeeded),
+            "failed" => Ok(Self::Failed),
+            other => Err(format!("invalid job status: {other}")),
         }
     }
 }
@@ -879,6 +932,28 @@ impl std::fmt::Display for LocationType {
 }
 
 impl std::str::FromStr for LocationType {
+    type Err = std::convert::Infallible;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "municipality" => Ok(Self::Municipality),
+            "place" => Ok(Self::Place),
+            "region" => Ok(Self::Region),
+            "country" => Ok(Self::Country),
+            "district" => Ok(Self::District),
+            "locality" => Ok(Self::Locality),
+            "neighborhood" => Ok(Self::Neighborhood),
+            _ => Ok(Self::Other),
+        }
+    }
+}
+
+impl std::fmt::Display for LocationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for LocationType {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -920,6 +995,24 @@ impl LocationStatus {
     }
 }
 
+impl std::fmt::Display for LocationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for LocationStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "active" => Ok(Self::Active),
+            "inactive" => Ok(Self::Inactive),
+            "archived" => Ok(Self::Archived),
+            other => Err(format!("invalid location status: {other}")),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SyncStatus enum
 // ---------------------------------------------------------------------------
@@ -948,6 +1041,25 @@ impl SyncStatus {
             Self::Synced => "synced",
             Self::Failed => "failed",
             Self::Manual => "manual",
+        }
+    }
+}
+
+impl std::fmt::Display for SyncStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for SyncStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pending" => Ok(Self::Pending),
+            "synced" => Ok(Self::Synced),
+            "failed" => Ok(Self::Failed),
+            "manual" => Ok(Self::Manual),
+            other => Err(format!("invalid sync status: {other}")),
         }
     }
 }
@@ -1071,6 +1183,59 @@ mod tests {
         assert!(ClubRole::Moderator.is_at_least_moderator());
         assert!(ClubRole::Owner.is_at_least_moderator());
         assert!(!ClubRole::Member.is_at_least_moderator());
+    }
+
+    // ---- JobStatus ----------------------------------------------------------
+
+    #[test]
+    fn job_status_roundtrip() {
+        roundtrip(JobStatus::Running, "running");
+        roundtrip(JobStatus::Skipped, "skipped");
+        roundtrip(JobStatus::Succeeded, "succeeded");
+        roundtrip(JobStatus::Failed, "failed");
+    }
+
+    // ---- LocationType -------------------------------------------------------
+
+    #[test]
+    fn location_type_roundtrip() {
+        roundtrip(LocationType::Municipality, "municipality");
+        roundtrip(LocationType::Place, "place");
+        roundtrip(LocationType::Region, "region");
+        roundtrip(LocationType::Country, "country");
+        roundtrip(LocationType::District, "district");
+        roundtrip(LocationType::Locality, "locality");
+        roundtrip(LocationType::Neighborhood, "neighborhood");
+        roundtrip(LocationType::Other, "other");
+    }
+
+    #[test]
+    fn location_type_fallback_to_other() {
+        // Any unknown string should parse as Other
+        assert_eq!(LocationType::from_str("city").unwrap(), LocationType::Other);
+        assert_eq!(
+            LocationType::from_str("something_else").unwrap(),
+            LocationType::Other
+        );
+    }
+
+    // ---- LocationStatus -----------------------------------------------------
+
+    #[test]
+    fn location_status_roundtrip() {
+        roundtrip(LocationStatus::Active, "active");
+        roundtrip(LocationStatus::Inactive, "inactive");
+        roundtrip(LocationStatus::Archived, "archived");
+    }
+
+    // ---- SyncStatus ---------------------------------------------------------
+
+    #[test]
+    fn sync_status_roundtrip() {
+        roundtrip(SyncStatus::Pending, "pending");
+        roundtrip(SyncStatus::Synced, "synced");
+        roundtrip(SyncStatus::Failed, "failed");
+        roundtrip(SyncStatus::Manual, "manual");
     }
 
     #[test]

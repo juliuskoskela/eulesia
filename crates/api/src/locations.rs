@@ -13,23 +13,12 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::map::{MunicipalityResponse, municipality_to_response};
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{LocationStatus, LocationType, new_id};
+use eulesia_common::types::{Bounds, Coordinates, LocationStatus, LocationType, new_id};
 use eulesia_db::entities::{locations, municipalities};
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
-#[serde(rename_all = "camelCase")]
-pub struct LocationBounds {
-    pub south: f64,
-    pub north: f64,
-    pub west: f64,
-    pub east: f64,
-}
 
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -59,9 +48,8 @@ pub struct LocationResponse {
     #[serde(rename = "type")]
     pub r#type: LocationType,
     pub country: Option<String>,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-    pub bounds: Option<LocationBounds>,
+    pub coordinates: Option<Coordinates>,
+    pub bounds: Option<Bounds>,
     pub population: Option<i64>,
     pub status: LocationStatus,
     pub content_count: i32,
@@ -150,27 +138,18 @@ fn parse_types_filter(value: Option<&str>) -> Vec<String> {
         .collect()
 }
 
-fn parse_bounds(bounds: Option<&serde_json::Value>) -> Option<LocationBounds> {
+fn parse_bounds(bounds: Option<&serde_json::Value>) -> Option<Bounds> {
     let value = bounds?;
-    let south = value.get("south")?.as_f64()?;
-    let north = value.get("north")?.as_f64()?;
-    let west = value.get("west")?.as_f64()?;
-    let east = value.get("east")?.as_f64()?;
-    Some(LocationBounds {
-        south,
-        north,
-        west,
-        east,
-    })
+    serde_json::from_value(value.clone()).ok()
 }
 
-fn parse_nominatim_bounds(bounds: Option<&Vec<String>>) -> Option<LocationBounds> {
+fn parse_nominatim_bounds(bounds: Option<&Vec<String>>) -> Option<Bounds> {
     let bounds = bounds?;
     if bounds.len() != 4 {
         return None;
     }
 
-    Some(LocationBounds {
+    Some(Bounds {
         south: bounds[0].parse().ok()?,
         north: bounds[1].parse().ok()?,
         west: bounds[2].parse().ok()?,
@@ -198,13 +177,8 @@ fn location_parent_from_model(model: &locations::Model) -> LocationParentRespons
     )
 }
 
-fn bounds_to_json(bounds: LocationBounds) -> serde_json::Value {
-    serde_json::json!({
-        "south": bounds.south,
-        "north": bounds.north,
-        "west": bounds.west,
-        "east": bounds.east,
-    })
+fn bounds_to_json(bounds: Bounds) -> serde_json::Value {
+    serde_json::to_value(bounds).unwrap_or(serde_json::json!({}))
 }
 
 fn normalize_osm_type(osm_type: &str) -> Option<&'static str> {
@@ -287,8 +261,10 @@ pub(crate) async fn model_to_response(
         admin_level: model.admin_level,
         r#type: model.r#type.unwrap_or(LocationType::Other),
         country: model.country,
-        latitude: model.latitude.and_then(decimal_to_f64),
-        longitude: model.longitude.and_then(decimal_to_f64),
+        coordinates: Coordinates::from_options(
+            model.latitude.and_then(decimal_to_f64),
+            model.longitude.and_then(decimal_to_f64),
+        ),
         bounds: parse_bounds(model.bounds.as_ref()),
         population: model.population,
         status: model.status,
@@ -319,8 +295,10 @@ fn nominatim_to_response(n: NominatimResult) -> LocationResponse {
             .address
             .as_ref()
             .and_then(|address| address.country_code.clone()),
-        latitude: n.lat.as_ref().and_then(|value| value.parse().ok()),
-        longitude: n.lon.as_ref().and_then(|value| value.parse().ok()),
+        coordinates: Coordinates::from_options(
+            n.lat.and_then(|value| value.parse().ok()),
+            n.lon.and_then(|value| value.parse().ok()),
+        ),
         bounds: parse_nominatim_bounds(n.boundingbox.as_ref()),
         population: None,
         status: LocationStatus::Active,
@@ -543,8 +521,7 @@ pub(crate) async fn increment_location_content_count(
 
 pub(crate) async fn nearest_municipality(
     db: &sea_orm::DatabaseConnection,
-    latitude: f64,
-    longitude: f64,
+    coords: Coordinates,
 ) -> Result<Option<municipalities::Model>, ApiError> {
     let row = db
         .query_one(Statement::from_sql_and_values(
@@ -558,7 +535,7 @@ pub(crate) async fn nearest_municipality(
               + POWER(longitude::float8 - $2, 2)
             LIMIT 1
             ",
-            [latitude.into(), longitude.into()],
+            [coords.latitude.into(), coords.longitude.into()],
         ))
         .await
         .map_err(|e| ApiError::Database(format!("reverse municipality lookup: {e}")))?;
@@ -730,9 +707,15 @@ async fn reverse_lookup(
     State(state): State<AppState>,
     Query(params): Query<ReverseParams>,
 ) -> Result<Json<MunicipalityResponse>, ApiError> {
-    let municipality = nearest_municipality(&state.db, params.lat, params.lon)
-        .await?
-        .ok_or_else(|| ApiError::NotFound(String::from("municipality not found")))?;
+    let municipality = nearest_municipality(
+        &state.db,
+        Coordinates {
+            latitude: params.lat,
+            longitude: params.lon,
+        },
+    )
+    .await?
+    .ok_or_else(|| ApiError::NotFound(String::from("municipality not found")))?;
 
     Ok(Json(municipality_to_response(municipality)))
 }
@@ -768,8 +751,10 @@ mod tests {
                 admin_level: Some(8),
                 r#type: LocationType::Municipality,
                 country: Some(String::from("FI")),
-                latitude: Some(60.1699),
-                longitude: Some(24.9384),
+                coordinates: Some(Coordinates {
+                    latitude: 60.1699,
+                    longitude: 24.9384,
+                }),
                 bounds: None,
                 population: Some(674_500),
                 status: LocationStatus::Active,
