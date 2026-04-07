@@ -533,7 +533,7 @@ pub async fn create_thread(
 
     if scope == ThreadScope::Local && municipality_id.is_none() {
         return Err(ApiError::BadRequest(
-            "municipality_id is required for local scope".into(),
+            "municipalityId is required for local scope".into(),
         ));
     }
 

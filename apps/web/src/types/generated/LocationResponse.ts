@@ -2,23 +2,4 @@
 import type { LocationBounds } from "./LocationBounds";
 import type { LocationParentResponse } from "./LocationParentResponse";
 
-export type LocationResponse = {
-  id: string | null;
-  name: string;
-  nameFi: string | null;
-  nameSv: string | null;
-  nameEn: string | null;
-  displayName: string;
-  osmId: number | null;
-  osmType: string | null;
-  adminLevel: number | null;
-  type: string;
-  country: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  bounds: LocationBounds | null;
-  population: number | null;
-  status: string;
-  contentCount: number;
-  parent: LocationParentResponse | null;
-};
+export type LocationResponse = { id: string | null, name: string, nameFi: string | null, nameSv: string | null, nameEn: string | null, displayName: string, osmId: number | null, osmType: string | null, adminLevel: number | null, type: string, country: string | null, latitude: number | null, longitude: number | null, bounds: LocationBounds | null, population: number | null, status: string, contentCount: number, parent: LocationParentResponse | null, };

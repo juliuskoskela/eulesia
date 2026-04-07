@@ -615,7 +615,9 @@ async fn list_places(
 ) -> Result<Json<PaginatedPlacesResponse>, ApiError> {
     let page = params.page.unwrap_or(1).max(1);
     let limit = params.limit.unwrap_or(50).min(200);
-    let offset = (page - 1) * limit;
+    let offset = (page - 1)
+        .checked_mul(limit)
+        .ok_or_else(|| ApiError::BadRequest("page value too large".into()))?;
 
     let mut query = places::Entity::find();
 
@@ -768,9 +770,11 @@ async fn map_location_detail(
 
             let municipality =
                 municipality_response_by_id(&state.db, thread.municipality_id).await?;
-            let place = place_by_id(&state.db, thread.place_id.unwrap_or(id))
-                .await?
-                .filter(|_| thread.place_id.is_some());
+            let place = if let Some(place_id) = thread.place_id {
+                place_by_id(&state.db, place_id).await?
+            } else {
+                None
+            };
             let related_threads = match thread.municipality_id {
                 Some(municipality_id) => {
                     recent_threads_for_municipality(&state.db, municipality_id, Some(thread.id))
