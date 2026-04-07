@@ -48,6 +48,7 @@ import type {
   AppealResponse,
   MySanction,
 } from "../types/frontend";
+import type { UserProfileResponse } from "../types/generated/UserProfileResponse";
 import type {
   AdminDashboard,
   AdminUser,
@@ -131,7 +132,7 @@ interface ApiMunicipality {
   longitude?: number | null;
 }
 
-interface ApiUserProfile {
+interface ApiCurrentUserProfile {
   id: string;
   username?: string;
   email?: string | null;
@@ -410,7 +411,7 @@ function toMunicipality(
   };
 }
 
-function toUser(apiUser: ApiUserProfile): User {
+function toUser(apiUser: ApiCurrentUserProfile): User {
   const municipality = toMunicipality(apiUser.municipality);
   return {
     id: apiUser.id,
@@ -496,7 +497,7 @@ class ApiClient {
   }
 
   async login(username: string, password: string): Promise<User> {
-    const response = await this.request<ApiUserProfile>("/auth/login", {
+    const response = await this.request<ApiCurrentUserProfile>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
@@ -508,10 +509,13 @@ class ApiClient {
   }
 
   async register(data: RegisterRequest): Promise<User> {
-    const response = await this.request<ApiUserProfile>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    const response = await this.request<ApiCurrentUserProfile>(
+      "/auth/register",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    );
     return toUser(response);
   }
 
@@ -520,7 +524,7 @@ class ApiClient {
   }
 
   async getCurrentUser(): Promise<User> {
-    const response = await this.request<ApiUserProfile>("/auth/me");
+    const response = await this.request<ApiCurrentUserProfile>("/auth/me");
     return toUser(response);
   }
 
@@ -595,9 +599,9 @@ class ApiClient {
   }
 
   // Users
-  async getUser(id: string): Promise<User> {
-    const response = await this.request<ApiUserProfile>(`/users/${id}`);
-    return toUser(response);
+  // Public profile endpoint returns the raw /users/:id payload, including threads.
+  async getUser(id: string): Promise<UserProfileResponse> {
+    return this.request<UserProfileResponse>(`/users/${id}`);
   }
 
   async updateProfile(data: Partial<User>): Promise<User> {
@@ -632,7 +636,7 @@ class ApiClient {
     }
 
     if (Object.keys(profilePayload).length > 0) {
-      const response = await this.request<ApiUserProfile>("/users/me", {
+      const response = await this.request<ApiCurrentUserProfile>("/users/me", {
         method: "PATCH",
         body: JSON.stringify(profilePayload),
       });

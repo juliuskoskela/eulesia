@@ -1,9 +1,10 @@
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
+use sea_orm::sea_query::{Expr, OnConflict};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait, DatabaseBackend,
-    EntityTrait, QueryFilter, QueryOrder, QuerySelect, Statement,
+    ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, EntityTrait,
+    QueryFilter, QueryOrder, QuerySelect, Statement,
 };
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -415,6 +416,19 @@ async fn fetch_nominatim_lookup(osm_type: &str, osm_id: i64) -> Result<Nominatim
     result
 }
 
+async fn find_location_by_osm_identity(
+    db: &sea_orm::DatabaseConnection,
+    osm_type: &str,
+    osm_id: i64,
+) -> Result<Option<locations::Model>, ApiError> {
+    locations::Entity::find()
+        .filter(locations::Column::OsmId.eq(osm_id))
+        .filter(locations::Column::OsmType.eq(osm_type))
+        .one(db)
+        .await
+        .map_err(|e| ApiError::Database(format!("find location by osm identity: {e}")))
+}
+
 async fn persist_nominatim_location(
     db: &sea_orm::DatabaseConnection,
     result: &NominatimResult,
@@ -427,16 +441,6 @@ async fn persist_nominatim_location(
         .as_deref()
         .and_then(normalize_osm_type)
         .ok_or_else(|| ApiError::BadRequest(String::from("invalid osm_type")))?;
-
-    if let Some(existing) = locations::Entity::find()
-        .filter(locations::Column::OsmId.eq(osm_id))
-        .filter(locations::Column::OsmType.eq(osm_type))
-        .one(db)
-        .await
-        .map_err(|e| ApiError::Database(format!("find location by osm identity: {e}")))?
-    {
-        return Ok(existing);
-    }
 
     let name = result
         .name
@@ -473,10 +477,31 @@ async fn persist_nominatim_location(
         ..Default::default()
     };
 
-    model
-        .insert(db)
+    locations::Entity::insert(model)
+        .on_conflict(
+            OnConflict::columns([locations::Column::OsmType, locations::Column::OsmId])
+                .target_and_where(
+                    Expr::col(locations::Column::OsmType)
+                        .is_not_null()
+                        .and(Expr::col(locations::Column::OsmId).is_not_null()),
+                )
+                .do_nothing()
+                .to_owned(),
+        )
+        .exec(db)
         .await
-        .map_err(|e| ApiError::Database(format!("insert location from nominatim: {e}")))
+        .map_err(|e| ApiError::Database(format!("insert location from nominatim: {e}")))?;
+
+    // Re-read by OSM identity so concurrent inserts converge on the same row.
+    // The unique index makes the insert idempotent, but the caller still
+    // needs the full model back.
+    find_location_by_osm_identity(db, osm_type, osm_id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::Internal(String::from(
+                "inserted nominatim location could not be loaded",
+            ))
+        })
 }
 
 pub(crate) async fn ensure_location_by_osm(
@@ -487,13 +512,7 @@ pub(crate) async fn ensure_location_by_osm(
     let normalized_osm_type = normalize_osm_type(osm_type)
         .ok_or_else(|| ApiError::BadRequest(String::from("invalid osm_type")))?;
 
-    if let Some(existing) = locations::Entity::find()
-        .filter(locations::Column::OsmId.eq(osm_id))
-        .filter(locations::Column::OsmType.eq(normalized_osm_type))
-        .one(db)
-        .await
-        .map_err(|e| ApiError::Database(format!("find location by osm identity: {e}")))?
-    {
+    if let Some(existing) = find_location_by_osm_identity(db, normalized_osm_type, osm_id).await? {
         return Ok(existing);
     }
 
