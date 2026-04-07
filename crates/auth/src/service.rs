@@ -375,3 +375,60 @@ fn validate_username(username: &str) -> Result<(), AuthError> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_username_passes() {
+        assert!(validate_username("valid_user").is_ok());
+    }
+
+    #[test]
+    fn short_username_rejected() {
+        let err = validate_username("ab").unwrap_err();
+        assert!(matches!(err, AuthError::InvalidUsername { .. }));
+    }
+
+    #[test]
+    fn long_username_rejected() {
+        let long = "a".repeat(51);
+        let err = validate_username(&long).unwrap_err();
+        assert!(matches!(err, AuthError::InvalidUsername { .. }));
+    }
+
+    #[test]
+    fn special_chars_rejected() {
+        let err = validate_username("user@name").unwrap_err();
+        assert!(matches!(err, AuthError::InvalidUsername { .. }));
+    }
+
+    #[test]
+    fn leading_underscore_rejected() {
+        let err = validate_username("_user").unwrap_err();
+        assert!(matches!(err, AuthError::InvalidUsername { .. }));
+    }
+
+    #[test]
+    fn trailing_underscore_rejected() {
+        let err = validate_username("user_").unwrap_err();
+        assert!(matches!(err, AuthError::InvalidUsername { .. }));
+    }
+
+    #[test]
+    fn three_char_username_passes() {
+        assert!(validate_username("abc").is_ok());
+    }
+
+    #[test]
+    fn fifty_char_username_passes() {
+        let name = "a".repeat(50);
+        assert!(validate_username(&name).is_ok());
+    }
+
+    #[test]
+    fn digits_and_underscores_pass() {
+        assert!(validate_username("user_123_test").is_ok());
+    }
+}
