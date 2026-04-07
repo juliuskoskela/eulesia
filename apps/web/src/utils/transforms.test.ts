@@ -4,7 +4,8 @@ import {
   transformComment,
   getAvatarInitials,
 } from "./transforms";
-import type { Comment, UserSummary } from "../lib/api";
+import type { AuthorSummary } from "../types/generated/AuthorSummary";
+import type { Comment } from "../lib/api";
 
 describe("getAvatarInitials", () => {
   it("returns first two initials uppercased", () => {
@@ -29,14 +30,12 @@ describe("getAvatarInitials", () => {
 });
 
 describe("transformAuthor", () => {
-  const mockAuthor: UserSummary = {
+  const mockAuthor: AuthorSummary = {
     id: "user-1",
+    username: "mvirtanen",
     name: "Maria Virtanen",
     role: "citizen",
-    identityVerified: true,
     avatarUrl: "https://example.com/avatar.jpg",
-    institutionType: undefined,
-    institutionName: undefined,
   };
 
   it("transforms a citizen author correctly", () => {
@@ -44,60 +43,32 @@ describe("transformAuthor", () => {
     expect(result.id).toBe("user-1");
     expect(result.name).toBe("Maria Virtanen");
     expect(result.role).toBe("citizen");
-    expect(result.verified).toBe(true);
     expect(result.canViewProfile).toBe(true);
     expect(result.avatarInitials).toBe("MV");
     expect(result.avatarUrl).toBe("https://example.com/avatar.jpg");
   });
 
-  it("sets verified to false when identityVerified is null/undefined", () => {
+  it("computes avatarInitials from name", () => {
     const result = transformAuthor({
       ...mockAuthor,
-      identityVerified: undefined,
-    } as unknown as UserSummary);
-    expect(result.verified).toBe(false);
-  });
-
-  it("transforms an institution author", () => {
-    const instAuthor: UserSummary = {
-      id: "inst-1",
       name: "City of Helsinki",
-      role: "institution",
-      identityVerified: true,
-      avatarUrl: undefined,
-      institutionType: "municipality",
-      institutionName: "Helsingin kaupunki",
-    };
-    const result = transformAuthor(instAuthor);
-    expect(result.institutionType).toBe("municipality");
-    expect(result.institutionName).toBe("Helsingin kaupunki");
+    });
     expect(result.avatarInitials).toBe("CO");
   });
 
-  it("handles a managed operator author with null id", () => {
+  it("accepts a minimal {id, name, role} object", () => {
     const result = transformAuthor({
-      id: null,
+      id: "op-1",
       name: "Eulesia Operator",
       role: "citizen",
-      identityVerified: false,
-      avatarUrl: undefined,
-      canViewProfile: false,
-      institutionType: undefined,
-      institutionName: undefined,
-    } as unknown as UserSummary);
-
-    expect(result.id).toBeNull();
-    expect(result.canViewProfile).toBe(false);
-    expect(result.name).toBe("Eulesia Operator");
+    });
+    expect(result.id).toBe("op-1");
     expect(result.avatarInitials).toBe("EO");
+    expect(result.avatarUrl).toBeNull();
   });
 
-  it("preserves an explicit non-linkable profile flag", () => {
-    const result = transformAuthor({
-      ...mockAuthor,
-      canViewProfile: false,
-    });
-
+  it("canViewProfile is false for empty id", () => {
+    const result = transformAuthor({ id: "", name: "Test", role: "citizen" });
     expect(result.canViewProfile).toBe(false);
   });
 });

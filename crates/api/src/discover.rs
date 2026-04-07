@@ -195,7 +195,7 @@ async fn trending(State(state): State<AppState>) -> Result<Json<DiscoverListResp
         })
         .collect();
 
-    let total = results.len() as i64;
+    let total = i64::try_from(results.len()).unwrap_or(i64::MAX);
     Ok(Json(DiscoverListResponse {
         items: results,
         total,

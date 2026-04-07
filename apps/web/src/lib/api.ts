@@ -1,4 +1,7 @@
 import { API_BASE_URL } from "./runtimeConfig";
+// Import generated types used in class method signatures before the class.
+// These are also re-exported below for consumers.
+import type { MapPoint as MapPointImport } from "../types/generated/MapPoint";
 
 const API_URL = API_BASE_URL;
 
@@ -700,7 +703,7 @@ class ApiClient {
   }
 
   // Map
-  async getMapPoints(bounds: MapBounds): Promise<{ points: MapPoint[] }> {
+  async getMapPoints(bounds: MapBounds): Promise<{ points: MapPointImport[] }> {
     const searchParams = new URLSearchParams();
     searchParams.set("north", bounds.north.toString());
     searchParams.set("south", bounds.south.toString());
@@ -1447,7 +1450,46 @@ class ApiClient {
   }
 }
 
-// Types
+// =============================================================================
+// Types — generated from Rust via ts-rs where possible.
+// Import the generated base types; extend with frontend-only fields.
+// Do NOT manually duplicate fields that exist in the generated types.
+// =============================================================================
+
+// Re-export pure generated types that need no frontend extension
+export type { ClubRole } from "../types/generated/ClubRole";
+export type { GroupRole } from "../types/generated/GroupRole";
+export type { ThreadScope } from "../types/generated/ThreadScope";
+export type { ThreadSource } from "../types/generated/ThreadSource";
+export type { MapPointType } from "../types/generated/MapPointType";
+export type { InvitationStatus } from "../types/generated/InvitationStatus";
+export type { TagWithCount } from "../types/generated/TagWithCount";
+export type { VoteResponse } from "../types/generated/VoteResponse";
+export type { EpochResponse } from "../types/generated/EpochResponse";
+export type { MemberSummary } from "../types/generated/MemberSummary";
+export type { ConversationUserSummary } from "../types/generated/ConversationUserSummary";
+export type { LastMessageSummary } from "../types/generated/LastMessageSummary";
+export type { MessageResponse } from "../types/generated/MessageResponse";
+export type { ConversationResponse } from "../types/generated/ConversationResponse";
+export type { ConversationListItem as ConversationListItemGenerated } from "../types/generated/ConversationListItem";
+export type { ClubResponse as ClubResponseGenerated } from "../types/generated/ClubResponse";
+export type { ClubListResponse } from "../types/generated/ClubListResponse";
+export type { ClubMemberSummary as ClubMemberSummaryGenerated } from "../types/generated/ClubMemberSummary";
+export type { InvitationResponse as InvitationResponseGenerated } from "../types/generated/InvitationResponse";
+export type { InvitationClubSummary } from "../types/generated/InvitationClubSummary";
+export type { InvitationUserSummary } from "../types/generated/InvitationUserSummary";
+export type { MapPoint } from "../types/generated/MapPoint";
+export type { PlaceResponse } from "../types/generated/PlaceResponse";
+export type { MunicipalityResponse } from "../types/generated/MunicipalityResponse";
+export type { LocationResponse } from "../types/generated/LocationResponse";
+export type { UserProfileResponse } from "../types/generated/UserProfileResponse";
+export type { ReportResponse } from "../types/generated/ReportResponse";
+export type { SanctionResponse } from "../types/generated/SanctionResponse";
+export type { AppealResponse as AppealResponseGenerated } from "../types/generated/AppealResponse";
+
+// Types below extend generated bases with frontend-specific fields.
+// As generated types become complete, these manual extensions shrink.
+
 export interface User {
   id: string;
   email?: string | null;
@@ -1922,22 +1964,7 @@ export interface CreateRoomData {
 }
 
 // Map types
-export interface MapPoint {
-  id: string;
-  type: "municipality" | "place" | "thread" | "club";
-  name: string;
-  latitude: number;
-  longitude: number;
-  meta: {
-    threadCount?: number;
-    memberCount?: number;
-    category?: string;
-    scope?: string;
-    placeType?: string;
-    language?: string;
-    createdAt?: string;
-  };
-}
+// MapPoint is re-exported from generated types above
 
 export interface MapBounds {
   north: number;
@@ -2141,15 +2168,9 @@ export interface SearchResults {
   processingTimeMs: number;
 }
 
-// Tag types
-export interface TagWithCategory {
-  tag: string;
-  count: number;
-  category: string | null;
-  displayName: string | null;
-  description: string | null;
-  scope: string | null;
-}
+// Tag types — TagWithCategory is an alias for the generated TagWithCount
+export type TagWithCategory =
+  import("../types/generated/TagWithCount").TagWithCount;
 
 export interface TagPageResponse {
   tag: string;

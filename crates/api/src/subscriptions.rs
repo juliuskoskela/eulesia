@@ -153,7 +153,7 @@ async fn subscription_feed(
     State(state): State<AppState>,
     Query(params): Query<FeedParams>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
-    let limit = params.limit.min(100).max(1);
+    let limit = params.limit.clamp(1, 100);
     let offset = params.offset;
 
     let (thread_ids, total) =

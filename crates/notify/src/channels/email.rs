@@ -65,15 +65,14 @@ impl EmailClient {
     /// Send an email. Returns `Err` on delivery failure so callers (e.g. the
     /// outbox worker) can retry rather than silently dropping the message.
     pub async fn send_email(&self, to: &str, subject: &str, body_html: &str) -> Result<(), String> {
-        let transport = match &self.transport {
-            Some(t) => t,
-            None => {
-                warn!(
-                    to,
-                    subject, "SMTP not configured — email cannot be delivered"
-                );
-                return Err("SMTP not configured".into());
-            }
+        let transport = if let Some(t) = &self.transport {
+            t
+        } else {
+            warn!(
+                to,
+                subject, "SMTP not configured — email cannot be delivered"
+            );
+            return Err("SMTP not configured".into());
         };
 
         let message =

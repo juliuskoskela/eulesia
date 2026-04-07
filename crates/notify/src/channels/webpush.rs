@@ -74,21 +74,19 @@ impl WebPushClient {
     }
 
     pub async fn send(&self, endpoint: &str, _p256dh: &str, _auth: &str, _payload: &str) {
-        let config = match &self.config {
-            Some(c) => c,
-            None => {
-                info!(endpoint, "WebPush not configured, skipping");
-                return;
-            }
+        let config = if let Some(c) = &self.config {
+            c
+        } else {
+            info!(endpoint, "WebPush not configured, skipping");
+            return;
         };
 
         // Extract the origin from the endpoint URL for the VAPID audience.
-        let audience = match url::Url::parse(endpoint) {
-            Ok(u) => format!("{}://{}", u.scheme(), u.host_str().unwrap_or("")),
-            Err(_) => {
-                warn!(endpoint, "invalid push endpoint URL");
-                return;
-            }
+        let audience = if let Ok(u) = url::Url::parse(endpoint) {
+            format!("{}://{}", u.scheme(), u.host_str().unwrap_or(""))
+        } else {
+            warn!(endpoint, "invalid push endpoint URL");
+            return;
         };
 
         let jwt = match self.create_vapid_jwt(config, &audience) {

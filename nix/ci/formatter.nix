@@ -30,6 +30,8 @@ _: {
             "flake.lock"
             "Cargo.lock"
             "pnpm-lock.yaml"
+            # Generated TypeScript types — managed by ts-rs, not treefmt
+            "apps/web/src/types/generated/**"
           ];
         };
       };

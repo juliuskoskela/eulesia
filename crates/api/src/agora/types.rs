@@ -1,3 +1,4 @@
+use eulesia_common::types::{ThreadScope, ThreadSource};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -10,7 +11,7 @@ use uuid::Uuid;
 pub struct CreateThreadRequest {
     pub title: String,
     pub content: String,
-    pub scope: Option<String>,
+    pub scope: Option<ThreadScope>,
     pub municipality_id: Option<Uuid>,
     pub tags: Option<Vec<String>>,
     pub language: Option<String>,
@@ -80,7 +81,7 @@ pub struct ThreadResponse {
     pub title: String,
     pub content: String,
     pub content_html: Option<String>,
-    pub scope: String,
+    pub scope: ThreadScope,
     pub author: AuthorSummary,
     pub tags: Vec<String>,
     pub municipality_id: Option<Uuid>,
@@ -92,7 +93,7 @@ pub struct ThreadResponse {
     pub is_bookmarked: bool,
     pub is_pinned: bool,
     pub is_locked: bool,
-    pub source: String,
+    pub source: ThreadSource,
     pub source_url: Option<String>,
     pub source_institution_id: Option<Uuid>,
     pub ai_generated: bool,
@@ -198,7 +199,7 @@ mod tests {
             title: "Test thread".into(),
             content: "Some content".into(),
             content_html: Some("<p>Some content</p>".into()),
-            scope: "national".into(),
+            scope: ThreadScope::National,
             author: sample_author(),
             tags: vec!["politics".into()],
             municipality_id: None,
@@ -210,7 +211,7 @@ mod tests {
             is_bookmarked: true,
             is_pinned: false,
             is_locked: false,
-            source: "user".into(),
+            source: ThreadSource::User,
             source_url: None,
             source_institution_id: None,
             ai_generated: false,
@@ -407,7 +408,7 @@ mod tests {
     fn create_thread_request_with_scope() {
         let json = r#"{"title":"Hello","content":"World","scope":"national"}"#;
         let req: CreateThreadRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.scope.as_deref(), Some("national"));
+        assert_eq!(req.scope, Some(ThreadScope::National));
     }
 
     /// Verify ThreadListParams accepts page param.

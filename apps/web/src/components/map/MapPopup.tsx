@@ -30,15 +30,17 @@ const typeConfig = {
 };
 
 export function MapPopup({ point, onViewDetails }: MapPopupProps) {
-  const config = typeConfig[point.type];
-  const Icon = config.icon;
+  const config = typeConfig[point.pointType as keyof typeof typeConfig];
+  const Icon = config?.icon;
+  const meta = (point.meta ?? {}) as Record<string, unknown>;
 
   const getLink = () => {
-    switch (point.type) {
+    switch (point.pointType) {
       case "thread":
         return `/agora/thread/${point.id}`;
       case "club":
-        return `/clubs/${point.id}`;
+        // Club map points are threads with a club_id — the id is the thread id
+        return `/agora/thread/${point.id}`;
       case "municipality":
         return `/kunnat/${point.id}`;
       default:
@@ -59,38 +61,38 @@ export function MapPopup({ point, onViewDetails }: MapPopupProps) {
             {point.name}
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-            {point.type}
+            {point.pointType}
           </p>
         </div>
       </div>
 
       {/* Meta info */}
       <div className="mt-3 flex flex-wrap gap-2 text-xs">
-        {point.meta.threadCount !== undefined && (
+        {meta.threadCount !== undefined && (
           <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
             <MessageCircle className="w-3.5 h-3.5" />
-            {point.meta.threadCount} threads
+            {String(meta.threadCount)} threads
           </span>
         )}
-        {point.meta.memberCount !== undefined && (
+        {meta.memberCount !== undefined && (
           <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
             <Users className="w-3.5 h-3.5" />
-            {point.meta.memberCount} members
+            {String(meta.memberCount)} members
           </span>
         )}
-        {point.meta.category && (
+        {typeof meta.category === "string" && (
           <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded">
-            {point.meta.category}
+            {meta.category}
           </span>
         )}
-        {point.meta.scope && (
+        {typeof meta.scope === "string" && (
           <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded capitalize">
-            {point.meta.scope}
+            {meta.scope}
           </span>
         )}
-        {point.meta.language && (
+        {typeof meta.language === "string" && (
           <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded uppercase">
-            {point.meta.language}
+            {meta.language}
           </span>
         )}
       </div>

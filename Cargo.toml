@@ -57,6 +57,7 @@ webp = { version = "0.3" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+private_interfaces = "allow"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
@@ -67,6 +68,32 @@ missing_errors_doc = "allow"
 module_name_repetitions = "allow"
 wildcard_imports = "allow"
 must_use_candidate = "allow"
+# doc_markdown: backtick-wrapping every identifier in docs is excessive
+doc_markdown = "allow"
+# items_after_statements: SeaORM pattern uses `use` inside async blocks
+items_after_statements = "allow"
+# similar_names: variable names like `caller`/`caller_role` are fine
+similar_names = "allow"
+# option_if_let_else: let...else is not always clearer
+option_if_let_else = "allow"
+# missing_panics_doc: impractical for handler functions
+missing_panics_doc = "allow"
+# too_many_lines: some handlers are large by nature
+too_many_lines = "allow"
+# struct_excessive_bools: ThreadResponse has many boolean flags
+struct_excessive_bools = "allow"
+# unused_self: FCM/WebPush clients need &self for interface consistency
+unused_self = "allow"
+# let_and_return: sometimes clearer to name the result
+let_and_return = "allow"
+# match_same_arms: sometimes explicit arms are clearer than combining
+match_same_arms = "allow"
+# manual_let_else: if-let-else is sometimes clearer than let-else
+manual_let_else = "allow"
+# needless_pass_by_value: handlers take owned types for axum extraction
+needless_pass_by_value = "allow"
+# cast_possible_wrap: usize→i64 casts are bounded by application logic
+cast_possible_wrap = "allow"
 
 [profile.dev]
 opt-level = 1

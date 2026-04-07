@@ -15,6 +15,8 @@ use eulesia_db::entities::locations;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct LocationResponse {
     pub id: Uuid,

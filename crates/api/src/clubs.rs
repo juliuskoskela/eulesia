@@ -139,6 +139,8 @@ pub struct ClubListParams {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ClubMemberSummary {
     pub id: Uuid,
@@ -148,6 +150,8 @@ pub struct ClubMemberSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ClubResponse {
     pub id: Uuid,
@@ -176,6 +180,8 @@ pub struct ClubResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ClubListResponse {
     pub items: Vec<ClubResponse>,
@@ -192,6 +198,8 @@ pub struct InviteRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationClubSummary {
     pub id: Uuid,
@@ -201,6 +209,8 @@ pub struct InvitationClubSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationUserSummary {
     pub id: Uuid,
@@ -209,6 +219,8 @@ pub struct InvitationUserSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationResponse {
     pub id: Uuid,
@@ -298,7 +310,7 @@ fn normalize_rules(val: Option<serde_json::Value>) -> Option<String> {
 
 /// Parse a club member's stored role string into a `ClubRole`.
 fn parse_club_role(role: &str) -> Result<ClubRole, ApiError> {
-    role.parse::<ClubRole>().map_err(|e| ApiError::Internal(e))
+    role.parse::<ClubRole>().map_err(ApiError::Internal)
 }
 
 /// Fetch the club member record for a user. Returns `None` if not a member.
@@ -619,8 +631,7 @@ pub async fn get_club(
     let creator_role = all_members
         .iter()
         .find(|m| m.user_id == creator_id)
-        .map(|m| m.role.clone())
-        .unwrap_or_else(|| "owner".into());
+        .map_or_else(|| "owner".into(), |m| m.role.clone());
     if let Ok(Some(creator_user)) = UserRepo::find_by_id(&state.db, creator_id).await {
         resp.creator = Some(ClubMemberSummary {
             id: creator_user.id,
@@ -1307,7 +1318,9 @@ pub async fn create_club_thread(
     let thread_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
 
-    let scope = req.scope.unwrap_or_else(|| "club".into());
+    let scope = req
+        .scope
+        .unwrap_or(eulesia_common::types::ThreadScope::Club);
     let thread = ThreadRepo::create(
         &state.db,
         threads::ActiveModel {
@@ -1315,7 +1328,7 @@ pub async fn create_club_thread(
             title: Set(req.title),
             content: Set(req.content),
             author_id: Set(auth.user_id.0),
-            scope: Set(scope),
+            scope: Set(scope.to_string()),
             municipality_id: Set(req.municipality_id),
             language: Set(req.language),
             club_id: Set(Some(club_id)),
@@ -1354,7 +1367,10 @@ pub async fn create_club_thread(
         title: thread.title,
         content: thread.content,
         content_html: thread.content_html,
-        scope: thread.scope,
+        scope: thread.scope.parse().unwrap_or_else(|_| {
+            tracing::warn!(thread_id = %thread.id, scope = %thread.scope, "unknown scope");
+            eulesia_common::types::ThreadScope::Club
+        }),
         author,
         tags: req.tags.unwrap_or_default(),
         reply_count: thread.reply_count,
@@ -1366,7 +1382,10 @@ pub async fn create_club_thread(
         is_locked: thread.is_locked,
         municipality_id: thread.municipality_id,
         institutional_context: thread.institutional_context,
-        source: thread.source,
+        source: thread.source.parse().unwrap_or_else(|_| {
+            tracing::warn!(thread_id = %thread.id, source = %thread.source, "unknown source");
+            eulesia_common::types::ThreadSource::User
+        }),
         source_url: thread.source_url,
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
@@ -1487,7 +1506,7 @@ pub async fn get_club_thread(
     let offset = comment_params.offset.unwrap_or(0);
     let limit = clamp_limit(comment_params.limit);
 
-    let (comments, comments_total) =
+    let (comments, _comments_total) =
         CommentRepo::list_for_thread(&state.db, path.thread_id, &[], sort, offset, limit)
             .await
             .map_err(db_err)?;
@@ -1537,7 +1556,10 @@ pub async fn get_club_thread(
         title: thread.title,
         content: thread.content,
         content_html: thread.content_html,
-        scope: thread.scope,
+        scope: thread.scope.parse().unwrap_or_else(|_| {
+            tracing::warn!(thread_id = %thread.id, scope = %thread.scope, "unknown scope");
+            eulesia_common::types::ThreadScope::Club
+        }),
         author: thread_author,
         tags,
         reply_count: thread.reply_count,
@@ -1549,7 +1571,10 @@ pub async fn get_club_thread(
         is_locked: thread.is_locked,
         municipality_id: thread.municipality_id,
         institutional_context: thread.institutional_context,
-        source: thread.source,
+        source: thread.source.parse().unwrap_or_else(|_| {
+            tracing::warn!(thread_id = %thread.id, source = %thread.source, "unknown source");
+            eulesia_common::types::ThreadSource::User
+        }),
         source_url: thread.source_url,
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
@@ -2279,7 +2304,7 @@ mod tests {
             title: "Test".into(),
             content: "Body".into(),
             content_html: None,
-            scope: "club".into(),
+            scope: eulesia_common::types::ThreadScope::Club,
             author: AuthorSummary {
                 id: Uuid::nil(),
                 username: "test".into(),
@@ -2297,7 +2322,7 @@ mod tests {
             is_bookmarked: false,
             is_pinned: false,
             is_locked: false,
-            source: "user".into(),
+            source: eulesia_common::types::ThreadSource::User,
             source_url: None,
             source_institution_id: None,
             ai_generated: false,

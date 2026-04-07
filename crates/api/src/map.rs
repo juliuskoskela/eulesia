@@ -1,6 +1,7 @@
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
+use eulesia_common::types::MapPointType;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
     QueryOrder, QuerySelect, Statement,
@@ -19,10 +20,12 @@ use eulesia_db::entities::{municipalities, places};
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct MapPoint {
     pub id: Uuid,
-    pub point_type: String,
+    pub point_type: MapPointType,
     pub name: String,
     pub latitude: f64,
     pub longitude: f64,
@@ -36,6 +39,8 @@ struct MapPointsResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct PlaceResponse {
     pub id: Uuid,
@@ -94,6 +99,8 @@ pub struct CategoryCount {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct MunicipalityResponse {
     pub id: Uuid,
@@ -226,7 +233,7 @@ async fn get_map_points(
 
         points.push(MapPoint {
             id,
-            point_type,
+            point_type: point_type.parse().unwrap_or(MapPointType::Thread),
             name,
             latitude: lat,
             longitude: lon,
@@ -456,7 +463,7 @@ mod tests {
     fn map_point_serializes_correctly() {
         let point = MapPoint {
             id: Uuid::nil(),
-            point_type: "club".into(),
+            point_type: MapPointType::Club,
             name: "Test Club".into(),
             latitude: 60.17,
             longitude: 24.94,
@@ -479,7 +486,7 @@ mod tests {
         let resp = MapPointsResponse {
             points: vec![MapPoint {
                 id: Uuid::nil(),
-                point_type: "thread".into(),
+                point_type: MapPointType::Thread,
                 name: "Test".into(),
                 latitude: 60.0,
                 longitude: 25.0,

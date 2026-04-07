@@ -107,7 +107,7 @@ async fn register(
             .await
             .ok()
             .flatten()
-            .map_or(true, |r| r.value == "true");
+            .is_none_or(|r| r.value == "true");
         if !reg_open {
             return Err(ApiError::Forbidden);
         }
@@ -397,7 +397,7 @@ async fn auth_config(State(state): State<AppState>) -> Json<AuthConfigResponse> 
             .await
             .ok()
             .flatten()
-            .map_or(true, |r| r.value == "true")
+            .is_none_or(|r| r.value == "true")
     };
 
     Json(AuthConfigResponse {

@@ -65,10 +65,17 @@ generate-types:
 check-types:
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo test -p eulesia-api --features ts --test ts_export 2>/dev/null
+    cargo test -p eulesia-api --features ts --test ts_export
     if ! git diff --quiet apps/web/src/types/generated/; then
         echo "Generated TypeScript types are stale. Run: just generate-types"
         git diff --stat apps/web/src/types/generated/
+        exit 1
+    fi
+    untracked=$(git ls-files --others --exclude-standard apps/web/src/types/generated/)
+    if [ -n "$untracked" ]; then
+        echo "New generated TypeScript files are not tracked:"
+        echo "$untracked"
+        echo "Run: just generate-types && git add apps/web/src/types/generated/"
         exit 1
     fi
 

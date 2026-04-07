@@ -10,8 +10,8 @@ pub mod ftn;
 mod health;
 mod institutions;
 mod link_preview;
-mod locations;
-mod map;
+pub mod locations;
+pub mod map;
 pub mod messaging;
 pub mod moderation;
 mod notifications;
@@ -75,7 +75,7 @@ async fn dm_unread_count(
         .db
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            r#"
+            r"
             SELECT COALESCE(SUM(cnt), 0)::BIGINT AS total
             FROM (
                 SELECT COUNT(m.id) AS cnt
@@ -88,15 +88,13 @@ async fn dm_unread_count(
                   AND mb.left_at IS NULL
                 GROUP BY mb.conversation_id
             ) sub
-            "#,
+            ",
             [auth.user_id.0.into()],
         ))
         .await
         .map_err(|e| eulesia_common::error::ApiError::Database(e.to_string()))?;
 
-    let count: i64 = row
-        .map(|r| r.try_get_by_index::<i64>(0).unwrap_or(0))
-        .unwrap_or(0);
+    let count: i64 = row.map_or(0, |r| r.try_get_by_index::<i64>(0).unwrap_or(0));
 
     Ok(axum::Json(serde_json::json!({ "count": count })))
 }

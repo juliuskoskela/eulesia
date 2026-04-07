@@ -42,12 +42,9 @@
       build = fullBuild;
       generate-idura-jwks = generateIduraJwks;
       default = fullBuild;
-    };
-
-    checks = {
+      # Exposed as packages so checks.nix can inherit them without circular deps.
       server-clippy = rustBuilds.clippy;
       server-test = rustBuilds.test;
-      # server-fmt removed — treefmt handles Rust formatting via the format check.
     };
 
     apps = {

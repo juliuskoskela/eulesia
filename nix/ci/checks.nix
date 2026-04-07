@@ -63,6 +63,7 @@
       {
         format = formatCheck;
         nix-lint = nixLintCheck;
+        inherit (config.packages) server-clippy server-test;
         frontend-lint = mkFrontendCheck "eulesia-frontend-lint-check" "check:web";
         frontend-test = mkFrontendCheck "eulesia-frontend-test-check" "test:web:run";
         frontend-build = config.packages.frontend;

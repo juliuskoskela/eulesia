@@ -51,9 +51,9 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
     data: details,
     isLoading,
     error,
-  } = useMapLocationDetails(point.type, point.id);
+  } = useMapLocationDetails(point.pointType, point.id);
 
-  const config = typeConfig[point.type];
+  const config = typeConfig[point.pointType as keyof typeof typeConfig];
   const Icon = config.icon;
 
   return (
@@ -90,7 +90,7 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
         ) : details ? (
           <div className="space-y-4">
             {/* Quick actions based on type */}
-            {point.type === "thread" && (
+            {point.pointType === "thread" && (
               <Link
                 to={`/agora/thread/${point.id}`}
                 className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
@@ -102,19 +102,19 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
               </Link>
             )}
 
-            {point.type === "club" && (
+            {point.pointType === "club" && (
               <Link
-                to={`/clubs/${point.id}`}
+                to={`/agora/thread/${point.id}`}
                 className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
               >
                 <span className="font-medium text-green-700 dark:text-green-400">
-                  View club
+                  View club thread
                 </span>
                 <ChevronRight className="w-5 h-5 text-green-600 dark:text-green-400" />
               </Link>
             )}
 
-            {point.type === "municipality" && (
+            {point.pointType === "municipality" && (
               <Link
                 to={`/kunnat/${point.id}`}
                 className="flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
@@ -192,7 +192,7 @@ export function LocationDetails({ point, onClose }: LocationDetailsProps) {
             )}
 
             {/* Place info */}
-            {details.place && point.type !== "place" && (
+            {details.place && point.pointType !== "place" && (
               <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   <span className="font-medium">Location:</span>{" "}

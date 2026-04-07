@@ -17,6 +17,8 @@ use eulesia_db::repo::users::UserRepo;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct UserProfileResponse {
     pub id: Uuid,
