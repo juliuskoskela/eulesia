@@ -149,6 +149,13 @@ _: {
           git diff --stat apps/web/src/types/generated/
           exit 1
         fi
+        untracked=$(git ls-files --others --exclude-standard apps/web/src/types/generated/)
+        if [ -n "$untracked" ]; then
+          echo "New generated TypeScript files are not tracked:"
+          echo "$untracked"
+          echo "Run: just generate-types && git add apps/web/src/types/generated/"
+          exit 1
+        fi
       '';
     };
 
