@@ -1,7 +1,7 @@
 import { MessageSquare, Building2, Bot, Share2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { Thread, User } from "../../types";
+import type { Thread, User } from "../../lib/api";
 import type { CvsBreakdown } from "../../lib/api";
 import { ScopeBadge } from "../common/ScopeBadge";
 import { ThreadVoteButtons } from "./ThreadVoteButtons";

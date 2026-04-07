@@ -14,7 +14,8 @@ import { useTranslation } from "react-i18next";
 import { useCreateThread } from "../../hooks/useApi";
 import { LocationSearch } from "../common/LocationSearch";
 import { api } from "../../lib/api";
-import type { Scope } from "../../types";
+// Public thread scopes (excludes "club" which is internal to club endpoints)
+type Scope = "local" | "national" | "european";
 import type { LocationResult } from "../../lib/api";
 
 interface InlineThreadFormProps {

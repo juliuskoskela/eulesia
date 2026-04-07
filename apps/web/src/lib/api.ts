@@ -53,6 +53,331 @@ export interface RegisterRequest {
   ftnToken?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Private types — used only as return types by ApiClient methods.
+// Not exported; callers get the types via TypeScript inference.
+// These will be replaced with generated types as Rust structs gain ts-rs.
+// ---------------------------------------------------------------------------
+
+interface ThreadsResponse {
+  items: Thread[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  feedScope?: FeedScope | null;
+  hasSubscriptions: boolean;
+}
+
+interface ExploreResponse extends PaginatedResponse<ExploreThread> {
+  feedScope: "explore";
+}
+
+interface ClubWithThreads extends Club {
+  threads: ClubThread[];
+}
+
+interface ClubThreadWithComments extends ClubThread {
+  memberRole?: string | null;
+  isRoomOwner?: boolean;
+  comments: ClubComment[];
+}
+
+interface RoomThreadWithComments extends RoomThread {
+  isRoomOwner: boolean;
+  comments: RoomComment[];
+}
+
+interface RoomWithThreads extends Room {
+  owner: UserSummary;
+  members: UserSummary[];
+  threads: RoomThread[];
+  isOwner: boolean;
+  canPost: boolean;
+}
+
+interface HomeData {
+  owner: UserSummary;
+  rooms: Room[];
+  recentActivity: {
+    threads: { id: string; title: string; scope: string; createdAt: string }[];
+    clubs: { id: string; name: string; slug: string }[];
+  };
+  isOwnHome: boolean;
+}
+
+interface EditHistoryEntry {
+  id: string;
+  contentType: string;
+  previousContent: string;
+  previousContentHtml?: string | null;
+  previousTitle?: string | null;
+  editedAt: string;
+  editor: { id: string; name: string; avatarUrl?: string };
+}
+
+interface ConversationWithMessages {
+  id: string;
+  encryption?: "e2ee" | "none";
+  otherUser: UserSummary | null;
+  messages: DirectMessage[];
+}
+
+interface CreatePlaceData {
+  name: string;
+  nameFi?: string;
+  nameSv?: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number;
+  geojson?: unknown;
+  type: "poi" | "area" | "route" | "landmark";
+  category?: string;
+  municipalityId?: string;
+}
+
+interface LocationSearchResponse {
+  results: LocationResult[];
+  source: "cache" | "nominatim" | "mixed";
+}
+
+interface LocationWithHierarchy extends LocationResult {
+  hierarchy: LocationHierarchyItem[];
+}
+
+interface SearchThreadResult {
+  id: string;
+  title: string;
+  content: string;
+  scope: "local" | "national" | "european";
+  authorName: string;
+  municipalityName?: string;
+  tags: string[];
+  score: number;
+  replyCount: number;
+  createdAt: string;
+}
+
+interface SearchPlaceResult {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  municipalityName?: string;
+}
+
+interface TagPageResponse {
+  tag: string;
+  tagMeta: {
+    tag: string;
+    category: string;
+    displayName: string | null;
+    description: string | null;
+    scope: string | null;
+  } | null;
+  institution: {
+    institutionId: string;
+    topicTag: string;
+    relatedTags: string[];
+    description: string | null;
+    institutionName: string | null;
+    institutionType: string | null;
+  } | null;
+  items: Thread[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+interface UploadAvatarResponse {
+  success: boolean;
+  avatarUrl: string;
+}
+
+interface UploadImageResponse {
+  success: boolean;
+  url: string;
+  thumbnailUrl: string;
+  width: number;
+  height: number;
+}
+
+interface AdminSanction {
+  id: string;
+  sanctionType: "warning" | "suspension" | "ban";
+  reason: string;
+  issuedAt: string;
+  expiresAt?: string;
+  revokedAt?: string;
+  issuerName?: string;
+}
+
+interface ModLogEntry {
+  id: string;
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  reason: string;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+  adminName: string;
+  adminUserId: string;
+}
+
+interface AdminReportContentPreview {
+  title?: string;
+  content?: string;
+  name?: string;
+  authorId?: string;
+  [key: string]: unknown;
+}
+
+interface LocationHierarchyItem {
+  name: string;
+  type: string;
+  adminLevel: number | null;
+}
+
+interface TrendingItem {
+  entityId: string;
+  score: number;
+  metadata: Record<string, unknown>;
+  computedAt: string | null;
+}
+
+interface TrendingResponse {
+  type: "threads" | "tags";
+  items: TrendingItem[];
+  computedAt: string | null;
+}
+
+interface AlgorithmDocumentation {
+  name: string;
+  version: string;
+  updatedAt: string;
+  description: Record<string, string>;
+  formula: string;
+  components: Record<string, unknown>;
+  whatIsNotUsed: Record<string, string[]>;
+  transparency: Record<string, string>;
+  changelog: {
+    date: string;
+    version: string;
+    description: Record<string, string>;
+  }[];
+}
+
+type BookmarksResponse = ThreadsResponse;
+
+interface LinkPreviewData {
+  url: string;
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  siteName: string | null;
+  faviconUrl: string | null;
+}
+
+interface InstitutionManager {
+  id: string;
+  role: "owner" | "editor";
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  approvedAt: string | null;
+  institution: {
+    id: string;
+    name: string;
+    username: string;
+    institutionType: "municipality" | "agency" | "ministry";
+    institutionName: string;
+    avatarUrl: string | null;
+    municipalityId: string | null;
+  };
+}
+
+interface CreateOrganizationData {
+  name: string;
+  institutionName: string;
+  businessId?: string;
+  businessIdCountry?: string;
+  websiteUrl?: string;
+  description?: string;
+  institutionType?: "organization" | "agency";
+}
+
+interface CreatedOrganization {
+  id: string;
+  name: string;
+  username: string;
+  institutionType: string;
+  institutionName: string;
+  businessId: string | null;
+}
+
+interface InstitutionClaimWithUser {
+  id: string;
+  role: "owner" | "editor";
+  status: "pending";
+  createdAt: string;
+  institution: {
+    id: string;
+    name: string;
+    institutionName: string;
+    institutionType: string;
+  };
+  user: { id: string; name: string; email: string };
+}
+
+interface SearchMunicipalityResult {
+  id: string;
+  name: string;
+  nameFi: string;
+  region?: string;
+}
+
+interface SearchLocationResult {
+  id: string;
+  osmId: number;
+  osmType: string;
+  name: string;
+  nameFi?: string;
+  displayName: string;
+  type: string;
+  country: string;
+  contentCount: number;
+  parentName?: string;
+}
+
+interface SearchTagResult {
+  tag: string;
+  count: number;
+}
+
+interface SearchClubResult {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  category?: string;
+  memberCount: number;
+}
+
+interface ContentReportResponse {
+  id: string;
+  status: string;
+  createdAt: string;
+}
+
+interface GeneratedAdminInvite {
+  id: string;
+  code: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+
 class ApiClient {
   private baseUrl: string;
 
@@ -1577,41 +1902,6 @@ export interface ExploreThread extends Thread {
   scoreBreakdown: CvsBreakdown;
 }
 
-export interface ExploreResponse extends PaginatedResponse<ExploreThread> {
-  feedScope: "explore";
-}
-
-export interface TrendingItem {
-  entityId: string;
-  score: number;
-  metadata: Record<string, unknown>;
-  computedAt: string | null;
-}
-
-export interface TrendingResponse {
-  type: "threads" | "tags";
-  items: TrendingItem[];
-  computedAt: string | null;
-}
-
-export interface AlgorithmDocumentation {
-  name: string;
-  version: string;
-  updatedAt: string;
-  description: Record<string, string>;
-  formula: string;
-  components: Record<string, unknown>;
-  whatIsNotUsed: Record<string, string[]>;
-  transparency: Record<string, string>;
-  changelog: {
-    date: string;
-    version: string;
-    description: Record<string, string>;
-  }[];
-}
-
-export type BookmarksResponse = ThreadsResponse;
-
 export interface Comment {
   id: string;
   threadId: string;
@@ -1683,11 +1973,6 @@ export interface ClubMemberSummary {
 }
 
 export type ClubMember = ClubMemberSummary;
-
-export interface ClubWithThreads extends Club {
-  threads: ClubThread[];
-}
-
 export interface ClubInvitation {
   id: string;
   clubId: string;
@@ -1725,13 +2010,6 @@ export interface ClubThread {
   createdAt: string;
   updatedAt: string;
 }
-
-export interface ClubThreadWithComments extends ClubThread {
-  memberRole?: string | null;
-  isRoomOwner?: boolean;
-  comments: ClubComment[];
-}
-
 export type ClubComment = Comment;
 
 // Home types
@@ -1766,12 +2044,6 @@ export interface RoomThread {
   createdAt: string;
   updatedAt: string;
 }
-
-export interface RoomThreadWithComments extends RoomThread {
-  isRoomOwner: boolean;
-  comments: RoomComment[];
-}
-
 export interface RoomComment {
   id: string;
   threadId: string;
@@ -1787,15 +2059,6 @@ export interface RoomComment {
   createdAt: string;
   updatedAt?: string;
 }
-
-export interface RoomWithThreads extends Room {
-  owner: UserSummary;
-  members: UserSummary[];
-  threads: RoomThread[];
-  isOwner: boolean;
-  canPost: boolean;
-}
-
 export interface RoomInvitation {
   id: string;
   roomId: string;
@@ -1809,17 +2072,6 @@ export interface RoomInvitationWithDetails extends RoomInvitation {
   room: { id: string; name: string; description?: string };
   inviter: UserSummary;
 }
-
-export interface HomeData {
-  owner: UserSummary;
-  rooms: Room[];
-  recentActivity: {
-    threads: { id: string; title: string; scope: string; createdAt: string }[];
-    clubs: { id: string; name: string; slug: string }[];
-  };
-  isOwnHome: boolean;
-}
-
 // Notification types
 export interface AppNotification {
   id: string;
@@ -1859,28 +2111,6 @@ export interface DirectMessage {
   isHidden?: boolean;
   createdAt: string;
 }
-
-export interface EditHistoryEntry {
-  id: string;
-  contentType: string;
-  previousContent: string;
-  previousContentHtml?: string | null;
-  previousTitle?: string | null;
-  editedAt: string;
-  editor: {
-    id: string;
-    name: string;
-    avatarUrl?: string;
-  };
-}
-
-export interface ConversationWithMessages {
-  id: string;
-  encryption?: "e2ee" | "none";
-  otherUser: UserSummary | null;
-  messages: DirectMessage[];
-}
-
 // Filter types - all scopes filter WITHIN subscriptions, never shows all content globally
 export type FeedScope = "following" | "local" | "national" | "european" | "all";
 export type SortBy = "recent" | "new" | "top";
@@ -1896,17 +2126,6 @@ export interface ThreadFilters {
   page?: number;
   limit?: number;
 }
-
-export interface ThreadsResponse {
-  items: Thread[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-  feedScope?: FeedScope | null;
-  hasSubscriptions: boolean;
-}
-
 export interface ClubFilters {
   category?: string;
   search?: string;
@@ -1997,21 +2216,6 @@ export interface Place {
   municipality?: Municipality;
   createdAt: string;
 }
-
-export interface CreatePlaceData {
-  name: string;
-  nameFi?: string;
-  nameSv?: string;
-  description?: string;
-  latitude?: number;
-  longitude?: number;
-  radiusKm?: number;
-  geojson?: unknown;
-  type: "poi" | "area" | "route" | "landmark";
-  category?: string;
-  municipalityId?: string;
-}
-
 export interface LocationDetails {
   id: string;
   name: string;
@@ -2050,22 +2254,6 @@ export interface LocationResult {
     type: string;
   } | null;
 }
-
-export interface LocationSearchResponse {
-  results: LocationResult[];
-  source: "cache" | "nominatim" | "mixed";
-}
-
-export interface LocationHierarchyItem {
-  name: string;
-  type: string;
-  adminLevel: number | null;
-}
-
-export interface LocationWithHierarchy extends LocationResult {
-  hierarchy: LocationHierarchyItem[];
-}
-
 // Subscription types
 export type EntityType = "user" | "municipality" | "place" | "club" | "tag";
 export type NotifyLevel = "all" | "none" | "highlights";
@@ -2100,62 +2288,6 @@ export interface SearchUserResult {
   institutionName?: string;
   municipalityName?: string;
 }
-
-export interface SearchThreadResult {
-  id: string;
-  title: string;
-  content: string;
-  scope: "local" | "national" | "european";
-  authorName: string;
-  municipalityName?: string;
-  tags: string[];
-  score: number;
-  replyCount: number;
-  createdAt: string;
-}
-
-export interface SearchPlaceResult {
-  id: string;
-  name: string;
-  description?: string;
-  category?: string;
-  municipalityName?: string;
-}
-
-export interface SearchMunicipalityResult {
-  id: string;
-  name: string;
-  nameFi: string;
-  region?: string;
-}
-
-export interface SearchTagResult {
-  tag: string;
-  count: number;
-}
-
-export interface SearchLocationResult {
-  id: string;
-  osmId: number;
-  osmType: string;
-  name: string;
-  nameFi?: string;
-  displayName: string;
-  type: string;
-  country: string;
-  contentCount: number;
-  parentName?: string;
-}
-
-export interface SearchClubResult {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  category?: string;
-  memberCount: number;
-}
-
 export interface SearchResults {
   users: SearchUserResult[];
   threads: SearchThreadResult[];
@@ -2171,45 +2303,6 @@ export interface SearchResults {
 // Tag types — TagWithCategory is an alias for the generated TagWithCount
 export type TagWithCategory =
   import("../types/generated/TagWithCount").TagWithCount;
-
-export interface TagPageResponse {
-  tag: string;
-  tagMeta: {
-    tag: string;
-    category: string;
-    displayName: string | null;
-    description: string | null;
-    scope: string | null;
-  } | null;
-  institution: {
-    institutionId: string;
-    topicTag: string;
-    relatedTags: string[];
-    description: string | null;
-    institutionName: string | null;
-    institutionType: string | null;
-  } | null;
-  items: Thread[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-}
-
-// Upload types
-export interface UploadAvatarResponse {
-  success: boolean;
-  avatarUrl: string;
-}
-
-export interface UploadImageResponse {
-  success: boolean;
-  url: string;
-  thumbnailUrl: string;
-  width: number;
-  height: number;
-}
-
 // ─── Admin types ──────────────────────────────────────────
 
 export interface AdminDashboard {
@@ -2251,17 +2344,6 @@ export interface AdminUser {
   createdAt: string;
   lastSeenAt?: string;
 }
-
-export interface AdminSanction {
-  id: string;
-  sanctionType: "warning" | "suspension" | "ban";
-  reason: string;
-  issuedAt: string;
-  expiresAt?: string;
-  revokedAt?: string;
-  issuerName?: string;
-}
-
 export interface AdminUserDetail extends AdminUser {
   sanctions: AdminSanction[];
   threadCount: number;
@@ -2292,27 +2374,6 @@ export interface AdminReportDetail extends AdminReport {
   content: AdminReportContentPreview | null;
   assignedTo?: string;
 }
-
-export interface AdminReportContentPreview {
-  title?: string;
-  content?: string;
-  name?: string;
-  authorId?: string;
-  [key: string]: unknown;
-}
-
-export interface ModLogEntry {
-  id: string;
-  actionType: string;
-  targetType: string;
-  targetId: string;
-  reason: string;
-  metadata?: Record<string, unknown> | null;
-  createdAt: string;
-  adminName: string;
-  adminUserId: string;
-}
-
 export interface TransparencyStats {
   period: { from: string; to: string };
   reports: {
@@ -2352,13 +2413,6 @@ export interface SubmitReportData {
   reason: string;
   description?: string;
 }
-
-export interface ContentReportResponse {
-  id: string;
-  status: string;
-  createdAt: string;
-}
-
 export interface SubmitAppealData {
   sanctionId?: string;
   reportId?: string;
@@ -2380,16 +2434,6 @@ export interface MySanction {
   expiresAt?: string;
   revokedAt?: string;
 }
-
-export interface LinkPreviewData {
-  url: string;
-  title: string | null;
-  description: string | null;
-  imageUrl: string | null;
-  siteName: string | null;
-  faviconUrl: string | null;
-}
-
 export interface SystemAnnouncement {
   id: string;
   title: string;
@@ -2403,37 +2447,11 @@ export interface AdminAnnouncement extends SystemAnnouncement {
   active: boolean;
   createdByName: string | null;
 }
-
-export interface GeneratedAdminInvite {
-  id: string;
-  code: string;
-  createdAt: string;
-}
-
 export interface AdminInvite extends GeneratedAdminInvite {
   status: "available" | "used" | "revoked";
   usedAt: string | null;
   usedBy: { name: string } | null;
 }
-
-// Institution management types
-export interface InstitutionManager {
-  id: string;
-  role: "owner" | "editor";
-  status: "pending" | "approved" | "rejected";
-  createdAt: string;
-  approvedAt: string | null;
-  institution: {
-    id: string;
-    name: string;
-    username: string;
-    institutionType: "municipality" | "agency" | "ministry";
-    institutionName: string;
-    avatarUrl: string | null;
-    municipalityId: string | null;
-  };
-}
-
 export interface AvailableInstitution {
   id: string;
   name: string;
@@ -2451,44 +2469,6 @@ export interface InstitutionClaim {
   status: "pending" | "approved" | "rejected";
   createdAt: string;
 }
-
-export interface InstitutionClaimWithUser {
-  id: string;
-  role: "owner" | "editor";
-  status: "pending";
-  createdAt: string;
-  institution: {
-    id: string;
-    name: string;
-    institutionName: string;
-    institutionType: string;
-  };
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
-}
-
-export interface CreateOrganizationData {
-  name: string;
-  institutionName: string;
-  businessId?: string;
-  businessIdCountry?: string;
-  websiteUrl?: string;
-  description?: string;
-  institutionType?: "organization" | "agency";
-}
-
-export interface CreatedOrganization {
-  id: string;
-  name: string;
-  username: string;
-  institutionType: string;
-  institutionName: string;
-  businessId: string | null;
-}
-
 export interface WaitlistEntry {
   id: string;
   email: string;
