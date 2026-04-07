@@ -11,13 +11,16 @@ use tokio_postgres::NoTls;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-use crate::geo_places::{LipasImportConfig, LipasImportError, LipasImportReport};
+use crate::geo_places::{
+    LipasImportConfig, LipasImportReport, OsmImportConfig, OsmImportReport, PlaceImportError,
+};
 use eulesia_db::repo::jobs::JobRepo;
 use eulesia_db::seed::{self, MunicipalitySyncReport};
 
 #[derive(Clone, Debug)]
 pub struct ImportConfig {
     pub lipas: LipasImportConfig,
+    pub osm: OsmImportConfig,
 }
 
 #[derive(Clone)]
@@ -35,8 +38,8 @@ pub enum SchedulerError {
     Lock(#[from] tokio_postgres::Error),
     #[error("scheduler error: {0}")]
     Scheduler(#[from] tokio_cron_scheduler::JobSchedulerError),
-    #[error("lipas import error: {0}")]
-    Lipas(#[from] LipasImportError),
+    #[error("place import error: {0}")]
+    Place(#[from] PlaceImportError),
     #[error("job skipped because another runner is active: {0}")]
     Skipped(String),
 }
@@ -83,6 +86,25 @@ pub async fn run(
         info!("lipas place sync disabled");
     }
 
+    if ctx.imports.osm.enabled {
+        let osm_ctx = Arc::clone(&ctx);
+        scheduler
+            .add(Job::new_async(
+                "0 50 4 * * *",
+                move |_job_id, _scheduler| {
+                    let osm_ctx = Arc::clone(&osm_ctx);
+                    Box::pin(async move {
+                        if let Err(error) = run_osm_place_sync(osm_ctx).await {
+                            error!(error = %error, "scheduled osm place sync failed");
+                        }
+                    })
+                },
+            )?)
+            .await?;
+    } else {
+        info!("osm place sync disabled");
+    }
+
     scheduler.start().await?;
     info!("jobs scheduler started");
 
@@ -117,6 +139,20 @@ pub async fn run_lipas_place_sync(
         "lipas-place-sync",
         &cursor_value,
         || async move { Ok(crate::geo_places::sync_lipas_places(&ctx.db, &ctx.imports.lipas).await?) },
+    )
+    .await
+}
+
+pub async fn run_osm_place_sync(
+    ctx: Arc<SchedulerContext>,
+) -> Result<OsmImportReport, SchedulerError> {
+    let cursor_value = Utc::now().to_rfc3339();
+
+    run_locked_job(
+        Arc::clone(&ctx),
+        "osm-place-sync",
+        &cursor_value,
+        || async move { Ok(crate::geo_places::sync_osm_places(&ctx.db, &ctx.imports.osm).await?) },
     )
     .await
 }

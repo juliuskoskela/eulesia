@@ -288,6 +288,7 @@
       database.url = "postgresql:///eulesia_v2";
       extraEnvironment = {
         EULESIA_JOBS_LIPAS_ENABLED = "true";
+        EULESIA_JOBS_OSM_ENABLED = "true";
       };
     };
   };

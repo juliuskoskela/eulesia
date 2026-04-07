@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use chrono::Utc;
 use reqwest::Client;
 use sea_orm::prelude::Decimal;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection,
+    EntityTrait, QueryFilter, Set, Statement,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -19,6 +22,13 @@ pub struct LipasImportConfig {
     pub page_size: u32,
 }
 
+#[derive(Debug, Clone)]
+pub struct OsmImportConfig {
+    pub enabled: bool,
+    pub interpreter_url: String,
+    pub timeout_seconds: u32,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct LipasImportReport {
     pub sports_sites_seen: usize,
@@ -26,14 +36,30 @@ pub struct LipasImportReport {
     pub inserted: usize,
     pub updated: usize,
     pub skipped_without_geometry: usize,
+    pub nearest_municipality_backfills: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OsmImportReport {
+    pub seen: usize,
+    pub inserted: usize,
+    pub updated: usize,
+    pub skipped_without_geometry: usize,
+    pub skipped_without_name: usize,
+    pub libraries: usize,
+    pub parks: usize,
+    pub playgrounds: usize,
+    pub beaches: usize,
 }
 
 #[derive(Debug, Error)]
-pub enum LipasImportError {
+pub enum PlaceImportError {
     #[error("http error: {0}")]
     Http(#[from] reqwest::Error),
     #[error("database error: {0}")]
     Database(#[from] sea_orm::DbErr),
+    #[error("row parse error: {0}")]
+    Row(String),
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,7 +158,34 @@ struct LipasGeometry {
     coordinates: Value,
 }
 
+#[derive(Debug, Deserialize)]
+struct OverpassResponse {
+    elements: Vec<OverpassElement>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OverpassElement {
+    #[serde(rename = "type")]
+    element_type: String,
+    id: i64,
+    #[serde(default)]
+    lat: Option<f64>,
+    #[serde(default)]
+    lon: Option<f64>,
+    #[serde(default)]
+    center: Option<OverpassCenter>,
+    #[serde(default)]
+    tags: HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OverpassCenter {
+    lat: f64,
+    lon: f64,
+}
+
 struct PlaceCandidate {
+    source: String,
     source_id: String,
     name: String,
     name_fi: Option<String>,
@@ -148,16 +201,17 @@ struct PlaceCandidate {
     country: String,
     address: Option<String>,
     source_url: Option<String>,
+    osm_id: Option<String>,
     metadata: Value,
 }
 
 pub async fn sync_lipas_places(
     db: &DatabaseConnection,
     config: &LipasImportConfig,
-) -> Result<LipasImportReport, LipasImportError> {
+) -> Result<LipasImportReport, PlaceImportError> {
     let client = Client::builder().user_agent("eulesia-jobs/0.1.0").build()?;
     let municipalities_by_code = municipality_lookup(db).await?;
-    let existing_places = existing_lipas_places(db).await?;
+    let existing_places = existing_source_places(db, "lipas").await?;
 
     let mut report = LipasImportReport {
         sports_sites_seen: 0,
@@ -165,6 +219,7 @@ pub async fn sync_lipas_places(
         inserted: 0,
         updated: 0,
         skipped_without_geometry: 0,
+        nearest_municipality_backfills: 0,
     };
 
     let sports_sites =
@@ -192,10 +247,18 @@ pub async fn sync_lipas_places(
     for loi in lois {
         report.lois_seen += 1;
 
-        let Some(candidate) = loi_candidate(&loi, &config.base_url) else {
+        let Some(mut candidate) = loi_candidate(&loi, &config.base_url) else {
             report.skipped_without_geometry += 1;
             continue;
         };
+
+        if candidate.municipality_id.is_none() {
+            candidate.municipality_id =
+                nearest_municipality_id(db, candidate.latitude, candidate.longitude).await?;
+            if candidate.municipality_id.is_some() {
+                report.nearest_municipality_backfills += 1;
+            }
+        }
 
         upsert_place(db, existing_places.get(&candidate.source_id), candidate).await?;
         if existing_places.contains_key(&loi.id.to_string()) {
@@ -209,12 +272,97 @@ pub async fn sync_lipas_places(
     Ok(report)
 }
 
+pub async fn sync_osm_places(
+    db: &DatabaseConnection,
+    config: &OsmImportConfig,
+) -> Result<OsmImportReport, PlaceImportError> {
+    let client = Client::builder().user_agent("eulesia-jobs/0.1.0").build()?;
+    let existing_places = existing_source_places(db, "osm").await?;
+    let elements = fetch_overpass_elements(&client, config).await?;
+
+    let mut report = OsmImportReport {
+        seen: 0,
+        inserted: 0,
+        updated: 0,
+        skipped_without_geometry: 0,
+        skipped_without_name: 0,
+        libraries: 0,
+        parks: 0,
+        playgrounds: 0,
+        beaches: 0,
+    };
+
+    for element in elements {
+        report.seen += 1;
+
+        let Some((latitude, longitude)) = overpass_coordinates(&element) else {
+            report.skipped_without_geometry += 1;
+            continue;
+        };
+
+        let Some((category, subcategory)) = osm_category(&element.tags) else {
+            continue;
+        };
+
+        match category.as_str() {
+            "osm:library" => report.libraries += 1,
+            "osm:park" => report.parks += 1,
+            "osm:playground" => report.playgrounds += 1,
+            "osm:beach" => report.beaches += 1,
+            _ => {}
+        }
+
+        let Some(name) = osm_name(&element.tags) else {
+            report.skipped_without_name += 1;
+            continue;
+        };
+
+        let candidate = PlaceCandidate {
+            source: String::from("osm"),
+            source_id: format!("{}/{}", element.element_type, element.id),
+            name,
+            name_fi: element
+                .tags
+                .get("name:fi")
+                .cloned()
+                .or_else(|| element.tags.get("name").cloned()),
+            name_sv: element.tags.get("name:sv").cloned(),
+            name_en: element.tags.get("name:en").cloned(),
+            description: element.tags.get("description").cloned(),
+            latitude,
+            longitude,
+            place_type: osm_place_type(&element),
+            category: Some(category),
+            subcategory: Some(subcategory),
+            municipality_id: nearest_municipality_id(db, latitude, longitude).await?,
+            country: String::from("FI"),
+            address: osm_address(&element.tags),
+            source_url: Some(format!(
+                "https://www.openstreetmap.org/{}/{}",
+                element.element_type, element.id
+            )),
+            osm_id: Some(element.id.to_string()),
+            metadata: json!({ "tags": element.tags }),
+        };
+
+        upsert_place(db, existing_places.get(&candidate.source_id), candidate).await?;
+        if existing_places.contains_key(&format!("{}/{}", element.element_type, element.id)) {
+            report.updated += 1;
+        } else {
+            report.inserted += 1;
+        }
+    }
+
+    info!(?report, "osm place sync completed");
+    Ok(report)
+}
+
 async fn fetch_paged<T>(
     client: &Client,
     base_url: &str,
     resource: &str,
     page_size: u32,
-) -> Result<Vec<T>, LipasImportError>
+) -> Result<Vec<T>, PlaceImportError>
 where
     T: for<'de> Deserialize<'de>,
 {
@@ -242,9 +390,28 @@ where
     Ok(items)
 }
 
+async fn fetch_overpass_elements(
+    client: &Client,
+    config: &OsmImportConfig,
+) -> Result<Vec<OverpassElement>, PlaceImportError> {
+    let response = client
+        .post(&config.interpreter_url)
+        .timeout(std::time::Duration::from_secs(u64::from(
+            config.timeout_seconds,
+        )))
+        .body(build_osm_query(config.timeout_seconds))
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<OverpassResponse>()
+        .await?;
+
+    Ok(response.elements)
+}
+
 async fn municipality_lookup(
     db: &DatabaseConnection,
-) -> Result<HashMap<String, Uuid>, LipasImportError> {
+) -> Result<HashMap<String, Uuid>, PlaceImportError> {
     Ok(municipalities::Entity::find()
         .all(db)
         .await?
@@ -257,11 +424,12 @@ async fn municipality_lookup(
         .collect())
 }
 
-async fn existing_lipas_places(
+async fn existing_source_places(
     db: &DatabaseConnection,
-) -> Result<HashMap<String, places::Model>, LipasImportError> {
+    source: &str,
+) -> Result<HashMap<String, places::Model>, PlaceImportError> {
     Ok(places::Entity::find()
-        .filter(places::Column::Source.eq("lipas"))
+        .filter(places::Column::Source.eq(source))
         .all(db)
         .await?
         .into_iter()
@@ -278,6 +446,7 @@ fn sports_site_candidate(
     let municipality_code = format!("{:03}", site.location.city.city_code);
 
     Some(PlaceCandidate {
+        source: String::from("lipas"),
         source_id: site.lipas_id.to_string(),
         name: site.name.clone(),
         name_fi: Some(site.name.clone()),
@@ -293,6 +462,7 @@ fn sports_site_candidate(
         country: String::from("FI"),
         address: site.location.address.clone(),
         source_url: Some(format!("{base_url}/sports-sites/{}", site.lipas_id)),
+        osm_id: None,
         metadata: json!({
             "typeCode": site.kind.type_code,
             "status": site.status,
@@ -317,6 +487,7 @@ fn loi_candidate(loi: &LipasLoi, base_url: &str) -> Option<PlaceCandidate> {
         .unwrap_or_else(|| loi.loi_type.clone());
 
     Some(PlaceCandidate {
+        source: String::from("lipas"),
         source_id: loi.id.to_string(),
         name,
         name_fi: loi.name.fi.clone(),
@@ -332,6 +503,7 @@ fn loi_candidate(loi: &LipasLoi, base_url: &str) -> Option<PlaceCandidate> {
         country: String::from("FI"),
         address: None,
         source_url: Some(format!("{base_url}/lois/{}", loi.id)),
+        osm_id: None,
         metadata: json!({
             "status": loi.status,
             "loiType": loi.loi_type,
@@ -344,7 +516,7 @@ async fn upsert_place(
     db: &DatabaseConnection,
     existing: Option<&places::Model>,
     candidate: PlaceCandidate,
-) -> Result<(), LipasImportError> {
+) -> Result<(), PlaceImportError> {
     let now = Utc::now().fixed_offset();
 
     match existing {
@@ -364,6 +536,7 @@ async fn upsert_place(
             active.country = Set(Some(candidate.country));
             active.address = Set(candidate.address);
             active.source_url = Set(candidate.source_url);
+            active.osm_id = Set(candidate.osm_id);
             active.last_synced = Set(Some(now));
             active.sync_status = Set(String::from("synced"));
             active.metadata = Set(Some(candidate.metadata));
@@ -389,10 +562,10 @@ async fn upsert_place(
                 location_id: Set(None),
                 country: Set(Some(candidate.country)),
                 address: Set(candidate.address),
-                source: Set(String::from("lipas")),
+                source: Set(candidate.source),
                 source_id: Set(Some(candidate.source_id)),
                 source_url: Set(candidate.source_url),
-                osm_id: Set(None),
+                osm_id: Set(candidate.osm_id),
                 last_synced: Set(Some(now)),
                 sync_status: Set(String::from("synced")),
                 metadata: Set(Some(candidate.metadata)),
@@ -406,6 +579,30 @@ async fn upsert_place(
     }
 
     Ok(())
+}
+
+async fn nearest_municipality_id(
+    db: &DatabaseConnection,
+    latitude: f64,
+    longitude: f64,
+) -> Result<Option<Uuid>, PlaceImportError> {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"
+            SELECT id
+            FROM municipalities
+            WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+            ORDER BY POWER(latitude::float8 - $1, 2) + POWER(longitude::float8 - $2, 2)
+            LIMIT 1
+            ",
+            [latitude.into(), longitude.into()],
+        ))
+        .await?;
+
+    row.map(|row| row.try_get("", "id"))
+        .transpose()
+        .map_err(|error| PlaceImportError::Row(error.to_string()))
 }
 
 fn geometry_center(geometries: &LipasFeatureCollection) -> Option<(String, f64, f64)> {
@@ -461,9 +658,116 @@ fn decimal_from_f64(value: f64) -> Option<Decimal> {
     Decimal::from_f64_retain(value)
 }
 
+fn build_osm_query(timeout_seconds: u32) -> String {
+    format!(
+        r#"[out:json][timeout:{timeout_seconds}];
+area["ISO3166-1"="FI"][admin_level=2]->.searchArea;
+(
+  nwr["amenity"="library"](area.searchArea);
+  nwr["leisure"="park"](area.searchArea);
+  nwr["leisure"="playground"](area.searchArea);
+  nwr["natural"="beach"](area.searchArea);
+  nwr["tourism"="beach"](area.searchArea);
+  nwr["leisure"="beach_resort"](area.searchArea);
+);
+out center tags;"#
+    )
+}
+
+fn overpass_coordinates(element: &OverpassElement) -> Option<(f64, f64)> {
+    if let (Some(lat), Some(lon)) = (element.lat, element.lon) {
+        return Some((lat, lon));
+    }
+
+    element
+        .center
+        .as_ref()
+        .map(|center| (center.lat, center.lon))
+}
+
+fn osm_name(tags: &HashMap<String, String>) -> Option<String> {
+    tags.get("name:fi")
+        .cloned()
+        .or_else(|| tags.get("name").cloned())
+        .or_else(|| tags.get("name:sv").cloned())
+        .or_else(|| tags.get("name:en").cloned())
+}
+
+fn osm_address(tags: &HashMap<String, String>) -> Option<String> {
+    let street = tags.get("addr:street");
+    let number = tags.get("addr:housenumber");
+    let city = tags.get("addr:city");
+
+    let mut parts = Vec::new();
+    match (street, number) {
+        (Some(street), Some(number)) => parts.push(format!("{street} {number}")),
+        (Some(street), None) => parts.push(street.clone()),
+        (None, Some(number)) => parts.push(number.clone()),
+        (None, None) => {}
+    }
+    if let Some(city) = city {
+        parts.push(city.clone());
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(", "))
+    }
+}
+
+fn osm_place_type(element: &OverpassElement) -> String {
+    let tags = &element.tags;
+    if tags.contains_key("leisure") && element.element_type != "node" {
+        return String::from("area");
+    }
+    if tags.contains_key("natural") && element.element_type != "node" {
+        return String::from("area");
+    }
+    if tags.contains_key("tourism") && element.element_type != "node" {
+        return String::from("area");
+    }
+
+    String::from("poi")
+}
+
+fn osm_category(tags: &HashMap<String, String>) -> Option<(String, String)> {
+    match (
+        tags.get("amenity").map(String::as_str),
+        tags.get("leisure").map(String::as_str),
+        tags.get("natural").map(String::as_str),
+        tags.get("tourism").map(String::as_str),
+    ) {
+        (Some("library"), _, _, _) => {
+            Some((String::from("osm:library"), String::from("amenity:library")))
+        }
+        (_, Some("park"), _, _) => Some((String::from("osm:park"), String::from("leisure:park"))),
+        (_, Some("playground"), _, _) => Some((
+            String::from("osm:playground"),
+            String::from("leisure:playground"),
+        )),
+        (_, _, Some("beach"), _) => {
+            Some((String::from("osm:beach"), String::from("natural:beach")))
+        }
+        (_, _, _, Some("beach")) => {
+            Some((String::from("osm:beach"), String::from("tourism:beach")))
+        }
+        (_, Some("beach_resort"), _, _) => Some((
+            String::from("osm:beach"),
+            String::from("leisure:beach_resort"),
+        )),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{LipasFeatureCollection, collect_points, geometry_center, place_type_for_geometry};
+    use std::collections::HashMap;
+
+    use super::{
+        LipasFeatureCollection, build_osm_query, collect_points, geometry_center, osm_address,
+        osm_category, osm_name, place_type_for_geometry,
+    };
 
     #[test]
     fn place_type_maps_known_geometry_families() {
@@ -499,5 +803,45 @@ mod tests {
         assert_eq!(place_type, "area");
         assert!((latitude - 62.0).abs() < f64::EPSILON);
         assert!((longitude - 25.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn osm_query_targets_curated_categories() {
+        let query = build_osm_query(180);
+        assert!(query.contains(r#""amenity"="library""#));
+        assert!(query.contains(r#""leisure"="park""#));
+        assert!(query.contains(r#""leisure"="playground""#));
+        assert!(query.contains(r#""natural"="beach""#));
+    }
+
+    #[test]
+    fn osm_category_recognizes_curated_tags() {
+        let tags = HashMap::from([(String::from("amenity"), String::from("library"))]);
+        assert_eq!(
+            osm_category(&tags),
+            Some((String::from("osm:library"), String::from("amenity:library")))
+        );
+    }
+
+    #[test]
+    fn osm_name_prefers_finnish_then_generic() {
+        let tags = HashMap::from([
+            (String::from("name"), String::from("Central Library")),
+            (String::from("name:fi"), String::from("Keskustakirjasto")),
+        ]);
+        assert_eq!(osm_name(&tags).as_deref(), Some("Keskustakirjasto"));
+    }
+
+    #[test]
+    fn osm_address_compacts_known_addr_fields() {
+        let tags = HashMap::from([
+            (String::from("addr:street"), String::from("Mannerheimintie")),
+            (String::from("addr:housenumber"), String::from("5")),
+            (String::from("addr:city"), String::from("Helsinki")),
+        ]);
+        assert_eq!(
+            osm_address(&tags).as_deref(),
+            Some("Mannerheimintie 5, Helsinki")
+        );
     }
 }

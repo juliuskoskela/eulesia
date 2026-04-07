@@ -34,6 +34,19 @@ struct Config {
 
     #[arg(long, env = "EULESIA_JOBS_LIPAS_PAGE_SIZE", default_value_t = 100)]
     lipas_page_size: u32,
+
+    #[arg(long, env = "EULESIA_JOBS_OSM_ENABLED")]
+    osm_enabled: bool,
+
+    #[arg(
+        long,
+        env = "EULESIA_JOBS_OSM_INTERPRETER_URL",
+        default_value = "https://overpass-api.de/api/interpreter"
+    )]
+    osm_interpreter_url: String,
+
+    #[arg(long, env = "EULESIA_JOBS_OSM_TIMEOUT_SECONDS", default_value_t = 180)]
+    osm_timeout_seconds: u32,
 }
 
 #[tokio::main]
@@ -54,6 +67,11 @@ async fn main() -> anyhow::Result<()> {
                 enabled: config.lipas_enabled,
                 base_url: config.lipas_base_url.clone(),
                 page_size: config.lipas_page_size,
+            },
+            osm: eulesia_jobs::geo_places::OsmImportConfig {
+                enabled: config.osm_enabled,
+                interpreter_url: config.osm_interpreter_url.clone(),
+                timeout_seconds: config.osm_timeout_seconds,
             },
         },
     });
@@ -90,6 +108,10 @@ async fn run_named_job(
         "lipas-place-sync" => {
             let report = eulesia_jobs::scheduler::run_lipas_place_sync(ctx).await?;
             info!(?report, "named lipas place sync completed");
+        }
+        "osm-place-sync" => {
+            let report = eulesia_jobs::scheduler::run_osm_place_sync(ctx).await?;
+            info!(?report, "named osm place sync completed");
         }
         other => anyhow::bail!("unknown job name: {other}"),
     }
