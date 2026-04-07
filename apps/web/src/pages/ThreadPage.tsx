@@ -33,7 +33,7 @@ import {
 } from "../hooks/useApi";
 import { useAuth } from "../hooks/useAuth";
 import { formatRelativeTime } from "../lib/formatTime";
-import { getAvatarInitials } from "../utils/avatar";
+import { getAvatarInitials, enrichComments } from "../utils/avatar";
 import { api } from "../lib/api";
 
 export function ThreadPage() {
@@ -221,23 +221,17 @@ export function ThreadPage() {
     );
   }
 
-  const rawAuthor = thread.author ?? { id: "", name: "", role: "" };
+  const rawAuthor = thread.author ?? {
+    id: "",
+    name: "",
+    role: "citizen" as const,
+  };
   const author = {
     ...rawAuthor,
     avatarInitials: getAvatarInitials(rawAuthor.name),
   };
   const isInstitutional = thread.author?.role === "institution";
-  const comments = (thread.comments ?? []).map((c) => ({
-    ...c,
-    authorId: c.authorId ?? c.author?.id ?? "",
-    author: c.author
-      ? {
-          ...c.author,
-          verified: false,
-          avatarInitials: getAvatarInitials(c.author.name),
-        }
-      : null,
-  }));
+  const comments = enrichComments(thread.comments ?? []);
 
   const threadJsonLd = {
     "@context": "https://schema.org",

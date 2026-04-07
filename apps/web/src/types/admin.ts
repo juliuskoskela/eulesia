@@ -16,7 +16,6 @@ export interface AdminReportContentPreview {
   content?: string;
   name?: string;
   authorId?: string;
-  [key: string]: unknown;
 }
 
 export interface GeneratedAdminInvite {
@@ -84,7 +83,7 @@ export interface AdminReport {
   contentId: string;
   reason: string;
   description?: string;
-  status: string;
+  status: "pending" | "reviewing" | "resolved" | "dismissed";
   createdAt: string;
   resolvedAt?: string;
   reporterName: string;

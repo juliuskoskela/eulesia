@@ -1,6 +1,9 @@
 // Frontend-only types — domain types, request types, UI unions.
 // These are NOT generated from Rust; they exist only in the frontend.
 
+import type { ThreadScope } from "./generated/ThreadScope";
+import type { InvitationStatus } from "./generated/InvitationStatus";
+
 export interface User {
   id: string;
   email?: string | null;
@@ -8,7 +11,7 @@ export interface User {
   username?: string;
   verifiedName?: string;
   avatarUrl?: string | null;
-  role: string;
+  role: "citizen" | "institution" | "moderator";
   institutionType?: string;
   institutionName?: string;
   municipality?: Municipality;
@@ -42,7 +45,7 @@ export interface Thread {
   title: string;
   content: string;
   contentHtml?: string;
-  scope: "local" | "national" | "european" | "club";
+  scope: ThreadScope;
   tags: string[];
   author?: UserSummary;
   authorId?: string | null;
@@ -97,7 +100,7 @@ export interface Comment {
   parentId?: string | null;
   score: number;
   depth: number;
-  userVote?: number;
+  userVote: number;
   editedAt?: string | null;
   editedBy?: string | null;
   isHidden?: boolean;
@@ -110,7 +113,7 @@ export interface UserSummary {
   username?: string;
   name: string;
   avatarUrl?: string | null;
-  role: string;
+  role: "citizen" | "institution" | "moderator";
   // Present on full user profiles, absent on embedded author summaries
   identityVerified?: boolean;
   canViewProfile?: boolean;
@@ -142,7 +145,7 @@ export interface Club {
   longitude?: number | null;
   memberCount: number;
   isMember: boolean;
-  memberRole?: string | null;
+  memberRole?: "member" | "moderator" | "owner" | null;
   moderators?: ClubMemberSummary[];
   members?: ClubMemberSummary[];
   createdAt: string;
@@ -153,7 +156,7 @@ export interface ClubMemberSummary {
   id: string;
   name: string;
   avatarUrl?: string | null;
-  role: string;
+  role: "member" | "moderator" | "owner";
   canViewProfile?: boolean;
 }
 
@@ -175,7 +178,7 @@ export interface ClubInvitation {
   invitee?: { id: string; name: string; avatarUrl?: string | null } | null;
   invitedBy: string;
   inviter?: { id: string; name: string; avatarUrl?: string | null } | null;
-  status: string;
+  status: InvitationStatus;
   createdAt: string;
 }
 

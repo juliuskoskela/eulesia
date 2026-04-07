@@ -233,7 +233,7 @@ export function AgoraPage() {
     const newItems = threadsData.items.map((item) => ({
       thread: transformThread(item),
       author: (() => {
-        const a = item.author ?? { id: "", name: "", role: "" };
+        const a = item.author ?? { id: "", name: "", role: "citizen" as const };
         return { ...a, avatarInitials: getAvatarInitials(a.name) };
       })(),
     }));

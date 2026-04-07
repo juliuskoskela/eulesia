@@ -28,7 +28,7 @@ import {
 } from "../hooks/useApi";
 import { ThreadVoteButtons } from "../components/agora/ThreadVoteButtons";
 import { formatRelativeTime } from "../lib/formatTime";
-import { getAvatarInitials } from "../utils/avatar";
+import { getAvatarInitials, enrichComments } from "../utils/avatar";
 
 type CommentSort = "best" | "new" | "old" | "controversial";
 
@@ -194,17 +194,7 @@ export function ClubThreadPage() {
     ...thread.author,
     avatarInitials: getAvatarInitials(thread.author.name),
   };
-  const comments = (thread.comments ?? []).map((c) => ({
-    ...c,
-    authorId: c.authorId ?? c.author?.id ?? "",
-    author: c.author
-      ? {
-          ...c.author,
-          verified: false,
-          avatarInitials: getAvatarInitials(c.author.name),
-        }
-      : null,
-  }));
+  const comments = enrichComments(thread.comments ?? []);
   const memberRole = thread.memberRole;
   const isModOrAdmin = memberRole === "owner" || memberRole === "moderator";
   const isThreadAuthor =

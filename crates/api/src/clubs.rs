@@ -386,7 +386,7 @@ fn deleted_author() -> AuthorSummary {
         username: "[deleted]".into(),
         name: "[deleted]".into(),
         avatar_url: None,
-        role: "user".into(),
+        role: UserRole::Citizen,
     }
 }
 
@@ -401,7 +401,7 @@ fn author_map(users: Vec<eulesia_db::entities::users::Model>) -> HashMap<Uuid, A
                     username: u.username,
                     name: u.name,
                     avatar_url: u.avatar_url,
-                    role: u.role,
+                    role: u.role.parse().unwrap_or(UserRole::Citizen),
                 },
             )
         })
@@ -1359,7 +1359,7 @@ pub async fn create_club_thread(
         username: user.username,
         name: user.name,
         avatar_url: user.avatar_url,
-        role: user.role,
+        role: user.role.parse().unwrap_or(UserRole::Citizen),
     };
 
     Ok(Json(ThreadResponse {
@@ -1812,7 +1812,7 @@ pub async fn create_club_comment(
         username: user.username,
         name: user.name,
         avatar_url: user.avatar_url,
-        role: user.role,
+        role: user.role.parse().unwrap_or(UserRole::Citizen),
     };
 
     Ok(Json(CommentResponse {
@@ -2265,7 +2265,7 @@ mod tests {
                 username: "alice".into(),
                 name: "Alice".into(),
                 avatar_url: None,
-                role: "citizen".into(),
+                role: UserRole::Citizen,
             },
             content: "Hello".into(),
             content_html: None,
@@ -2310,7 +2310,7 @@ mod tests {
                 username: "test".into(),
                 name: "Test".into(),
                 avatar_url: None,
-                role: "citizen".into(),
+                role: UserRole::Citizen,
             },
             tags: vec![],
             municipality_id: None,

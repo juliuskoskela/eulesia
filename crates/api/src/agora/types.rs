@@ -1,4 +1,4 @@
-use eulesia_common::types::{ThreadScope, ThreadSource};
+use eulesia_common::types::{ThreadScope, ThreadSource, UserRole};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -154,7 +154,7 @@ pub struct AuthorSummary {
     pub username: String,
     pub name: String,
     pub avatar_url: Option<String>,
-    pub role: String,
+    pub role: UserRole,
 }
 
 #[derive(Debug, Serialize)]
@@ -189,7 +189,7 @@ mod tests {
             username: "testuser".into(),
             name: "Test User".into(),
             avatar_url: Some("https://example.com/avatar.png".into()),
-            role: "citizen".into(),
+            role: UserRole::Citizen,
         }
     }
 

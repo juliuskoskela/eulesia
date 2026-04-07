@@ -153,7 +153,11 @@ export function MunicipalityPage() {
                 key={thread.id}
                 thread={transformThread(thread)}
                 author={(() => {
-                  const a = thread.author ?? { id: "", name: "", role: "" };
+                  const a = thread.author ?? {
+                    id: "",
+                    name: "",
+                    role: "citizen" as const,
+                  };
                   return { ...a, avatarInitials: getAvatarInitials(a.name) };
                 })()}
               />
