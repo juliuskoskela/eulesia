@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use sea_orm::entity::prelude::EnumIter;
 use sea_orm::DeriveActiveEnum;
+use sea_orm::entity::prelude::{EnumIter, StringLen};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -868,6 +868,29 @@ impl LocationType {
             Self::Locality => "locality",
             Self::Neighborhood => "neighborhood",
             Self::Other => "other",
+        }
+    }
+}
+
+impl std::fmt::Display for LocationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for LocationType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "municipality" => Ok(Self::Municipality),
+            "place" => Ok(Self::Place),
+            "region" => Ok(Self::Region),
+            "country" => Ok(Self::Country),
+            "district" => Ok(Self::District),
+            "locality" => Ok(Self::Locality),
+            "neighborhood" => Ok(Self::Neighborhood),
+            "other" => Ok(Self::Other),
+            other => Err(format!("invalid location type: {other}")),
         }
     }
 }

@@ -171,8 +171,7 @@ struct LocationDetailsResponse {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn decimal_to_f64(d: sea_orm::prelude::Decimal) -> Option<f64> {
-    use rust_decimal::prelude::ToPrimitive;
-    d.to_f64()
+    d.to_string().parse().ok()
 }
 
 fn decimal_from_f64(value: Option<f64>) -> Option<sea_orm::prelude::Decimal> {
