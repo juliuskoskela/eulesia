@@ -282,6 +282,75 @@ where
     values.len()
 }
 
+fn append_thread_filters(
+    sql: &mut String,
+    values: &mut Vec<Value>,
+    params: &BoundsParams,
+    table_alias: &str,
+    club_only: Option<bool>,
+) {
+    if let Some(club_only) = club_only {
+        if club_only {
+            let _ = write!(sql, " AND {table_alias}.club_id IS NOT NULL");
+        } else {
+            let _ = write!(sql, " AND {table_alias}.club_id IS NULL");
+        }
+    }
+
+    if let Some(scope) = params.scope.as_deref() {
+        let position = push_value(values, scope.to_owned());
+        let _ = write!(sql, " AND {table_alias}.scope = ${position}");
+    }
+
+    if let Some(language) = params.language.as_deref() {
+        let position = push_value(values, language.to_owned());
+        let _ = write!(sql, " AND {table_alias}.language = ${position}");
+    }
+
+    let (date_from, date_to) = effective_date_range(
+        params.time_preset.as_deref(),
+        params.date_from.as_deref(),
+        params.date_to.as_deref(),
+    );
+    if let Some(date_from) = date_from {
+        let position = push_value(values, date_from);
+        let _ = write!(sql, " AND {table_alias}.created_at >= ${position}");
+    }
+    if let Some(date_to) = date_to {
+        let position = push_value(values, date_to);
+        let _ = write!(sql, " AND {table_alias}.created_at <= ${position}");
+    }
+
+    let tags = parse_csv(params.tags.as_deref());
+    if !tags.is_empty() {
+        let mut placeholders = Vec::with_capacity(tags.len());
+        for tag in tags {
+            let position = push_value(values, tag);
+            placeholders.push(format!("${position}"));
+        }
+        let _ = write!(
+            sql,
+            " AND EXISTS (
+                SELECT 1
+                FROM thread_tags tt
+                WHERE tt.thread_id = {table_alias}.id
+                  AND tt.tag IN ({})
+              )",
+            placeholders.join(",")
+        );
+    }
+}
+
+fn municipality_thread_count_subquery() -> &'static str {
+    r#"
+        SELECT COUNT(*)
+        FROM threads t
+        WHERE t.municipality_id = m.id
+          AND t.deleted_at IS NULL
+          AND t.is_hidden = false
+    "#
+}
+
 fn parse_map_point_fields(
     row: &sea_orm::QueryResult,
     point_type: MapPointType,
@@ -363,54 +432,7 @@ async fn query_thread_points(
         params.east.into(),
     ];
 
-    if club_only {
-        sql.push_str(" AND t.club_id IS NOT NULL");
-    } else {
-        sql.push_str(" AND t.club_id IS NULL");
-    }
-
-    if let Some(scope) = params.scope.as_deref() {
-        let position = push_value(&mut values, scope.to_owned());
-        let _ = write!(sql, " AND t.scope = ${position}");
-    }
-
-    if let Some(language) = params.language.as_deref() {
-        let position = push_value(&mut values, language.to_owned());
-        let _ = write!(sql, " AND t.language = ${position}");
-    }
-
-    let (date_from, date_to) = effective_date_range(
-        params.time_preset.as_deref(),
-        params.date_from.as_deref(),
-        params.date_to.as_deref(),
-    );
-    if let Some(date_from) = date_from {
-        let position = push_value(&mut values, date_from);
-        let _ = write!(sql, " AND t.created_at >= ${position}");
-    }
-    if let Some(date_to) = date_to {
-        let position = push_value(&mut values, date_to);
-        let _ = write!(sql, " AND t.created_at <= ${position}");
-    }
-
-    let tags = parse_csv(params.tags.as_deref());
-    if !tags.is_empty() {
-        let mut placeholders = Vec::with_capacity(tags.len());
-        for tag in tags {
-            let position = push_value(&mut values, tag);
-            placeholders.push(format!("${position}"));
-        }
-        let _ = write!(
-            sql,
-            " AND EXISTS (
-                SELECT 1
-                FROM thread_tags tt
-                WHERE tt.thread_id = t.id
-                  AND tt.tag IN ({})
-              )",
-            placeholders.join(",")
-        );
-    }
+    append_thread_filters(&mut sql, &mut values, params, "t", Some(club_only));
 
     sql.push_str(" ORDER BY t.created_at DESC LIMIT 500");
 
@@ -504,36 +526,44 @@ async fn query_municipality_points(
     db: &sea_orm::DatabaseConnection,
     params: &BoundsParams,
 ) -> Result<Vec<MapPoint>, ApiError> {
+    let values = vec![
+        params.south.into(),
+        params.north.into(),
+        params.west.into(),
+        params.east.into(),
+    ];
+
+    let thread_count_sql = municipality_thread_count_subquery();
+
+    let mut sql = String::from(
+        r"
+        SELECT
+          m.id,
+          m.name,
+          m.latitude::float8 AS lat,
+          m.longitude::float8 AS lon,
+          (
+        ",
+    );
+    sql.push_str(&thread_count_sql);
+    sql.push_str(
+        r"
+            )::bigint AS thread_count
+        FROM municipalities m
+        WHERE m.latitude IS NOT NULL
+          AND m.longitude IS NOT NULL
+          AND m.latitude BETWEEN $1 AND $2
+          AND m.longitude BETWEEN $3 AND $4
+        ORDER BY m.name ASC
+        LIMIT 500
+        ",
+    );
+
     let rows = db
         .query_all(Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            r"
-            SELECT
-              m.id,
-              m.name,
-              m.latitude::float8 AS lat,
-              m.longitude::float8 AS lon,
-              (
-                SELECT COUNT(*)
-                FROM threads t
-                WHERE t.municipality_id = m.id
-                  AND t.deleted_at IS NULL
-                  AND t.is_hidden = false
-              )::bigint AS thread_count
-            FROM municipalities m
-            WHERE m.latitude IS NOT NULL
-              AND m.longitude IS NOT NULL
-              AND m.latitude BETWEEN $1 AND $2
-              AND m.longitude BETWEEN $3 AND $4
-            ORDER BY m.name ASC
-            LIMIT 500
-            ",
-            [
-                params.south.into(),
-                params.north.into(),
-                params.west.into(),
-                params.east.into(),
-            ],
+            sql,
+            values,
         ))
         .await
         .map_err(|e| ApiError::Database(format!("map municipality query: {e}")))?;
@@ -921,5 +951,47 @@ mod tests {
         assert!(parsed.contains(&MapPointType::Thread));
         assert!(parsed.contains(&MapPointType::Club));
         assert!(parsed.contains(&MapPointType::Place));
+    }
+
+    #[test]
+    fn thread_filter_helper_applies_all_requested_predicates() {
+        let params = BoundsParams {
+            north: 61.0,
+            south: 60.0,
+            east: 26.0,
+            west: 24.0,
+            types: None,
+            categories: None,
+            time_preset: Some(String::from("week")),
+            date_from: None,
+            date_to: None,
+            scope: Some(String::from("national")),
+            language: Some(String::from("fi")),
+            tags: Some(String::from("climate,water")),
+        };
+
+        let mut sql = String::from("SELECT COUNT(*) FROM threads t WHERE 1 = 1");
+        let mut values = Vec::new();
+        append_thread_filters(&mut sql, &mut values, &params, "t", None);
+
+        assert!(!sql.contains("club_id"));
+        assert!(sql.contains("t.scope = $1"));
+        assert!(sql.contains("t.language = $2"));
+        assert!(sql.contains("t.created_at >= $3"));
+        assert!(sql.contains("tt.thread_id = t.id"));
+        assert!(sql.contains("tt.tag IN ($4,$5)"));
+        assert_eq!(values.len(), 5);
+    }
+
+    #[test]
+    fn municipality_thread_count_query_is_not_filter_aware() {
+        let thread_count_sql = municipality_thread_count_subquery();
+        assert!(thread_count_sql.contains("t.deleted_at IS NULL"));
+        assert!(thread_count_sql.contains("t.is_hidden = false"));
+        assert!(thread_count_sql.contains("t.municipality_id = m.id"));
+        assert!(!thread_count_sql.contains(".scope"));
+        assert!(!thread_count_sql.contains(".language"));
+        assert!(!thread_count_sql.contains(".created_at"));
+        assert!(!thread_count_sql.contains("thread_tags"));
     }
 }
