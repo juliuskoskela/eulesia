@@ -177,6 +177,38 @@ fn parse_nominatim_bounds(bounds: Option<&Vec<String>>) -> Option<LocationBounds
     })
 }
 
+fn location_parent_response(
+    name: String,
+    location_type: String,
+    admin_level: Option<i32>,
+) -> LocationParentResponse {
+    LocationParentResponse {
+        name,
+        r#type: location_type,
+        admin_level,
+    }
+}
+
+fn location_parent_from_model(model: &locations::Model) -> LocationParentResponse {
+    location_parent_response(
+        model.name.clone(),
+        model
+            .r#type
+            .clone()
+            .unwrap_or_else(|| String::from("unknown")),
+        model.admin_level,
+    )
+}
+
+fn bounds_to_json(bounds: LocationBounds) -> serde_json::Value {
+    serde_json::json!({
+        "south": bounds.south,
+        "north": bounds.north,
+        "west": bounds.west,
+        "east": bounds.east,
+    })
+}
+
 fn normalize_osm_type(osm_type: &str) -> Option<&'static str> {
     match osm_type {
         "node" | "N" => Some("node"),
@@ -192,38 +224,30 @@ fn nominatim_parent(address: Option<&NominatimAddress>) -> Option<LocationParent
     address
         .municipality
         .as_ref()
-        .map(|name| LocationParentResponse {
-            name: name.clone(),
-            r#type: String::from("municipality"),
-            admin_level: Some(8),
+        .map(|name| location_parent_response(name.clone(), String::from("municipality"), Some(8)))
+        .or_else(|| {
+            address
+                .city
+                .as_ref()
+                .map(|name| location_parent_response(name.clone(), String::from("city"), None))
         })
         .or_else(|| {
-            address.city.as_ref().map(|name| LocationParentResponse {
-                name: name.clone(),
-                r#type: String::from("city"),
-                admin_level: None,
-            })
+            address
+                .town
+                .as_ref()
+                .map(|name| location_parent_response(name.clone(), String::from("town"), None))
         })
         .or_else(|| {
-            address.town.as_ref().map(|name| LocationParentResponse {
-                name: name.clone(),
-                r#type: String::from("town"),
-                admin_level: None,
-            })
+            address
+                .county
+                .as_ref()
+                .map(|name| location_parent_response(name.clone(), String::from("county"), None))
         })
         .or_else(|| {
-            address.county.as_ref().map(|name| LocationParentResponse {
-                name: name.clone(),
-                r#type: String::from("county"),
-                admin_level: None,
-            })
-        })
-        .or_else(|| {
-            address.state.as_ref().map(|name| LocationParentResponse {
-                name: name.clone(),
-                r#type: String::from("region"),
-                admin_level: None,
-            })
+            address
+                .state
+                .as_ref()
+                .map(|name| location_parent_response(name.clone(), String::from("region"), None))
         })
 }
 
@@ -242,16 +266,8 @@ async fn parent_response(
         return Ok(None);
     };
 
-    let parent = locations::Entity::find_by_id(parent_id)
-        .one(db)
-        .await
-        .map_err(|e| ApiError::Database(format!("find parent location: {e}")))?;
-
-    Ok(parent.map(|model| LocationParentResponse {
-        name: model.name,
-        r#type: model.r#type.unwrap_or_else(|| String::from("unknown")),
-        admin_level: model.admin_level,
-    }))
+    let parent = find_location_by_id(db, parent_id, "parent location").await?;
+    Ok(parent.as_ref().map(location_parent_from_model))
 }
 
 pub(crate) async fn model_to_response(
@@ -450,16 +466,7 @@ async fn persist_nominatim_location(
         longitude: Set(decimal_from_f64(
             result.lon.as_ref().and_then(|value| value.parse().ok()),
         )),
-        bounds: Set(
-            parse_nominatim_bounds(result.boundingbox.as_ref()).map(|bounds| {
-                serde_json::json!({
-                    "south": bounds.south,
-                    "north": bounds.north,
-                    "west": bounds.west,
-                    "east": bounds.east,
-                })
-            }),
-        ),
+        bounds: Set(parse_nominatim_bounds(result.boundingbox.as_ref()).map(bounds_to_json)),
         population: Set(None),
         status: Set(String::from("active")),
         content_count: Set(0),
@@ -477,9 +484,12 @@ pub(crate) async fn ensure_location_by_osm(
     osm_type: &str,
     osm_id: i64,
 ) -> Result<locations::Model, ApiError> {
+    let normalized_osm_type = normalize_osm_type(osm_type)
+        .ok_or_else(|| ApiError::BadRequest(String::from("invalid osm_type")))?;
+
     if let Some(existing) = locations::Entity::find()
         .filter(locations::Column::OsmId.eq(osm_id))
-        .filter(locations::Column::OsmType.eq(normalize_osm_type(osm_type).unwrap_or_default()))
+        .filter(locations::Column::OsmType.eq(normalized_osm_type))
         .one(db)
         .await
         .map_err(|e| ApiError::Database(format!("find location by osm identity: {e}")))?
@@ -487,7 +497,7 @@ pub(crate) async fn ensure_location_by_osm(
         return Ok(existing);
     }
 
-    let nominatim = fetch_nominatim_lookup(osm_type, osm_id).await?;
+    let nominatim = fetch_nominatim_lookup(normalized_osm_type, osm_id).await?;
     persist_nominatim_location(db, &nominatim).await
 }
 
@@ -547,6 +557,17 @@ pub(crate) async fn nearest_municipality(
         .map_err(|e| ApiError::Database(format!("load reverse municipality: {e}")))
 }
 
+async fn find_location_by_id(
+    db: &sea_orm::DatabaseConnection,
+    location_id: Uuid,
+    label: &str,
+) -> Result<Option<locations::Model>, ApiError> {
+    locations::Entity::find_by_id(location_id)
+        .one(db)
+        .await
+        .map_err(|e| ApiError::Database(format!("find {label}: {e}")))
+}
+
 async fn hierarchy_response(
     db: &sea_orm::DatabaseConnection,
     model: locations::Model,
@@ -555,22 +576,11 @@ async fn hierarchy_response(
     let mut cursor = model.parent_id;
 
     while let Some(parent_id) = cursor {
-        let Some(parent) = locations::Entity::find_by_id(parent_id)
-            .one(db)
-            .await
-            .map_err(|e| ApiError::Database(format!("load location hierarchy: {e}")))?
-        else {
+        let Some(parent) = find_location_by_id(db, parent_id, "location hierarchy").await? else {
             break;
         };
 
-        hierarchy.push(LocationParentResponse {
-            name: parent.name.clone(),
-            r#type: parent
-                .r#type
-                .clone()
-                .unwrap_or_else(|| String::from("unknown")),
-            admin_level: parent.admin_level,
-        });
+        hierarchy.push(location_parent_from_model(&parent));
         cursor = parent.parent_id;
     }
 
@@ -679,10 +689,8 @@ async fn get_location(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<LocationWithHierarchyResponse>, ApiError> {
-    let location = locations::Entity::find_by_id(id)
-        .one(&*state.db)
-        .await
-        .map_err(|e| ApiError::Database(format!("find location: {e}")))?
+    let location = find_location_by_id(&state.db, id, "location")
+        .await?
         .ok_or_else(|| ApiError::NotFound(String::from("location not found")))?;
 
     Ok(Json(hierarchy_response(&state.db, location).await?))

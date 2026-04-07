@@ -453,7 +453,7 @@ pub async fn import_legacy_social_data(
         if current_thread_ids.contains(&thread.id) {
             continue;
         }
-        insert_public_thread(&tx, thread).await?;
+        insert_thread(&tx, ThreadInsert::from_public(thread)).await?;
         current_thread_ids.insert(thread.id);
         report.threads_inserted += 1;
     }
@@ -465,24 +465,7 @@ pub async fn import_legacy_social_data(
         let Some(&target_club_id) = legacy_public_to_target.get(&thread.club_id) else {
             continue;
         };
-        insert_discussion_thread(
-            &tx,
-            thread.id,
-            target_club_id,
-            thread.author_id,
-            &thread.title,
-            &thread.content,
-            thread.content_html.clone(),
-            thread.is_pinned,
-            thread.is_locked,
-            thread.reply_count,
-            thread.score,
-            thread.is_hidden,
-            thread.language.clone(),
-            thread.created_at,
-            thread.updated_at,
-        )
-        .await?;
+        insert_thread(&tx, ThreadInsert::from_club(thread, target_club_id)).await?;
         current_thread_ids.insert(thread.id);
         report.threads_inserted += 1;
     }
@@ -494,24 +477,7 @@ pub async fn import_legacy_social_data(
         let Some(&target_club_id) = legacy_room_to_target.get(&thread.room_id) else {
             continue;
         };
-        insert_discussion_thread(
-            &tx,
-            thread.id,
-            target_club_id,
-            thread.author_id,
-            &thread.title,
-            &thread.content,
-            thread.content_html.clone(),
-            thread.is_pinned,
-            thread.is_locked,
-            thread.reply_count,
-            thread.score,
-            thread.is_hidden,
-            None,
-            thread.created_at,
-            thread.updated_at,
-        )
-        .await?;
+        insert_thread(&tx, ThreadInsert::from_room(thread, target_club_id)).await?;
         current_thread_ids.insert(thread.id);
         report.threads_inserted += 1;
     }
@@ -566,131 +532,35 @@ pub async fn import_legacy_social_data(
         report.comments_inserted += 1;
     }
 
-    let mut current_thread_vote_keys: HashSet<(Uuid, Uuid)> = thread_votes::Entity::find()
-        .all(&tx)
-        .await?
-        .into_iter()
-        .map(|vote| (vote.thread_id, vote.user_id))
-        .collect();
-    for vote in &legacy_thread_votes {
-        let key = (vote.thread_id, vote.user_id);
-        if current_thread_vote_keys.contains(&key) || !current_thread_ids.contains(&vote.thread_id)
-        {
-            continue;
-        }
-        thread_votes::ActiveModel {
-            thread_id: Set(vote.thread_id),
-            user_id: Set(vote.user_id),
-            value: Set(vote.value),
-            created_at: Set(vote.created_at),
-        }
-        .insert(&tx)
-        .await?;
-        current_thread_vote_keys.insert(key);
-        report.thread_votes_inserted += 1;
-    }
+    report.thread_votes_inserted +=
+        import_thread_votes(&tx, &legacy_thread_votes, &current_thread_ids).await?;
 
-    let mut current_comment_vote_keys: HashSet<(Uuid, Uuid)> = comment_votes::Entity::find()
-        .all(&tx)
-        .await?
-        .into_iter()
-        .map(|vote| (vote.comment_id, vote.user_id))
-        .collect();
-    for vote in &legacy_comment_votes {
-        let key = (vote.comment_id, vote.user_id);
-        if current_comment_vote_keys.contains(&key)
-            || !current_comment_ids.contains(&vote.comment_id)
-        {
-            continue;
-        }
-        comment_votes::ActiveModel {
-            comment_id: Set(vote.comment_id),
-            user_id: Set(vote.user_id),
-            value: Set(vote.value),
-            created_at: Set(vote.created_at),
-        }
-        .insert(&tx)
-        .await?;
-        current_comment_vote_keys.insert(key);
-        report.comment_votes_inserted += 1;
-    }
+    report.comment_votes_inserted +=
+        import_comment_votes(&tx, &legacy_comment_votes, &current_comment_ids).await?;
 
-    let mut current_thread_tag_keys: HashSet<(Uuid, String)> = thread_tags::Entity::find()
-        .all(&tx)
-        .await?
-        .into_iter()
-        .map(|tag| (tag.thread_id, tag.tag))
-        .collect();
-    for tag in &legacy_thread_tags {
-        let key = (tag.thread_id, tag.tag.clone());
-        if current_thread_tag_keys.contains(&key) || !current_thread_ids.contains(&tag.thread_id) {
-            continue;
-        }
-        thread_tags::ActiveModel {
-            thread_id: Set(tag.thread_id),
-            tag: Set(tag.tag.clone()),
-        }
-        .insert(&tx)
-        .await?;
-        current_thread_tag_keys.insert(key);
-        report.thread_tags_inserted += 1;
-    }
+    report.thread_tags_inserted +=
+        import_thread_tags(&tx, &legacy_thread_tags, &current_thread_ids).await?;
 
-    let mut current_thread_view_keys: HashSet<(Uuid, Uuid)> = thread_views::Entity::find()
-        .all(&tx)
-        .await?
-        .into_iter()
-        .map(|view| (view.thread_id, view.user_id))
-        .collect();
-    for view in &legacy_thread_views {
-        let key = (view.thread_id, view.user_id);
-        if current_thread_view_keys.contains(&key) || !current_thread_ids.contains(&view.thread_id)
-        {
-            continue;
-        }
-        thread_views::ActiveModel {
-            thread_id: Set(view.thread_id),
-            user_id: Set(view.user_id),
-            viewed_at: Set(view.viewed_at),
-        }
-        .insert(&tx)
-        .await?;
-        current_thread_view_keys.insert(key);
-        report.thread_views_inserted += 1;
-    }
+    report.thread_views_inserted +=
+        import_thread_views(&tx, &legacy_thread_views, &current_thread_ids).await?;
 
-    let mut current_edit_history_ids: HashSet<Uuid> = edit_history::Entity::find()
-        .all(&tx)
-        .await?
-        .into_iter()
-        .map(|entry| entry.id)
-        .collect();
-    for entry in &legacy_edit_history {
-        if current_edit_history_ids.contains(&entry.id)
-            || entry.content_type != "thread"
-            || !current_thread_ids.contains(&entry.content_id)
-        {
-            continue;
-        }
-        edit_history::ActiveModel {
-            id: Set(entry.id),
-            content_type: Set(entry.content_type.clone()),
-            content_id: Set(entry.content_id),
-            edited_by: Set(entry.edited_by),
-            previous_content: Set(entry.previous_content.clone()),
-            previous_content_html: Set(entry.previous_content_html.clone()),
-            previous_title: Set(entry.previous_title.clone()),
-            edited_at: Set(entry.edited_at),
-        }
-        .insert(&tx)
-        .await?;
-        current_edit_history_ids.insert(entry.id);
-        report.edit_history_inserted += 1;
-    }
+    report.edit_history_inserted +=
+        import_edit_history(&tx, &legacy_edit_history, &current_thread_ids).await?;
 
     tx.commit().await?;
     info!(?report, "legacy import complete");
     Ok(report)
+}
+
+/// Merge an optional field: if the existing value is `None` and the legacy value is `Some`,
+/// set the active model field and mark as changed.
+macro_rules! merge_optional {
+    ($active:expr, $existing:expr, $legacy:expr, $changed:expr, $field:ident) => {
+        if $existing.$field.is_none() && $legacy.$field.is_some() {
+            $active.$field = Set($legacy.$field.clone());
+            $changed = true;
+        }
+    };
 }
 
 async fn merge_public_club<C: ConnectionTrait>(
@@ -701,36 +571,19 @@ async fn merge_public_club<C: ConnectionTrait>(
     let mut changed = false;
     let mut active: clubs::ActiveModel = existing.clone().into();
 
-    if existing.description.is_none() && legacy.description.is_some() {
-        active.description = Set(legacy.description.clone());
-        changed = true;
-    }
-    if existing.category.is_none() && legacy.category.is_some() {
-        active.category = Set(legacy.category.clone());
-        changed = true;
-    }
-    if !existing.is_public && legacy.is_public {
-        active.is_public = Set(true);
-        changed = true;
-    }
-    if existing.cover_image_url.is_none() && legacy.cover_image_url.is_some() {
-        active.cover_image_url = Set(legacy.cover_image_url.clone());
-        changed = true;
-    }
+    merge_optional!(active, existing, legacy, changed, description);
+    merge_optional!(active, existing, legacy, changed, category);
+    merge_optional!(active, existing, legacy, changed, cover_image_url);
+    merge_optional!(active, existing, legacy, changed, address);
+    merge_optional!(active, existing, legacy, changed, latitude);
+    merge_optional!(active, existing, legacy, changed, longitude);
+
     if existing.rules.is_none() && legacy.rules_json.is_some() {
         active.rules = Set(legacy.rules_json.clone());
         changed = true;
     }
-    if existing.address.is_none() && legacy.address.is_some() {
-        active.address = Set(legacy.address.clone());
-        changed = true;
-    }
-    if existing.latitude.is_none() && legacy.latitude.is_some() {
-        active.latitude = Set(legacy.latitude);
-        changed = true;
-    }
-    if existing.longitude.is_none() && legacy.longitude.is_some() {
-        active.longitude = Set(legacy.longitude);
+    if !existing.is_public && legacy.is_public {
+        active.is_public = Set(true);
         changed = true;
     }
 
@@ -744,100 +597,336 @@ async fn merge_public_club<C: ConnectionTrait>(
     Ok(Some(updated))
 }
 
-async fn insert_public_thread<C: ConnectionTrait>(
-    db: &C,
-    thread: &LegacyPublicThread,
-) -> Result<(), DbErr> {
+struct ThreadInsert {
+    id: Uuid,
+    title: String,
+    content: String,
+    content_html: Option<String>,
+    author_id: Uuid,
+    scope: String,
+    country: Option<String>,
+    municipality_id: Option<Uuid>,
+    location_id: Option<Uuid>,
+    place_id: Option<Uuid>,
+    latitude: Option<Decimal>,
+    longitude: Option<Decimal>,
+    institutional_context: Option<JsonValue>,
+    is_pinned: bool,
+    is_locked: bool,
+    reply_count: i32,
+    score: i32,
+    view_count: i32,
+    source: String,
+    source_url: Option<String>,
+    source_id: Option<String>,
+    source_institution_id: Option<Uuid>,
+    ai_generated: bool,
+    ai_model: Option<String>,
+    language: Option<String>,
+    is_hidden: bool,
+    club_id: Option<Uuid>,
+    created_at: DateTimeWithTimeZone,
+    updated_at: DateTimeWithTimeZone,
+}
+
+impl ThreadInsert {
+    fn from_public(thread: &LegacyPublicThread) -> Self {
+        Self {
+            id: thread.id,
+            title: thread.title.clone(),
+            content: thread.content.clone(),
+            content_html: thread.content_html.clone(),
+            author_id: thread.author_id,
+            scope: thread.scope.clone(),
+            country: thread.country.clone(),
+            municipality_id: thread.municipality_id,
+            location_id: thread.location_id,
+            place_id: thread.place_id,
+            latitude: thread.latitude,
+            longitude: thread.longitude,
+            institutional_context: thread.institutional_context.clone(),
+            is_pinned: thread.is_pinned,
+            is_locked: thread.is_locked,
+            reply_count: thread.reply_count,
+            score: thread.score,
+            view_count: thread.view_count,
+            source: thread.source.clone(),
+            source_url: thread.source_url.clone(),
+            source_id: thread.source_id.clone(),
+            source_institution_id: thread.source_institution_id,
+            ai_generated: thread.ai_generated,
+            ai_model: thread.ai_model.clone(),
+            language: thread.language.clone(),
+            is_hidden: thread.is_hidden,
+            club_id: None,
+            created_at: thread.created_at,
+            updated_at: thread.updated_at,
+        }
+    }
+
+    fn from_club(thread: &LegacyClubThread, club_id: Uuid) -> Self {
+        Self {
+            id: thread.id,
+            title: thread.title.clone(),
+            content: thread.content.clone(),
+            content_html: thread.content_html.clone(),
+            author_id: thread.author_id,
+            scope: "club".into(),
+            country: None,
+            municipality_id: None,
+            location_id: None,
+            place_id: None,
+            latitude: None,
+            longitude: None,
+            institutional_context: None,
+            is_pinned: thread.is_pinned,
+            is_locked: thread.is_locked,
+            reply_count: thread.reply_count,
+            score: thread.score,
+            view_count: 0,
+            source: "user".into(),
+            source_url: None,
+            source_id: None,
+            source_institution_id: None,
+            ai_generated: false,
+            ai_model: None,
+            language: thread.language.clone(),
+            is_hidden: thread.is_hidden,
+            club_id: Some(club_id),
+            created_at: thread.created_at,
+            updated_at: thread.updated_at,
+        }
+    }
+
+    fn from_room(thread: &LegacyRoomThread, club_id: Uuid) -> Self {
+        Self {
+            id: thread.id,
+            title: thread.title.clone(),
+            content: thread.content.clone(),
+            content_html: thread.content_html.clone(),
+            author_id: thread.author_id,
+            scope: "club".into(),
+            country: None,
+            municipality_id: None,
+            location_id: None,
+            place_id: None,
+            latitude: None,
+            longitude: None,
+            institutional_context: None,
+            is_pinned: thread.is_pinned,
+            is_locked: thread.is_locked,
+            reply_count: thread.reply_count,
+            score: thread.score,
+            view_count: 0,
+            source: "user".into(),
+            source_url: None,
+            source_id: None,
+            source_institution_id: None,
+            ai_generated: false,
+            ai_model: None,
+            language: None,
+            is_hidden: thread.is_hidden,
+            club_id: Some(club_id),
+            created_at: thread.created_at,
+            updated_at: thread.updated_at,
+        }
+    }
+}
+
+async fn insert_thread<C: ConnectionTrait>(db: &C, t: ThreadInsert) -> Result<(), DbErr> {
     threads::ActiveModel {
-        id: Set(thread.id),
-        title: Set(thread.title.clone()),
-        content: Set(thread.content.clone()),
-        content_html: Set(thread.content_html.clone()),
-        author_id: Set(thread.author_id),
-        scope: Set(thread.scope.clone()),
-        country: Set(thread.country.clone()),
-        municipality_id: Set(thread.municipality_id),
-        location_id: Set(thread.location_id),
-        place_id: Set(thread.place_id),
-        latitude: Set(thread.latitude),
-        longitude: Set(thread.longitude),
-        institutional_context: Set(thread.institutional_context.clone()),
-        is_pinned: Set(thread.is_pinned),
-        is_locked: Set(thread.is_locked),
-        reply_count: Set(thread.reply_count),
-        score: Set(thread.score),
-        view_count: Set(thread.view_count),
-        source: Set(thread.source.clone()),
-        source_url: Set(thread.source_url.clone()),
-        source_id: Set(thread.source_id.clone()),
-        source_institution_id: Set(thread.source_institution_id),
-        ai_generated: Set(thread.ai_generated),
-        ai_model: Set(thread.ai_model.clone()),
-        language: Set(thread.language.clone()),
-        is_hidden: Set(thread.is_hidden),
-        club_id: Set(None),
+        id: Set(t.id),
+        title: Set(t.title),
+        content: Set(t.content),
+        content_html: Set(t.content_html),
+        author_id: Set(t.author_id),
+        scope: Set(t.scope),
+        country: Set(t.country),
+        municipality_id: Set(t.municipality_id),
+        location_id: Set(t.location_id),
+        place_id: Set(t.place_id),
+        latitude: Set(t.latitude),
+        longitude: Set(t.longitude),
+        institutional_context: Set(t.institutional_context),
+        is_pinned: Set(t.is_pinned),
+        is_locked: Set(t.is_locked),
+        reply_count: Set(t.reply_count),
+        score: Set(t.score),
+        view_count: Set(t.view_count),
+        source: Set(t.source),
+        source_url: Set(t.source_url),
+        source_id: Set(t.source_id),
+        source_institution_id: Set(t.source_institution_id),
+        ai_generated: Set(t.ai_generated),
+        ai_model: Set(t.ai_model),
+        language: Set(t.language),
+        is_hidden: Set(t.is_hidden),
+        club_id: Set(t.club_id),
         deleted_at: Set(None),
-        created_at: Set(thread.created_at),
-        updated_at: Set(thread.updated_at),
+        created_at: Set(t.created_at),
+        updated_at: Set(t.updated_at),
     }
     .insert(db)
     .await?;
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn insert_discussion_thread<C: ConnectionTrait>(
+async fn import_thread_votes<C: ConnectionTrait>(
     db: &C,
-    id: Uuid,
-    club_id: Uuid,
-    author_id: Uuid,
-    title: &str,
-    content: &str,
-    content_html: Option<String>,
-    is_pinned: bool,
-    is_locked: bool,
-    reply_count: i32,
-    score: i32,
-    is_hidden: bool,
-    language: Option<String>,
-    created_at: DateTimeWithTimeZone,
-    updated_at: DateTimeWithTimeZone,
-) -> Result<(), DbErr> {
-    threads::ActiveModel {
-        id: Set(id),
-        title: Set(title.to_owned()),
-        content: Set(content.to_owned()),
-        content_html: Set(content_html),
-        author_id: Set(author_id),
-        scope: Set("club".into()),
-        country: Set(None),
-        municipality_id: Set(None),
-        location_id: Set(None),
-        place_id: Set(None),
-        latitude: Set(None),
-        longitude: Set(None),
-        institutional_context: Set(None),
-        is_pinned: Set(is_pinned),
-        is_locked: Set(is_locked),
-        reply_count: Set(reply_count),
-        score: Set(score),
-        view_count: Set(0),
-        source: Set("user".into()),
-        source_url: Set(None),
-        source_id: Set(None),
-        source_institution_id: Set(None),
-        ai_generated: Set(false),
-        ai_model: Set(None),
-        language: Set(language),
-        is_hidden: Set(is_hidden),
-        club_id: Set(Some(club_id)),
-        deleted_at: Set(None),
-        created_at: Set(created_at),
-        updated_at: Set(updated_at),
+    legacy_votes: &[LegacyThreadVote],
+    valid_thread_ids: &HashSet<Uuid>,
+) -> Result<usize, DbErr> {
+    let mut existing: HashSet<(Uuid, Uuid)> = thread_votes::Entity::find()
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|v| (v.thread_id, v.user_id))
+        .collect();
+    let mut count = 0;
+    for vote in legacy_votes {
+        let key = (vote.thread_id, vote.user_id);
+        if existing.contains(&key) || !valid_thread_ids.contains(&vote.thread_id) {
+            continue;
+        }
+        thread_votes::ActiveModel {
+            thread_id: Set(vote.thread_id),
+            user_id: Set(vote.user_id),
+            value: Set(vote.value),
+            created_at: Set(vote.created_at),
+        }
+        .insert(db)
+        .await?;
+        existing.insert(key);
+        count += 1;
     }
-    .insert(db)
-    .await?;
-    Ok(())
+    Ok(count)
+}
+
+async fn import_comment_votes<C: ConnectionTrait>(
+    db: &C,
+    legacy_votes: &[LegacyCommentVote],
+    valid_comment_ids: &HashSet<Uuid>,
+) -> Result<usize, DbErr> {
+    let mut existing: HashSet<(Uuid, Uuid)> = comment_votes::Entity::find()
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|v| (v.comment_id, v.user_id))
+        .collect();
+    let mut count = 0;
+    for vote in legacy_votes {
+        let key = (vote.comment_id, vote.user_id);
+        if existing.contains(&key) || !valid_comment_ids.contains(&vote.comment_id) {
+            continue;
+        }
+        comment_votes::ActiveModel {
+            comment_id: Set(vote.comment_id),
+            user_id: Set(vote.user_id),
+            value: Set(vote.value),
+            created_at: Set(vote.created_at),
+        }
+        .insert(db)
+        .await?;
+        existing.insert(key);
+        count += 1;
+    }
+    Ok(count)
+}
+
+async fn import_thread_tags<C: ConnectionTrait>(
+    db: &C,
+    legacy_tags: &[LegacyThreadTag],
+    valid_thread_ids: &HashSet<Uuid>,
+) -> Result<usize, DbErr> {
+    let mut existing: HashSet<(Uuid, String)> = thread_tags::Entity::find()
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|t| (t.thread_id, t.tag))
+        .collect();
+    let mut count = 0;
+    for tag in legacy_tags {
+        let key = (tag.thread_id, tag.tag.clone());
+        if existing.contains(&key) || !valid_thread_ids.contains(&tag.thread_id) {
+            continue;
+        }
+        thread_tags::ActiveModel {
+            thread_id: Set(tag.thread_id),
+            tag: Set(tag.tag.clone()),
+        }
+        .insert(db)
+        .await?;
+        existing.insert(key);
+        count += 1;
+    }
+    Ok(count)
+}
+
+async fn import_thread_views<C: ConnectionTrait>(
+    db: &C,
+    legacy_views: &[LegacyThreadView],
+    valid_thread_ids: &HashSet<Uuid>,
+) -> Result<usize, DbErr> {
+    let mut existing: HashSet<(Uuid, Uuid)> = thread_views::Entity::find()
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|v| (v.thread_id, v.user_id))
+        .collect();
+    let mut count = 0;
+    for view in legacy_views {
+        let key = (view.thread_id, view.user_id);
+        if existing.contains(&key) || !valid_thread_ids.contains(&view.thread_id) {
+            continue;
+        }
+        thread_views::ActiveModel {
+            thread_id: Set(view.thread_id),
+            user_id: Set(view.user_id),
+            viewed_at: Set(view.viewed_at),
+        }
+        .insert(db)
+        .await?;
+        existing.insert(key);
+        count += 1;
+    }
+    Ok(count)
+}
+
+async fn import_edit_history<C: ConnectionTrait>(
+    db: &C,
+    legacy_entries: &[LegacyEditHistory],
+    valid_thread_ids: &HashSet<Uuid>,
+) -> Result<usize, DbErr> {
+    let mut existing: HashSet<Uuid> = edit_history::Entity::find()
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|e| e.id)
+        .collect();
+    let mut count = 0;
+    for entry in legacy_entries {
+        if existing.contains(&entry.id)
+            || entry.content_type != "thread"
+            || !valid_thread_ids.contains(&entry.content_id)
+        {
+            continue;
+        }
+        edit_history::ActiveModel {
+            id: Set(entry.id),
+            content_type: Set(entry.content_type.clone()),
+            content_id: Set(entry.content_id),
+            edited_by: Set(entry.edited_by),
+            previous_content: Set(entry.previous_content.clone()),
+            previous_content_html: Set(entry.previous_content_html.clone()),
+            previous_title: Set(entry.previous_title.clone()),
+            edited_at: Set(entry.edited_at),
+        }
+        .insert(db)
+        .await?;
+        existing.insert(entry.id);
+        count += 1;
+    }
+    Ok(count)
 }
 
 fn merge_desired_membership(

@@ -258,12 +258,76 @@ pub(crate) fn municipality_to_response(
     }
 }
 
+pub(crate) async fn municipality_response_by_id(
+    db: &sea_orm::DatabaseConnection,
+    municipality_id: Option<Uuid>,
+) -> Result<Option<MunicipalityResponse>, ApiError> {
+    let Some(municipality_id) = municipality_id else {
+        return Ok(None);
+    };
+
+    let municipality = municipalities::Entity::find_by_id(municipality_id)
+        .one(db)
+        .await
+        .map_err(|e| ApiError::Database(format!("find municipality: {e}")))?;
+
+    Ok(municipality.map(municipality_to_response))
+}
+
 fn push_value<T>(values: &mut Vec<Value>, value: T) -> usize
 where
     T: Into<Value>,
 {
     values.push(value.into());
     values.len()
+}
+
+fn parse_map_point_fields(
+    row: &sea_orm::QueryResult,
+    point_type: MapPointType,
+    label: &str,
+    meta: serde_json::Value,
+) -> Result<MapPoint, ApiError> {
+    Ok(MapPoint {
+        id: row
+            .try_get("", "id")
+            .map_err(|e| ApiError::Database(format!("parse {label} id: {e}")))?,
+        point_type,
+        name: row
+            .try_get("", "name")
+            .map_err(|e| ApiError::Database(format!("parse {label} name: {e}")))?,
+        latitude: row
+            .try_get("", "lat")
+            .map_err(|e| ApiError::Database(format!("parse {label} lat: {e}")))?,
+        longitude: row
+            .try_get("", "lon")
+            .map_err(|e| ApiError::Database(format!("parse {label} lon: {e}")))?,
+        meta,
+    })
+}
+
+fn thread_to_summary(thread: threads::Model) -> MapThreadSummary {
+    MapThreadSummary {
+        id: thread.id,
+        title: thread.title,
+        created_at: thread.created_at.to_rfc3339(),
+    }
+}
+
+async fn visible_threads_for_place(
+    db: &sea_orm::DatabaseConnection,
+    place_id: Uuid,
+) -> Result<Vec<MapThreadSummary>, ApiError> {
+    threads::Entity::find()
+        .filter(threads::Column::PlaceId.eq(place_id))
+        .filter(threads::Column::DeletedAt.is_null())
+        .filter(threads::Column::IsHidden.eq(false))
+        .order_by_desc(threads::Column::CreatedAt)
+        .limit(5)
+        .all(db)
+        .await
+        .map_err(|e| ApiError::Database(format!("list place threads: {e}")))
+        .map(|threads| threads.into_iter().map(thread_to_summary).collect())
 }
 
 async fn query_thread_points(
@@ -367,27 +431,13 @@ async fn query_thread_points(
 
     rows.into_iter()
         .map(|row| {
-            Ok(MapPoint {
-                id: row
-                    .try_get("", "id")
-                    .map_err(|e| ApiError::Database(format!("parse map thread id: {e}")))?,
-                point_type,
-                name: row
-                    .try_get("", "name")
-                    .map_err(|e| ApiError::Database(format!("parse map thread name: {e}")))?,
-                latitude: row
-                    .try_get("", "lat")
-                    .map_err(|e| ApiError::Database(format!("parse map thread lat: {e}")))?,
-                longitude: row
-                    .try_get("", "lon")
-                    .map_err(|e| ApiError::Database(format!("parse map thread lon: {e}")))?,
-                meta: serde_json::json!({
-                    "scope": row.try_get::<String>("", "scope").ok(),
-                    "language": row.try_get::<Option<String>>("", "language").ok().flatten(),
-                    "replyCount": row.try_get::<i32>("", "reply_count").ok(),
-                    "score": row.try_get::<i32>("", "score").ok(),
-                }),
-            })
+            let meta = serde_json::json!({
+                "scope": row.try_get::<String>("", "scope").ok(),
+                "language": row.try_get::<Option<String>>("", "language").ok().flatten(),
+                "replyCount": row.try_get::<i32>("", "reply_count").ok(),
+                "score": row.try_get::<i32>("", "score").ok(),
+            });
+            parse_map_point_fields(&row, point_type, "map thread", meta)
         })
         .collect()
 }
@@ -442,24 +492,10 @@ async fn query_place_points(
 
     rows.into_iter()
         .map(|row| {
-            Ok(MapPoint {
-                id: row
-                    .try_get("", "id")
-                    .map_err(|e| ApiError::Database(format!("parse map place id: {e}")))?,
-                point_type: MapPointType::Place,
-                name: row
-                    .try_get("", "name")
-                    .map_err(|e| ApiError::Database(format!("parse map place name: {e}")))?,
-                latitude: row
-                    .try_get("", "lat")
-                    .map_err(|e| ApiError::Database(format!("parse map place lat: {e}")))?,
-                longitude: row
-                    .try_get("", "lon")
-                    .map_err(|e| ApiError::Database(format!("parse map place lon: {e}")))?,
-                meta: serde_json::json!({
-                    "category": row.try_get::<Option<String>>("", "category").ok().flatten(),
-                }),
-            })
+            let meta = serde_json::json!({
+                "category": row.try_get::<Option<String>>("", "category").ok().flatten(),
+            });
+            parse_map_point_fields(&row, MapPointType::Place, "map place", meta)
         })
         .collect()
 }
@@ -504,24 +540,10 @@ async fn query_municipality_points(
 
     rows.into_iter()
         .map(|row| {
-            Ok(MapPoint {
-                id: row
-                    .try_get("", "id")
-                    .map_err(|e| ApiError::Database(format!("parse municipality id: {e}")))?,
-                point_type: MapPointType::Municipality,
-                name: row
-                    .try_get("", "name")
-                    .map_err(|e| ApiError::Database(format!("parse municipality name: {e}")))?,
-                latitude: row
-                    .try_get("", "lat")
-                    .map_err(|e| ApiError::Database(format!("parse municipality lat: {e}")))?,
-                longitude: row
-                    .try_get("", "lon")
-                    .map_err(|e| ApiError::Database(format!("parse municipality lon: {e}")))?,
-                meta: serde_json::json!({
-                    "threadCount": row.try_get::<i64>("", "thread_count").ok(),
-                }),
-            })
+            let meta = serde_json::json!({
+                "threadCount": row.try_get::<i64>("", "thread_count").ok(),
+            });
+            parse_map_point_fields(&row, MapPointType::Municipality, "municipality", meta)
         })
         .collect()
 }
@@ -545,16 +567,8 @@ async fn recent_threads_for_municipality(
     query
         .all(db)
         .await
-        .map_err(|e| ApiError::Database(format!("list municipality threads: {e}")))?
-        .into_iter()
-        .map(|thread| {
-            Ok(MapThreadSummary {
-                id: thread.id,
-                title: thread.title,
-                created_at: thread.created_at.to_rfc3339(),
-            })
-        })
-        .collect()
+        .map_err(|e| ApiError::Database(format!("list municipality threads: {e}")))
+        .map(|threads| threads.into_iter().map(thread_to_summary).collect())
 }
 
 async fn place_by_id(
@@ -566,22 +580,6 @@ async fn place_by_id(
         .await
         .map_err(|e| ApiError::Database(format!("find place: {e}")))?;
     Ok(place.map(place_to_response))
-}
-
-async fn municipality_by_id(
-    db: &sea_orm::DatabaseConnection,
-    municipality_id: Option<Uuid>,
-) -> Result<Option<MunicipalityResponse>, ApiError> {
-    let Some(municipality_id) = municipality_id else {
-        return Ok(None);
-    };
-
-    let municipality = municipalities::Entity::find_by_id(municipality_id)
-        .one(db)
-        .await
-        .map_err(|e| ApiError::Database(format!("find municipality: {e}")))?;
-
-    Ok(municipality.map(municipality_to_response))
 }
 
 // ---------------------------------------------------------------------------
@@ -768,7 +766,8 @@ async fn map_location_detail(
                 .filter(|thread| thread.deleted_at.is_none())
                 .ok_or_else(|| ApiError::NotFound(String::from("thread not found")))?;
 
-            let municipality = municipality_by_id(&state.db, thread.municipality_id).await?;
+            let municipality =
+                municipality_response_by_id(&state.db, thread.municipality_id).await?;
             let place = place_by_id(&state.db, thread.place_id.unwrap_or(id))
                 .await?
                 .filter(|_| thread.place_id.is_some());
@@ -814,24 +813,9 @@ async fn map_location_detail(
                 .map_err(|e| ApiError::Database(format!("find place: {e}")))?
                 .ok_or_else(|| ApiError::NotFound(String::from("place not found")))?;
 
-            let threads = threads::Entity::find()
-                .filter(threads::Column::PlaceId.eq(place.id))
-                .filter(threads::Column::DeletedAt.is_null())
-                .filter(threads::Column::IsHidden.eq(false))
-                .order_by_desc(threads::Column::CreatedAt)
-                .limit(5)
-                .all(&*state.db)
-                .await
-                .map_err(|e| ApiError::Database(format!("list place threads: {e}")))?
-                .into_iter()
-                .map(|thread| MapThreadSummary {
-                    id: thread.id,
-                    title: thread.title,
-                    created_at: thread.created_at.to_rfc3339(),
-                })
-                .collect();
-
-            let municipality = municipality_by_id(&state.db, place.municipality_id).await?;
+            let threads = visible_threads_for_place(&state.db, place.id).await?;
+            let municipality =
+                municipality_response_by_id(&state.db, place.municipality_id).await?;
             let place_response = place_to_response(place.clone());
 
             Ok(Json(LocationDetailsResponse {

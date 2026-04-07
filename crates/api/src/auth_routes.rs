@@ -4,7 +4,6 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use sea_orm::EntityTrait;
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, ConnectionTrait, DatabaseBackend, Statement};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -49,18 +48,7 @@ async fn user_profile(
     db: &sea_orm::DatabaseConnection,
     user: eulesia_db::entities::users::Model,
 ) -> Result<UserProfile, ApiError> {
-    let municipality = match user.municipality_id {
-        Some(municipality_id) => {
-            eulesia_db::entities::municipalities::Entity::find_by_id(municipality_id)
-                .one(db)
-                .await
-                .map_err(|e| {
-                    ApiError::Database(format!("find municipality for auth profile: {e}"))
-                })?
-                .map(crate::map::municipality_to_response)
-        }
-        None => None,
-    };
+    let municipality = crate::map::municipality_response_by_id(db, user.municipality_id).await?;
 
     Ok(UserProfile {
         id: user.id,

@@ -53,57 +53,49 @@ pub async fn run(
     let mut scheduler = JobScheduler::new().await?;
     let refresh_ctx = Arc::clone(&ctx);
 
-    scheduler
-        .add(Job::new_async(
-            "0 17 3 * * *",
-            move |_job_id, _scheduler| {
-                let refresh_ctx = Arc::clone(&refresh_ctx);
-                Box::pin(async move {
-                    if let Err(error) = run_municipality_refresh(refresh_ctx).await {
-                        error!(error = %error, "scheduled municipality refresh failed");
-                    }
-                })
-            },
-        )?)
-        .await?;
+    add_job(&mut scheduler, "0 17 3 * * *", move || {
+        let refresh_ctx = Arc::clone(&refresh_ctx);
+        async move {
+            if let Err(error) = run_municipality_refresh(refresh_ctx).await {
+                error!(error = %error, "scheduled municipality refresh failed");
+            }
+        }
+    })
+    .await?;
 
-    if ctx.imports.lipas.enabled {
-        let lipas_ctx = Arc::clone(&ctx);
-        scheduler
-            .add(Job::new_async(
-                "0 35 3 * * *",
-                move |_job_id, _scheduler| {
-                    let lipas_ctx = Arc::clone(&lipas_ctx);
-                    Box::pin(async move {
-                        if let Err(error) = run_lipas_place_sync(lipas_ctx).await {
-                            error!(error = %error, "scheduled lipas place sync failed");
-                        }
-                    })
-                },
-            )?)
-            .await?;
-    } else {
-        info!("lipas place sync disabled");
-    }
+    let lipas_ctx = Arc::clone(&ctx);
+    add_optional_job(
+        &mut scheduler,
+        ctx.imports.lipas.enabled,
+        "lipas place sync",
+        "0 35 3 * * *",
+        move || {
+            let lipas_ctx = Arc::clone(&lipas_ctx);
+            async move {
+                if let Err(error) = run_lipas_place_sync(lipas_ctx).await {
+                    error!(error = %error, "scheduled lipas place sync failed");
+                }
+            }
+        },
+    )
+    .await?;
 
-    if ctx.imports.osm.enabled {
-        let osm_ctx = Arc::clone(&ctx);
-        scheduler
-            .add(Job::new_async(
-                "0 50 4 * * *",
-                move |_job_id, _scheduler| {
-                    let osm_ctx = Arc::clone(&osm_ctx);
-                    Box::pin(async move {
-                        if let Err(error) = run_osm_place_sync(osm_ctx).await {
-                            error!(error = %error, "scheduled osm place sync failed");
-                        }
-                    })
-                },
-            )?)
-            .await?;
-    } else {
-        info!("osm place sync disabled");
-    }
+    let osm_ctx = Arc::clone(&ctx);
+    add_optional_job(
+        &mut scheduler,
+        ctx.imports.osm.enabled,
+        "osm place sync",
+        "0 50 4 * * *",
+        move || {
+            let osm_ctx = Arc::clone(&osm_ctx);
+            async move {
+                if let Err(error) = run_osm_place_sync(osm_ctx).await {
+                    error!(error = %error, "scheduled osm place sync failed");
+                }
+            }
+        },
+    )
+    .await?;
 
     scheduler.start().await?;
     info!("jobs scheduler started");
@@ -111,6 +103,42 @@ pub async fn run(
     cancel.cancelled().await;
     info!("jobs scheduler shutting down");
     scheduler.shutdown().await?;
+    Ok(())
+}
+
+async fn add_job<F, Fut>(
+    scheduler: &mut JobScheduler,
+    schedule: &str,
+    run: F,
+) -> Result<(), SchedulerError>
+where
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
+{
+    scheduler
+        .add(Job::new_async(schedule, move |_job_id, _scheduler| {
+            Box::pin(run())
+        })?)
+        .await?;
+    Ok(())
+}
+
+async fn add_optional_job<F, Fut>(
+    scheduler: &mut JobScheduler,
+    enabled: bool,
+    label: &str,
+    schedule: &str,
+    run: F,
+) -> Result<(), SchedulerError>
+where
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
+{
+    if enabled {
+        add_job(scheduler, schedule, run).await?;
+    } else {
+        info!("{label} disabled");
+    }
     Ok(())
 }
 

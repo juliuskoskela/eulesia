@@ -67,7 +67,11 @@ pub async fn sync_finnish_municipalities(
 
     let mut by_name = HashMap::new();
     for model in &existing {
-        for key in municipality_name_keys(model) {
+        for key in municipality_name_keys(
+            &model.name,
+            model.name_fi.as_deref(),
+            model.name_sv.as_deref(),
+        ) {
             by_name.entry(key).or_insert_with(|| model.clone());
         }
     }
@@ -157,22 +161,19 @@ fn finnish_municipalities() -> &'static Vec<MunicipalitySeedRecord> {
 }
 
 fn municipality_lookup_keys(record: &MunicipalitySeedRecord) -> Vec<String> {
-    let mut keys = vec![normalize_name(&record.name)];
-    if let Some(ref name_fi) = record.name_fi {
-        keys.push(normalize_name(name_fi));
-    }
-    if let Some(ref name_sv) = record.name_sv {
-        keys.push(normalize_name(name_sv));
-    }
-    keys
+    municipality_name_keys(
+        &record.name,
+        record.name_fi.as_deref(),
+        record.name_sv.as_deref(),
+    )
 }
 
-fn municipality_name_keys(model: &municipalities::Model) -> Vec<String> {
-    let mut keys = vec![normalize_name(&model.name)];
-    if let Some(ref name_fi) = model.name_fi {
+fn municipality_name_keys(name: &str, name_fi: Option<&str>, name_sv: Option<&str>) -> Vec<String> {
+    let mut keys = vec![normalize_name(name)];
+    if let Some(name_fi) = name_fi {
         keys.push(normalize_name(name_fi));
     }
-    if let Some(ref name_sv) = model.name_sv {
+    if let Some(name_sv) = name_sv {
         keys.push(normalize_name(name_sv));
     }
     keys

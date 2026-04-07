@@ -235,8 +235,7 @@ pub async fn sync_lipas_places(
             continue;
         };
 
-        upsert_place(db, existing_places.get(&candidate.source_id), candidate).await?;
-        if existing_places.contains_key(&site.lipas_id.to_string()) {
+        if upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
             report.updated += 1;
         } else {
             report.inserted += 1;
@@ -260,8 +259,7 @@ pub async fn sync_lipas_places(
             }
         }
 
-        upsert_place(db, existing_places.get(&candidate.source_id), candidate).await?;
-        if existing_places.contains_key(&loi.id.to_string()) {
+        if upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
             report.updated += 1;
         } else {
             report.inserted += 1;
@@ -345,8 +343,7 @@ pub async fn sync_osm_places(
             metadata: json!({ "tags": element.tags }),
         };
 
-        upsert_place(db, existing_places.get(&candidate.source_id), candidate).await?;
-        if existing_places.contains_key(&format!("{}/{}", element.element_type, element.id)) {
+        if upsert_place(db, existing_places.get(&candidate.source_id), candidate).await? {
             report.updated += 1;
         } else {
             report.inserted += 1;
@@ -512,73 +509,57 @@ fn loi_candidate(loi: &LipasLoi, base_url: &str) -> Option<PlaceCandidate> {
     })
 }
 
+/// Returns `true` if an existing row was updated, `false` if a new row was inserted.
 async fn upsert_place(
     db: &DatabaseConnection,
     existing: Option<&places::Model>,
     candidate: PlaceCandidate,
-) -> Result<(), PlaceImportError> {
+) -> Result<bool, PlaceImportError> {
     let now = Utc::now().fixed_offset();
 
-    match existing {
-        Some(existing) => {
-            let mut active: places::ActiveModel = existing.clone().into();
-            active.name = Set(candidate.name);
-            active.name_fi = Set(candidate.name_fi);
-            active.name_sv = Set(candidate.name_sv);
-            active.name_en = Set(candidate.name_en);
-            active.description = Set(candidate.description);
-            active.latitude = Set(decimal_from_f64(candidate.latitude));
-            active.longitude = Set(decimal_from_f64(candidate.longitude));
-            active.r#type = Set(candidate.place_type);
-            active.category = Set(candidate.category);
-            active.subcategory = Set(candidate.subcategory);
-            active.municipality_id = Set(candidate.municipality_id);
-            active.country = Set(Some(candidate.country));
-            active.address = Set(candidate.address);
-            active.source_url = Set(candidate.source_url);
-            active.osm_id = Set(candidate.osm_id);
-            active.last_synced = Set(Some(now));
-            active.sync_status = Set(String::from("synced"));
-            active.metadata = Set(Some(candidate.metadata));
-            active.updated_at = Set(now);
-            active.update(db).await?;
-        }
-        None => {
-            places::ActiveModel {
-                id: Set(Uuid::now_v7()),
-                name: Set(candidate.name),
-                name_fi: Set(candidate.name_fi),
-                name_sv: Set(candidate.name_sv),
-                name_en: Set(candidate.name_en),
-                description: Set(candidate.description),
-                latitude: Set(decimal_from_f64(candidate.latitude)),
-                longitude: Set(decimal_from_f64(candidate.longitude)),
-                radius_km: Set(None),
-                geojson: Set(None),
-                r#type: Set(candidate.place_type),
-                category: Set(candidate.category),
-                subcategory: Set(candidate.subcategory),
-                municipality_id: Set(candidate.municipality_id),
-                location_id: Set(None),
-                country: Set(Some(candidate.country)),
-                address: Set(candidate.address),
-                source: Set(candidate.source),
-                source_id: Set(Some(candidate.source_id)),
-                source_url: Set(candidate.source_url),
-                osm_id: Set(candidate.osm_id),
-                last_synced: Set(Some(now)),
-                sync_status: Set(String::from("synced")),
-                metadata: Set(Some(candidate.metadata)),
-                created_by: Set(None),
-                created_at: Set(now),
-                updated_at: Set(now),
-            }
-            .insert(db)
-            .await?;
-        }
+    let mut active = match existing {
+        Some(existing) => existing.clone().into(),
+        None => places::ActiveModel {
+            id: Set(Uuid::now_v7()),
+            source: Set(candidate.source),
+            source_id: Set(Some(candidate.source_id)),
+            radius_km: Set(None),
+            geojson: Set(None),
+            location_id: Set(None),
+            created_by: Set(None),
+            created_at: Set(now),
+            ..Default::default()
+        },
+    };
+
+    active.name = Set(candidate.name);
+    active.name_fi = Set(candidate.name_fi);
+    active.name_sv = Set(candidate.name_sv);
+    active.name_en = Set(candidate.name_en);
+    active.description = Set(candidate.description);
+    active.latitude = Set(decimal_from_f64(candidate.latitude));
+    active.longitude = Set(decimal_from_f64(candidate.longitude));
+    active.r#type = Set(candidate.place_type);
+    active.category = Set(candidate.category);
+    active.subcategory = Set(candidate.subcategory);
+    active.municipality_id = Set(candidate.municipality_id);
+    active.country = Set(Some(candidate.country));
+    active.address = Set(candidate.address);
+    active.source_url = Set(candidate.source_url);
+    active.osm_id = Set(candidate.osm_id);
+    active.last_synced = Set(Some(now));
+    active.sync_status = Set(String::from("synced"));
+    active.metadata = Set(Some(candidate.metadata));
+    active.updated_at = Set(now);
+
+    let updated = existing.is_some();
+    if updated {
+        active.update(db).await?;
+    } else {
+        active.insert(db).await?;
     }
 
-    Ok(())
+    Ok(updated)
 }
 
 async fn nearest_municipality_id(
