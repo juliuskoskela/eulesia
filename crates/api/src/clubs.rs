@@ -168,6 +168,7 @@ pub struct ClubResponse {
     pub address: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
+    pub municipality_id: Option<Uuid>,
     pub member_count: i32,
     pub is_member: bool,
     pub member_role: Option<String>,
@@ -370,6 +371,7 @@ fn club_to_response(club: clubs::Model, member_role: Option<String>) -> ClubResp
         address: club.address,
         latitude: club.latitude.and_then(decimal_to_f64),
         longitude: club.longitude.and_then(decimal_to_f64),
+        municipality_id: None, // not in v2 schema
         member_count: club.member_count,
         is_member,
         member_role,
@@ -387,6 +389,9 @@ fn deleted_author() -> AuthorSummary {
         name: "[deleted]".into(),
         avatar_url: None,
         role: UserRole::Citizen,
+        institution_type: None,
+        institution_name: None,
+        identity_verified: false,
     }
 }
 
@@ -402,6 +407,9 @@ fn author_map(users: Vec<eulesia_db::entities::users::Model>) -> HashMap<Uuid, A
                     name: u.name,
                     avatar_url: u.avatar_url,
                     role: u.role.parse().unwrap_or(UserRole::Citizen),
+                    institution_type: u.institution_type,
+                    institution_name: u.institution_name,
+                    identity_verified: u.identity_verified,
                 },
             )
         })
@@ -1360,6 +1368,9 @@ pub async fn create_club_thread(
         name: user.name,
         avatar_url: user.avatar_url,
         role: user.role.parse().unwrap_or(UserRole::Citizen),
+        institution_type: user.institution_type,
+        institution_name: user.institution_name,
+        identity_verified: user.identity_verified,
     };
 
     Ok(Json(ThreadResponse {
@@ -1813,6 +1824,9 @@ pub async fn create_club_comment(
         name: user.name,
         avatar_url: user.avatar_url,
         role: user.role.parse().unwrap_or(UserRole::Citizen),
+        institution_type: user.institution_type,
+        institution_name: user.institution_name,
+        identity_verified: user.identity_verified,
     };
 
     Ok(Json(CommentResponse {
@@ -1990,6 +2004,7 @@ mod tests {
             address: Some("Helsinki".into()),
             latitude: Some(60.1699),
             longitude: Some(24.9384),
+            municipality_id: None,
             member_count: 42,
             is_member: true,
             member_role: Some("member".into()),
@@ -2063,6 +2078,7 @@ mod tests {
             address: None,
             latitude: None,
             longitude: None,
+            municipality_id: None,
             member_count: 0,
             is_member: false,
             member_role: None,
@@ -2266,6 +2282,9 @@ mod tests {
                 name: "Alice".into(),
                 avatar_url: None,
                 role: UserRole::Citizen,
+                institution_type: None,
+                institution_name: None,
+                identity_verified: false,
             },
             content: "Hello".into(),
             content_html: None,
@@ -2311,6 +2330,9 @@ mod tests {
                 name: "Test".into(),
                 avatar_url: None,
                 role: UserRole::Citizen,
+                institution_type: None,
+                institution_name: None,
+                identity_verified: false,
             },
             tags: vec![],
             municipality_id: None,

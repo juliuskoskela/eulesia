@@ -1,6 +1,6 @@
 use axum::Json;
 use axum::extract::{Path, Query, State};
-use sea_orm::ActiveValue::Set;
+use sea_orm::{ActiveValue::Set, ConnectionTrait, DatabaseBackend, Statement, TransactionTrait};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -116,20 +116,74 @@ pub async fn respond_appeal(
 ) -> Result<Json<AppealResponse>, ApiError> {
     require_moderator(&state.db, auth.user_id.0).await?;
 
-    AppealRepo::find_by_id(&state.db, id)
+    let appeal = AppealRepo::find_by_id(&state.db, id)
         .await
         .map_err(|e| ApiError::Database(format!("find appeal: {e}")))?
         .ok_or_else(|| ApiError::NotFound("appeal not found".into()))?;
 
-    AppealRepo::respond(
-        &state.db,
-        id,
-        &req.admin_response,
-        auth.user_id.0,
-        req.status.as_str(),
-    )
-    .await
-    .map_err(|e| ApiError::Database(format!("respond to appeal: {e}")))?;
+    let sanction_id_to_revoke = if req.status == AppealStatus::Accepted {
+        if let Some(sanction_id) = appeal.sanction_id {
+            let sanction = SanctionRepo::find_by_id(&state.db, sanction_id)
+                .await
+                .map_err(|e| ApiError::Database(format!("find sanction: {e}")))?
+                .ok_or_else(|| ApiError::NotFound("sanction not found".into()))?;
+
+            if sanction.revoked_at.is_none() {
+                Some(sanction_id)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let status = req.status.as_str().to_owned();
+    let admin_response = req.admin_response;
+
+    let txn = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| ApiError::Database(format!("begin transaction: {e}")))?;
+
+    if let Some(sanction_id) = sanction_id_to_revoke {
+        txn.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE user_sanctions
+              SET revoked_at = NOW(), revoked_by = $2
+              WHERE id = $1 AND revoked_at IS NULL",
+            [sanction_id.into(), auth.user_id.0.into()],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("revoke sanction: {e}")))?;
+    }
+
+    let result = txn
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE moderation_appeals
+              SET admin_response = $2, responded_by = $3, responded_at = NOW(), status = $4
+              WHERE id = $1",
+            [
+                id.into(),
+                admin_response.into(),
+                auth.user_id.0.into(),
+                status.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| ApiError::Database(format!("respond to appeal: {e}")))?;
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound("appeal not found".into()));
+    }
+
+    txn.commit()
+        .await
+        .map_err(|e| ApiError::Database(format!("commit appeal response: {e}")))?;
 
     let updated = AppealRepo::find_by_id(&state.db, id)
         .await

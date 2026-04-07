@@ -21,6 +21,8 @@ struct SearchParams {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SearchResult {
+    query: String,
+    processing_time_ms: i64,
     threads: Vec<serde_json::Value>,
     users: Vec<serde_json::Value>,
     places: Vec<serde_json::Value>,
@@ -33,10 +35,13 @@ async fn search_handler(
     State(state): State<AppState>,
     Query(params): Query<SearchParams>,
 ) -> Result<Json<SearchResult>, ApiError> {
+    let started = std::time::Instant::now();
     let limit = params.limit.unwrap_or(20).min(100);
     let search_client = state.search_client.as_ref();
 
     let mut result = SearchResult {
+        query: params.q.clone(),
+        processing_time_ms: 0,
         threads: vec![],
         users: vec![],
         places: vec![],
@@ -83,6 +88,7 @@ async fn search_handler(
         }
     }
 
+    result.processing_time_ms = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
     Ok(Json(result))
 }
 

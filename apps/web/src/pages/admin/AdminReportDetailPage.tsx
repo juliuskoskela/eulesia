@@ -26,13 +26,16 @@ export function AdminReportDetailPage() {
     );
   }
 
+  const canRemoveContent =
+    report.contentType === "thread" || report.contentType === "comment";
+
   const handleUpdateStatus = (status: string) => {
     if (!id) return;
     updateReportMutation.mutate({ id, data: { status } });
   };
 
   const handleRemoveContent = () => {
-    if (!report) return;
+    if (!report || !canRemoveContent) return;
     removeContentMutation.mutate({
       type: report.contentType,
       id: report.contentId,
@@ -127,13 +130,15 @@ export function AdminReportDetailPage() {
                   {t("reportDetail.startReviewing")}
                 </button>
               )}
-              <button
-                onClick={handleRemoveContent}
-                disabled={removeContentMutation.isPending}
-                className="w-full text-sm px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                {t("reportDetail.removeContent")}
-              </button>
+              {canRemoveContent ? (
+                <button
+                  onClick={handleRemoveContent}
+                  disabled={removeContentMutation.isPending}
+                  className="w-full text-sm px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  {t("reportDetail.removeContent")}
+                </button>
+              ) : null}
               <button
                 onClick={() => handleUpdateStatus("dismissed")}
                 disabled={updateReportMutation.isPending}

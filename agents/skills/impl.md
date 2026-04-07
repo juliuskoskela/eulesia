@@ -99,12 +99,13 @@
 
 ## Decision Points
 
-| Signal                            | Action                     |
-| --------------------------------- | -------------------------- |
-| Issue is clear, small scope       | Proceed directly to step 3 |
-| Schema change or migration needed | Escalate to `/plan`        |
-| Ambiguous requirements            | Escalate to `/plan`        |
-| CI failures after implementation  | Run `/fix-fast` or `/fix`  |
+| Signal                            | Action                      |
+| --------------------------------- | --------------------------- |
+| Issue is clear, small scope       | Proceed directly to step 3  |
+| Schema change or migration needed | Escalate to `/plan`         |
+| Data migration or DB change       | Plan data verification step |
+| Ambiguous requirements            | Escalate to `/plan`         |
+| CI failures after implementation  | Run `/fix-fast` or `/fix`   |
 
 ## Output Format
 

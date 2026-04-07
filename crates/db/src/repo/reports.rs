@@ -50,15 +50,12 @@ impl ReportRepo {
         status: &str,
         resolved_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     ) -> Result<(), DbErr> {
-        let mut am = content_reports::ActiveModel {
+        let am = content_reports::ActiveModel {
             id: ActiveValue::Set(id),
             status: ActiveValue::Set(status.to_owned()),
+            resolved_at: ActiveValue::Set(resolved_at),
             ..Default::default()
         };
-
-        if let Some(ts) = resolved_at {
-            am.resolved_at = ActiveValue::Set(Some(ts));
-        }
 
         am.update(db).await?;
         Ok(())

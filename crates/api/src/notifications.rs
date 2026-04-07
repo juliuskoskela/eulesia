@@ -21,6 +21,7 @@ use eulesia_db::repo::push_subscriptions::PushSubscriptionRepo;
 #[serde(rename_all = "camelCase")]
 struct NotificationResponse {
     id: Uuid,
+    #[serde(rename = "type")]
     event_type: String,
     title: String,
     body: Option<String>,
@@ -49,6 +50,9 @@ struct NotificationListResponse {
     #[serde(rename = "items")]
     data: Vec<NotificationResponse>,
     total: u64,
+    page: i64,
+    limit: i64,
+    has_more: bool,
 }
 
 #[derive(Serialize)]
@@ -81,6 +85,30 @@ struct PushUnsubscribeRequest {
     endpoint: String,
 }
 
+const DEFAULT_NOTIFICATION_LIMIT: u64 = 50;
+const MAX_NOTIFICATION_LIMIT: u64 = 100;
+
+fn normalize_notification_pagination(params: &PaginationParams) -> (u64, u64, i64) {
+    let max_offset = i64::MAX as u64;
+    let offset = u64::try_from(params.offset).unwrap_or(0).min(max_offset);
+    let limit = u64::try_from(params.limit)
+        .unwrap_or(DEFAULT_NOTIFICATION_LIMIT)
+        .clamp(1, MAX_NOTIFICATION_LIMIT);
+    let page = i64::try_from(offset / limit)
+        .unwrap_or(i64::MAX)
+        .saturating_add(1);
+
+    (offset, limit, page)
+}
+
+fn notification_has_more(total: u64, offset: u64, limit: u64) -> bool {
+    offset.saturating_add(limit) < total
+}
+
+fn pagination_sql_value(value: u64) -> i64 {
+    i64::try_from(value).expect("notification pagination values are clamped to i64::MAX")
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -90,15 +118,21 @@ async fn list_notifications(
     State(state): State<AppState>,
     Query(params): Query<PaginationParams>,
 ) -> Result<Json<NotificationListResponse>, ApiError> {
-    let offset = u64::try_from(params.offset).unwrap_or(0);
-    let limit = u64::try_from(params.limit).unwrap_or(50);
+    let (offset, limit, page) = normalize_notification_pagination(&params);
 
     let (items, total) = NotificationRepo::list_for_user(&state.db, auth.user_id.0, offset, limit)
         .await
         .map_err(|e| ApiError::Database(format!("list notifications: {e}")))?;
 
+    let limit_i64 = pagination_sql_value(limit);
     let data = items.into_iter().map(NotificationResponse::from).collect();
-    Ok(Json(NotificationListResponse { data, total }))
+    Ok(Json(NotificationListResponse {
+        data,
+        total,
+        page,
+        limit: limit_i64,
+        has_more: notification_has_more(total, offset, limit),
+    }))
 }
 
 async fn unread_count(
@@ -324,4 +358,29 @@ pub fn routes() -> Router<AppState> {
             "/notifications/push/device-token",
             post(store_device_token).delete(remove_device_token),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_notification_pagination_clamps_values() {
+        let params = PaginationParams {
+            offset: i64::MAX,
+            limit: i64::MAX,
+        };
+
+        let (offset, limit, page) = normalize_notification_pagination(&params);
+        let expected_page = i64::MAX / i64::try_from(MAX_NOTIFICATION_LIMIT).unwrap() + 1;
+
+        assert_eq!(offset, i64::MAX as u64);
+        assert_eq!(limit, MAX_NOTIFICATION_LIMIT);
+        assert_eq!(page, expected_page);
+    }
+
+    #[test]
+    fn notification_has_more_uses_saturating_add() {
+        assert!(!notification_has_more(u64::MAX, u64::MAX - 1, 10));
+    }
 }

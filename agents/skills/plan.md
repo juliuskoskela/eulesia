@@ -58,6 +58,10 @@
    - Performance implications
    - Security considerations
    - Backward compatibility concerns
+   - **Data integrity**: Does this change affect persistent state on
+     servers? If yes, plan how to verify data is correct after deploy.
+     Schema migrations are NOT data migrations — `IF NOT EXISTS` succeeds
+     on empty databases. Always plan a data verification step.
 
 ## Decision Points
 
@@ -106,6 +110,14 @@
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | <risk> | <high/med/low> | <mitigation> |
+
+### Data Verification
+
+<If this change involves DB migrations, schema changes, or data movement:>
+- How will you verify data is present after deploy?
+- What row counts should you expect?
+- Is there an existing database with data that must be preserved?
+- Run `/deploy-verify` after merging.
 
 ### Open Questions
 

@@ -114,6 +114,9 @@ pub async fn create_comment(
         name: user.name,
         avatar_url: user.avatar_url,
         role: user.role.parse().unwrap_or(UserRole::Citizen),
+        institution_type: user.institution_type,
+        institution_name: user.institution_name,
+        identity_verified: user.identity_verified,
     };
 
     Ok(Json(CommentResponse {
@@ -174,6 +177,9 @@ pub async fn update_comment(
         name: user.name,
         avatar_url: user.avatar_url,
         role: user.role.parse().unwrap_or(UserRole::Citizen),
+        institution_type: user.institution_type,
+        institution_name: user.institution_name,
+        identity_verified: user.identity_verified,
     };
 
     Ok(Json(CommentResponse {

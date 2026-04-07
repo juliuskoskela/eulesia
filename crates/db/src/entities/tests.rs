@@ -252,18 +252,8 @@ fn moderation_actions_belongs_to_report() {
 }
 
 #[test]
-fn moderation_actions_belongs_to_admin() {
-    assert_related!(moderation_actions::Entity, users::Entity);
-}
-
-#[test]
 fn user_sanctions_belongs_to_user() {
     assert_related!(user_sanctions::Entity, users::Entity);
-}
-
-#[test]
-fn user_sanctions_has_issued_by_relation() {
-    let _ = user_sanctions::Relation::IssuedBy.def();
 }
 
 #[test]

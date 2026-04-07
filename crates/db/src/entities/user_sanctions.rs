@@ -24,12 +24,6 @@ pub enum Relation {
         to = "super::users::Column::Id"
     )]
     User,
-    #[sea_orm(
-        belongs_to = "super::users::Entity",
-        from = "Column::IssuedBy",
-        to = "super::users::Column::Id"
-    )]
-    IssuedBy,
 }
 
 impl Related<super::users::Entity> for Entity {

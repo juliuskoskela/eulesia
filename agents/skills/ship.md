@@ -47,7 +47,14 @@
    - **Migration impact:** Are there SeaORM migration changes?
    - **Security impact:** Are there changes to auth, permissions, secrets, or crypto?
 
+   - **Data impact:** Are there migrations that modify or move data?
+     If yes, run `/deploy-verify` after merge to confirm data integrity.
+
    Flag any concerns before proceeding.
+
+   **CRITICAL: Never declare a migration "clean" based solely on code
+   review or CI passing.** Migrations with `IF NOT EXISTS` succeed on
+   empty databases. Data presence must be verified on the actual server.
 
 5. **Sync fork before merge.**
 
@@ -81,6 +88,7 @@
 | Unresolved comments        | Stop, run `/resolve`                           |
 | Missing PR description     | Update description before merging              |
 | Schema/migration changes   | Double-check migration order and rollback plan |
+| Data migration or DB move  | Run `/deploy-verify` after merge               |
 | Security-sensitive changes | Flag for additional human review               |
 | PR has merge conflicts     | Rebase branch, re-run checks                   |
 
@@ -100,6 +108,7 @@
 - [x] PR description complete
 - [ ] Docs impact: <none | details>
 - [ ] Migration impact: <none | details>
+- [ ] Data impact: <none | verified with /deploy-verify>
 - [ ] Security impact: <none | details>
 
 ### Post-merge

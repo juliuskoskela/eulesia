@@ -77,7 +77,9 @@ export function AdminUserDetailPage() {
       data: {
         sanctionType,
         reason: sanctionReason,
-        expiresAt: sanctionExpiry || undefined,
+        expiresAt: sanctionExpiry
+          ? new Date(sanctionExpiry).toISOString()
+          : undefined,
       },
     });
     setShowSanctionForm(false);

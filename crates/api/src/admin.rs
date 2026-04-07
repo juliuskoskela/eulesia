@@ -5,18 +5,20 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait,
-    QueryFilter, QueryOrder, Statement,
+    QueryFilter, QueryOrder, Statement, TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::{AppConfig, AppState};
 use eulesia_auth::password;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{Id, new_id};
-use eulesia_db::entities::{admin_accounts, admin_sessions};
-use eulesia_db::repo::users::UserRepo;
+use eulesia_common::types::{AppealStatus, Id, ReportStatus, SanctionType, new_id};
+use eulesia_db::entities::{admin_accounts, admin_sessions, comments, threads};
+use eulesia_db::repo::outbox_helpers::emit_event;
+use eulesia_db::repo::{appeals::AppealRepo, sanctions::SanctionRepo, users::UserRepo};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -126,6 +128,109 @@ async fn require_admin(
         .ok_or(ApiError::Unauthorized)?;
 
     Ok(admin)
+}
+
+fn paginate(
+    page: Option<u64>,
+    limit: Option<u64>,
+    default_limit: u64,
+    max_limit: u64,
+) -> (u64, u64, u64) {
+    let max_pagination_value = i64::MAX as u64;
+    let max_limit = max_limit.clamp(1, max_pagination_value);
+    let default_limit = default_limit.clamp(1, max_limit);
+    let limit = limit.unwrap_or(default_limit).clamp(1, max_limit);
+
+    let max_page = max_pagination_value
+        .checked_div(limit)
+        .and_then(|value| value.checked_add(1))
+        .unwrap_or(1);
+    let page = page.unwrap_or(1).clamp(1, max_page);
+
+    let offset = page
+        .checked_sub(1)
+        .and_then(|value| value.checked_mul(limit))
+        .unwrap_or(max_pagination_value);
+    (page, limit, offset)
+}
+
+fn pagination_sql_value(value: u64) -> i64 {
+    i64::try_from(value).expect("pagination values are clamped to i64::MAX")
+}
+
+fn has_more(total: u64, offset: u64, limit: u64) -> bool {
+    offset.saturating_add(limit) < total
+}
+
+fn action_type_for_api(action_type: &str) -> String {
+    match action_type {
+        "content_delete" => "content_removed",
+        "content_restore" => "content_restored",
+        other => other,
+    }
+    .to_owned()
+}
+
+async fn actor_name_by_id(
+    db: &sea_orm::DatabaseConnection,
+    actor_id: Uuid,
+) -> Result<Option<String>, sea_orm::DbErr> {
+    if let Some(user) = UserRepo::find_by_id(db, actor_id).await? {
+        return Ok(Some(user.name));
+    }
+
+    Ok(admin_accounts::Entity::find_by_id(actor_id)
+        .one(db)
+        .await?
+        .map(|admin| admin.name))
+}
+
+fn parse_api_datetime(
+    value: &str,
+    field_name: &'static str,
+) -> Result<chrono::DateTime<chrono::FixedOffset>, ApiError> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map_err(|_| ApiError::BadRequest(format!("invalid {field_name} format")))
+}
+
+fn should_sync_thread_search(thread: &threads::Model) -> bool {
+    thread.club_id.is_none() && !thread.is_hidden
+}
+
+fn thread_search_payload(thread: &threads::Model) -> serde_json::Value {
+    serde_json::json!({
+        "id": thread.id.to_string(),
+        "title": thread.title,
+        "content": thread.content,
+        "author_id": thread.author_id.to_string(),
+        "scope": thread.scope,
+        "created_at": thread.created_at.timestamp(),
+    })
+}
+
+async fn write_moderation_action(
+    db: &impl ConnectionTrait,
+    admin_id: Uuid,
+    action_type: &str,
+    target_type: &str,
+    target_id: Uuid,
+    reason: Option<String>,
+) -> Result<(), sea_orm::DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        DatabaseBackend::Postgres,
+        r"INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id, reason, created_at)
+          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW())",
+        [
+            admin_id.into(),
+            action_type.into(),
+            target_type.into(),
+            target_id.into(),
+            reason.into(),
+        ],
+    ))
+    .await?;
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -419,10 +524,11 @@ async fn admin_dashboard(
         .db
         .query_all(Statement::from_string(
             DatabaseBackend::Postgres,
-            r"SELECT ma.id, ma.admin_id, u.name, ma.action_type, ma.target_type,
-                     ma.target_id, ma.reason, ma.created_at
+            r"SELECT ma.id, ma.admin_id, COALESCE(u.name, aa.name, 'system') AS admin_name,
+                     ma.action_type, ma.target_type, ma.target_id, ma.reason, ma.created_at
               FROM moderation_actions ma
               LEFT JOIN users u ON u.id = ma.admin_id
+              LEFT JOIN admin_accounts aa ON aa.id = ma.admin_id
               ORDER BY ma.created_at DESC
               LIMIT 10",
         ))
@@ -439,7 +545,7 @@ async fn admin_dashboard(
                     .try_get_by_index::<Option<String>>(2)
                     .ok()?
                     .unwrap_or_default(),
-                action_type: r.try_get_by_index(3).ok()?,
+                action_type: action_type_for_api(&r.try_get_by_index::<String>(3).ok()?),
                 target_type: r.try_get_by_index(4).ok()?,
                 target_id: r.try_get_by_index(5).ok()?,
                 reason: r.try_get_by_index(6).ok()?,
@@ -600,8 +706,9 @@ async fn admin_list_users(
 struct SanctionItem {
     id: Uuid,
     sanction_type: String,
-    reason: Option<String>,
+    reason: String,
     issued_by: Uuid,
+    issued_by_name: Option<String>,
     issued_at: String,
     expires_at: Option<String>,
     revoked_at: Option<String>,
@@ -686,18 +793,10 @@ async fn admin_get_user(
         .await
         .map_err(db_err)?;
 
-    let sanctions: Vec<SanctionItem> = sanctions_models
-        .into_iter()
-        .map(|s| SanctionItem {
-            id: s.id,
-            sanction_type: s.sanction_type,
-            reason: s.reason,
-            issued_by: s.issued_by,
-            issued_at: s.issued_at.to_rfc3339(),
-            expires_at: s.expires_at.map(|t| t.to_rfc3339()),
-            revoked_at: s.revoked_at.map(|t| t.to_rfc3339()),
-        })
-        .collect();
+    let mut sanctions = Vec::with_capacity(sanctions_models.len());
+    for s in sanctions_models {
+        sanctions.push(sanction_model_to_item(&state.db, s).await?);
+    }
 
     Ok(Json(AdminUserDetailResponse {
         id: user.id,
@@ -821,11 +920,7 @@ async fn announcement_to_response(
     db: &sea_orm::DatabaseConnection,
 ) -> AnnouncementResponse {
     let created_by_name = if let Some(uid) = m.created_by {
-        UserRepo::find_by_id(db, uid)
-            .await
-            .ok()
-            .flatten()
-            .map(|u| u.name)
+        actor_name_by_id(db, uid).await.ok().flatten()
     } else {
         None
     };
@@ -883,7 +978,7 @@ async fn admin_create_announcement(
     jar: CookieJar,
     Json(req): Json<CreateAnnouncementRequest>,
 ) -> Result<Json<AnnouncementResponse>, ApiError> {
-    require_admin(&jar, &state).await?;
+    let admin = require_admin(&jar, &state).await?;
 
     if req.title.trim().is_empty() || req.message.trim().is_empty() {
         return Err(ApiError::BadRequest(
@@ -901,10 +996,7 @@ async fn admin_create_announcement(
     let expires_at = req
         .expires_at
         .as_deref()
-        .map(|s| {
-            chrono::DateTime::parse_from_rfc3339(s)
-                .map_err(|_| ApiError::BadRequest("invalid expiresAt format".into()))
-        })
+        .map(|s| parse_api_datetime(s, "expiresAt"))
         .transpose()?;
 
     let id = new_id();
@@ -917,7 +1009,7 @@ async fn admin_create_announcement(
         message: Set(req.message.clone()),
         announcement_type: Set(req.announcement_type.clone()),
         active: Set(true),
-        created_by: Set(None),
+        created_by: Set(Some(admin.id)),
         created_at: Set(now),
         expires_at: Set(expires_at),
     };
@@ -1066,7 +1158,7 @@ async fn admin_generate_invites(
     jar: CookieJar,
     Json(req): Json<GenerateInvitesRequest>,
 ) -> Result<Json<Vec<InviteCodeResponse>>, ApiError> {
-    require_admin(&jar, &state).await?;
+    let admin = require_admin(&jar, &state).await?;
 
     if req.count == 0 || req.count > 50 {
         return Err(ApiError::BadRequest(
@@ -1087,12 +1179,7 @@ async fn admin_generate_invites(
                 DatabaseBackend::Postgres,
                 r"INSERT INTO invite_codes (id, code, created_by, created_at)
                   VALUES ($1, $2, $3, $4)",
-                [
-                    id.into(),
-                    code.clone().into(),
-                    sea_orm::Value::Uuid(None),
-                    now.into(),
-                ],
+                [id.into(), code.clone().into(), admin.id.into(), now.into()],
             ))
             .await
             .map_err(db_err)?;
@@ -1191,15 +1278,725 @@ async fn admin_list_invites(
 }
 
 // ===========================================================================
+// Reports, Appeals & Sanctions
+// ===========================================================================
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminReportsParams {
+    page: Option<u64>,
+    limit: Option<u64>,
+    status: Option<String>,
+    reason: Option<String>,
+    content_type: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminReportContentPreview {
+    title: Option<String>,
+    content: Option<String>,
+    name: Option<String>,
+    author_id: Option<Uuid>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminReportListItem {
+    id: Uuid,
+    content_type: String,
+    content_id: Uuid,
+    reason: String,
+    description: Option<String>,
+    status: String,
+    created_at: String,
+    resolved_at: Option<String>,
+    reporter_name: String,
+    reporter_user_id: Uuid,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminReportDetailResponse {
+    id: Uuid,
+    content_type: String,
+    content_id: Uuid,
+    reason: String,
+    description: Option<String>,
+    status: String,
+    created_at: String,
+    resolved_at: Option<String>,
+    reporter_name: String,
+    reporter_user_id: Uuid,
+    assigned_to: Option<Uuid>,
+    content: Option<AdminReportContentPreview>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminReportListResponse {
+    items: Vec<AdminReportListItem>,
+    total: u64,
+    page: u64,
+    limit: u64,
+    has_more: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateAdminReportRequest {
+    status: ReportStatus,
+    reason: Option<String>,
+}
+
+async fn load_report_content_preview(
+    db: &sea_orm::DatabaseConnection,
+    content_type: &str,
+    content_id: Uuid,
+) -> Result<Option<AdminReportContentPreview>, ApiError> {
+    let statement = match content_type {
+        "thread" => Some(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT title, content, author_id FROM threads WHERE id = $1",
+            [content_id.into()],
+        )),
+        "comment" => Some(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT content, author_id FROM comments WHERE id = $1",
+            [content_id.into()],
+        )),
+        "club" => Some(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT name, description, creator_id FROM clubs WHERE id = $1",
+            [content_id.into()],
+        )),
+        "user" => Some(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT name, bio FROM users WHERE id = $1",
+            [content_id.into()],
+        )),
+        _ => None,
+    };
+
+    let Some(statement) = statement else {
+        return Ok(None);
+    };
+
+    let row = db.query_one(statement).await.map_err(db_err)?;
+
+    Ok(match content_type {
+        "thread" => row.map(|r| AdminReportContentPreview {
+            title: r.try_get_by_index(0).ok(),
+            content: r.try_get_by_index(1).ok(),
+            name: None,
+            author_id: r.try_get_by_index(2).ok(),
+        }),
+        "comment" => row.map(|r| AdminReportContentPreview {
+            title: None,
+            content: r.try_get_by_index(0).ok(),
+            name: None,
+            author_id: r.try_get_by_index(1).ok(),
+        }),
+        "club" => row.map(|r| AdminReportContentPreview {
+            title: None,
+            content: r.try_get_by_index(1).ok(),
+            name: r.try_get_by_index(0).ok(),
+            author_id: r.try_get_by_index(2).ok(),
+        }),
+        "user" => row.map(|r| AdminReportContentPreview {
+            title: None,
+            content: r.try_get_by_index(1).ok(),
+            name: r.try_get_by_index(0).ok(),
+            author_id: Some(content_id),
+        }),
+        _ => None,
+    })
+}
+
+/// GET /admin/reports
+async fn admin_list_reports(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Query(params): Query<AdminReportsParams>,
+) -> Result<Json<AdminReportListResponse>, ApiError> {
+    require_admin(&jar, &state).await?;
+
+    let (page, limit, offset) = paginate(params.page, params.limit, 20, 100);
+
+    let count_sql = r"SELECT COUNT(*)::bigint
+          FROM content_reports cr
+          WHERE ($1::text IS NULL OR cr.status = $1)
+            AND ($2::text IS NULL OR cr.reason = $2)
+            AND ($3::text IS NULL OR cr.content_type = $3)";
+    let total = state
+        .db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            count_sql,
+            [
+                params.status.clone().into(),
+                params.reason.clone().into(),
+                params.content_type.clone().into(),
+            ],
+        ))
+        .await
+        .map_err(db_err)?
+        .and_then(|r| r.try_get_by_index::<i64>(0).ok())
+        .unwrap_or(0) as u64;
+
+    let data_sql = r"SELECT cr.id, cr.content_type, cr.content_id, cr.reason, cr.description,
+                 cr.status, cr.created_at, cr.resolved_at, cr.reporter_id,
+                 COALESCE(u.name, 'Deleted user') AS reporter_name
+          FROM content_reports cr
+          LEFT JOIN users u ON u.id = cr.reporter_id
+          WHERE ($1::text IS NULL OR cr.status = $1)
+            AND ($2::text IS NULL OR cr.reason = $2)
+            AND ($3::text IS NULL OR cr.content_type = $3)
+          ORDER BY cr.created_at DESC
+          OFFSET $4 LIMIT $5";
+
+    let rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            data_sql,
+            [
+                params.status.into(),
+                params.reason.into(),
+                params.content_type.into(),
+                pagination_sql_value(offset).into(),
+                pagination_sql_value(limit).into(),
+            ],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let items = rows
+        .iter()
+        .filter_map(|r| {
+            Some(AdminReportListItem {
+                id: r.try_get_by_index(0).ok()?,
+                content_type: r.try_get_by_index(1).ok()?,
+                content_id: r.try_get_by_index(2).ok()?,
+                reason: r.try_get_by_index(3).ok()?,
+                description: r.try_get_by_index(4).ok()?,
+                status: r.try_get_by_index(5).ok()?,
+                created_at: r
+                    .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(6)
+                    .ok()?
+                    .to_rfc3339(),
+                resolved_at: r
+                    .try_get_by_index::<Option<chrono::DateTime<chrono::FixedOffset>>>(7)
+                    .ok()?
+                    .map(|t| t.to_rfc3339()),
+                reporter_user_id: r.try_get_by_index(8).ok()?,
+                reporter_name: r.try_get_by_index(9).ok()?,
+            })
+        })
+        .collect();
+
+    Ok(Json(AdminReportListResponse {
+        items,
+        total,
+        page,
+        limit,
+        has_more: has_more(total, offset, limit),
+    }))
+}
+
+/// GET /admin/reports/{id}
+async fn admin_get_report(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(id): Path<Uuid>,
+) -> Result<Json<AdminReportDetailResponse>, ApiError> {
+    require_admin(&jar, &state).await?;
+
+    let row = state
+        .db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT cr.id, cr.content_type, cr.content_id, cr.reason, cr.description,
+                     cr.status, cr.created_at, cr.resolved_at, cr.reporter_id,
+                     COALESCE(u.name, 'Deleted user') AS reporter_name, cr.assigned_to
+              FROM content_reports cr
+              LEFT JOIN users u ON u.id = cr.reporter_id
+              WHERE cr.id = $1",
+            [id.into()],
+        ))
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("report not found".into()))?;
+
+    let content_type: String = row.try_get_by_index(1).map_err(db_err)?;
+    let content_id: Uuid = row.try_get_by_index(2).map_err(db_err)?;
+    let content = load_report_content_preview(&state.db, &content_type, content_id).await?;
+
+    Ok(Json(AdminReportDetailResponse {
+        id: row.try_get_by_index(0).map_err(db_err)?,
+        content_type,
+        content_id,
+        reason: row.try_get_by_index(3).map_err(db_err)?,
+        description: row.try_get_by_index(4).map_err(db_err)?,
+        status: row.try_get_by_index(5).map_err(db_err)?,
+        created_at: row
+            .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(6)
+            .map_err(db_err)?
+            .to_rfc3339(),
+        resolved_at: row
+            .try_get_by_index::<Option<chrono::DateTime<chrono::FixedOffset>>>(7)
+            .map_err(db_err)?
+            .map(|t| t.to_rfc3339()),
+        reporter_user_id: row.try_get_by_index(8).map_err(db_err)?,
+        reporter_name: row.try_get_by_index(9).map_err(db_err)?,
+        assigned_to: row.try_get_by_index(10).map_err(db_err)?,
+        content,
+    }))
+}
+
+/// PATCH /admin/reports/{id}
+async fn admin_update_report(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateAdminReportRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let admin = require_admin(&jar, &state).await?;
+
+    use eulesia_db::entities::content_reports;
+    let existing = content_reports::Entity::find_by_id(id)
+        .one(&*state.db)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("report not found".into()))?;
+
+    let mut am: content_reports::ActiveModel = existing.into();
+    am.status = Set(req.status.as_str().to_owned());
+    am.assigned_to = Set(Some(admin.id));
+    am.resolved_at = Set(
+        if matches!(req.status, ReportStatus::Resolved | ReportStatus::Dismissed) {
+            Some(chrono::Utc::now().fixed_offset())
+        } else {
+            None
+        },
+    );
+    let updated = am.update(&*state.db).await.map_err(db_err)?;
+
+    let logged_action = match req.status {
+        ReportStatus::Resolved => Some("report_resolved"),
+        ReportStatus::Dismissed => Some("report_dismissed"),
+        _ => None,
+    };
+
+    if let Some(action_type) = logged_action {
+        state
+            .db
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                r"INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id, reason, created_at)
+                  VALUES ($1, $2, $3, 'report', $4, $5, NOW())",
+                [
+                    new_id().into(),
+                    admin.id.into(),
+                    action_type.into(),
+                    updated.id.into(),
+                    req.reason.into(),
+                ],
+            ))
+            .await
+            .map_err(db_err)?;
+    }
+
+    Ok(Json(serde_json::json!({
+        "id": updated.id,
+        "status": updated.status,
+    })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminAppealsParams {
+    page: Option<u64>,
+    limit: Option<u64>,
+    status: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminAppealItem {
+    id: Uuid,
+    reason: String,
+    status: String,
+    admin_response: Option<String>,
+    created_at: String,
+    responded_at: Option<String>,
+    sanction_id: Option<Uuid>,
+    report_id: Option<Uuid>,
+    action_id: Option<Uuid>,
+    user_id: Uuid,
+    user_name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AdminAppealsResponse {
+    items: Vec<AdminAppealItem>,
+    total: u64,
+    page: u64,
+    limit: u64,
+    has_more: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveAdminAppealRequest {
+    admin_response: String,
+    status: AppealStatus,
+}
+
+/// GET /admin/appeals
+async fn admin_list_appeals(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Query(params): Query<AdminAppealsParams>,
+) -> Result<Json<AdminAppealsResponse>, ApiError> {
+    require_admin(&jar, &state).await?;
+
+    let (page, limit, offset) = paginate(params.page, params.limit, 20, 100);
+
+    let count_sql = r"SELECT COUNT(*)::bigint
+          FROM moderation_appeals ma
+          WHERE ($1::text IS NULL OR ma.status = $1)";
+    let total = state
+        .db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            count_sql,
+            [params.status.clone().into()],
+        ))
+        .await
+        .map_err(db_err)?
+        .and_then(|r| r.try_get_by_index::<i64>(0).ok())
+        .unwrap_or(0) as u64;
+
+    let data_sql = r"SELECT ma.id, ma.reason, ma.status, ma.admin_response, ma.created_at,
+                 ma.responded_at, ma.sanction_id, ma.report_id, ma.action_id,
+                 ma.user_id, COALESCE(u.name, 'Deleted user') AS user_name
+          FROM moderation_appeals ma
+          LEFT JOIN users u ON u.id = ma.user_id
+          WHERE ($1::text IS NULL OR ma.status = $1)
+          ORDER BY ma.created_at DESC
+          OFFSET $2 LIMIT $3";
+
+    let rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            data_sql,
+            [
+                params.status.into(),
+                pagination_sql_value(offset).into(),
+                pagination_sql_value(limit).into(),
+            ],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let items = rows
+        .iter()
+        .filter_map(|r| {
+            Some(AdminAppealItem {
+                id: r.try_get_by_index(0).ok()?,
+                reason: r.try_get_by_index(1).ok()?,
+                status: r.try_get_by_index(2).ok()?,
+                admin_response: r.try_get_by_index(3).ok()?,
+                created_at: r
+                    .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(4)
+                    .ok()?
+                    .to_rfc3339(),
+                responded_at: r
+                    .try_get_by_index::<Option<chrono::DateTime<chrono::FixedOffset>>>(5)
+                    .ok()?
+                    .map(|t| t.to_rfc3339()),
+                sanction_id: r.try_get_by_index(6).ok()?,
+                report_id: r.try_get_by_index(7).ok()?,
+                action_id: r.try_get_by_index(8).ok()?,
+                user_id: r.try_get_by_index(9).ok()?,
+                user_name: r.try_get_by_index(10).ok()?,
+            })
+        })
+        .collect();
+
+    Ok(Json(AdminAppealsResponse {
+        items,
+        total,
+        page,
+        limit,
+        has_more: has_more(total, offset, limit),
+    }))
+}
+
+/// PATCH /admin/appeals/{id}
+async fn admin_respond_appeal(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(id): Path<Uuid>,
+    Json(req): Json<ResolveAdminAppealRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let admin = require_admin(&jar, &state).await?;
+
+    if req.admin_response.trim().is_empty() {
+        return Err(ApiError::BadRequest("adminResponse is required".into()));
+    }
+    if matches!(req.status, AppealStatus::Pending) {
+        return Err(ApiError::BadRequest(
+            "status must be accepted or rejected".into(),
+        ));
+    }
+
+    let appeal = AppealRepo::find_by_id(&state.db, id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("appeal not found".into()))?;
+
+    let sanction_id_to_revoke = if req.status == AppealStatus::Accepted {
+        if let Some(sanction_id) = appeal.sanction_id {
+            let sanction = SanctionRepo::find_by_id(&state.db, sanction_id)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| ApiError::NotFound("sanction not found".into()))?;
+
+            if sanction.revoked_at.is_none() {
+                Some(sanction_id)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let status = req.status.as_str().to_owned();
+    let admin_response = req.admin_response;
+
+    let txn = state.db.begin().await.map_err(db_err)?;
+
+    if let Some(sanction_id) = sanction_id_to_revoke {
+        txn.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE user_sanctions
+              SET revoked_at = NOW(), revoked_by = $2
+              WHERE id = $1 AND revoked_at IS NULL",
+            [sanction_id.into(), admin.id.into()],
+        ))
+        .await
+        .map_err(db_err)?;
+    }
+
+    let result = txn
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"UPDATE moderation_appeals
+              SET admin_response = $2, responded_by = $3, responded_at = NOW(), status = $4
+              WHERE id = $1",
+            [
+                id.into(),
+                admin_response.into(),
+                admin.id.into(),
+                status.clone().into(),
+            ],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound("appeal not found".into()));
+    }
+
+    txn.commit().await.map_err(db_err)?;
+
+    Ok(Json(serde_json::json!({
+        "id": id,
+        "status": status,
+    })))
+}
+
+async fn sanction_model_to_item(
+    db: &sea_orm::DatabaseConnection,
+    sanction: eulesia_db::entities::user_sanctions::Model,
+) -> Result<SanctionItem, ApiError> {
+    Ok(SanctionItem {
+        id: sanction.id,
+        sanction_type: sanction.sanction_type,
+        reason: sanction.reason.unwrap_or_default(),
+        issued_by: sanction.issued_by,
+        issued_by_name: actor_name_by_id(db, sanction.issued_by)
+            .await
+            .map_err(db_err)?,
+        issued_at: sanction.issued_at.to_rfc3339(),
+        expires_at: sanction.expires_at.map(|t| t.to_rfc3339()),
+        revoked_at: sanction.revoked_at.map(|t| t.to_rfc3339()),
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IssueAdminSanctionRequest {
+    sanction_type: SanctionType,
+    reason: Option<String>,
+    expires_at: Option<String>,
+}
+
+/// POST /admin/users/{id}/sanction
+async fn admin_issue_sanction(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(user_id): Path<Uuid>,
+    Json(req): Json<IssueAdminSanctionRequest>,
+) -> Result<Json<SanctionItem>, ApiError> {
+    let admin = require_admin(&jar, &state).await?;
+
+    UserRepo::find_by_id(&state.db, user_id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
+
+    let reason = req
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| ApiError::BadRequest("reason is required".into()))?;
+
+    let expires_at = req
+        .expires_at
+        .as_deref()
+        .map(|value| parse_api_datetime(value, "expiresAt"))
+        .transpose()?;
+
+    let sanction = SanctionRepo::create(
+        &state.db,
+        eulesia_db::entities::user_sanctions::ActiveModel {
+            id: Set(new_id()),
+            user_id: Set(user_id),
+            sanction_type: Set(req.sanction_type.as_str().to_owned()),
+            reason: Set(Some(reason.clone())),
+            issued_by: Set(admin.id),
+            issued_at: Set(chrono::Utc::now().fixed_offset()),
+            expires_at: Set(expires_at),
+            ..Default::default()
+        },
+    )
+    .await
+    .map_err(db_err)?;
+
+    let action_type = match req.sanction_type {
+        SanctionType::Warning => "user_warned",
+        SanctionType::Suspension => "user_suspended",
+        SanctionType::Ban => "user_banned",
+    };
+
+    state
+        .db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id, reason, created_at)
+              VALUES ($1, $2, $3, 'user', $4, $5, NOW())",
+            [
+                new_id().into(),
+                admin.id.into(),
+                action_type.into(),
+                user_id.into(),
+                Some(reason).into(),
+            ],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    Ok(Json(sanction_model_to_item(&state.db, sanction).await?))
+}
+
+/// GET /admin/users/{id}/sanctions
+async fn admin_user_sanctions(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(user_id): Path<Uuid>,
+) -> Result<Json<Vec<SanctionItem>>, ApiError> {
+    require_admin(&jar, &state).await?;
+
+    use eulesia_db::entities::user_sanctions;
+    let models = user_sanctions::Entity::find()
+        .filter(user_sanctions::Column::UserId.eq(user_id))
+        .order_by_desc(user_sanctions::Column::IssuedAt)
+        .all(&*state.db)
+        .await
+        .map_err(db_err)?;
+
+    let mut items = Vec::with_capacity(models.len());
+    for sanction in models {
+        items.push(sanction_model_to_item(&state.db, sanction).await?);
+    }
+
+    Ok(Json(items))
+}
+
+/// DELETE /admin/sanctions/{id}
+async fn admin_revoke_sanction(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let admin = require_admin(&jar, &state).await?;
+
+    let sanction = SanctionRepo::find_by_id(&state.db, id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("sanction not found".into()))?;
+
+    SanctionRepo::revoke(&state.db, id, admin.id)
+        .await
+        .map_err(db_err)?;
+
+    let action_type = if sanction.sanction_type == "ban" {
+        "user_unbanned"
+    } else {
+        "sanction_revoked"
+    };
+
+    state
+        .db
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id, reason, created_at)
+              VALUES ($1, $2, $3, 'user', $4, $5, NOW())",
+            [
+                new_id().into(),
+                admin.id.into(),
+                action_type.into(),
+                sanction.user_id.into(),
+                sanction.reason.into(),
+            ],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    Ok(Json(serde_json::json!({ "revoked": true })))
+}
+
+// ===========================================================================
 // Modlog & Transparency
 // ===========================================================================
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ModlogParams {
-    offset: Option<u64>,
+    page: Option<u64>,
     limit: Option<u64>,
     action_type: Option<String>,
+    admin_id: Option<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -1219,9 +2016,10 @@ struct ModlogEntry {
 #[serde(rename_all = "camelCase")]
 struct ModlogResponse {
     items: Vec<ModlogEntry>,
-    total: i64,
-    offset: u64,
+    total: u64,
+    page: u64,
     limit: u64,
+    has_more: bool,
 }
 
 /// GET /admin/modlog — paginated moderation action log (admin-only).
@@ -1232,39 +2030,57 @@ async fn admin_modlog(
 ) -> Result<Json<ModlogResponse>, ApiError> {
     require_admin(&jar, &state).await?;
 
-    let offset = params.offset.unwrap_or(0);
-    let limit = params.limit.unwrap_or(50).min(200);
+    let (page, limit, offset) = paginate(params.page, params.limit, 30, 200);
     let action_type = params.action_type.clone();
+    let admin_id = params.admin_id;
 
     let count_sql = r"SELECT COUNT(*)::bigint
           FROM moderation_actions ma
-          WHERE ($1::text IS NULL OR ma.action_type = $1)";
-    let total: i64 = state
+          WHERE ($1::text IS NULL OR
+                 CASE ma.action_type
+                   WHEN 'content_delete' THEN 'content_removed'
+                   WHEN 'content_restore' THEN 'content_restored'
+                   ELSE ma.action_type
+                 END = $1)
+            AND ($2::uuid IS NULL OR ma.admin_id = $2)";
+    let total = state
         .db
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             count_sql,
-            [action_type.clone().into()],
+            [action_type.clone().into(), admin_id.into()],
         ))
         .await
         .map_err(db_err)?
-        .map_or(0, |r| r.try_get_by_index::<i64>(0).unwrap_or(0));
+        .and_then(|r| r.try_get_by_index::<i64>(0).ok())
+        .unwrap_or(0) as u64;
 
     let data_sql = r"SELECT ma.id, ma.admin_id, COALESCE(u.name, aa.name, 'system') AS admin_name,
                  ma.action_type, ma.target_type, ma.target_id, ma.reason, ma.created_at
           FROM moderation_actions ma
           LEFT JOIN users u ON u.id = ma.admin_id
           LEFT JOIN admin_accounts aa ON aa.id = ma.admin_id
-          WHERE ($1::text IS NULL OR ma.action_type = $1)
-          ORDER BY ma.created_at DESC
-          OFFSET $2 LIMIT $3";
+          WHERE ($1::text IS NULL OR
+                 CASE ma.action_type
+                   WHEN 'content_delete' THEN 'content_removed'
+                   WHEN 'content_restore' THEN 'content_restored'
+                   ELSE ma.action_type
+                 END = $1)
+            AND ($2::uuid IS NULL OR ma.admin_id = $2)
+          ORDER BY ma.created_at DESC, ma.id DESC
+          OFFSET $3 LIMIT $4";
 
     let rows = state
         .db
         .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
             data_sql,
-            [action_type.into(), offset.into(), limit.into()],
+            [
+                action_type.into(),
+                admin_id.into(),
+                pagination_sql_value(offset).into(),
+                pagination_sql_value(limit).into(),
+            ],
         ))
         .await
         .map_err(db_err)?;
@@ -1276,7 +2092,7 @@ async fn admin_modlog(
                 id: r.try_get_by_index(0).ok()?,
                 admin_id: r.try_get_by_index(1).ok()?,
                 admin_name: r.try_get_by_index::<String>(2).ok()?,
-                action_type: r.try_get_by_index(3).ok()?,
+                action_type: action_type_for_api(&r.try_get_by_index::<String>(3).ok()?),
                 target_type: r.try_get_by_index(4).ok()?,
                 target_id: r.try_get_by_index(5).ok()?,
                 reason: r.try_get_by_index::<Option<String>>(6).ok()?,
@@ -1291,9 +2107,17 @@ async fn admin_modlog(
     Ok(Json(ModlogResponse {
         items,
         total,
-        offset,
+        page,
         limit,
+        has_more: has_more(total, offset, limit),
     }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyParams {
+    from: Option<String>,
+    to: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1305,84 +2129,283 @@ struct TransparencyActionCount {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct TransparencyStatusCount {
+    status: String,
+    count: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyReasonCount {
+    reason: String,
+    count: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyContentTypeCount {
+    content_type: String,
+    count: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencySanctionTypeCount {
+    sanction_type: String,
+    count: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyPeriod {
+    from: String,
+    to: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyReports {
+    by_status: Vec<TransparencyStatusCount>,
+    by_reason: Vec<TransparencyReasonCount>,
+    by_content_type: Vec<TransparencyContentTypeCount>,
+    avg_response_time_hours: Option<f64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyActions {
+    by_type: Vec<TransparencyActionCount>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencySanctions {
+    by_type: Vec<TransparencySanctionTypeCount>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransparencyAppeals {
+    by_status: Vec<TransparencyStatusCount>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct TransparencyResponse {
-    total_actions: i64,
-    actions_by_type: Vec<TransparencyActionCount>,
-    recent_actions: Vec<ModlogEntry>,
+    period: TransparencyPeriod,
+    reports: TransparencyReports,
+    actions: TransparencyActions,
+    sanctions: TransparencySanctions,
+    appeals: TransparencyAppeals,
 }
 
 /// GET /admin/transparency — public-facing moderation transparency summary.
 async fn admin_transparency(
     State(state): State<AppState>,
+    Query(params): Query<TransparencyParams>,
 ) -> Result<Json<TransparencyResponse>, ApiError> {
-    let total: i64 = state
-        .db
-        .query_one(Statement::from_string(
-            DatabaseBackend::Postgres,
-            "SELECT COUNT(*)::bigint FROM moderation_actions",
-        ))
-        .await
-        .map_err(db_err)?
-        .map_or(0, |r| r.try_get_by_index::<i64>(0).unwrap_or(0));
+    let to = params
+        .to
+        .as_deref()
+        .map(|value| parse_api_datetime(value, "to"))
+        .transpose()?
+        .unwrap_or_else(|| chrono::Utc::now().fixed_offset());
+    let from = params
+        .from
+        .as_deref()
+        .map(|value| parse_api_datetime(value, "from"))
+        .transpose()?
+        .unwrap_or_else(|| to - chrono::Duration::days(30));
 
-    let type_rows = state
+    let report_status_rows = state
         .db
-        .query_all(Statement::from_string(
+        .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            r"SELECT action_type, COUNT(*)::bigint AS cnt
-              FROM moderation_actions
-              GROUP BY action_type
-              ORDER BY cnt DESC",
+            r"SELECT status, COUNT(*)::bigint
+              FROM content_reports
+              WHERE created_at >= $1 AND created_at <= $2
+              GROUP BY status
+              ORDER BY COUNT(*) DESC, status ASC",
+            [from.clone().into(), to.clone().into()],
         ))
         .await
         .map_err(db_err)?;
 
-    let actions_by_type: Vec<TransparencyActionCount> = type_rows
+    let report_reason_rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT reason, COUNT(*)::bigint
+              FROM content_reports
+              WHERE created_at >= $1 AND created_at <= $2
+              GROUP BY reason
+              ORDER BY COUNT(*) DESC, reason ASC",
+            [from.clone().into(), to.clone().into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let report_content_type_rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT content_type, COUNT(*)::bigint
+              FROM content_reports
+              WHERE created_at >= $1 AND created_at <= $2
+              GROUP BY content_type
+              ORDER BY COUNT(*) DESC, content_type ASC",
+            [from.clone().into(), to.clone().into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let avg_response_time_hours = state
+        .db
+        .query_one(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600.0)
+              FROM content_reports
+              WHERE created_at >= $1 AND created_at <= $2
+                AND resolved_at IS NOT NULL",
+            [from.clone().into(), to.clone().into()],
+        ))
+        .await
+        .map_err(db_err)?
+        .and_then(|r| r.try_get_by_index::<Option<f64>>(0).ok())
+        .flatten()
+        .map(|value| (value * 10.0).round() / 10.0);
+
+    let type_rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT action_type, COUNT(*)::bigint AS cnt
+              FROM moderation_actions
+              WHERE created_at >= $1 AND created_at <= $2
+              GROUP BY action_type
+              ORDER BY cnt DESC, action_type ASC",
+            [from.clone().into(), to.clone().into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let sanctions_by_type_rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT sanction_type, COUNT(*)::bigint
+              FROM user_sanctions
+              WHERE issued_at >= $1 AND issued_at <= $2
+              GROUP BY sanction_type
+              ORDER BY COUNT(*) DESC, sanction_type ASC",
+            [from.clone().into(), to.clone().into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let appeals_by_status_rows = state
+        .db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r"SELECT status, COUNT(*)::bigint
+              FROM moderation_appeals
+              WHERE created_at >= $1 AND created_at <= $2
+              GROUP BY status
+              ORDER BY COUNT(*) DESC, status ASC",
+            [from.clone().into(), to.clone().into()],
+        ))
+        .await
+        .map_err(db_err)?;
+
+    let reports_by_status = report_status_rows
         .iter()
         .filter_map(|r| {
-            Some(TransparencyActionCount {
-                action_type: r.try_get_by_index(0).ok()?,
+            Some(TransparencyStatusCount {
+                status: r.try_get_by_index(0).ok()?,
                 count: r.try_get_by_index(1).ok()?,
             })
         })
         .collect();
 
-    // Recent actions (anonymized — no admin_id exposed)
-    let recent_rows = state
-        .db
-        .query_all(Statement::from_string(
-            DatabaseBackend::Postgres,
-            r"SELECT ma.id, ma.action_type, ma.target_type, ma.target_id, ma.reason, ma.created_at
-              FROM moderation_actions ma
-              ORDER BY ma.created_at DESC
-              LIMIT 20",
-        ))
-        .await
-        .map_err(db_err)?;
-
-    let recent_actions: Vec<ModlogEntry> = recent_rows
+    let reports_by_reason = report_reason_rows
         .iter()
         .filter_map(|r| {
-            Some(ModlogEntry {
-                id: r.try_get_by_index(0).ok()?,
-                admin_id: Uuid::nil(),          // anonymized
-                admin_name: "moderator".into(), // anonymized
-                action_type: r.try_get_by_index(1).ok()?,
-                target_type: r.try_get_by_index(2).ok()?,
-                target_id: r.try_get_by_index(3).ok()?,
-                reason: r.try_get_by_index::<Option<String>>(4).ok()?,
-                created_at: r
-                    .try_get_by_index::<chrono::DateTime<chrono::FixedOffset>>(5)
-                    .ok()?
-                    .to_rfc3339(),
+            Some(TransparencyReasonCount {
+                reason: r.try_get_by_index(0).ok()?,
+                count: r.try_get_by_index(1).ok()?,
+            })
+        })
+        .collect();
+
+    let reports_by_content_type = report_content_type_rows
+        .iter()
+        .filter_map(|r| {
+            Some(TransparencyContentTypeCount {
+                content_type: r.try_get_by_index(0).ok()?,
+                count: r.try_get_by_index(1).ok()?,
+            })
+        })
+        .collect();
+
+    let mut action_counts = std::collections::BTreeMap::<String, i64>::new();
+    for row in &type_rows {
+        let raw_action_type: String = row.try_get_by_index(0).map_err(db_err)?;
+        let count: i64 = row.try_get_by_index(1).map_err(db_err)?;
+        *action_counts
+            .entry(action_type_for_api(&raw_action_type))
+            .or_insert(0) += count;
+    }
+    let mut actions_by_type: Vec<TransparencyActionCount> = action_counts
+        .into_iter()
+        .map(|(action_type, count)| TransparencyActionCount { action_type, count })
+        .collect();
+    actions_by_type.sort_by(|left, right| {
+        right
+            .count
+            .cmp(&left.count)
+            .then_with(|| left.action_type.cmp(&right.action_type))
+    });
+
+    let sanctions_by_type = sanctions_by_type_rows
+        .iter()
+        .filter_map(|r| {
+            Some(TransparencySanctionTypeCount {
+                sanction_type: r.try_get_by_index(0).ok()?,
+                count: r.try_get_by_index(1).ok()?,
+            })
+        })
+        .collect();
+
+    let appeals_by_status = appeals_by_status_rows
+        .iter()
+        .filter_map(|r| {
+            Some(TransparencyStatusCount {
+                status: r.try_get_by_index(0).ok()?,
+                count: r.try_get_by_index(1).ok()?,
             })
         })
         .collect();
 
     Ok(Json(TransparencyResponse {
-        total_actions: total,
-        actions_by_type,
-        recent_actions,
+        period: TransparencyPeriod {
+            from: from.to_rfc3339(),
+            to: to.to_rfc3339(),
+        },
+        reports: TransparencyReports {
+            by_status: reports_by_status,
+            by_reason: reports_by_reason,
+            by_content_type: reports_by_content_type,
+            avg_response_time_hours,
+        },
+        actions: TransparencyActions {
+            by_type: actions_by_type,
+        },
+        sanctions: TransparencySanctions {
+            by_type: sanctions_by_type,
+        },
+        appeals: TransparencyAppeals {
+            by_status: appeals_by_status,
+        },
     }))
 }
 
@@ -1398,43 +2421,120 @@ async fn admin_delete_content(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let admin = require_admin(&jar, &state).await?;
 
-    let sql = match content_type.as_str() {
-        "thread" => "UPDATE threads SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
-        "comment" => "UPDATE comments SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+    match content_type.as_str() {
+        "thread" => {
+            let thread = threads::Entity::find_by_id(content_id)
+                .one(&*state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| ApiError::NotFound("thread not found".into()))?;
+
+            if thread.deleted_at.is_some() {
+                return Err(ApiError::NotFound(
+                    "thread not found or already deleted".into(),
+                ));
+            }
+
+            let sync_search = should_sync_thread_search(&thread);
+            let txn = state.db.begin().await.map_err(db_err)?;
+            let result = txn
+                .execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE threads SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+                    [content_id.into()],
+                ))
+                .await
+                .map_err(db_err)?;
+
+            if result.rows_affected() == 0 {
+                return Err(ApiError::NotFound(
+                    "thread not found or already deleted".into(),
+                ));
+            }
+
+            write_moderation_action(
+                &txn,
+                admin.id,
+                "content_removed",
+                "thread",
+                content_id,
+                None,
+            )
+            .await
+            .map_err(db_err)?;
+
+            txn.commit().await.map_err(db_err)?;
+
+            if sync_search {
+                if let Err(e) = emit_event(
+                    &*state.db,
+                    "thread_deleted",
+                    serde_json::json!({
+                        "id": thread.id.to_string(),
+                    }),
+                )
+                .await
+                {
+                    warn!(thread_id = %thread.id, error = %e, "failed to emit thread_deleted event");
+                }
+            }
+        }
+        "comment" => {
+            let comment = comments::Entity::find_by_id(content_id)
+                .one(&*state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| ApiError::NotFound("comment not found".into()))?;
+
+            if comment.deleted_at.is_some() {
+                return Err(ApiError::NotFound(
+                    "comment not found or already deleted".into(),
+                ));
+            }
+
+            let txn = state.db.begin().await.map_err(db_err)?;
+            let result = txn
+                .execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE comments SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+                    [content_id.into()],
+                ))
+                .await
+                .map_err(db_err)?;
+
+            if result.rows_affected() == 0 {
+                return Err(ApiError::NotFound(
+                    "comment not found or already deleted".into(),
+                ));
+            }
+
+            txn.execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "UPDATE threads SET reply_count = reply_count - 1 WHERE id = $1",
+                [comment.thread_id.into()],
+            ))
+            .await
+            .map_err(db_err)?;
+
+            write_moderation_action(
+                &txn,
+                admin.id,
+                "content_removed",
+                "comment",
+                content_id,
+                None,
+            )
+            .await
+            .map_err(db_err)?;
+
+            txn.commit().await.map_err(db_err)?;
+        }
         _ => {
             return Err(ApiError::BadRequest(
                 "type must be 'thread' or 'comment'".into(),
             ));
         }
-    };
-
-    let result = state
-        .db
-        .execute(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            sql,
-            [content_id.into()],
-        ))
-        .await
-        .map_err(db_err)?;
-
-    if result.rows_affected() == 0 {
-        return Err(ApiError::NotFound(format!(
-            "{content_type} not found or already deleted"
-        )));
     }
-
-    // Log only when content was actually deleted
-    state
-        .db
-        .execute(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            r"INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id, reason, created_at)
-              VALUES (gen_random_uuid(), $1, 'content_delete', $2, $3, NULL, NOW())",
-            [admin.id.into(), content_type.clone().into(), content_id.into()],
-        ))
-        .await
-        .map_err(db_err)?;
 
     Ok(Json(
         serde_json::json!({ "deleted": true, "type": content_type, "id": content_id }),
@@ -1449,45 +2549,110 @@ async fn admin_restore_content(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let admin = require_admin(&jar, &state).await?;
 
-    let sql = match content_type.as_str() {
-        "thread" => "UPDATE threads SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
+    match content_type.as_str() {
+        "thread" => {
+            let thread = threads::Entity::find_by_id(content_id)
+                .one(&*state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| ApiError::NotFound("thread not found".into()))?;
+
+            if thread.deleted_at.is_none() {
+                return Err(ApiError::NotFound("thread not found or not deleted".into()));
+            }
+
+            let sync_search = should_sync_thread_search(&thread);
+            let txn = state.db.begin().await.map_err(db_err)?;
+            let result = txn
+                .execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE threads SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
+                    [content_id.into()],
+                ))
+                .await
+                .map_err(db_err)?;
+
+            if result.rows_affected() == 0 {
+                return Err(ApiError::NotFound("thread not found or not deleted".into()));
+            }
+
+            write_moderation_action(
+                &txn,
+                admin.id,
+                "content_restored",
+                "thread",
+                content_id,
+                None,
+            )
+            .await
+            .map_err(db_err)?;
+
+            txn.commit().await.map_err(db_err)?;
+
+            if sync_search {
+                if let Err(e) =
+                    emit_event(&*state.db, "thread_updated", thread_search_payload(&thread)).await
+                {
+                    warn!(thread_id = %thread.id, error = %e, "failed to emit thread_updated event");
+                }
+            }
+        }
         "comment" => {
-            "UPDATE comments SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL"
+            let comment = comments::Entity::find_by_id(content_id)
+                .one(&*state.db)
+                .await
+                .map_err(db_err)?
+                .ok_or_else(|| ApiError::NotFound("comment not found".into()))?;
+
+            if comment.deleted_at.is_none() {
+                return Err(ApiError::NotFound(
+                    "comment not found or not deleted".into(),
+                ));
+            }
+
+            let txn = state.db.begin().await.map_err(db_err)?;
+            let result = txn
+                .execute(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "UPDATE comments SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
+                    [content_id.into()],
+                ))
+                .await
+                .map_err(db_err)?;
+
+            if result.rows_affected() == 0 {
+                return Err(ApiError::NotFound(
+                    "comment not found or not deleted".into(),
+                ));
+            }
+
+            txn.execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "UPDATE threads SET reply_count = reply_count + 1 WHERE id = $1",
+                [comment.thread_id.into()],
+            ))
+            .await
+            .map_err(db_err)?;
+
+            write_moderation_action(
+                &txn,
+                admin.id,
+                "content_restored",
+                "comment",
+                content_id,
+                None,
+            )
+            .await
+            .map_err(db_err)?;
+
+            txn.commit().await.map_err(db_err)?;
         }
         _ => {
             return Err(ApiError::BadRequest(
                 "type must be 'thread' or 'comment'".into(),
             ));
         }
-    };
-
-    let result = state
-        .db
-        .execute(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            sql,
-            [content_id.into()],
-        ))
-        .await
-        .map_err(db_err)?;
-
-    if result.rows_affected() == 0 {
-        return Err(ApiError::NotFound(format!(
-            "{content_type} not found or not deleted"
-        )));
     }
-
-    // Log only when content was actually restored
-    state
-        .db
-        .execute(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            r"INSERT INTO moderation_actions (id, admin_id, action_type, target_type, target_id, reason, created_at)
-              VALUES (gen_random_uuid(), $1, 'content_restore', $2, $3, NULL, NOW())",
-            [admin.id.into(), content_type.clone().into(), content_id.into()],
-        ))
-        .await
-        .map_err(db_err)?;
 
     Ok(Json(
         serde_json::json!({ "restored": true, "type": content_type, "id": content_id }),
@@ -1532,36 +2697,17 @@ pub fn routes() -> Router<AppState> {
         // Modlog & Transparency
         .route("/admin/modlog", get(admin_modlog))
         .route("/admin/transparency", get(admin_transparency))
-        // Moderation aliases — frontend calls /admin/* but handlers live in moderation module
-        .route(
-            "/admin/reports",
-            get(crate::moderation::reports::list_reports),
-        )
+        // Moderation
+        .route("/admin/reports", get(admin_list_reports))
         .route(
             "/admin/reports/{id}",
-            get(crate::moderation::reports::get_report)
-                .patch(crate::moderation::reports::update_report),
+            get(admin_get_report).patch(admin_update_report),
         )
-        .route(
-            "/admin/appeals",
-            get(crate::moderation::appeals::list_appeals),
-        )
-        .route(
-            "/admin/appeals/{id}",
-            patch(crate::moderation::appeals::respond_appeal),
-        )
-        .route(
-            "/admin/users/{id}/sanction",
-            post(crate::moderation::sanctions::create_sanction),
-        )
-        .route(
-            "/admin/users/{id}/sanctions",
-            get(crate::moderation::sanctions::user_sanctions),
-        )
-        .route(
-            "/admin/sanctions/{id}",
-            delete(crate::moderation::sanctions::revoke_sanction),
-        )
+        .route("/admin/appeals", get(admin_list_appeals))
+        .route("/admin/appeals/{id}", patch(admin_respond_appeal))
+        .route("/admin/users/{id}/sanction", post(admin_issue_sanction))
+        .route("/admin/users/{id}/sanctions", get(admin_user_sanctions))
+        .route("/admin/sanctions/{id}", delete(admin_revoke_sanction))
         // Content moderation
         .route("/admin/content/{type}/{id}", delete(admin_delete_content))
         .route(
@@ -1589,14 +2735,15 @@ mod tests {
                 created_at: "2026-01-01T00:00:00+00:00".into(),
             }],
             total: 1,
-            offset: 0,
+            page: 1,
             limit: 50,
+            has_more: false,
         };
 
         let json = serde_json::to_value(&resp).unwrap();
         let obj = json.as_object().unwrap();
 
-        let keys = ["items", "total", "offset", "limit"];
+        let keys = ["items", "total", "page", "limit", "hasMore"];
         for key in &keys {
             assert!(obj.contains_key(*key), "missing modlog field: {key}");
         }
@@ -1620,41 +2767,81 @@ mod tests {
         }
     }
 
-    /// Contract test: TransparencyResponse has summary + anonymized recent actions.
+    /// Contract test: TransparencyResponse matches the admin dashboard payload.
     #[test]
     fn transparency_response_shape() {
         let resp = TransparencyResponse {
-            total_actions: 42,
-            actions_by_type: vec![TransparencyActionCount {
-                action_type: "warn".into(),
-                count: 20,
-            }],
-            recent_actions: vec![ModlogEntry {
-                id: Uuid::nil(),
-                admin_id: Uuid::nil(),
-                admin_name: "moderator".into(),
-                action_type: "warn".into(),
-                target_type: "user".into(),
-                target_id: Uuid::nil(),
-                reason: None,
-                created_at: "2026-01-01T00:00:00+00:00".into(),
-            }],
+            period: TransparencyPeriod {
+                from: "2026-01-01T00:00:00+00:00".into(),
+                to: "2026-01-31T00:00:00+00:00".into(),
+            },
+            reports: TransparencyReports {
+                by_status: vec![TransparencyStatusCount {
+                    status: "pending".into(),
+                    count: 3,
+                }],
+                by_reason: vec![TransparencyReasonCount {
+                    reason: "spam".into(),
+                    count: 2,
+                }],
+                by_content_type: vec![TransparencyContentTypeCount {
+                    content_type: "thread".into(),
+                    count: 4,
+                }],
+                avg_response_time_hours: Some(12.5),
+            },
+            actions: TransparencyActions {
+                by_type: vec![TransparencyActionCount {
+                    action_type: "user_warned".into(),
+                    count: 1,
+                }],
+            },
+            sanctions: TransparencySanctions {
+                by_type: vec![TransparencySanctionTypeCount {
+                    sanction_type: "warning".into(),
+                    count: 1,
+                }],
+            },
+            appeals: TransparencyAppeals {
+                by_status: vec![TransparencyStatusCount {
+                    status: "accepted".into(),
+                    count: 1,
+                }],
+            },
         };
 
         let json = serde_json::to_value(&resp).unwrap();
         let obj = json.as_object().unwrap();
 
-        let keys = ["totalActions", "actionsByType", "recentActions"];
+        let keys = ["period", "reports", "actions", "sanctions", "appeals"];
         for key in &keys {
             assert!(obj.contains_key(*key), "missing transparency field: {key}");
         }
 
-        // actionsByType shape
-        let abt = obj["actionsByType"].as_array().unwrap()[0]
+        let abt = obj["actions"]["byType"].as_array().unwrap()[0]
             .as_object()
             .unwrap();
         assert!(abt.contains_key("actionType"));
         assert!(abt.contains_key("count"));
+    }
+
+    #[test]
+    fn parse_api_datetime_rejects_naive_datetime() {
+        assert!(parse_api_datetime("2026-04-07T12:34", "expiresAt").is_err());
+    }
+
+    #[test]
+    fn paginate_clamps_to_postgres_bounds() {
+        let (page, limit, offset) = paginate(Some(u64::MAX), Some(u64::MAX), 20, u64::MAX);
+
+        assert_eq!(limit, i64::MAX as u64);
+        assert_eq!(page, 2);
+        assert_eq!(offset, i64::MAX as u64);
+    }
+
+    #[test]
+    fn has_more_uses_saturating_add() {
+        assert!(!has_more(u64::MAX, u64::MAX - 1, 10));
     }
 
     // ---- sha256_hex ----

@@ -56,6 +56,9 @@ fn author_map(users: Vec<eulesia_db::entities::users::Model>) -> HashMap<Uuid, A
                     name: u.name,
                     avatar_url: u.avatar_url,
                     role: u.role.parse().unwrap_or(UserRole::Citizen),
+                    institution_type: u.institution_type,
+                    institution_name: u.institution_name,
+                    identity_verified: u.identity_verified,
                 },
             )
         })
@@ -69,6 +72,9 @@ fn deleted_author() -> AuthorSummary {
         name: "[deleted]".into(),
         avatar_url: None,
         role: UserRole::Citizen,
+        institution_type: None,
+        institution_name: None,
+        identity_verified: false,
     }
 }
 
@@ -540,6 +546,9 @@ pub async fn create_thread(
         name: user.name,
         avatar_url: user.avatar_url,
         role: user.role.parse().unwrap_or(UserRole::Citizen),
+        institution_type: user.institution_type,
+        institution_name: user.institution_name,
+        identity_verified: user.identity_verified,
     };
 
     Ok(Json(ThreadResponse {
@@ -678,6 +687,9 @@ pub async fn update_thread(
         name: user.name,
         avatar_url: user.avatar_url,
         role: user.role.parse().unwrap_or(UserRole::Citizen),
+        institution_type: user.institution_type,
+        institution_name: user.institution_name,
+        identity_verified: user.identity_verified,
     };
 
     Ok(Json(ThreadResponse {

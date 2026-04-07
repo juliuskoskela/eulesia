@@ -155,6 +155,9 @@ pub struct AuthorSummary {
     pub name: String,
     pub avatar_url: Option<String>,
     pub role: UserRole,
+    pub institution_type: Option<String>,
+    pub institution_name: Option<String>,
+    pub identity_verified: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -190,6 +193,9 @@ mod tests {
             name: "Test User".into(),
             avatar_url: Some("https://example.com/avatar.png".into()),
             role: UserRole::Citizen,
+            institution_type: None,
+            institution_name: None,
+            identity_verified: false,
         }
     }
 

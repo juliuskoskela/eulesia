@@ -123,7 +123,7 @@ pub async fn update_report(
         .ok_or_else(|| ApiError::NotFound("report not found".into()))?;
 
     if let Some(status) = req.status {
-        let resolved_at = if matches!(status, ReportStatus::Resolved) {
+        let resolved_at = if matches!(status, ReportStatus::Resolved | ReportStatus::Dismissed) {
             Some(chrono::Utc::now().fixed_offset())
         } else {
             None

@@ -53,38 +53,79 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.EULESIA_DEPLOY_SSH_KEY }}
         run: |
           install -d -m 700 "$HOME/.ssh"
+          install -d -m 700 "$HOME/.ssh/controlmasters"
           echo "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
 
           # Validate key
           ssh-keygen -l -f "$HOME/.ssh/id_ed25519" || { echo "::error::Invalid SSH key"; exit 1; }
 
-          ssh-keyscan -H -t ed25519,rsa "$EULESIA_PROD_TARGET_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
-          test -s "$HOME/.ssh/known_hosts" || { echo "::error::ssh-keyscan produced no host keys"; exit 1; }
+          ssh-keyscan -T 15 -v -H -t ed25519,rsa "$EULESIA_PROD_TARGET_HOST" >> "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-          ssh -o BatchMode=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -o StrictHostKeyChecking=yes \
-            -i "$HOME/.ssh/id_ed25519" \
-            root@"$EULESIA_PROD_TARGET_HOST" "echo 'SSH connection OK'"
+          SSH_OPTS=(
+            -i "$HOME/.ssh/id_ed25519"
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o StrictHostKeyChecking=yes
+            -o BatchMode=yes
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=8
+            -o TCPKeepAlive=yes
+            -o ConnectTimeout=15
+            -o ConnectionAttempts=5
+            -o ControlMaster=auto
+            -o ControlPersist=10m
+            -o ControlPath="$HOME/.ssh/controlmasters/%C"
+          )
+
+          ssh "${SSH_OPTS[@]}" root@"$EULESIA_PROD_TARGET_HOST" "echo 'SSH connection OK'"
 
       - name: Build production system
         run: nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel
 
       - name: Deploy production system
         run: |
-          export NIX_SSHOPTS="-i $HOME/.ssh/id_ed25519 -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes"
+          SSH_OPTS=(
+            -i "$HOME/.ssh/id_ed25519"
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o StrictHostKeyChecking=yes
+            -o BatchMode=yes
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=8
+            -o TCPKeepAlive=yes
+            -o ConnectTimeout=15
+            -o ConnectionAttempts=5
+            -o ControlMaster=auto
+            -o ControlPersist=10m
+            -o ControlPath="$HOME/.ssh/controlmasters/%C"
+          )
+
+          export NIX_SSHOPTS="${SSH_OPTS[*]}"
+          ssh "${SSH_OPTS[@]}" root@"$EULESIA_PROD_TARGET_HOST" "echo 'Pre-deploy SSH OK'"
           nix run .#rebuild-prod
 
       - name: Health checks
         run: |
-          SSH="ssh -o BatchMode=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes -i $HOME/.ssh/id_ed25519 root@$EULESIA_PROD_TARGET_HOST"
+          SSH_OPTS=(
+            -i "$HOME/.ssh/id_ed25519"
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o StrictHostKeyChecking=yes
+            -o BatchMode=yes
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=8
+            -o TCPKeepAlive=yes
+            -o ConnectTimeout=15
+            -o ConnectionAttempts=5
+            -o ControlMaster=auto
+            -o ControlPersist=10m
+            -o ControlPath="$HOME/.ssh/controlmasters/%C"
+          )
 
           echo "Waiting for API to become healthy..."
           HEALTHY=false
           for i in $(seq 1 30); do
-            if $SSH "curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/health" 2>/dev/null; then
+            if ssh "${SSH_OPTS[@]}" root@"$EULESIA_PROD_TARGET_HOST" \
+              "curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/health" 2>/dev/null; then
               HEALTHY=true
               break
             fi
@@ -98,7 +139,9 @@ jobs:
           fi
 
           echo "Verifying auth config..."
-          $SSH "curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/auth/config" > /tmp/auth-config.json
+          ssh "${SSH_OPTS[@]}" root@"$EULESIA_PROD_TARGET_HOST" \
+            "curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/auth/config" \
+            > /tmp/auth-config.json
           cat /tmp/auth-config.json
           jq -e '.success == true and .data.registrationMode == "ftn-open"' /tmp/auth-config.json >/dev/null
           echo "All health checks passed."

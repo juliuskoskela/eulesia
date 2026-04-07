@@ -14,6 +14,8 @@ mod m20260405_000011_admin_features;
 mod m20260406_000012_admin_accounts;
 mod m20260406_000013_club_enrichment;
 mod m20260406_000014_club_role_owner;
+mod m20260407_000015_admin_actor_fks;
+mod m20260407_000016_modlog_indexes;
 
 pub struct Migrator;
 
@@ -35,6 +37,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260406_000012_admin_accounts::Migration),
             Box::new(m20260406_000013_club_enrichment::Migration),
             Box::new(m20260406_000014_club_role_owner::Migration),
+            Box::new(m20260407_000015_admin_actor_fks::Migration),
+            Box::new(m20260407_000016_modlog_indexes::Migration),
         ]
     }
 }
