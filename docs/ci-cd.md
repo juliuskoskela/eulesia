@@ -42,7 +42,11 @@ Runs on every push to `main`.
 3. Setup SSH credentials
 4. Build the production NixOS system (`nix build .#nixosConfigurations.eulesia-prod.config.system.build.toplevel`)
 5. Deploy with `nix run .#rebuild-prod`
-6. Health checks over SSH against `127.0.0.1:8080`
+6. Health checks over SSH against `127.0.0.1:3002`
+7. Data integrity checks over SSH:
+   - `seaql_migrations` row count matches the local migration file count
+   - `eulesia_v2` has non-empty `users` and `threads`
+   - when the legacy `eulesia` database still exists, all legacy usernames and club slugs must also exist in `eulesia_v2`
 
 **Concurrency:** `deploy-prod` group, never cancels in-progress deploys.
 

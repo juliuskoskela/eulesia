@@ -44,9 +44,10 @@ This means you have up to 3 rollback points available.
 ## Post-Rollback
 
 1. Verify the service is healthy: `systemctl status eulesia-server`
-2. Check the health endpoint: `curl -fsS -H 'Host: eulesia.org' http://127.0.0.1:8080/api/v1/health`
-3. Investigate the failed deploy on a branch — don't push to main until fixed
-4. The failed deploy's CI run will have build logs in GitHub Actions
+2. Check the health endpoint: `curl -fsS http://127.0.0.1:3002/api/v1/health`
+3. If both `eulesia` and `eulesia_v2` exist, compare critical data presence before declaring recovery complete
+4. Investigate the failed deploy on a branch — don't push to main until fixed
+5. The failed deploy's CI run will have build logs in GitHub Actions
 
 ## Database Considerations
 

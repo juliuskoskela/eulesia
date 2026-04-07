@@ -210,7 +210,7 @@ Current assumptions in the repo:
 - SSH user: `root`
 - production domains: `eulesia.org`, `api.eulesia.org`, and `admin.eulesia.org`
 - test domains: `test.eulesia.org`, `api.test.eulesia.org`, and `admin.test.eulesia.org`
-- both test and production use Traefik as the public edge, with nginx bound to `127.0.0.1:8080` as the internal origin
+- both test and production use Traefik as the public edge, with the Rust server bound to `127.0.0.1:3002` as the internal origin
 - both test and production use a same-origin browser API base on the app domain, with `api.*` kept as an alias and compatibility host
 - the test host bootstrap uses `disko` with `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114774765` as the system disk and `/dev/disk/by-id/scsi-0HC_Volume_105267941` as the PostgreSQL volume
 - the production host bootstrap uses `disko` with `/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_114785278` as the system disk and `/dev/disk/by-id/scsi-0HC_Volume_105268989` as the PostgreSQL volume
@@ -381,7 +381,7 @@ That workflow only works when all of the following are already in place:
   - secret `EULESIA_TEST_SSH_KEY`
   - secret `EULESIA_TEST_KNOWN_HOSTS`
 
-The workflow builds the test system, deploys it with `nix run .#rebuild-test`, and then verifies health over SSH against `127.0.0.1:8080` on the target host.
+The workflow builds the test system, deploys it with `nix run .#rebuild-test`, and then verifies health over SSH against `127.0.0.1:3002` on the target host.
 
 ### Production First Install
 
@@ -442,6 +442,12 @@ just rebuild-prod
 `nix run .#deploy-test` and `nix run .#deploy` remain available through `deploy-rs` for manual use. All remote deployment paths assume the target host already has its own `/var/lib/sops-nix/key.txt` in place.
 
 The API service runs database migration as a pre-start step, so configuration switches restart the app against the current schema automatically.
+
+That schema step is not enough to declare a deployment correct on its own. When a legacy `eulesia` database still exists alongside `eulesia_v2`, post-deploy verification must also compare live data presence between the two databases. At minimum:
+
+- `seaql_migrations` row count on `eulesia_v2` must match the local migration file count
+- `users` and `threads` on `eulesia_v2` must be non-empty
+- legacy usernames and club slugs from `eulesia` must also exist in `eulesia_v2`
 
 ## VM Target
 
