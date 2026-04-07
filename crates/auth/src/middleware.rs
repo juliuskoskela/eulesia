@@ -59,3 +59,90 @@ fn extract_token(jar: &CookieJar, req: &Request<Body>) -> Option<String> {
         .or_else(|| jar.get("__Host-session"))
         .map(|c| c.value().to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum_extra::extract::cookie::Cookie;
+
+    fn empty_request() -> Request<Body> {
+        Request::builder().body(Body::empty()).unwrap()
+    }
+
+    fn request_with_header(name: &str, value: &str) -> Request<Body> {
+        Request::builder()
+            .header(name, value)
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    fn jar_with_cookie(name: &str, value: &str) -> CookieJar {
+        CookieJar::new().add(Cookie::new(name.to_string(), value.to_string()))
+    }
+
+    #[test]
+    fn bearer_token_extracted() {
+        let jar = CookieJar::new();
+        let req = request_with_header("authorization", "Bearer abc123");
+        assert_eq!(extract_token(&jar, &req), Some("abc123".into()));
+    }
+
+    #[test]
+    fn bearer_prefix_required() {
+        let jar = CookieJar::new();
+        let req = request_with_header("authorization", "Token abc123");
+        assert_eq!(extract_token(&jar, &req), None);
+    }
+
+    #[test]
+    fn bearer_case_sensitive() {
+        let jar = CookieJar::new();
+        let req = request_with_header("authorization", "bearer abc123");
+        assert_eq!(extract_token(&jar, &req), None);
+    }
+
+    #[test]
+    fn cookie_session_extracted() {
+        let jar = jar_with_cookie("session", "sess_value");
+        let req = empty_request();
+        assert_eq!(extract_token(&jar, &req), Some("sess_value".into()));
+    }
+
+    #[test]
+    fn cookie_host_session_extracted() {
+        let jar = jar_with_cookie("__Host-session", "host_value");
+        let req = empty_request();
+        assert_eq!(extract_token(&jar, &req), Some("host_value".into()));
+    }
+
+    #[test]
+    fn header_takes_precedence_over_cookie() {
+        let jar = jar_with_cookie("session", "cookie_val");
+        let req = request_with_header("authorization", "Bearer header_val");
+        assert_eq!(extract_token(&jar, &req), Some("header_val".into()));
+    }
+
+    #[test]
+    fn no_auth_returns_none() {
+        let jar = CookieJar::new();
+        let req = empty_request();
+        assert_eq!(extract_token(&jar, &req), None);
+    }
+
+    #[test]
+    fn empty_bearer_value() {
+        let jar = CookieJar::new();
+        let req = request_with_header("authorization", "Bearer ");
+        assert_eq!(extract_token(&jar, &req), Some(String::new()));
+    }
+
+    #[test]
+    fn session_cookie_preferred_over_host() {
+        let jar = jar_with_cookie("session", "sess").add(Cookie::new(
+            "__Host-session".to_string(),
+            "host".to_string(),
+        ));
+        let req = empty_request();
+        assert_eq!(extract_token(&jar, &req), Some("sess".into()));
+    }
+}

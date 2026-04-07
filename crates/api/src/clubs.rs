@@ -2351,4 +2351,130 @@ mod tests {
         assert!(obj.contains_key("isRoomOwner"), "must have isRoomOwner");
         assert_eq!(obj["isRoomOwner"], true);
     }
+
+    // ---- slugify ----
+
+    #[test]
+    fn slugify_basic() {
+        assert_eq!(slugify("Test Club"), "test-club");
+    }
+
+    #[test]
+    fn slugify_multiple_spaces() {
+        assert_eq!(slugify("Multiple  Spaces"), "multiple-spaces");
+    }
+
+    #[test]
+    fn slugify_uppercase() {
+        assert_eq!(slugify("UPPERCASE"), "uppercase");
+    }
+
+    #[test]
+    fn slugify_special_chars() {
+        assert_eq!(slugify("Hello@World!"), "hello-world");
+    }
+
+    #[test]
+    fn slugify_numbers() {
+        assert_eq!(slugify("Club 123"), "club-123");
+    }
+
+    #[test]
+    fn slugify_consecutive_dashes() {
+        assert_eq!(slugify("a---b"), "a-b");
+    }
+
+    #[test]
+    fn slugify_leading_trailing() {
+        assert_eq!(slugify("---name---"), "name");
+    }
+
+    #[test]
+    fn slugify_empty() {
+        assert_eq!(slugify(""), "");
+    }
+
+    #[test]
+    fn slugify_only_special() {
+        assert_eq!(slugify("@#$%"), "");
+    }
+
+    #[test]
+    fn slugify_finnish_chars() {
+        // Finnish chars are Unicode-alphanumeric, so they pass is_alphanumeric()
+        assert_eq!(slugify("Äiti ja Isä"), "äiti-ja-isä");
+    }
+
+    // ---- normalize_rules ----
+
+    #[test]
+    fn normalize_rules_none() {
+        assert_eq!(normalize_rules(None), None);
+    }
+
+    #[test]
+    fn normalize_rules_null() {
+        assert_eq!(normalize_rules(Some(serde_json::Value::Null)), None);
+    }
+
+    #[test]
+    fn normalize_rules_empty_string() {
+        assert_eq!(
+            normalize_rules(Some(serde_json::Value::String(String::new()))),
+            None
+        );
+    }
+
+    #[test]
+    fn normalize_rules_nonempty_string() {
+        assert_eq!(
+            normalize_rules(Some(serde_json::Value::String("Rules here".into()))),
+            Some("Rules here".into())
+        );
+    }
+
+    #[test]
+    fn normalize_rules_array() {
+        let val = serde_json::json!(["rule1", "rule2"]);
+        let result = normalize_rules(Some(val));
+        assert!(result.is_some());
+        let parsed: Vec<String> = serde_json::from_str(&result.unwrap()).unwrap();
+        assert_eq!(parsed, vec!["rule1", "rule2"]);
+    }
+
+    #[test]
+    fn normalize_rules_number() {
+        assert_eq!(
+            normalize_rules(Some(serde_json::json!(42))),
+            Some("42".into())
+        );
+    }
+
+    // ---- clamp_limit ----
+
+    #[test]
+    fn clamp_limit_none() {
+        assert_eq!(clamp_limit(None), DEFAULT_LIMIT);
+    }
+
+    #[test]
+    fn clamp_limit_within_range() {
+        assert_eq!(clamp_limit(Some(50)), 50);
+    }
+
+    #[test]
+    fn clamp_limit_above_max() {
+        assert_eq!(clamp_limit(Some(200)), MAX_LIMIT);
+    }
+
+    #[test]
+    fn clamp_limit_zero() {
+        // No minimum clamping in the implementation — 0 passes through
+        assert_eq!(clamp_limit(Some(0)), 0);
+    }
+
+    #[test]
+    fn clamp_limit_max_boundary() {
+        assert_eq!(clamp_limit(Some(MAX_LIMIT)), MAX_LIMIT);
+    }
 }

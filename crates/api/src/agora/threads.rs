@@ -782,3 +782,187 @@ pub async fn record_view(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---- validate_scope ----
+
+    #[test]
+    fn validate_scope_local() {
+        assert!(validate_scope("local").is_ok());
+    }
+
+    #[test]
+    fn validate_scope_national() {
+        assert!(validate_scope("national").is_ok());
+    }
+
+    #[test]
+    fn validate_scope_european() {
+        assert!(validate_scope("european").is_ok());
+    }
+
+    #[test]
+    fn validate_scope_invalid() {
+        let err = validate_scope("global").unwrap_err();
+        assert!(
+            matches!(err, ApiError::BadRequest(_)),
+            "expected BadRequest, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn validate_scope_empty() {
+        let err = validate_scope("").unwrap_err();
+        assert!(
+            matches!(err, ApiError::BadRequest(_)),
+            "expected BadRequest, got {err:?}"
+        );
+    }
+
+    // ---- clamp_limit ----
+
+    #[test]
+    fn clamp_none_uses_default() {
+        assert_eq!(clamp_limit(None), DEFAULT_LIMIT);
+    }
+
+    #[test]
+    fn clamp_above_max() {
+        assert_eq!(clamp_limit(Some(200)), MAX_LIMIT);
+    }
+
+    #[test]
+    fn clamp_within_range() {
+        assert_eq!(clamp_limit(Some(50)), 50);
+    }
+
+    #[test]
+    fn clamp_zero() {
+        assert_eq!(clamp_limit(Some(0)), 0);
+    }
+
+    #[test]
+    fn clamp_boundary() {
+        assert_eq!(clamp_limit(Some(MAX_LIMIT)), MAX_LIMIT);
+    }
+
+    // ---- deleted_author ----
+
+    #[test]
+    fn deleted_author_has_placeholder_values() {
+        let author = deleted_author();
+        assert_eq!(author.id, Uuid::nil());
+        assert_eq!(author.username, "[deleted]");
+        assert_eq!(author.name, "[deleted]");
+        assert!(author.avatar_url.is_none());
+        assert_eq!(author.role, "user");
+    }
+
+    #[test]
+    fn deleted_author_serializes() {
+        let author = deleted_author();
+        let json = serde_json::to_value(&author).unwrap();
+        let obj = json.as_object().unwrap();
+        assert_eq!(obj["username"], "[deleted]");
+        assert_eq!(obj["name"], "[deleted]");
+        assert!(obj.contains_key("id"));
+        assert!(obj.contains_key("avatarUrl"));
+        assert!(obj.contains_key("role"));
+    }
+
+    // ---- author_map ----
+
+    #[test]
+    fn author_map_empty() {
+        let map = author_map(vec![]);
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn author_map_builds_lookup() {
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+        let now = chrono::Utc::now().fixed_offset();
+
+        let users = vec![
+            eulesia_db::entities::users::Model {
+                id: id1,
+                username: "alice".into(),
+                name: "Alice".into(),
+                avatar_url: Some("https://example.com/alice.png".into()),
+                role: "user".into(),
+                email: Some("alice@example.com".into()),
+                password_hash: Some(String::new()),
+                municipality_id: None,
+                bio: None,
+                institution_type: None,
+                institution_name: None,
+                identity_verified: false,
+                identity_provider: None,
+                identity_level: "none".into(),
+                identity_issuer: None,
+                identity_verified_at: None,
+                verified_name: None,
+                rp_subject: None,
+                locale: "fi".into(),
+                notification_replies: true,
+                notification_mentions: true,
+                notification_official: true,
+                onboarding_completed_at: None,
+                deleted_at: None,
+                created_at: now,
+                updated_at: now,
+                last_seen_at: None,
+            },
+            eulesia_db::entities::users::Model {
+                id: id2,
+                username: "bob".into(),
+                name: "Bob".into(),
+                avatar_url: None,
+                role: "moderator".into(),
+                email: Some("bob@example.com".into()),
+                password_hash: Some(String::new()),
+                municipality_id: None,
+                bio: None,
+                institution_type: None,
+                institution_name: None,
+                identity_verified: false,
+                identity_provider: None,
+                identity_level: "none".into(),
+                identity_issuer: None,
+                identity_verified_at: None,
+                verified_name: None,
+                rp_subject: None,
+                locale: "fi".into(),
+                notification_replies: true,
+                notification_mentions: true,
+                notification_official: true,
+                onboarding_completed_at: None,
+                deleted_at: None,
+                created_at: now,
+                updated_at: now,
+                last_seen_at: None,
+            },
+        ];
+
+        let map = author_map(users);
+        assert_eq!(map.len(), 2);
+
+        let alice = map.get(&id1).expect("alice should be in map");
+        assert_eq!(alice.username, "alice");
+        assert_eq!(alice.name, "Alice");
+        assert_eq!(
+            alice.avatar_url.as_deref(),
+            Some("https://example.com/alice.png")
+        );
+        assert_eq!(alice.role, "user");
+
+        let bob = map.get(&id2).expect("bob should be in map");
+        assert_eq!(bob.username, "bob");
+        assert_eq!(bob.role, "moderator");
+        assert!(bob.avatar_url.is_none());
+    }
+}
