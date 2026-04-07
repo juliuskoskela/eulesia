@@ -7,7 +7,7 @@ import { ThreadCard } from "../components/agora/ThreadCard";
 import { FollowButton } from "../components/common";
 import { useTagPage, useVoteThread } from "../hooks/useApi";
 import type { Thread as ApiThread } from "../lib/api";
-import { transformAuthor } from "../utils/transforms";
+import { getAvatarInitials } from "../utils/avatar";
 
 function transformThread(thread: ApiThread) {
   return {
@@ -167,9 +167,10 @@ export function TagPage() {
             <ThreadCard
               key={thread.id}
               thread={transformThread(thread)}
-              author={transformAuthor(
-                thread.author ?? { id: "", name: "", role: "" },
-              )}
+              author={(() => {
+                const a = thread.author ?? { id: "", name: "", role: "" };
+                return { ...a, avatarInitials: getAvatarInitials(a.name) };
+              })()}
               onVote={handleVote}
               isVoting={voteMutation.isPending}
             />
