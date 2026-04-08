@@ -27,6 +27,7 @@ import type { ApiClient } from "./apiTypes.ts";
 export interface DeviceRegistration {
   deviceId: string;
   identityPublicKey: string; // base64url
+  didCreateDevice: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,6 +116,7 @@ export async function initializeDevice(
     return {
       deviceId: existing.deviceId,
       identityPublicKey: existing.identityKeyPair.publicKey,
+      didCreateDevice: false,
     };
   }
 
@@ -171,6 +173,7 @@ export async function initializeDevice(
   return {
     deviceId: device.id,
     identityPublicKey: identityExported.publicKey,
+    didCreateDevice: true,
   };
 }
 

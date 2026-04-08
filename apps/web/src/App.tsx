@@ -94,9 +94,6 @@ const CreateGroupPage = lazy(() =>
     default: m.CreateGroupPage,
   })),
 );
-const UserHomePage = lazy(() =>
-  import("./pages/UserHomePage").then((m) => ({ default: m.UserHomePage })),
-);
 const TermsPage = lazy(() =>
   import("./pages/TermsPage").then((m) => ({ default: m.TermsPage })),
 );

@@ -10,7 +10,6 @@ import type {
   ClubThread,
   ClubComment,
   Comment,
-  UserSummary,
   DirectMessage,
   ExploreThread,
   FeedScope,
@@ -1139,37 +1138,57 @@ class ApiClient {
     id: string,
     limit?: number,
   ): Promise<ConversationWithMessages> {
-    // The v2 GET /conversations/{id} returns metadata only. We need to
-    // fetch messages separately and combine into the shape the UI expects.
-    const [meta, messagesResp] = await Promise.all([
+    // DM pages still need the v1-compatible detail shape for `otherUser`,
+    // message authors, and plaintext compatibility. Overlay v2 message
+    // metadata when available so E2EE fields remain accessible.
+    const [detail, messagesResp] = await Promise.all([
       this.request<{
         id: string;
-        conversationType: string;
         encryption: string;
-        name: string | null;
-        currentEpoch: number;
-        members: { userId: string; role: string; joinedEpoch: number }[];
-      }>(`/conversations/${id}`),
+        otherUser: {
+          id: string;
+          name: string;
+          avatarUrl?: string | null;
+          role: "citizen" | "institution" | "moderator";
+        } | null;
+        messages: Array<{
+          id: string;
+          conversationId: string;
+          content?: string | null;
+          author: {
+            id: string;
+            name: string;
+            avatarUrl?: string | null;
+            role: "citizen" | "institution" | "moderator";
+          } | null;
+          createdAt: string;
+        }>;
+      }>(`/dm/${id}`),
       this.request<MessageResponse[]>(
         `/conversations/${id}/messages${limit ? `?limit=${limit}` : ""}`,
-      ),
+      ).catch(() => []),
     ]);
 
-    // For DMs, find the other user from the members list
-    const messages: DirectMessage[] = messagesResp.map((m) => ({
-      id: m.id,
-      conversationId: m.conversationId,
-      content: m.content ?? null,
-      ciphertext: m.ciphertext || undefined,
-      senderDeviceId: m.senderDeviceId ?? undefined,
-      author: null, // filled by the page from member data
-      createdAt: m.serverTs,
-    }));
+    const messageMetaById = new Map(
+      messagesResp.map((message) => [message.id, message]),
+    );
+    const messages: DirectMessage[] = detail.messages.map((message) => {
+      const meta = messageMetaById.get(message.id);
+      return {
+        id: message.id,
+        conversationId: message.conversationId,
+        content: message.content ?? meta?.content ?? null,
+        ciphertext: meta?.ciphertext || undefined,
+        senderDeviceId: meta?.senderDeviceId ?? undefined,
+        author: message.author,
+        createdAt: message.createdAt,
+      };
+    });
 
     return {
-      id: meta.id,
-      encryption: meta.encryption as "e2ee" | "none",
-      otherUser: null, // DM page resolves this from context
+      id: detail.id,
+      encryption: detail.encryption as "e2ee" | "none",
+      otherUser: detail.otherUser,
       messages,
     };
   }

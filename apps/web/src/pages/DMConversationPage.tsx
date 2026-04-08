@@ -401,7 +401,7 @@ export function DMConversationPage() {
         }}
       >
         {/* Header */}
-        <div className="bg-teal-700 dark:bg-teal-800 px-4 py-4 flex-shrink-0">
+        <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-700 dark:from-emerald-900 dark:via-teal-900 dark:to-cyan-950 px-4 py-4 flex-shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
@@ -450,7 +450,7 @@ export function DMConversationPage() {
         </div>
 
         {/* Messages area — contained surface with subtle pattern */}
-        <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-emerald-50 via-white to-gray-50 dark:from-emerald-950/20 dark:via-gray-950 dark:to-gray-950">
           <div className="px-4 py-4 space-y-4 min-h-full">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -534,7 +534,7 @@ export function DMConversationPage() {
         )}
 
         {/* Input bar — elevated surface */}
-        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+        <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 border-t border-emerald-100 dark:border-emerald-950/40 px-4 py-3 backdrop-blur">
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <input
               ref={inputRef}

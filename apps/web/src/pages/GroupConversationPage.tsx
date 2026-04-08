@@ -141,19 +141,19 @@ export function GroupConversationPage() {
       />
       <div className="flex flex-col h-[calc(100dvh-56px)]">
         {/* Header */}
-        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
+        <div className="flex-shrink-0 bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-700 dark:from-emerald-900 dark:via-teal-900 dark:to-cyan-950 border-b border-emerald-600/20 px-4 py-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate("/messages")}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              className="p-1 hover:bg-white/10 rounded-lg transition-colors"
             >
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <ArrowLeft className="w-5 h-5 text-white" />
             </button>
             <div className="flex-1 min-w-0">
-              <h1 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+              <h1 className="font-semibold text-white truncate">
                 {groupData.name}
               </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-white/70">
                 {t("memberCount", {
                   defaultValue: "{{count}} members",
                   count: groupData.members.length,
@@ -161,14 +161,14 @@ export function GroupConversationPage() {
               </p>
             </div>
             <div className="flex items-center gap-1">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                <Lock className="w-3 h-3" /> E2EE
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-white/10 text-white/85">
+                <Lock className="w-3 h-3 text-emerald-200" /> E2EE
               </span>
               <button
                 onClick={() => setShowMembers(!showMembers)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
-                <Users className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <Users className="w-5 h-5 text-white" />
               </button>
             </div>
           </div>
@@ -186,7 +186,7 @@ export function GroupConversationPage() {
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-emerald-50 via-white to-gray-50 dark:from-emerald-950/20 dark:via-gray-950 dark:to-gray-950">
           <div className="px-4 py-4 space-y-3">
             {messages.length === 0 ? (
               <div className="text-center py-12">
@@ -242,7 +242,7 @@ export function GroupConversationPage() {
         )}
 
         {/* Input bar */}
-        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 py-3">
+        <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 border-t border-emerald-100 dark:border-emerald-950/40 px-4 py-3 backdrop-blur">
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <input
               ref={inputRef}

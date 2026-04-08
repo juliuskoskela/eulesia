@@ -262,12 +262,12 @@ export type FeedScope =
 // E2EE Device types
 export interface Device {
   id: string;
-  userId: string;
-  displayName: string;
+  userId?: string;
+  displayName?: string | null;
   platform: string;
-  identityKey: string;
+  identityKey?: string;
   createdAt: string;
-  lastActiveAt: string;
+  lastActiveAt?: string;
 }
 
 export interface PreKeyBundle {
