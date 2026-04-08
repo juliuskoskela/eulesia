@@ -135,7 +135,12 @@ fn parse_types_filter(value: Option<&str>) -> Vec<LocationType> {
         .split(',')
         .map(str::trim)
         .filter(|item| !item.is_empty())
-        .filter_map(|item| item.parse::<LocationType>().ok())
+        .filter_map(|item| {
+            // LocationType::from_str never fails (unknown → Other), so validate
+            // via round-trip: only accept strings that survive as_str() unchanged.
+            let ty: LocationType = item.parse().unwrap();
+            (ty.as_str() == item).then_some(ty)
+        })
         .collect()
 }
 

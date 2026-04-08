@@ -80,7 +80,8 @@ in {
         ExecStart = "${cfg.package}/bin/eulesia-jobs";
         Restart = "always";
         RestartSec = 5;
-        WorkingDirectory = config.services.eulesia.stateDir or "/var/lib/eulesia";
+        StateDirectory = "eulesia";
+        WorkingDirectory = "/var/lib/eulesia";
       };
     };
   };
