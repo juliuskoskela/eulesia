@@ -16,6 +16,7 @@ import type {
 import type { MapFilterState } from "../components/map/types";
 
 export type CommentSort = "best" | "new" | "old" | "controversial";
+type ConversationTargetDevice = { deviceId: string; userId: string };
 
 // Query keys
 export const queryKeys = {
@@ -66,6 +67,38 @@ export const queryKeys = {
   availableInstitutions: ["availableInstitutions"] as const,
   institutionClaims: ["institutionClaims"] as const,
 };
+
+export async function loadConversationTargetDevices(
+  userIds: string[],
+  currentUserId: string,
+  client: Pick<typeof api, "getUserDevices" | "listDevices"> = api,
+): Promise<ConversationTargetDevice[]> {
+  const uniqueUserIds = [...new Set(userIds)];
+  const deviceLists = await Promise.all(
+    uniqueUserIds.map(async (userId) => {
+      const devices =
+        userId === currentUserId
+          ? await client.listDevices()
+          : await client.getUserDevices(userId);
+
+      return devices.map((device) => ({
+        deviceId: device.id,
+        userId,
+      }));
+    }),
+  );
+
+  const seenDeviceIds = new Set<string>();
+  return deviceLists.flatMap((devices) =>
+    devices.filter(({ deviceId }) => {
+      if (seenDeviceIds.has(deviceId)) {
+        return false;
+      }
+      seenDeviceIds.add(deviceId);
+      return true;
+    }),
+  );
+}
 
 // Auth hooks
 export function useCurrentUser() {
@@ -721,6 +754,8 @@ export function useSendDM(
   options?: {
     /** The local device ID, if E2EE is initialized. */
     deviceId?: string | null;
+    /** The current authenticated user ID. */
+    userId?: string | null;
     /** The ID of the other user in the conversation, for device lookup. */
     otherUserId?: string | null;
   },
@@ -729,31 +764,36 @@ export function useSendDM(
 
   return useMutation({
     mutationFn: async (content: string) => {
-      const { deviceId, otherUserId } = options ?? {};
+      const { deviceId, userId, otherUserId } = options ?? {};
 
       if (!deviceId) {
         throw new Error("DEVICE_NOT_INITIALIZED");
+      }
+
+      if (!userId) {
+        throw new Error("USER_ID_UNKNOWN");
       }
 
       if (!otherUserId) {
         throw new Error("RECIPIENT_UNKNOWN");
       }
 
-      // Get the other user's devices
-      const devices = await api.getUserDevices(otherUserId);
-      if (devices.length === 0) {
+      const targetDevices = await loadConversationTargetDevices(
+        [userId, otherUserId],
+        userId,
+      );
+      if (!targetDevices.some((target) => target.userId === otherUserId)) {
         throw new Error("RECIPIENT_NO_DEVICE");
+      }
+      if (!targetDevices.some((target) => target.deviceId === deviceId)) {
+        throw new Error("SENDER_DEVICE_MISSING");
       }
 
       const { encryptForConversation } = await import("../lib/e2ee/index.ts");
 
-      const recipientDevices = devices.map((d) => ({
-        deviceId: d.id,
-        userId: otherUserId,
-      }));
       const payload = await encryptForConversation(
         conversationId,
-        recipientDevices,
+        targetDevices,
         content,
         api,
       );
@@ -891,20 +931,19 @@ export function useSendGroupMessage(
       // Distribute sender key to group members if this is a fresh key
       // (messageIndex === 0 means it was just generated)
       if (senderKey.messageIndex === 0 && memberUserIds?.length) {
-        // Fetch all member device IDs
-        const otherUserIds = memberUserIds.filter((uid) => uid !== userId);
-        const deviceResults = await Promise.all(
-          otherUserIds.map((uid) => api.getUserDevices(uid)),
+        const targetDevices = await loadConversationTargetDevices(
+          memberUserIds,
+          userId,
         );
-        const allDevices = otherUserIds.flatMap((uid, i) =>
-          deviceResults[i]!.map((d) => ({ deviceId: d.id, userId: uid })),
-        );
+        if (!targetDevices.some((target) => target.deviceId === deviceId)) {
+          throw new Error("SENDER_DEVICE_MISSING");
+        }
 
-        if (allDevices.length > 0) {
+        if (targetDevices.length > 0) {
           const skdPayload = await distributeSenderKey(
             conversationId,
             senderKey,
-            allDevices,
+            targetDevices,
             api,
           );
           await api.sendGroupSkd(conversationId, {

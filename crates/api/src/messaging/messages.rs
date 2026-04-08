@@ -47,8 +47,54 @@ struct PreparedSend {
     queue_entries: Vec<message_device_queue::ActiveModel>,
 }
 
-/// Prepare a direct-message send: validate device ciphertexts, build queue entries.
-async fn prepare_direct_send<C: sea_orm::ConnectionTrait>(
+fn message_uses_device_queue(conv_type: ConversationType, message_type: &str) -> bool {
+    conv_type == ConversationType::Direct || message_type == MessageType::Skd.as_str()
+}
+
+fn ciphertext_for_viewer(
+    msg: &messages::Model,
+    conv_type: ConversationType,
+    viewer_device_id: Option<Uuid>,
+    device_ct_map: &HashMap<Uuid, Vec<u8>>,
+) -> String {
+    if !message_uses_device_queue(conv_type, &msg.message_type) {
+        return msg
+            .ciphertext
+            .as_ref()
+            .map(|ct| STANDARD.encode(ct))
+            .unwrap_or_default();
+    }
+
+    let Some(device_id) = viewer_device_id else {
+        return String::new();
+    };
+
+    if msg.sender_device_id == Some(device_id) {
+        return msg
+            .ciphertext
+            .as_ref()
+            .map(|ct| STANDARD.encode(ct))
+            .unwrap_or_default();
+    }
+
+    device_ct_map
+        .get(&msg.id)
+        .map(|ct| STANDARD.encode(ct))
+        .unwrap_or_default()
+}
+
+fn broadcast_ciphertext(uses_device_queue: bool, stored_ciphertext: Option<&[u8]>) -> String {
+    if uses_device_queue {
+        return String::new();
+    }
+
+    stored_ciphertext
+        .map(|ct| STANDARD.encode(ct))
+        .unwrap_or_default()
+}
+
+/// Prepare a per-device send: validate device ciphertexts, build queue entries.
+async fn prepare_device_queued_send<C: sea_orm::ConnectionTrait>(
     txn: &C,
     req: &SendMessageRequest,
     device_id: Uuid,
@@ -57,7 +103,7 @@ async fn prepare_direct_send<C: sea_orm::ConnectionTrait>(
     now: chrono::DateTime<chrono::FixedOffset>,
 ) -> Result<PreparedSend, ApiError> {
     let device_cts = req.device_ciphertexts.as_ref().ok_or_else(|| {
-        ApiError::BadRequest("device_ciphertexts is required for direct messages".into())
+        ApiError::BadRequest("device_ciphertexts is required for per-device messages".into())
     })?;
 
     if device_cts.is_empty() {
@@ -66,8 +112,8 @@ async fn prepare_direct_send<C: sea_orm::ConnectionTrait>(
         ));
     }
 
-    // For DMs, store the sender's own device ciphertext as the canonical
-    // messages.ciphertext (gives sender history access).
+    // Store the sender's own device ciphertext as the canonical
+    // messages.ciphertext (gives the sending device history access).
     let sender_ct = device_cts
         .get(&device_id)
         .ok_or_else(|| {
@@ -253,11 +299,7 @@ pub async fn send(
             .map_err(|e| ApiError::Database(e.to_string()))?;
 
         // Broadcast to other members via WebSocket using stored bytes as base64
-        let broadcast_ct = msg
-            .ciphertext
-            .as_ref()
-            .map(|ct| STANDARD.encode(ct))
-            .unwrap_or_default();
+        let broadcast_ct = broadcast_ciphertext(false, msg.ciphertext.as_deref());
         eulesia_ws::handler::broadcast_new_message(
             &state.db,
             &state.ws_registry,
@@ -303,13 +345,14 @@ pub async fn send(
 
     let prepared = match conv_type {
         ConversationType::Direct => {
-            prepare_direct_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
+            prepare_device_queued_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
         }
         ConversationType::Group | ConversationType::Channel => {
             if req.message_type == MessageType::Skd {
                 // Sender Key Distribution uses per-device ciphertexts (like DMs)
                 // even in group conversations — each device gets a unique SKD.
-                prepare_direct_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
+                prepare_device_queued_send(&txn, &req, device_id, conversation_id, msg_id, now)
+                    .await?
             } else {
                 prepare_group_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
             }
@@ -342,11 +385,10 @@ pub async fn send(
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
     // Broadcast to other members via WebSocket using stored ciphertext as base64
-    let broadcast_ct = msg
-        .ciphertext
-        .as_ref()
-        .map(|ct| STANDARD.encode(ct))
-        .unwrap_or_default();
+    let broadcast_ct = broadcast_ciphertext(
+        message_uses_device_queue(conv_type, req.message_type.as_str()),
+        msg.ciphertext.as_deref(),
+    );
     eulesia_ws::handler::broadcast_new_message(
         &state.db,
         &state.ws_registry,
@@ -420,11 +462,14 @@ pub async fn list_messages(
         return Ok(Json(items));
     }
 
-    // E2EE path — for DMs, serve device-specific ciphertext from the queue.
     let device_id = auth.device_id.map(|d| d.0);
     let msg_ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
 
-    let device_ct_map: HashMap<Uuid, Vec<u8>> = if conv_type == ConversationType::Direct {
+    let device_ct_map: HashMap<Uuid, Vec<u8>> = if device_id.is_some()
+        && msgs
+            .iter()
+            .any(|msg| message_uses_device_queue(conv_type, &msg.message_type))
+    {
         if let Some(did) = device_id {
             let entries = MessageRepo::get_device_ciphertexts(&*state.db, &msg_ids, did)
                 .await
@@ -464,24 +509,13 @@ pub async fn list_messages(
                 };
             }
 
-            let ct = if conv_type == ConversationType::Direct {
-                device_ct_map
-                    .get(&m.id)
-                    .map(|ct| STANDARD.encode(ct))
-                    .unwrap_or_default()
-            } else {
-                m.ciphertext
-                    .as_ref()
-                    .map(|ct| STANDARD.encode(ct))
-                    .unwrap_or_default()
-            };
             MessageResponse {
                 id: m.id,
                 conversation_id: m.conversation_id,
                 sender_id: m.sender_id,
                 sender_device_id: m.sender_device_id,
                 epoch: m.epoch,
-                ciphertext: ct,
+                ciphertext: ciphertext_for_viewer(m, conv_type, device_id, &device_ct_map),
                 content: None,
                 message_type: m.message_type.clone(),
                 server_ts: m.server_ts.to_rfc3339(),
@@ -631,4 +665,111 @@ pub async fn mark_read(
         .map_err(db_err)?;
 
     Ok(Json(serde_json::json!({ "read": true })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_message(
+        message_type: MessageType,
+        sender_device_id: Option<Uuid>,
+        ciphertext: &[u8],
+    ) -> messages::Model {
+        messages::Model {
+            id: Uuid::now_v7(),
+            conversation_id: Uuid::now_v7(),
+            sender_id: Uuid::now_v7(),
+            sender_device_id,
+            epoch: 0,
+            ciphertext: Some(ciphertext.to_vec()),
+            message_type: message_type.as_str().to_string(),
+            server_ts: chrono::Utc::now().fixed_offset(),
+        }
+    }
+
+    #[test]
+    fn direct_sender_device_uses_stored_ciphertext() {
+        let sender_device_id = Uuid::now_v7();
+        let msg = make_message(MessageType::Text, Some(sender_device_id), b"sender-copy");
+
+        let ciphertext = ciphertext_for_viewer(
+            &msg,
+            ConversationType::Direct,
+            Some(sender_device_id),
+            &HashMap::new(),
+        );
+
+        assert_eq!(ciphertext, STANDARD.encode(b"sender-copy"));
+    }
+
+    #[test]
+    fn direct_recipient_device_uses_queue_ciphertext() {
+        let msg = make_message(MessageType::Text, Some(Uuid::now_v7()), b"sender-copy");
+        let viewer_device_id = Uuid::now_v7();
+        let queue_ciphertexts = HashMap::from([(msg.id, b"recipient-copy".to_vec())]);
+
+        let ciphertext = ciphertext_for_viewer(
+            &msg,
+            ConversationType::Direct,
+            Some(viewer_device_id),
+            &queue_ciphertexts,
+        );
+
+        assert_eq!(ciphertext, STANDARD.encode(b"recipient-copy"));
+    }
+
+    #[test]
+    fn group_skd_recipient_uses_queue_ciphertext() {
+        let msg = make_message(MessageType::Skd, Some(Uuid::now_v7()), b"sender-copy");
+        let viewer_device_id = Uuid::now_v7();
+        let queue_ciphertexts = HashMap::from([(msg.id, b"recipient-skd".to_vec())]);
+
+        let ciphertext = ciphertext_for_viewer(
+            &msg,
+            ConversationType::Group,
+            Some(viewer_device_id),
+            &queue_ciphertexts,
+        );
+
+        assert_eq!(ciphertext, STANDARD.encode(b"recipient-skd"));
+    }
+
+    #[test]
+    fn group_skd_without_queue_entry_returns_empty_ciphertext() {
+        let msg = make_message(MessageType::Skd, Some(Uuid::now_v7()), b"sender-copy");
+
+        let ciphertext = ciphertext_for_viewer(
+            &msg,
+            ConversationType::Group,
+            Some(Uuid::now_v7()),
+            &HashMap::new(),
+        );
+
+        assert!(ciphertext.is_empty());
+    }
+
+    #[test]
+    fn group_text_uses_stored_ciphertext() {
+        let msg = make_message(MessageType::Text, Some(Uuid::now_v7()), b"group-message");
+        let queue_ciphertexts = HashMap::from([(msg.id, b"recipient-copy".to_vec())]);
+
+        let ciphertext = ciphertext_for_viewer(
+            &msg,
+            ConversationType::Group,
+            Some(Uuid::now_v7()),
+            &queue_ciphertexts,
+        );
+
+        assert_eq!(ciphertext, STANDARD.encode(b"group-message"));
+    }
+
+    #[test]
+    fn per_device_broadcasts_do_not_publish_sender_copy() {
+        assert!(broadcast_ciphertext(true, Some(b"sender-copy")).is_empty());
+        assert_eq!(
+            broadcast_ciphertext(false, Some(b"group-message")),
+            STANDARD.encode(b"group-message")
+        );
+    }
 }
