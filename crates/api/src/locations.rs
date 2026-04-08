@@ -158,6 +158,7 @@ fn parse_nominatim_bounds(bounds: Option<&Vec<String>>) -> Option<Bounds> {
     })
 }
 
+#[allow(clippy::missing_const_for_fn)]
 fn location_parent_response(
     name: String,
     location_type: LocationType,

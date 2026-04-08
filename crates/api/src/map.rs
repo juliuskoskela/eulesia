@@ -339,14 +339,14 @@ fn append_thread_filters(
     }
 }
 
-fn municipality_thread_count_subquery() -> &'static str {
-    r#"
+const fn municipality_thread_count_subquery() -> &'static str {
+    r"
         SELECT COUNT(*)
         FROM threads t
         WHERE t.municipality_id = m.id
           AND t.deleted_at IS NULL
           AND t.is_hidden = false
-    "#
+    "
 }
 
 fn parse_map_point_fields(
@@ -545,7 +545,7 @@ async fn query_municipality_points(
           (
         ",
     );
-    sql.push_str(&thread_count_sql);
+    sql.push_str(thread_count_sql);
     sql.push_str(
         r"
             )::bigint AS thread_count
