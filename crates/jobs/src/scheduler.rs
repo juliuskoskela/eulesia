@@ -54,7 +54,7 @@ pub async fn run(
     let mut scheduler = JobScheduler::new().await?;
     let refresh_ctx = Arc::clone(&ctx);
 
-    add_job(&mut scheduler, "0 17 3 * * *", move || {
+    add_job(&scheduler, "0 17 3 * * *", move || {
         let refresh_ctx = Arc::clone(&refresh_ctx);
         async move {
             match run_municipality_refresh(refresh_ctx).await {
@@ -67,7 +67,7 @@ pub async fn run(
 
     let lipas_ctx = Arc::clone(&ctx);
     add_optional_job(
-        &mut scheduler,
+        &scheduler,
         ctx.imports.lipas.enabled,
         "lipas place sync",
         "0 35 3 * * *",
@@ -85,7 +85,7 @@ pub async fn run(
 
     let osm_ctx = Arc::clone(&ctx);
     add_optional_job(
-        &mut scheduler,
+        &scheduler,
         ctx.imports.osm.enabled,
         "osm place sync",
         "0 50 4 * * *",
@@ -111,7 +111,7 @@ pub async fn run(
 }
 
 async fn add_job<F, Fut>(
-    scheduler: &mut JobScheduler,
+    scheduler: &JobScheduler,
     schedule: &str,
     run: F,
 ) -> Result<(), SchedulerError>
@@ -128,7 +128,7 @@ where
 }
 
 async fn add_optional_job<F, Fut>(
-    scheduler: &mut JobScheduler,
+    scheduler: &JobScheduler,
     enabled: bool,
     label: &str,
     schedule: &str,
