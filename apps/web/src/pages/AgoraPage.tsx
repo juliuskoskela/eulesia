@@ -24,6 +24,7 @@ import {
   Users,
   HelpCircle,
   MessageSquarePlus,
+  UserPlus,
 } from "lucide-react";
 import {
   useThreads,
@@ -280,6 +281,7 @@ export function AgoraPage() {
   const isPersonalizedScope = ["local", "national", "european"].includes(
     feedScope,
   );
+  // Personal scope doesn't need subscription hints
   const showScopeHint = isPersonalizedScope && !isLoading && !hasSubscriptions;
 
   const handleVote = (threadId: string, value: number) => {
@@ -391,7 +393,20 @@ export function AgoraPage() {
         {/* Inline thread creation */}
         {currentUser && (
           <div data-guide="agora-newthread">
-            <InlineThreadForm onSuccess={handleThreadCreated} />
+            <InlineThreadForm
+              defaultScope={
+                ["local", "national", "european", "personal"].includes(
+                  feedScope,
+                )
+                  ? (feedScope as
+                      | "local"
+                      | "national"
+                      | "european"
+                      | "personal")
+                  : undefined
+              }
+              onSuccess={handleThreadCreated}
+            />
           </div>
         )}
 
@@ -497,22 +512,32 @@ export function AgoraPage() {
                 )}
               </p>
               {currentUser ? (
-                <button
-                  onClick={() => {
-                    const form = document.querySelector(
-                      '[data-guide="agora-newthread"]',
-                    );
-                    if (form) {
-                      form.scrollIntoView({ behavior: "smooth" });
-                      const input = form.querySelector("input, textarea");
-                      if (input) (input as HTMLElement).focus();
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <MessageSquarePlus className="w-4 h-4" />
-                  {t("emptyQuoteCta")}
-                </button>
+                feedScope === "personal" ? (
+                  <button
+                    onClick={() => navigate("/explore")}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    {t("emptyQuoteCtaPersonal")}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const form = document.querySelector(
+                        '[data-guide="agora-newthread"]',
+                      );
+                      if (form) {
+                        form.scrollIntoView({ behavior: "smooth" });
+                        const input = form.querySelector("input, textarea");
+                        if (input) (input as HTMLElement).focus();
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <MessageSquarePlus className="w-4 h-4" />
+                    {t("emptyQuoteCta")}
+                  </button>
+                )
               ) : null}
             </div>
           </div>

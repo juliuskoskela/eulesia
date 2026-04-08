@@ -3,6 +3,7 @@ import {
   MapPin,
   Building2,
   Globe,
+  User,
   Hash,
   Plus,
   X,
@@ -15,13 +16,15 @@ import { useCreateThread } from "../../hooks/useApi";
 import { LocationSearch } from "../common/LocationSearch";
 import { api } from "../../lib/api";
 // Public thread scopes (excludes "club" which is internal to club endpoints)
-type Scope = "local" | "national" | "european";
+type Scope = "local" | "national" | "european" | "personal";
 import type { LocationResult } from "../../lib/api";
 
 interface InlineThreadFormProps {
   // For municipality pages - prefilled municipality
   municipalityId?: string;
   municipalityName?: string;
+  // Default scope from current feed tab
+  defaultScope?: Scope;
   // Callback when thread is created
   onSuccess: (threadId: string) => void;
 }
@@ -50,6 +53,7 @@ interface UploadedImage {
 export function InlineThreadForm({
   municipalityId,
   municipalityName,
+  defaultScope,
   onSuccess,
 }: InlineThreadFormProps) {
   const { t } = useTranslation("agora");
@@ -63,6 +67,7 @@ export function InlineThreadForm({
     icon: React.ElementType;
     label: string;
   }[] = [
+    { value: "personal", icon: User, label: t("threadForm.scopePersonal") },
     { value: "local", icon: MapPin, label: t("threadForm.scopeLocal") },
     {
       value: "national",
@@ -77,7 +82,10 @@ export function InlineThreadForm({
 
   // Form state
   const [isExpanded, setIsExpanded] = useState(false);
-  const [scope, setScope] = useState<Scope>(isPrefilled ? "local" : "national");
+  const initialScope: Scope = isPrefilled
+    ? "local"
+    : (defaultScope ?? "national");
+  const [scope, setScope] = useState<Scope>(initialScope);
   const [selectedLocation, setSelectedLocation] =
     useState<LocationResult | null>(null);
   const [title, setTitle] = useState("");
@@ -92,6 +100,13 @@ export function InlineThreadForm({
     null,
   );
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Sync scope when feed tab changes
+  useEffect(() => {
+    if (defaultScope && !isPrefilled) {
+      setScope(defaultScope);
+    }
+  }, [defaultScope, isPrefilled]);
 
   // Focus title input when expanded
   useEffect(() => {
@@ -235,7 +250,7 @@ export function InlineThreadForm({
       setSelectedTags([]);
       setSelectedLocation(null);
       setUploadedImage(null);
-      setScope(isPrefilled ? "local" : "national");
+      setScope(isPrefilled ? "local" : (defaultScope ?? "national"));
       setIsExpanded(false);
 
       onSuccess(result.id);
@@ -253,7 +268,7 @@ export function InlineThreadForm({
     setSelectedTags([]);
     setSelectedLocation(null);
     setUploadedImage(null);
-    setScope(isPrefilled ? "local" : "national");
+    setScope(isPrefilled ? "local" : (defaultScope ?? "national"));
     setError(null);
     setIsExpanded(false);
   };
