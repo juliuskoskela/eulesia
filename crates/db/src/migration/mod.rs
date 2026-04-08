@@ -19,6 +19,7 @@ mod m20260407_000016_modlog_indexes;
 mod m20260407_000017_thread_scope_club;
 mod m20260407_000018_jobs_geo_foundation;
 mod m20260407_000019_places_source_identity_index;
+mod m20260408_000020_clean_municipality_duplicates;
 
 pub struct Migrator;
 
@@ -45,6 +46,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260407_000017_thread_scope_club::Migration),
             Box::new(m20260407_000018_jobs_geo_foundation::Migration),
             Box::new(m20260407_000019_places_source_identity_index::Migration),
+            Box::new(m20260408_000020_clean_municipality_duplicates::Migration),
         ]
     }
 }
