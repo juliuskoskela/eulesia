@@ -85,6 +85,7 @@ function useDecryptedContent(message: DirectMessage): {
 interface DMMessageBubbleProps {
   message: DirectMessage;
   isOwnMessage: boolean;
+  isEncrypted: boolean;
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
 }
@@ -92,6 +93,7 @@ interface DMMessageBubbleProps {
 function MessageBubble({
   message,
   isOwnMessage,
+  isEncrypted,
   onEdit,
   onDelete,
 }: DMMessageBubbleProps) {
@@ -212,13 +214,15 @@ function MessageBubble({
             </div>
             {isOwnMessage && (
               <div className="absolute top-0 left-0 -translate-x-full pr-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
-                <button
-                  onClick={handleStartEdit}
-                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  title={t("common:actions.edit")}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
+                {!isEncrypted && (
+                  <button
+                    onClick={handleStartEdit}
+                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    title={t("common:actions.edit")}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500"
@@ -466,6 +470,7 @@ export function DMConversationPage() {
                   key={msg.id}
                   message={msg}
                   isOwnMessage={msg.author?.id === currentUser?.id}
+                  isEncrypted={conversationData?.encryption === "e2ee"}
                   onEdit={(messageId, content) =>
                     editMessageMutation.mutate({ messageId, content })
                   }

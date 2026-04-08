@@ -42,6 +42,9 @@ pub struct SendMessageRequest {
     pub device_ciphertexts: Option<HashMap<Uuid, String>>,
     /// Plaintext content (for encryption: "none" conversations).
     pub content: Option<String>,
+    /// The sender's device ID (required for E2EE sends from browser sessions
+    /// that don't carry device_id in the auth token).
+    pub sender_device_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,6 +142,8 @@ pub struct LastMessageSummary {
 #[serde(rename_all = "camelCase")]
 pub struct MemberSummary {
     pub user_id: Uuid,
+    pub name: String,
+    pub avatar_url: Option<String>,
     pub role: GroupRole,
     pub joined_epoch: i64,
 }

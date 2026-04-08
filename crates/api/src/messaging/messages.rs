@@ -220,10 +220,10 @@ pub async fn send(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    // Use plaintext path if conversation is plaintext OR if the sender has
-    // no registered device (frontend doesn't implement E2EE device registration
-    // yet, so all browser-sent messages go through the plaintext path).
-    let is_plaintext = encryption == "none" || auth.device_id.is_none();
+    // Use plaintext path if conversation is plaintext OR if the request
+    // contains neither per-device ciphertexts (DMs) nor a group ciphertext.
+    let has_e2ee_payload = req.device_ciphertexts.is_some() || req.ciphertext.is_some();
+    let is_plaintext = encryption == "none" || !has_e2ee_payload;
 
     if is_plaintext {
         // Plaintext path — no device binding, no ciphertext, no device queue.
@@ -277,11 +277,14 @@ pub async fn send(
         return Ok(Json(resp));
     }
 
-    // E2EE path — require device binding.
+    // E2EE path — resolve device ID from session or request body.
     let device_id = auth
         .device_id
-        .ok_or_else(|| ApiError::BadRequest("device_id required for E2EE messages".into()))?
-        .0;
+        .map(|d| d.0)
+        .or(req.sender_device_id)
+        .ok_or_else(|| {
+            ApiError::BadRequest("sender_device_id required for E2EE messages".into())
+        })?;
 
     let prepared = match conv_type {
         ConversationType::Direct => {

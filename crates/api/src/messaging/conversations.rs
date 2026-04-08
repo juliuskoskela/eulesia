@@ -52,15 +52,32 @@ fn db_err(e: sea_orm::DbErr) -> ApiError {
     ApiError::Database(e.to_string())
 }
 
-fn members_from_models(models: &[memberships::Model]) -> Vec<MemberSummary> {
+fn members_from_models(
+    models: &[memberships::Model],
+    user_map: &std::collections::HashMap<uuid::Uuid, eulesia_db::entities::users::Model>,
+) -> Vec<MemberSummary> {
     models
         .iter()
-        .map(|m| MemberSummary {
-            user_id: m.user_id,
-            role: m.role.parse::<GroupRole>().unwrap_or(GroupRole::Member),
-            joined_epoch: m.joined_epoch,
+        .map(|m| {
+            let user = user_map.get(&m.user_id);
+            MemberSummary {
+                user_id: m.user_id,
+                name: user.map_or_else(|| "Unknown".into(), |u| u.name.clone()),
+                avatar_url: user.and_then(|u| u.avatar_url.clone()),
+                role: m.role.parse::<GroupRole>().unwrap_or(GroupRole::Member),
+                joined_epoch: m.joined_epoch,
+            }
         })
         .collect()
+}
+
+async fn build_user_map(
+    db: &sea_orm::DatabaseConnection,
+    members: &[memberships::Model],
+) -> Result<std::collections::HashMap<uuid::Uuid, eulesia_db::entities::users::Model>, ApiError> {
+    let user_ids: Vec<uuid::Uuid> = members.iter().map(|m| m.user_id).collect();
+    let users = UserRepo::find_by_ids(db, &user_ids).await.map_err(db_err)?;
+    Ok(users.into_iter().map(|u| (u.id, u)).collect())
 }
 
 fn conversation_response(
@@ -144,10 +161,10 @@ async fn create_direct(
             let other_active = members.iter().any(|m| m.user_id == other);
 
             if caller_active && other_active {
-                return Ok(Json(conversation_response(
-                    &existing,
-                    members_from_models(&members),
-                )));
+                return Ok(Json(conversation_response(&existing, {
+                    let um = build_user_map(&state.db, &members).await?;
+                    members_from_models(&members, &um)
+                })));
             }
 
             // Reactivate: re-add missing members and bump epoch.
@@ -207,10 +224,10 @@ async fn create_direct(
             let refreshed_members = ConversationRepo::active_members(&state.db, existing.id)
                 .await
                 .map_err(db_err)?;
-            return Ok(Json(conversation_response(
-                &refreshed_conv,
-                members_from_models(&refreshed_members),
-            )));
+            return Ok(Json(conversation_response(&refreshed_conv, {
+                let um = build_user_map(&state.db, &refreshed_members).await?;
+                members_from_models(&refreshed_members, &um)
+            })));
         }
     }
 
@@ -330,10 +347,10 @@ async fn create_direct(
                     let members = ConversationRepo::active_members(&state.db, existing.id)
                         .await
                         .map_err(db_err)?;
-                    return Ok(Json(conversation_response(
-                        &existing,
-                        members_from_models(&members),
-                    )));
+                    return Ok(Json(conversation_response(&existing, {
+                        let um = build_user_map(&state.db, &members).await?;
+                        members_from_models(&members, &um)
+                    })));
                 }
             }
             return Err(ApiError::Database(msg));
@@ -344,10 +361,10 @@ async fn create_direct(
         .await
         .map_err(db_err)?;
 
-    Ok(Json(conversation_response(
-        &conv,
-        members_from_models(&members),
-    )))
+    Ok(Json(conversation_response(&conv, {
+        let um = build_user_map(&state.db, &members).await?;
+        members_from_models(&members, &um)
+    })))
 }
 
 #[allow(clippy::too_many_lines)]
@@ -514,10 +531,10 @@ async fn create_group(
         .await
         .map_err(db_err)?;
 
-    Ok(Json(conversation_response(
-        &conv,
-        members_from_models(&members),
-    )))
+    Ok(Json(conversation_response(&conv, {
+        let um = build_user_map(&state.db, &members).await?;
+        members_from_models(&members, &um)
+    })))
 }
 
 // ---------------------------------------------------------------------------
@@ -730,10 +747,10 @@ pub async fn get(
         .await
         .map_err(db_err)?;
 
-    Ok(Json(conversation_response(
-        &conv,
-        members_from_models(&members),
-    )))
+    Ok(Json(conversation_response(&conv, {
+        let um = build_user_map(&state.db, &members).await?;
+        members_from_models(&members, &um)
+    })))
 }
 
 // ---------------------------------------------------------------------------
@@ -797,10 +814,10 @@ pub async fn update(
         .await
         .map_err(db_err)?;
 
-    Ok(Json(conversation_response(
-        &updated,
-        members_from_models(&members),
-    )))
+    Ok(Json(conversation_response(&updated, {
+        let um = build_user_map(&state.db, &members).await?;
+        members_from_models(&members, &um)
+    })))
 }
 
 // ---------------------------------------------------------------------------

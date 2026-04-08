@@ -91,19 +91,32 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, isInitialized, isInitializing, initialize]);
 
-  // Clear key store on logout
+  // Revoke server device and clear key store on logout
   useEffect(() => {
     if (prevAuthRef.current && !isAuthenticated) {
-      // User just logged out — clear all crypto state
+      // User just logged out — revoke the server device, then clear local crypto.
+      const revokeAndClear = async () => {
+        if (deviceId) {
+          try {
+            await api.revokeDevice(deviceId);
+          } catch (err) {
+            // Best-effort — session may already be invalidated.
+            console.warn("Failed to revoke device on logout:", err);
+          }
+        }
+        try {
+          await clearKeyStore();
+        } catch (err) {
+          console.warn("Failed to clear key store on logout:", err);
+        }
+      };
+      revokeAndClear();
       setDeviceId(null);
       setIsInitialized(false);
       setError(null);
-      clearKeyStore().catch((err) => {
-        console.warn("Failed to clear key store on logout:", err);
-      });
     }
     prevAuthRef.current = isAuthenticated;
-  }, [isAuthenticated]);
+  }, [isAuthenticated, deviceId]);
 
   return (
     <DeviceContext.Provider

@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "./runtimeConfig";
 // Import generated types used in class method signatures before the class.
 import type { MapPoint as MapPointImport } from "../types/generated/MapPoint";
+import type { MessageResponse } from "../types/generated/MessageResponse";
 // Import frontend and admin types used by ApiClient method signatures.
 import type {
   Thread,
@@ -1138,8 +1139,39 @@ class ApiClient {
     id: string,
     limit?: number,
   ): Promise<ConversationWithMessages> {
-    const query = limit ? `?limit=${limit}` : "";
-    return this.request(`/conversations/${id}${query}`);
+    // The v2 GET /conversations/{id} returns metadata only. We need to
+    // fetch messages separately and combine into the shape the UI expects.
+    const [meta, messagesResp] = await Promise.all([
+      this.request<{
+        id: string;
+        conversationType: string;
+        encryption: string;
+        name: string | null;
+        currentEpoch: number;
+        members: { userId: string; role: string; joinedEpoch: number }[];
+      }>(`/conversations/${id}`),
+      this.request<MessageResponse[]>(
+        `/conversations/${id}/messages${limit ? `?limit=${limit}` : ""}`,
+      ),
+    ]);
+
+    // For DMs, find the other user from the members list
+    const messages: DirectMessage[] = messagesResp.map((m) => ({
+      id: m.id,
+      conversationId: m.conversationId,
+      content: m.content ?? null,
+      ciphertext: m.ciphertext || undefined,
+      senderDeviceId: m.senderDeviceId ?? undefined,
+      author: null, // filled by the page from member data
+      createdAt: m.serverTs,
+    }));
+
+    return {
+      id: meta.id,
+      encryption: meta.encryption as "e2ee" | "none",
+      otherUser: null, // DM page resolves this from context
+      messages,
+    };
   }
 
   async sendDirectMessage(
@@ -1229,8 +1261,39 @@ class ApiClient {
     id: string,
     limit?: number,
   ): Promise<GroupConversationDetail> {
-    const query = limit ? `?limit=${limit}` : "";
-    return this.request(`/conversations/${id}${query}`);
+    const [meta, members, messagesResp] = await Promise.all([
+      this.request<{
+        id: string;
+        encryption: string;
+        name: string | null;
+        description: string | null;
+        currentEpoch: number;
+      }>(`/conversations/${id}`),
+      this.getGroupMembers(id),
+      this.request<MessageResponse[]>(
+        `/conversations/${id}/messages${limit ? `?limit=${limit}` : ""}`,
+      ),
+    ]);
+
+    const messages: DirectMessage[] = messagesResp.map((m) => ({
+      id: m.id,
+      conversationId: m.conversationId,
+      content: m.content ?? null,
+      ciphertext: m.ciphertext || undefined,
+      senderDeviceId: m.senderDeviceId ?? undefined,
+      author: null,
+      createdAt: m.serverTs,
+    }));
+
+    return {
+      id: meta.id,
+      name: meta.name ?? "Group",
+      description: meta.description,
+      encryption: meta.encryption,
+      currentEpoch: meta.currentEpoch,
+      members,
+      messages,
+    };
   }
 
   async getGroupMembers(conversationId: string): Promise<GroupMember[]> {

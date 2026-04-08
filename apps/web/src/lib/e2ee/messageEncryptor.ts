@@ -45,6 +45,9 @@ interface CiphertextEnvelope {
   counter: number;
   /** The sender's ephemeral public key (only for initial session messages). */
   ephemeralKey?: string;
+  /** The sender's identity public key (only for initial session messages,
+   *  so the receiver can run the responder-side X3DH). */
+  senderIdentityKey?: string;
   /** Whether this is a pre-key message (first message in a session). */
   isPreKeyMessage?: boolean;
 }
@@ -143,6 +146,10 @@ export async function encryptForConversation(
 ): Promise<EncryptedPayload> {
   const deviceCiphertexts: Record<string, string> = {};
 
+  // Load our identity key for inclusion in pre-key messages
+  const deviceKeys = await loadDeviceKeys();
+  const myIdentityPublicKey = deviceKeys?.identityKeyPair.publicKey;
+
   for (const deviceId of recipientDeviceIds) {
     // Ensure session exists
     await ensureSession(conversationId, deviceId, api);
@@ -177,6 +184,7 @@ export async function encryptForConversation(
       nonce: toBase64url(encrypted.nonce),
       counter: session.sendCounter,
       ephemeralKey: isFirstMessage ? session.ephemeralPublicKey : undefined,
+      senderIdentityKey: isFirstMessage ? myIdentityPublicKey : undefined,
       isPreKeyMessage: isFirstMessage,
     };
 
@@ -219,7 +227,12 @@ export async function decryptConversationMessage(
 
   // Load existing session or establish one from the pre-key message
   let session = await loadSession(conversationId, senderDeviceId);
-  if (!session && envelope.isPreKeyMessage && envelope.ephemeralKey) {
+  if (
+    !session &&
+    envelope.isPreKeyMessage &&
+    envelope.ephemeralKey &&
+    envelope.senderIdentityKey
+  ) {
     // First message from this device — run responder-side X3DH
     const deviceKeys = await loadDeviceKeys();
     if (!deviceKeys) throw new Error("Device not initialized");
@@ -235,9 +248,7 @@ export async function decryptConversationMessage(
       false,
     );
 
-    const theirIdentityKey = fromBase64url(
-      deviceKeys.identityKeyPair.publicKey,
-    ); // placeholder — the sender's identity key should be fetched from the server
+    const theirIdentityKey = fromBase64url(envelope.senderIdentityKey);
     const theirEphemeralKey = fromBase64url(envelope.ephemeralKey);
 
     const sessionKeys = await receiveSession(
@@ -326,22 +337,27 @@ interface GroupCiphertextEnvelope {
  * architecture. A production hardening pass would use proper sender-key
  * distribution (e.g., Signal Sender Key Distribution Messages or MLS).
  */
+/**
+ * Derive a symmetric group key from the conversation ID and epoch.
+ *
+ * All members derive the SAME key because the IKM is the conversation ID
+ * (shared knowledge), not per-device material. This is a simplified
+ * sender-key model; a production hardening pass would use proper sender-key
+ * distribution (e.g., Signal Sender Key Distribution Messages or MLS).
+ */
 async function deriveGroupKey(
   conversationId: string,
   epoch: number,
 ): Promise<CryptoKey> {
-  const deviceKeys = await loadDeviceKeys();
-  if (!deviceKeys) throw new Error("Device not initialized");
-
   const encoder = new TextEncoder();
   const salt = encoder.encode(`eulesia-group-${conversationId}`);
   const info = encoder.encode(`epoch-${epoch}`);
 
-  // Use identity public key as input keying material
-  const ikm = fromBase64url(deviceKeys.identityKeyPair.publicKey);
+  // Use conversation ID as input keying material — shared by all members.
+  const ikm = encoder.encode(conversationId);
   const hkdfKey = await crypto.subtle.importKey(
     "raw",
-    new Uint8Array(ikm) as Uint8Array<ArrayBuffer>,
+    ikm as Uint8Array<ArrayBuffer>,
     "HKDF",
     false,
     ["deriveKey"],
