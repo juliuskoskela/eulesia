@@ -1138,69 +1138,54 @@ class ApiClient {
     id: string,
     limit?: number,
   ): Promise<ConversationWithMessages> {
-    // DM pages still need the v1-compatible detail shape for `otherUser`,
-    // message authors, and plaintext compatibility. Overlay v2 message
-    // metadata when available so E2EE fields remain accessible.
-    const [detail, messagesResp] = await Promise.all([
+    // Pure v2 path — fetch conversation metadata + messages in parallel.
+    const [conv, messagesResp] = await Promise.all([
       this.request<{
         id: string;
         encryption: string;
-        otherUser: {
-          id: string;
+        members: Array<{
+          userId: string;
           name: string;
           avatarUrl?: string | null;
-          role: "citizen" | "institution" | "moderator";
-        } | null;
-        messages: Array<{
-          id: string;
-          conversationId: string;
-          content?: string | null;
-          author: {
-            id: string;
-            name: string;
-            avatarUrl?: string | null;
-            role: "citizen" | "institution" | "moderator";
-          } | null;
-          createdAt: string;
+          role: string;
         }>;
-      }>(`/dm/${id}`),
+      }>(`/conversations/${id}`),
       this.request<MessageResponse[]>(
         `/conversations/${id}/messages${limit ? `?limit=${limit}` : ""}`,
-      ).catch(() => []),
+      ),
     ]);
 
-    const messageMetaById = new Map(
-      messagesResp.map((message) => [message.id, message]),
-    );
-    const messages: DirectMessage[] = detail.messages.map((message) => {
-      const meta = messageMetaById.get(message.id);
+    const memberById = new Map(conv.members.map((m) => [m.userId, m]));
+
+    const messages: DirectMessage[] = messagesResp.map((m) => {
+      const member = memberById.get(m.senderId);
       return {
-        id: message.id,
-        conversationId: message.conversationId,
-        content: message.content ?? meta?.content ?? null,
-        ciphertext: meta?.ciphertext || undefined,
-        senderDeviceId: meta?.senderDeviceId ?? undefined,
-        author: message.author,
-        createdAt: message.createdAt,
+        id: m.id,
+        conversationId: m.conversationId,
+        content: m.content ?? null,
+        ciphertext: m.ciphertext || undefined,
+        senderDeviceId: m.senderDeviceId ?? undefined,
+        senderId: m.senderId,
+        messageType: m.messageType,
+        author: member
+          ? {
+              id: member.userId,
+              name: member.name,
+              avatarUrl: member.avatarUrl ?? null,
+              role: "citizen" as const,
+            }
+          : null,
+        createdAt: m.serverTs,
       };
     });
 
     return {
-      id: detail.id,
-      encryption: detail.encryption as "e2ee" | "none",
-      otherUser: detail.otherUser,
+      id: conv.id,
+      encryption: conv.encryption as "e2ee" | "none",
+      otherUser: null, // DM page derives from members
+      members: conv.members,
       messages,
     };
-  }
-
-  async sendDirectMessage(
-    conversationId: string,
-    content: string,
-  ): Promise<DirectMessage> {
-    return this.request(`/conversations/${conversationId}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ content }),
-    });
   }
 
   async markConversationRead(conversationId: string): Promise<void> {

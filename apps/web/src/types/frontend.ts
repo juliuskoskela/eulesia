@@ -285,6 +285,12 @@ export interface ConversationWithMessages {
   id: string;
   encryption?: "e2ee" | "none";
   otherUser: UserSummary | null;
+  /** All members — used by DM page to derive otherUser. */
+  members?: Array<{
+    userId: string;
+    name: string;
+    avatarUrl?: string | null;
+  }>;
   messages: DirectMessage[];
 }
 

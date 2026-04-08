@@ -262,7 +262,20 @@ export function DMConversationPage() {
     isLoading,
     error,
   } = useConversation(conversationId || "");
-  const otherUserId = conversationData?.otherUser?.id ?? null;
+
+  // Derive otherUser from members list (v2 API doesn't have a dedicated field)
+  const otherMember = conversationData?.members?.find(
+    (m) => m.userId !== currentUser?.id,
+  );
+  const otherUser = otherMember
+    ? {
+        id: otherMember.userId,
+        name: otherMember.name,
+        avatarUrl: otherMember.avatarUrl ?? null,
+        role: "citizen" as const,
+      }
+    : (conversationData?.otherUser ?? null);
+  const otherUserId = otherUser?.id ?? null;
 
   // Check if recipient has a registered device (required for E2EE).
   const { data: recipientDevices, isError: recipientDevicesError } = useQuery({
@@ -351,7 +364,7 @@ export function DMConversationPage() {
     );
   }
 
-  const { otherUser, messages } = conversationData;
+  const { messages } = conversationData;
   // E2EE is active when the device is initialized and conversation supports it
   const isEncrypted = deviceReady && conversationData.encryption === "e2ee";
   const canLinkToOtherUserProfile =

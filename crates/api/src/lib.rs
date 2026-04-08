@@ -125,17 +125,10 @@ pub fn router(state: AppState) -> Router {
         .merge(waitlist::routes())
         // Alias: /reports/my-sanctions -> same handler as /moderation/my-sanctions
         .route("/reports/my-sanctions", get(moderation::my_sanctions))
-        // DM route aliases — frontend calls /dm/* but v2 uses /conversations/*.
-        .route(
-            "/dm",
-            get(messaging::conversations::list).post(messaging::conversations::create_dm_v1),
-        )
-        .route("/dm/{id}", get(messaging::conversations::get_dm_v1))
-        .route(
-            "/dm/{id}/messages",
-            post(messaging::conversations::send_dm_message_v1)
-                .get(messaging::conversations::list_dm_messages_v1),
-        )
+        // DM convenience aliases — thin redirects to v2 /conversations/* routes.
+        // The v1 DM-specific endpoints (create_dm_v1, get_dm_v1, send_dm_message_v1)
+        // have been removed; all messaging now goes through the v2 conversation endpoints.
+        .route("/dm", get(messaging::conversations::list))
         .route("/dm/{id}/read", post(messaging::messages::mark_read))
         .route(
             "/dm/{id}/messages/{messageId}",
