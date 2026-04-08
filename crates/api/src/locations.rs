@@ -1,6 +1,7 @@
 use axum::extract::{Path, Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
+use sea_orm::sea_query::extension::postgres::PgExpr;
 use sea_orm::sea_query::{Expr, OnConflict};
 use sea_orm::{
     ActiveValue::Set, ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, EntityTrait,
@@ -612,10 +613,10 @@ async fn search_locations(
     let mut local_query = locations::Entity::find()
         .filter(
             Condition::any()
-                .add(locations::Column::Name.like(&ilike_pattern))
-                .add(locations::Column::NameFi.like(&ilike_pattern))
-                .add(locations::Column::NameSv.like(&ilike_pattern))
-                .add(locations::Column::NameEn.like(&ilike_pattern)),
+                .add(Expr::col(locations::Column::Name).ilike(&ilike_pattern))
+                .add(Expr::col(locations::Column::NameFi).ilike(&ilike_pattern))
+                .add(Expr::col(locations::Column::NameSv).ilike(&ilike_pattern))
+                .add(Expr::col(locations::Column::NameEn).ilike(&ilike_pattern)),
         )
         .filter(locations::Column::Country.eq(&country))
         .order_by_desc(locations::Column::ContentCount)

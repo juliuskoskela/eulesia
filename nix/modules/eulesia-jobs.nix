@@ -69,7 +69,7 @@ in {
           EULESIA_JOBS_LOG_JSON =
             if cfg.logJson
             then "true"
-            else "";
+            else "false";
         }
         // cfg.extraEnvironment;
 

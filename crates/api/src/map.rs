@@ -690,7 +690,7 @@ async fn list_places(
         total,
         page,
         limit,
-        has_more: offset + limit < total,
+        has_more: offset.saturating_add(limit) < total,
     }))
 }
 

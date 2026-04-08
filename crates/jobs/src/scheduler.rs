@@ -49,8 +49,8 @@ pub async fn run(
     ctx: Arc<SchedulerContext>,
     cancel: CancellationToken,
 ) -> Result<(), SchedulerError> {
-    run_municipality_refresh(Arc::clone(&ctx)).await?;
-
+    // Municipality data is already seeded by db::migrate() on startup.
+    // The cron job below handles subsequent nightly refreshes.
     let mut scheduler = JobScheduler::new().await?;
     let refresh_ctx = Arc::clone(&ctx);
 
