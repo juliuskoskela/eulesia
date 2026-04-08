@@ -342,10 +342,10 @@ function useGroupDecryptedContent(message: DirectMessage): {
   }, [message.ciphertext, message.conversationId]);
 
   useEffect(() => {
-    if (message.ciphertext && !decrypted) {
+    if (message.ciphertext && !decrypted && !decryptionFailed) {
       decrypt();
     }
-  }, [message.ciphertext, decrypted, decrypt]);
+  }, [message.ciphertext, decrypted, decryptionFailed, decrypt]);
 
   return {
     content: decrypted ?? message.content ?? "",

@@ -71,10 +71,21 @@ function useDecryptedContent(message: DirectMessage): {
   }, [message.ciphertext, message.senderDeviceId, message.conversationId]);
 
   useEffect(() => {
-    if (message.ciphertext && message.senderDeviceId && !decryptedContent) {
+    if (
+      message.ciphertext &&
+      message.senderDeviceId &&
+      !decryptedContent &&
+      !decryptionFailed
+    ) {
       decrypt();
     }
-  }, [message.ciphertext, message.senderDeviceId, decryptedContent, decrypt]);
+  }, [
+    message.ciphertext,
+    message.senderDeviceId,
+    decryptedContent,
+    decryptionFailed,
+    decrypt,
+  ]);
 
   // If we have ciphertext and decrypted it, use that. Otherwise use content.
   const content = decryptedContent ?? message.content ?? "";

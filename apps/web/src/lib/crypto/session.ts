@@ -110,7 +110,7 @@ async function deriveSessionKeys(ikm: Uint8Array): Promise<SessionKeys> {
     },
     hkdfKey,
     { name: "AES-GCM", length: 256 },
-    false,
+    true,
     ["encrypt", "decrypt"],
   );
 

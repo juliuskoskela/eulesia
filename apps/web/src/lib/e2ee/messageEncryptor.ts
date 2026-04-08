@@ -452,8 +452,14 @@ export async function handleSenderKeyDistribution(
     throw new Error("Invalid SKD payload");
   }
 
+  // Use the trusted conversationId parameter, not the payload's value,
+  // to prevent a malicious SKD from poisoning keys in other conversations.
+  if (payload.conversationId !== conversationId) {
+    throw new Error("SKD conversationId mismatch");
+  }
+
   await saveSenderKey({
-    conversationId: payload.conversationId,
+    conversationId,
     userId: payload.senderId,
     epoch: payload.epoch,
     chainKey: payload.chainKey,

@@ -77,12 +77,14 @@ The message key is used as AES-256-GCM input keying material via HKDF:
 aesKey = HKDF-SHA256(
   ikm:  messageKey,
   salt: "eulesia-group-msg",
-  info: conversationId || epoch (big-endian u64) || messageIndex (big-endian u64)
+  info: empty
 )
 ```
 
-This ensures each message uses a unique key, and compromising a message key
-does not reveal past or future message keys.
+Each message gets a unique key because the chain ratchet produces a fresh
+`messageKey` for every index. The HKDF step converts HMAC output into
+an AES-256-GCM `CryptoKey`; domain separation comes from the salt and the
+per-message chain derivation, not from the info parameter.
 
 ### Sender Key Distribution (SKD)
 

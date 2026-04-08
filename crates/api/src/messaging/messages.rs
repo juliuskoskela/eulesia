@@ -287,6 +287,20 @@ pub async fn send(
             ApiError::BadRequest("sender_device_id required for E2EE messages".into())
         })?;
 
+    // Verify the device belongs to the caller and is active.
+    if auth.device_id.map(|d| d.0) != Some(device_id) {
+        // Device came from request body — validate ownership.
+        let dev = DeviceRepo::find_by_id_and_user(&state.db, device_id, caller)
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| {
+                ApiError::BadRequest("device not found or not owned by caller".into())
+            })?;
+        if dev.revoked_at.is_some() {
+            return Err(ApiError::BadRequest("device is revoked".into()));
+        }
+    }
+
     let prepared = match conv_type {
         ConversationType::Direct => {
             prepare_direct_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
