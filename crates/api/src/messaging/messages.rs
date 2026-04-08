@@ -429,6 +429,27 @@ pub async fn list_messages(
     let items = msgs
         .iter()
         .map(|m| {
+            // Messages without a sender_device_id were stored via the
+            // plaintext fallback path — decode their ciphertext as UTF-8
+            // content even in E2EE conversations.
+            if m.sender_device_id.is_none() {
+                let content = m
+                    .ciphertext
+                    .as_ref()
+                    .and_then(|ct| String::from_utf8(ct.clone()).ok());
+                return MessageResponse {
+                    id: m.id,
+                    conversation_id: m.conversation_id,
+                    sender_id: m.sender_id,
+                    sender_device_id: None,
+                    epoch: m.epoch,
+                    ciphertext: String::new(),
+                    content,
+                    message_type: m.message_type.clone(),
+                    server_ts: m.server_ts.to_rfc3339(),
+                };
+            }
+
             let ct = if conv_type == ConversationType::Direct {
                 device_ct_map
                     .get(&m.id)
