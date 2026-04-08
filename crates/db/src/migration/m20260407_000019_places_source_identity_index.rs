@@ -17,7 +17,9 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_index(Index::drop().name("uq_places_source_identity").to_owned())
-            .await
+            .get_connection()
+            .execute_unprepared("DROP INDEX IF EXISTS uq_places_source_identity")
+            .await?;
+        Ok(())
     }
 }

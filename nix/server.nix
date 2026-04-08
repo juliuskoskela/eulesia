@@ -13,7 +13,7 @@
     buildInputs = [pkgs.openssl pkgs.libwebp];
   };
 
-  cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+  cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {pname = "eulesia-workspace-deps";});
 
   mkWorkspacePackage = {
     pname,

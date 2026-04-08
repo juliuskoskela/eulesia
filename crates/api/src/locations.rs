@@ -129,13 +129,13 @@ fn decimal_from_f64(value: Option<f64>) -> Option<sea_orm::prelude::Decimal> {
     value.and_then(sea_orm::prelude::Decimal::from_f64_retain)
 }
 
-fn parse_types_filter(value: Option<&str>) -> Vec<String> {
+fn parse_types_filter(value: Option<&str>) -> Vec<LocationType> {
     value
         .unwrap_or_default()
         .split(',')
         .map(str::trim)
         .filter(|item| !item.is_empty())
-        .map(ToOwned::to_owned)
+        .filter_map(|item| item.parse::<LocationType>().ok())
         .collect()
 }
 
@@ -308,11 +308,11 @@ fn nominatim_to_response(n: NominatimResult) -> LocationResponse {
     }
 }
 
-fn location_matches_type_filter(location_type: LocationType, type_filters: &[String]) -> bool {
-    type_filters.is_empty()
-        || type_filters
-            .iter()
-            .any(|f| f.parse::<LocationType>().ok() == Some(location_type))
+fn location_matches_type_filter(
+    location_type: LocationType,
+    type_filters: &[LocationType],
+) -> bool {
+    type_filters.is_empty() || type_filters.contains(&location_type)
 }
 
 async fn fetch_nominatim(query: &str, country: &str, limit: u64) -> Vec<LocationResponse> {
@@ -624,7 +624,8 @@ async fn search_locations(
         .limit(limit);
 
     if !type_filters.is_empty() {
-        local_query = local_query.filter(locations::Column::Type.is_in(type_filters.clone()));
+        local_query = local_query
+            .filter(locations::Column::Type.is_in(type_filters.iter().map(LocationType::as_str)));
     }
 
     let local_models = local_query

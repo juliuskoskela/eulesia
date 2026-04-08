@@ -18,6 +18,7 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
+                    .if_not_exists()
                     .name("uq_municipalities_official_code")
                     .table(Municipalities::Table)
                     .col(Municipalities::OfficialCode)

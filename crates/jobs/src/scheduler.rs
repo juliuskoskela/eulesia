@@ -57,8 +57,9 @@ pub async fn run(
     add_job(&mut scheduler, "0 17 3 * * *", move || {
         let refresh_ctx = Arc::clone(&refresh_ctx);
         async move {
-            if let Err(error) = run_municipality_refresh(refresh_ctx).await {
-                error!(error = %error, "scheduled municipality refresh failed");
+            match run_municipality_refresh(refresh_ctx).await {
+                Ok(_) | Err(SchedulerError::Skipped(_)) => {}
+                Err(error) => error!(error = %error, "scheduled municipality refresh failed"),
             }
         }
     })
@@ -73,8 +74,9 @@ pub async fn run(
         move || {
             let lipas_ctx = Arc::clone(&lipas_ctx);
             async move {
-                if let Err(error) = run_lipas_place_sync(lipas_ctx).await {
-                    error!(error = %error, "scheduled lipas place sync failed");
+                match run_lipas_place_sync(lipas_ctx).await {
+                    Ok(_) | Err(SchedulerError::Skipped(_)) => {}
+                    Err(error) => error!(error = %error, "scheduled lipas place sync failed"),
                 }
             }
         },
@@ -90,8 +92,9 @@ pub async fn run(
         move || {
             let osm_ctx = Arc::clone(&osm_ctx);
             async move {
-                if let Err(error) = run_osm_place_sync(osm_ctx).await {
-                    error!(error = %error, "scheduled osm place sync failed");
+                match run_osm_place_sync(osm_ctx).await {
+                    Ok(_) | Err(SchedulerError::Skipped(_)) => {}
+                    Err(error) => error!(error = %error, "scheduled osm place sync failed"),
                 }
             }
         },
