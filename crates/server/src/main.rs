@@ -31,6 +31,8 @@ async fn main() -> anyhow::Result<()> {
 
     let db = eulesia_db::connect(database_url).await?;
     eulesia_db::migrate(&db).await?;
+    let seed_report = eulesia_db::seed::sync_reference_data(&db).await?;
+    info!(?seed_report, "reference data synced");
 
     if let Some(legacy_database_url) = config.resolved_legacy_database_url() {
         match eulesia_db::connect(&legacy_database_url).await {

@@ -49,7 +49,7 @@ pub async fn run(
     ctx: Arc<SchedulerContext>,
     cancel: CancellationToken,
 ) -> Result<(), SchedulerError> {
-    // Municipality data is already seeded by db::migrate() on startup.
+    // Municipality reference data is seeded by eulesia-server on startup.
     // The cron job below handles subsequent nightly refreshes.
     let mut scheduler = JobScheduler::new().await?;
     let refresh_ctx = Arc::clone(&ctx);
