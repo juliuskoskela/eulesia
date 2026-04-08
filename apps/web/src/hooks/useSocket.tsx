@@ -230,17 +230,20 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
         switch (msg.type) {
           case "new_message": {
-            // Invalidate the conversation query so the UI refetches messages.
+            // Invalidate both DM and group conversation queries.
             queryClient.invalidateQueries({
               queryKey: ["conversation", msg.conversation_id],
+            });
+            queryClient.invalidateQueries({
+              queryKey: ["groupConversation", msg.conversation_id],
             });
             // Also invalidate the conversations list (for unread badges, last message preview).
             queryClient.invalidateQueries({
               queryKey: ["conversations"],
             });
-            // Invalidate unread count
+            // Invalidate unread count (must match queryKeys.dmUnreadCount)
             queryClient.invalidateQueries({
-              queryKey: ["dm-unread-count"],
+              queryKey: ["dmUnreadCount"],
             });
             // Clear typing indicator for this sender in this conversation
             removeTypingUser(msg.conversation_id, msg.sender_id);

@@ -1235,8 +1235,13 @@ class ApiClient {
     });
   }
 
-  async getPreKeyBundle(deviceId: string): Promise<PreKeyBundle> {
-    return this.request(`/devices/${deviceId}/pre-key-bundle`);
+  async getPreKeyBundle(
+    deviceId: string,
+    userId: string,
+  ): Promise<PreKeyBundle> {
+    return this.request(
+      `/devices/${deviceId}/pre-key-bundle?userId=${encodeURIComponent(userId)}`,
+    );
   }
 
   async listDevices(): Promise<Device[]> {

@@ -97,19 +97,15 @@ export async function fastForwardChain(
   steps: number,
 ): Promise<{ messageKey: CryptoKey; nextChainKey: string }> {
   let currentChain = chainKeyB64;
-  let result: { messageKey: CryptoKey; nextChainKey: string } | null = null;
 
+  // Skip `steps` positions (discard intermediate keys)
   for (let i = 0; i < steps; i++) {
-    result = await ratchetSenderKey(currentChain);
-    currentChain = result.nextChainKey;
+    const { nextChainKey } = await ratchetSenderKey(currentChain);
+    currentChain = nextChainKey;
   }
 
-  if (!result) {
-    // steps === 0: derive the key at the current position
-    return ratchetSenderKey(chainKeyB64);
-  }
-
-  return result;
+  // Derive the key at the target position
+  return ratchetSenderKey(currentChain);
 }
 
 // ---------------------------------------------------------------------------

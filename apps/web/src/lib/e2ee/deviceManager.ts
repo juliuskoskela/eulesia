@@ -16,6 +16,7 @@ import {
   sign,
   loadDeviceKeys,
   saveDeviceKeys,
+  clearKeyStore,
 } from "../crypto/index.ts";
 import type { ExportedKeyPair, OneTimePreKeyEntry } from "../crypto/index.ts";
 import type { ApiClient } from "./apiTypes.ts";
@@ -110,14 +111,25 @@ async function generateOneTimePreKeys(
 export async function initializeDevice(
   api: ApiClient,
 ): Promise<DeviceRegistration> {
-  // Step 1: Try loading existing keys
+  // Step 1: Try loading existing keys — but verify the device still exists
+  // on the server (migrations may have truncated the devices table).
   const existing = await loadDeviceKeys();
   if (existing) {
-    return {
-      deviceId: existing.deviceId,
-      identityPublicKey: existing.identityKeyPair.publicKey,
-      didCreateDevice: false,
-    };
+    try {
+      const serverDevices = await api.listDevices();
+      const stillExists = serverDevices.some((d) => d.id === existing.deviceId);
+      if (stillExists) {
+        return {
+          deviceId: existing.deviceId,
+          identityPublicKey: existing.identityKeyPair.publicKey,
+          didCreateDevice: false,
+        };
+      }
+    } catch {
+      // If the check fails, assume device is gone and re-register.
+    }
+    // Server device is gone — clear stale local keys and re-register.
+    await clearKeyStore();
   }
 
   // Step 2: Generate new key material

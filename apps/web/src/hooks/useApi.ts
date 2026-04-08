@@ -747,10 +747,13 @@ export function useSendDM(
 
       const { encryptForConversation } = await import("../lib/e2ee/index.ts");
 
-      const recipientDeviceIds = devices.map((d) => d.id);
+      const recipientDevices = devices.map((d) => ({
+        deviceId: d.id,
+        userId: otherUserId,
+      }));
       const payload = await encryptForConversation(
         conversationId,
-        recipientDeviceIds,
+        recipientDevices,
         content,
         api,
       );
@@ -889,18 +892,19 @@ export function useSendGroupMessage(
       // (messageIndex === 0 means it was just generated)
       if (senderKey.messageIndex === 0 && memberUserIds?.length) {
         // Fetch all member device IDs
+        const otherUserIds = memberUserIds.filter((uid) => uid !== userId);
         const deviceResults = await Promise.all(
-          memberUserIds
-            .filter((uid) => uid !== userId)
-            .map((uid) => api.getUserDevices(uid)),
+          otherUserIds.map((uid) => api.getUserDevices(uid)),
         );
-        const allDeviceIds = deviceResults.flat().map((d) => d.id);
+        const allDevices = otherUserIds.flatMap((uid, i) =>
+          deviceResults[i]!.map((d) => ({ deviceId: d.id, userId: uid })),
+        );
 
-        if (allDeviceIds.length > 0) {
+        if (allDevices.length > 0) {
           const skdPayload = await distributeSenderKey(
             conversationId,
             senderKey,
-            allDeviceIds,
+            allDevices,
             api,
           );
           await api.sendGroupSkd(conversationId, {

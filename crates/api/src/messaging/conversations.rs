@@ -37,9 +37,11 @@ pub async fn create_dm_v1(
     State(state): State<AppState>,
     Json(req): Json<CreateDmV1Request>,
 ) -> Result<Json<ConversationResponse>, ApiError> {
+    // v1 clients cannot perform E2EE — create as plaintext.
+    // The frontend uses the v2 POST /conversations endpoint with encryption: "e2ee".
     let v2_req = CreateConversationRequest {
         conversation_type: ConversationType::Direct,
-        encryption: Some("e2ee".into()),
+        encryption: Some("none".into()),
         name: None,
         description: None,
         members: vec![req.user_id],
@@ -1005,13 +1007,20 @@ pub async fn get_dm_v1(
         })
         .collect();
 
+    let is_plaintext = conv.encryption == "none";
     let messages = msgs
         .into_iter()
         .map(|m| {
-            let content = m
-                .ciphertext
-                .as_ref()
-                .and_then(|ct| String::from_utf8(ct.clone()).ok());
+            // Only decode ciphertext as plaintext content for unencrypted
+            // conversations. For E2EE conversations the ciphertext is binary
+            // encrypted data — surfacing it as content would render garbled text.
+            let content = if is_plaintext {
+                m.ciphertext
+                    .as_ref()
+                    .and_then(|ct| String::from_utf8(ct.clone()).ok())
+            } else {
+                None
+            };
             V1DirectMessage {
                 id: m.id,
                 conversation_id: m.conversation_id,
@@ -1042,12 +1051,18 @@ pub async fn list_dm_messages_v1(
 ) -> Result<Json<Vec<V1DirectMessage>>, ApiError> {
     let caller = auth.user_id.0;
 
+    let conv = ConversationRepo::find_by_id(&state.db, id)
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| ApiError::NotFound("conversation not found".into()))?;
+
     // Verify caller is active member.
     MembershipRepo::find_active(&*state.db, id, caller)
         .await
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
+    let is_plaintext = conv.encryption == "none";
     let limit = params.limit.unwrap_or(50).min(100);
     let msgs = ConversationRepo::messages_page(&state.db, id, params.before, limit)
         .await
@@ -1081,10 +1096,13 @@ pub async fn list_dm_messages_v1(
     let messages = msgs
         .into_iter()
         .map(|m| {
-            let content = m
-                .ciphertext
-                .as_ref()
-                .and_then(|ct| String::from_utf8(ct.clone()).ok());
+            let content = if is_plaintext {
+                m.ciphertext
+                    .as_ref()
+                    .and_then(|ct| String::from_utf8(ct.clone()).ok())
+            } else {
+                None
+            };
             V1DirectMessage {
                 id: m.id,
                 conversation_id: m.conversation_id,
@@ -1120,6 +1138,13 @@ pub async fn send_dm_message_v1(
         .await
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
+
+    // Reject plaintext sends on E2EE conversations.
+    if conv.encryption != "none" {
+        return Err(ApiError::BadRequest(
+            "this conversation requires E2EE — use the v2 messaging endpoint".into(),
+        ));
+    }
 
     // For plaintext DMs, store the content directly.
     let content_text = req.content.clone();

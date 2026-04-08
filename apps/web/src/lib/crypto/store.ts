@@ -68,6 +68,8 @@ export interface SessionState {
   receiveKey: string;
   /** Base64url-encoded ephemeral public key (initiator only, for first message). */
   ephemeralPublicKey?: string;
+  /** Key ID of the consumed one-time pre-key (initiator only, for first message). */
+  usedOneTimePreKeyId?: number;
   /** Next send-side message counter. */
   sendCounter: number;
   /** Next receive-side message counter. */

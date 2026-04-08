@@ -58,6 +58,9 @@ interface CiphertextEnvelope {
   senderIdentityKey?: string;
   /** Whether this is a pre-key message (first message in a session). */
   isPreKeyMessage?: boolean;
+  /** The key ID of the consumed one-time pre-key (initial messages only).
+   *  The responder uses this to look up the matching local OTK for DH4. */
+  oneTimePreKeyId?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +77,8 @@ export async function ensureSession(
   conversationId: string,
   deviceId: string,
   api: ApiClient,
+  /** The user who owns the target device — required for pre-key bundle lookup. */
+  remoteUserId?: string,
 ): Promise<void> {
   // Check if we already have a session
   const existing = await loadSession(conversationId, deviceId);
@@ -85,8 +90,12 @@ export async function ensureSession(
     throw new Error("Local device keys not found — device not initialized");
   }
 
+  if (!remoteUserId) {
+    throw new Error("remoteUserId is required for pre-key bundle lookup");
+  }
+
   // Fetch the remote device's pre-key bundle
-  const bundle = await api.getPreKeyBundle(deviceId);
+  const bundle = await api.getPreKeyBundle(deviceId, remoteUserId);
 
   // Import our identity key for ECDH
   const myIdentityKey = await importKeyPair(
@@ -120,13 +129,14 @@ export async function ensureSession(
     initiated.sessionKeys.receiveKey,
   );
 
-  // Save the session — includes the ephemeral public key for the first message
+  // Save the session — includes the ephemeral public key and OTK key ID for the first message
   await saveSession({
     conversationId,
     deviceId,
     sendKey: toBase64url(new Uint8Array(sendKeyRaw)),
     receiveKey: toBase64url(new Uint8Array(receiveKeyRaw)),
     ephemeralPublicKey: toBase64url(initiated.ephemeralPublicKey),
+    usedOneTimePreKeyId: bundle.oneTimePreKey?.keyId,
     sendCounter: 0,
     receiveCounter: 0,
   });
@@ -148,7 +158,7 @@ export async function ensureSession(
  */
 export async function encryptForConversation(
   conversationId: string,
-  recipientDeviceIds: string[],
+  recipientDevices: Array<{ deviceId: string; userId: string }>,
   plaintext: string,
   api: ApiClient,
 ): Promise<EncryptedPayload> {
@@ -158,9 +168,9 @@ export async function encryptForConversation(
   const deviceKeys = await loadDeviceKeys();
   const myIdentityPublicKey = deviceKeys?.identityKeyPair.publicKey;
 
-  for (const deviceId of recipientDeviceIds) {
+  for (const { deviceId, userId } of recipientDevices) {
     // Ensure session exists
-    await ensureSession(conversationId, deviceId, api);
+    await ensureSession(conversationId, deviceId, api, userId);
 
     // Load session state
     const session = await loadSession(conversationId, deviceId);
@@ -194,6 +204,7 @@ export async function encryptForConversation(
       ephemeralKey: isFirstMessage ? session.ephemeralPublicKey : undefined,
       senderIdentityKey: isFirstMessage ? myIdentityPublicKey : undefined,
       isPreKeyMessage: isFirstMessage,
+      oneTimePreKeyId: isFirstMessage ? session.usedOneTimePreKeyId : undefined,
     };
 
     // Base64url-encode the JSON envelope
@@ -259,10 +270,20 @@ export async function decryptConversationMessage(
     const theirIdentityKey = fromBase64url(envelope.senderIdentityKey);
     const theirEphemeralKey = fromBase64url(envelope.ephemeralKey);
 
+    // Look up and consume the one-time pre-key if the initiator used one
+    let myOneTimePreKey;
+    if (envelope.oneTimePreKeyId != null) {
+      const { consumeOneTimePreKey } = await import("./deviceManager.ts");
+      const otkPair = await consumeOneTimePreKey(envelope.oneTimePreKeyId);
+      if (otkPair) {
+        myOneTimePreKey = await importKeyPair(otkPair, "dh", false);
+      }
+    }
+
     const sessionKeys = await receiveSession(
       myIdentityKey,
       mySignedPreKey,
-      undefined, // OTK lookup would go here in a full implementation
+      myOneTimePreKey,
       theirIdentityKey,
       theirEphemeralKey,
     );
@@ -387,7 +408,7 @@ export async function ensureLocalSenderKey(
 export async function distributeSenderKey(
   conversationId: string,
   senderKey: SenderKeyState,
-  recipientDeviceIds: string[],
+  recipientDevices: Array<{ deviceId: string; userId: string }>,
   apiClient: ApiClient,
 ): Promise<EncryptedPayload> {
   const payload: SenderKeyDistributionPayload = {
@@ -404,7 +425,7 @@ export async function distributeSenderKey(
   // Encrypt per-device using existing pairwise sessions (same as DM encryption)
   return encryptForConversation(
     conversationId,
-    recipientDeviceIds,
+    recipientDevices,
     plaintext,
     apiClient,
   );

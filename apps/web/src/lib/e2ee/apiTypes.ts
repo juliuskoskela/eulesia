@@ -24,7 +24,7 @@ export interface ApiClient {
     },
   ): Promise<void>;
 
-  getPreKeyBundle(deviceId: string): Promise<PreKeyBundle>;
+  getPreKeyBundle(deviceId: string, userId: string): Promise<PreKeyBundle>;
 
   listDevices(): Promise<Device[]>;
 
