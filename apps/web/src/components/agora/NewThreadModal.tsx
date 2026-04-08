@@ -142,8 +142,10 @@ export function NewThreadModal({
         type: "municipality",
         adminLevel: 7,
         country,
-        latitude: 0,
-        longitude: 0,
+        coordinates: {
+          latitude: 0,
+          longitude: 0,
+        },
         bounds: null,
         population: null,
         status: "active",

@@ -42,8 +42,8 @@ export interface Municipality {
   region?: string;
   country?: string;
   population?: number | null;
-  latitude?: number | null;
-  longitude?: number | null;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Thread {
@@ -401,22 +401,20 @@ export interface Place {
   nameFi?: string;
   nameSv?: string;
   description?: string;
-  latitude?: string;
-  longitude?: string;
-  radiusKm?: string;
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number;
   geojson?: unknown;
   type: "poi" | "area" | "route" | "landmark";
   category?: string;
   municipalityId?: string;
-  municipality?: Municipality;
   createdAt: string;
 }
 
 export interface LocationDetails {
   id: string;
   name: string;
-  latitude?: string;
-  longitude?: string;
+  coordinates?: { latitude: number; longitude: number };
   threads?: Thread[];
   clubs?: Club[];
   municipality?: Municipality;
@@ -439,8 +437,7 @@ export interface LocationResult {
   type: string; // 'municipality', 'village', 'region', etc.
   adminLevel: number | null;
   country: string | null;
-  latitude: number | null;
-  longitude: number | null;
+  coordinates: { latitude: number; longitude: number } | null;
   bounds: { south: number; north: number; west: number; east: number } | null;
   population: number | null;
   status: LocationStatus; // 'active' = in DB, 'available' = from Nominatim
@@ -522,6 +519,7 @@ export interface SearchLocationResult {
   displayName: string;
   type: string;
   country: string;
+  coordinates?: { latitude: number; longitude: number };
   contentCount: number;
   parentName?: string;
 }

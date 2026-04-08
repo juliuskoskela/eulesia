@@ -128,8 +128,10 @@ interface ApiMunicipality {
   region?: string | null;
   country?: string | null;
   population?: number | null;
-  latitude?: number | null;
-  longitude?: number | null;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  } | null;
 }
 
 interface ApiCurrentUserProfile {
@@ -406,8 +408,8 @@ function toMunicipality(
     region: municipality.region ?? undefined,
     country: municipality.country ?? undefined,
     population: municipality.population ?? undefined,
-    latitude: municipality.latitude ?? undefined,
-    longitude: municipality.longitude ?? undefined,
+    latitude: municipality.coordinates?.latitude ?? undefined,
+    longitude: municipality.coordinates?.longitude ?? undefined,
   };
 }
 
