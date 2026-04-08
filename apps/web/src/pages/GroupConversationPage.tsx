@@ -47,9 +47,12 @@ export function GroupConversationPage() {
   } = useGroupConversation(conversationId || "");
 
   const currentEpoch = groupData?.currentEpoch ?? 0;
+  const memberUserIds = groupData?.members.map((m) => m.userId) ?? [];
   const sendMessageMutation = useSendGroupMessage(conversationId || "", {
     deviceId: deviceReady ? deviceId : null,
     epoch: currentEpoch,
+    userId: currentUser?.id ?? null,
+    memberUserIds,
   });
   const markReadMutation = useMarkRead(conversationId || "");
 
@@ -88,6 +91,31 @@ export function GroupConversationPage() {
       }, 100);
     }
   }, [isKeyboardOpen]);
+
+  // Process incoming SKD messages to import sender keys
+  useEffect(() => {
+    const skdMessages = (groupData?.messages ?? []).filter(
+      (m) => m.messageType === "skd" && m.ciphertext && m.senderDeviceId,
+    );
+    if (skdMessages.length === 0 || !conversationId) return;
+
+    (async () => {
+      const { handleSenderKeyDistribution } = await import(
+        "../lib/e2ee/index.ts"
+      );
+      for (const msg of skdMessages) {
+        try {
+          await handleSenderKeyDistribution(
+            conversationId,
+            msg.senderDeviceId!,
+            msg.ciphertext!,
+          );
+        } catch {
+          // SKD processing failure is non-fatal — may already be imported
+        }
+      }
+    })();
+  }, [groupData?.messages, conversationId]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,7 +157,11 @@ export function GroupConversationPage() {
     );
   }
 
-  const messages = groupData.messages ?? [];
+  // Filter out SKD (sender key distribution) messages — they're protocol
+  // messages, not user-visible chat.
+  const messages = (groupData.messages ?? []).filter(
+    (m) => m.messageType !== "skd",
+  );
   const typingUsers = conversationId ? (typingInDm[conversationId] ?? []) : [];
 
   return (
@@ -356,7 +388,7 @@ function GroupMessageBubble({
         {isDecrypting ? (
           <p className="text-sm italic opacity-60">Decrypting...</p>
         ) : decryptionFailed ? (
-          <p className="text-sm italic opacity-60">Unable to decrypt message</p>
+          <p className="text-sm italic opacity-60">Waiting for sender key...</p>
         ) : (
           <p className="text-sm whitespace-pre-wrap break-words">
             {displayContent}

@@ -20,7 +20,15 @@ import {
   loadDeviceKeys,
   loadSession,
   saveSession,
+  saveSenderKey,
+  loadSenderKey,
+  generateSenderKeyMaterial,
+  ratchetSenderKey,
+  fastForwardChain,
+  senderKeyEncrypt,
+  senderKeyDecrypt,
 } from "../crypto/index.ts";
+import type { SenderKeyState } from "../crypto/index.ts";
 import type { ApiClient } from "./apiTypes.ts";
 
 // ---------------------------------------------------------------------------
@@ -317,85 +325,171 @@ export async function decryptConversationMessage(
 // ---------------------------------------------------------------------------
 
 /**
- * Envelope format for group-encrypted messages.
+ * Envelope format for group-encrypted messages (Sender Keys protocol).
  */
 interface GroupCiphertextEnvelope {
   ct: string;
   nonce: string;
   epoch: number;
+  messageIndex: number;
+  senderId: string;
 }
 
 /**
- * Derive a symmetric group key from the conversation ID, epoch, and the
- * local device's identity key material.
- *
- * All group members at the same epoch can derive the same key independently
- * because the key is derived from the conversation context and their own
- * device identity. The server fans out the same ciphertext to all members.
- *
- * NOTE: This is a simplified sender-key model suitable for the current
- * architecture. A production hardening pass would use proper sender-key
- * distribution (e.g., Signal Sender Key Distribution Messages or MLS).
+ * Sender Key Distribution payload — encrypted per-device and sent as an
+ * SKD message so recipients can decrypt future group messages from this sender.
  */
+export interface SenderKeyDistributionPayload {
+  type: "skd";
+  conversationId: string;
+  senderId: string;
+  epoch: number;
+  chainKey: string;
+  messageIndex: number;
+}
+
+// ---------------------------------------------------------------------------
+// Sender Key: generate and distribute
+// ---------------------------------------------------------------------------
+
 /**
- * Derive a symmetric group key from the conversation ID and epoch.
- *
- * All members derive the SAME key because the IKM is the conversation ID
- * (shared knowledge), not per-device material. This is a simplified
- * sender-key model; a production hardening pass would use proper sender-key
- * distribution (e.g., Signal Sender Key Distribution Messages or MLS).
+ * Ensure the local user has a sender key for this conversation + epoch.
+ * If not (or if epoch is stale), generate a fresh one.
  */
-async function deriveGroupKey(
+export async function ensureLocalSenderKey(
   conversationId: string,
+  userId: string,
   epoch: number,
-): Promise<CryptoKey> {
-  const encoder = new TextEncoder();
-  const salt = encoder.encode(`eulesia-group-${conversationId}`);
-  const info = encoder.encode(`epoch-${epoch}`);
+): Promise<SenderKeyState> {
+  const existing = await loadSenderKey(conversationId, userId);
+  if (existing && existing.epoch === epoch) {
+    return existing;
+  }
 
-  // Use conversation ID as input keying material — shared by all members.
-  const ikm = encoder.encode(conversationId);
-  const hkdfKey = await crypto.subtle.importKey(
-    "raw",
-    ikm as Uint8Array<ArrayBuffer>,
-    "HKDF",
-    false,
-    ["deriveKey"],
-  );
+  // Generate fresh sender key for new epoch
+  const state: SenderKeyState = {
+    conversationId,
+    userId,
+    chainKey: generateSenderKeyMaterial(),
+    epoch,
+    messageIndex: 0,
+  };
+  await saveSenderKey(state);
+  return state;
+}
 
-  return crypto.subtle.deriveKey(
-    { name: "HKDF", hash: "SHA-256", salt, info },
-    hkdfKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"],
+/**
+ * Build sender key distribution payloads encrypted per-device for all
+ * group members. Uses existing X3DH pairwise sessions.
+ *
+ * Returns device_ciphertexts ready to POST as an SKD message.
+ */
+export async function distributeSenderKey(
+  conversationId: string,
+  senderKey: SenderKeyState,
+  recipientDeviceIds: string[],
+  apiClient: ApiClient,
+): Promise<EncryptedPayload> {
+  const payload: SenderKeyDistributionPayload = {
+    type: "skd",
+    conversationId: senderKey.conversationId,
+    senderId: senderKey.userId,
+    epoch: senderKey.epoch,
+    chainKey: senderKey.chainKey,
+    messageIndex: senderKey.messageIndex,
+  };
+
+  const plaintext = JSON.stringify(payload);
+
+  // Encrypt per-device using existing pairwise sessions (same as DM encryption)
+  return encryptForConversation(
+    conversationId,
+    recipientDeviceIds,
+    plaintext,
+    apiClient,
   );
 }
 
 /**
- * Encrypt a plaintext message for a group conversation.
+ * Handle an incoming sender key distribution message.
+ * Decrypts the SKD payload and stores the remote member's sender key.
+ */
+export async function handleSenderKeyDistribution(
+  conversationId: string,
+  senderDeviceId: string,
+  ciphertextB64: string,
+): Promise<void> {
+  // Decrypt using pairwise session (same as DM decryption)
+  const plaintext = await decryptConversationMessage(
+    conversationId,
+    senderDeviceId,
+    ciphertextB64,
+  );
+
+  const payload: SenderKeyDistributionPayload = JSON.parse(plaintext);
+  if (payload.type !== "skd") {
+    throw new Error("Invalid SKD payload");
+  }
+
+  await saveSenderKey({
+    conversationId: payload.conversationId,
+    userId: payload.senderId,
+    epoch: payload.epoch,
+    chainKey: payload.chainKey,
+    messageIndex: payload.messageIndex,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Sender Key: encrypt group message
+// ---------------------------------------------------------------------------
+
+/**
+ * Encrypt a plaintext message for a group conversation using sender keys.
  * Returns a base64url-encoded envelope that the server fans out to all members.
+ *
+ * The sender's chain key is ratcheted forward after each message.
  */
 export async function encryptForGroup(
   conversationId: string,
   plaintext: string,
+  userId: string,
   epoch: number = 0,
 ): Promise<string> {
-  const groupKey = await deriveGroupKey(conversationId, epoch);
-  const encrypted = await encryptMessage(groupKey, plaintext);
+  const senderKey = await ensureLocalSenderKey(conversationId, userId, epoch);
+
+  // Ratchet and encrypt
+  const { messageKey, nextChainKey } = await ratchetSenderKey(
+    senderKey.chainKey,
+  );
+  const { ciphertext, nonce } = await senderKeyEncrypt(messageKey, plaintext);
 
   const envelope: GroupCiphertextEnvelope = {
-    ct: toBase64url(encrypted.ciphertext),
-    nonce: toBase64url(encrypted.nonce),
-    epoch,
+    ct: toBase64url(ciphertext),
+    nonce: toBase64url(nonce),
+    epoch: senderKey.epoch,
+    messageIndex: senderKey.messageIndex,
+    senderId: userId,
   };
+
+  // Save ratcheted state
+  await saveSenderKey({
+    ...senderKey,
+    chainKey: nextChainKey,
+    messageIndex: senderKey.messageIndex + 1,
+  });
 
   const encoder = new TextEncoder();
   return toBase64url(encoder.encode(JSON.stringify(envelope)));
 }
 
+// ---------------------------------------------------------------------------
+// Sender Key: decrypt group message
+// ---------------------------------------------------------------------------
+
 /**
  * Decrypt a group message from the base64url-encoded envelope.
+ * Looks up the sender's key and fast-forwards the chain if needed.
  */
 export async function decryptGroupMessage(
   conversationId: string,
@@ -407,9 +501,37 @@ export async function decryptGroupMessage(
     decoder.decode(envelopeBytes),
   );
 
-  const groupKey = await deriveGroupKey(conversationId, envelope.epoch);
-  const ciphertext = fromBase64url(envelope.ct);
-  const nonce = fromBase64url(envelope.nonce);
+  const senderKey = await loadSenderKey(conversationId, envelope.senderId);
+  if (!senderKey) {
+    throw new Error(
+      `No sender key for user ${envelope.senderId} in conversation ${conversationId}. ` +
+        `Sender key distribution message may not have been received yet.`,
+    );
+  }
 
-  return cryptoDecrypt(groupKey, ciphertext, nonce);
+  // Fast-forward the chain to the target message index
+  const steps = envelope.messageIndex - senderKey.messageIndex;
+  if (steps < 0) {
+    throw new Error(
+      `Message index ${envelope.messageIndex} is behind stored index ${senderKey.messageIndex}`,
+    );
+  }
+
+  const { messageKey, nextChainKey } = await fastForwardChain(
+    senderKey.chainKey,
+    steps,
+  );
+
+  const ct = fromBase64url(envelope.ct) as Uint8Array<ArrayBuffer>;
+  const nonce = fromBase64url(envelope.nonce) as Uint8Array<ArrayBuffer>;
+  const plaintext = await senderKeyDecrypt(messageKey, ct, nonce);
+
+  // Save ratcheted state (advance past this message)
+  await saveSenderKey({
+    ...senderKey,
+    chainKey: nextChainKey,
+    messageIndex: envelope.messageIndex + 1,
+  });
+
+  return plaintext;
 }

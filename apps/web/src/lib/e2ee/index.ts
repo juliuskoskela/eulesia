@@ -27,9 +27,15 @@ export {
   decryptConversationMessage,
   encryptForGroup,
   decryptGroupMessage,
+  ensureLocalSenderKey,
+  distributeSenderKey,
+  handleSenderKeyDistribution,
 } from "./messageEncryptor.ts";
 
-export type { EncryptedPayload } from "./messageEncryptor.ts";
+export type {
+  EncryptedPayload,
+  SenderKeyDistributionPayload,
+} from "./messageEncryptor.ts";
 
 // apiTypes — Minimal API client interface
 export type { ApiClient } from "./apiTypes.ts";

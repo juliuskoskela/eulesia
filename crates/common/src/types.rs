@@ -424,6 +424,10 @@ pub enum MessageType {
     System,
     Reaction,
     Redaction,
+    /// Sender Key Distribution — delivers a group sender key to each device
+    /// via per-device ciphertexts (even in group conversations).
+    #[serde(rename = "skd")]
+    Skd,
 }
 
 impl MessageType {
@@ -434,6 +438,7 @@ impl MessageType {
             Self::System => "system",
             Self::Reaction => "reaction",
             Self::Redaction => "redaction",
+            Self::Skd => "skd",
         }
     }
 }
@@ -453,6 +458,7 @@ impl std::str::FromStr for MessageType {
             "system" => Ok(Self::System),
             "reaction" => Ok(Self::Reaction),
             "redaction" => Ok(Self::Redaction),
+            "skd" => Ok(Self::Skd),
             other => Err(format!("invalid message type: {other}")),
         }
     }

@@ -60,7 +60,24 @@ export {
   loadDeviceKeysById,
   saveSession,
   loadSession,
+  saveSenderKey,
+  loadSenderKey,
+  clearSenderKeysForConversation,
   clearKeyStore,
 } from "./store.ts";
 
-export type { DeviceKeys, OneTimePreKeyEntry, SessionState } from "./store.ts";
+export type {
+  DeviceKeys,
+  OneTimePreKeyEntry,
+  SessionState,
+  SenderKeyState,
+} from "./store.ts";
+
+// senderKeys — Sender Key group E2EE primitives
+export {
+  generateSenderKeyMaterial,
+  ratchetSenderKey,
+  fastForwardChain,
+  senderKeyEncrypt,
+  senderKeyDecrypt,
+} from "./senderKeys.ts";

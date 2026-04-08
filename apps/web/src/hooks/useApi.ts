@@ -861,18 +861,60 @@ export function useRemoveGroupMember(conversationId: string) {
 
 export function useSendGroupMessage(
   conversationId: string,
-  options?: { deviceId?: string | null; epoch?: number },
+  options?: {
+    deviceId?: string | null;
+    epoch?: number;
+    userId?: string | null;
+    memberUserIds?: string[];
+  },
 ) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (content: string) => {
-      const { deviceId, epoch } = options ?? {};
+      const { deviceId, epoch, userId, memberUserIds } = options ?? {};
       if (!deviceId) throw new Error("DEVICE_NOT_INITIALIZED");
+      if (!userId) throw new Error("USER_ID_UNKNOWN");
 
-      const { encryptForGroup } = await import("../lib/e2ee/index.ts");
+      const { ensureLocalSenderKey, distributeSenderKey, encryptForGroup } =
+        await import("../lib/e2ee/index.ts");
+
+      // Ensure we have a sender key for the current epoch
+      const senderKey = await ensureLocalSenderKey(
+        conversationId,
+        userId,
+        epoch ?? 0,
+      );
+
+      // Distribute sender key to group members if this is a fresh key
+      // (messageIndex === 0 means it was just generated)
+      if (senderKey.messageIndex === 0 && memberUserIds?.length) {
+        // Fetch all member device IDs
+        const deviceResults = await Promise.all(
+          memberUserIds
+            .filter((uid) => uid !== userId)
+            .map((uid) => api.getUserDevices(uid)),
+        );
+        const allDeviceIds = deviceResults.flat().map((d) => d.id);
+
+        if (allDeviceIds.length > 0) {
+          const skdPayload = await distributeSenderKey(
+            conversationId,
+            senderKey,
+            allDeviceIds,
+            api,
+          );
+          await api.sendGroupSkd(conversationId, {
+            deviceCiphertexts: skdPayload.deviceCiphertexts,
+            senderDeviceId: deviceId,
+          });
+        }
+      }
+
+      // Encrypt and send the actual message
       const ciphertext = await encryptForGroup(
         conversationId,
         content,
+        userId,
         epoch ?? 0,
       );
 

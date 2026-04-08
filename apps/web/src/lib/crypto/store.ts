@@ -23,11 +23,12 @@ import type { ExportedKeyPair } from "./keys.ts";
 const DB_NAME = "eulesia-e2ee-keystore";
 
 /** Current schema version. Bump when adding/modifying object stores. */
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /** Object store names. */
 const STORE_DEVICE_KEYS = "deviceKeys";
 const STORE_SESSIONS = "sessions";
+const STORE_SENDER_KEYS = "senderKeys";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,6 +100,13 @@ export async function openKeyStore(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_SESSIONS)) {
         db.createObjectStore(STORE_SESSIONS, {
           keyPath: ["conversationId", "deviceId"],
+        });
+      }
+
+      // Sender keys — compound key [conversationId, userId]
+      if (!db.objectStoreNames.contains(STORE_SENDER_KEYS)) {
+        db.createObjectStore(STORE_SENDER_KEYS, {
+          keyPath: ["conversationId", "userId"],
         });
       }
     };
@@ -230,6 +238,92 @@ export async function loadSession(
         >,
     );
     return result ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sender Keys
+// ---------------------------------------------------------------------------
+
+/**
+ * Sender key state for a group member. Stored per [conversationId, userId].
+ * Each member has one sender key per epoch.
+ */
+export interface SenderKeyState {
+  conversationId: string;
+  userId: string;
+  /** HMAC-SHA256 chain key — base64url-encoded 32 bytes. */
+  chainKey: string;
+  /** Epoch when this sender key was created. */
+  epoch: number;
+  /** Monotonic message counter (ratchets forward on each send/receive). */
+  messageIndex: number;
+}
+
+/**
+ * Save (or overwrite) a sender key for a specific group member.
+ */
+export async function saveSenderKey(state: SenderKeyState): Promise<void> {
+  const db = await openKeyStore();
+  try {
+    await tx(db, STORE_SENDER_KEYS, "readwrite", (store) => store.put(state));
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Load a sender key for a specific group member.
+ */
+export async function loadSenderKey(
+  conversationId: string,
+  userId: string,
+): Promise<SenderKeyState | null> {
+  const db = await openKeyStore();
+  try {
+    const result = await tx(
+      db,
+      STORE_SENDER_KEYS,
+      "readonly",
+      (store) =>
+        store.get([conversationId, userId]) as IDBRequest<
+          SenderKeyState | undefined
+        >,
+    );
+    return result ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Delete all sender keys for a conversation (used on epoch rotation).
+ */
+export async function clearSenderKeysForConversation(
+  conversationId: string,
+): Promise<void> {
+  const db = await openKeyStore();
+  try {
+    const transaction = db.transaction(STORE_SENDER_KEYS, "readwrite");
+    const store = transaction.objectStore(STORE_SENDER_KEYS);
+    const request = store.openCursor();
+    await new Promise<void>((resolve, reject) => {
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          const value = cursor.value as SenderKeyState;
+          if (value.conversationId === conversationId) {
+            cursor.delete();
+          }
+          cursor.continue();
+        } else {
+          resolve();
+        }
+      };
+      request.onerror = () => reject(request.error);
+    });
   } finally {
     db.close();
   }

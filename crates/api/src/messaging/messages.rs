@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::AppState;
 use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
-use eulesia_common::types::{ConversationType, new_id};
+use eulesia_common::types::{ConversationType, MessageType, new_id};
 use eulesia_db::entities::{message_device_queue, messages};
 use eulesia_db::repo::conversations::ConversationRepo;
 use eulesia_db::repo::devices::DeviceRepo;
@@ -298,7 +298,13 @@ pub async fn send(
             prepare_direct_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
         }
         ConversationType::Group | ConversationType::Channel => {
-            prepare_group_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
+            if req.message_type == MessageType::Skd {
+                // Sender Key Distribution uses per-device ciphertexts (like DMs)
+                // even in group conversations — each device gets a unique SKD.
+                prepare_direct_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
+            } else {
+                prepare_group_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
+            }
         }
     };
 

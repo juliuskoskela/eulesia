@@ -1304,6 +1304,7 @@ class ApiClient {
         ciphertext: m.ciphertext || undefined,
         senderDeviceId: m.senderDeviceId ?? undefined,
         senderId: m.senderId,
+        messageType: m.messageType,
         author: member
           ? {
               id: member.userId,
@@ -1357,6 +1358,20 @@ class ApiClient {
     return this.request(`/conversations/${conversationId}/messages`, {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  }
+
+  /** Send a Sender Key Distribution message (per-device, like a DM). */
+  async sendGroupSkd(
+    conversationId: string,
+    data: {
+      deviceCiphertexts: Record<string, string>;
+      senderDeviceId: string;
+    },
+  ): Promise<DirectMessage> {
+    return this.request(`/conversations/${conversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ ...data, messageType: "skd" }),
     });
   }
 
