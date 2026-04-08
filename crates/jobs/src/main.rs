@@ -57,7 +57,8 @@ async fn main() -> anyhow::Result<()> {
     info!(version = env!("CARGO_PKG_VERSION"), "starting eulesia-jobs");
 
     let db = eulesia_db::connect(&config.database_url).await?;
-    eulesia_db::migrate(&db).await?;
+    // Migrations are owned by eulesia-server which starts first.
+    // Running them here races with the server on concurrent startup.
 
     let ctx = Arc::new(eulesia_jobs::scheduler::SchedulerContext {
         db: Arc::new(db),

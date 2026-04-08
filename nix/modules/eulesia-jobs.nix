@@ -57,7 +57,7 @@ in {
       wantedBy = ["multi-user.target"];
       wants = ["network-online.target"];
       after =
-        ["network-online.target"]
+        ["network-online.target" "eulesia-server.service"]
         ++ optional config.services.eulesia-server.database.createLocally "eulesia-server-db-setup.service";
       requires =
         optional config.services.eulesia-server.database.createLocally "eulesia-server-db-setup.service";
