@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use sea_orm::ActiveValue::Set;
-use sea_orm::EntityTrait;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use uuid::Uuid;
 
 use tracing::warn;
@@ -146,6 +146,36 @@ async fn blocked_ids(
 // Enrichment helpers (reused by tags module)
 // ---------------------------------------------------------------------------
 
+/// Batch-fetch municipality names by id, returning a map.
+async fn fetch_municipality_names(
+    db: &sea_orm::DatabaseConnection,
+    ids: &[Uuid],
+) -> Result<HashMap<Uuid, String>, ApiError> {
+    use eulesia_db::entities::municipalities;
+
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = municipalities::Entity::find()
+        .filter(municipalities::Column::Id.is_in(ids.to_vec()))
+        .all(db)
+        .await
+        .map_err(db_err)?;
+
+    Ok(rows.into_iter().map(|m| (m.id, m.name)).collect())
+}
+
+/// Fetch a single municipality name, returning `None` if id is `None` or not found.
+async fn fetch_municipality_name(
+    db: &sea_orm::DatabaseConnection,
+    id: Option<Uuid>,
+) -> Result<Option<String>, ApiError> {
+    let Some(id) = id else { return Ok(None) };
+    let map = fetch_municipality_names(db, &[id]).await?;
+    Ok(map.into_values().next())
+}
+
 /// Enrich a list of thread models into full `ThreadResponse`s.
 pub async fn enrich_threads(
     db: &sea_orm::DatabaseConnection,
@@ -180,6 +210,15 @@ pub async fn enrich_threads(
         tags_map.entry(t.thread_id).or_default().push(t.tag);
     }
 
+    // Batch-fetch municipality names for threads that have one.
+    let municipality_ids: Vec<Uuid> = threads
+        .iter()
+        .filter_map(|t| t.municipality_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let municipality_name_map = fetch_municipality_names(db, &municipality_ids).await?;
+
     // Per-user enrichment (votes, bookmarks).
     let (vote_map, bookmark_set): (HashMap<Uuid, i16>, HashSet<Uuid>) = if let Some(uid) =
         auth_user_id
@@ -205,6 +244,9 @@ pub async fn enrich_threads(
                 .get(&t.author_id)
                 .cloned()
                 .unwrap_or_else(deleted_author);
+            let municipality_name = t
+                .municipality_id
+                .and_then(|id| municipality_name_map.get(&id).cloned());
             ThreadResponse {
                 id: t.id,
                 title: t.title,
@@ -217,6 +259,7 @@ pub async fn enrich_threads(
                 author,
                 tags: tags_map.remove(&t.id).unwrap_or_default(),
                 municipality_id: t.municipality_id,
+                municipality_name,
                 institutional_context: t.institutional_context,
                 reply_count: t.reply_count,
                 score: t.score,
@@ -433,6 +476,8 @@ pub async fn get_thread(
         .cloned()
         .unwrap_or_else(deleted_author);
 
+    let municipality_name = fetch_municipality_name(&state.db, thread.municipality_id).await?;
+
     let thread_resp = ThreadResponse {
         id: thread.id,
         title: thread.title,
@@ -459,6 +504,7 @@ pub async fn get_thread(
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
         municipality_id: thread.municipality_id,
+        municipality_name,
         institutional_context: thread.institutional_context,
         created_at: thread.created_at.to_rfc3339(),
         updated_at: thread.updated_at.to_rfc3339(),
@@ -622,6 +668,8 @@ pub async fn create_thread(
         identity_verified: user.identity_verified,
     };
 
+    let municipality_name = fetch_municipality_name(&state.db, thread.municipality_id).await?;
+
     Ok(Json(ThreadResponse {
         id: thread.id,
         title: thread.title,
@@ -648,6 +696,7 @@ pub async fn create_thread(
         source_institution_id: thread.source_institution_id,
         ai_generated: thread.ai_generated,
         municipality_id: thread.municipality_id,
+        municipality_name,
         institutional_context: thread.institutional_context,
         created_at: thread.created_at.to_rfc3339(),
         updated_at: thread.updated_at.to_rfc3339(),
@@ -763,6 +812,8 @@ pub async fn update_thread(
         identity_verified: user.identity_verified,
     };
 
+    let municipality_name = fetch_municipality_name(&state.db, updated.municipality_id).await?;
+
     Ok(Json(ThreadResponse {
         id: updated.id,
         title: updated.title,
@@ -782,6 +833,7 @@ pub async fn update_thread(
         is_pinned: updated.is_pinned,
         is_locked: updated.is_locked,
         municipality_id: updated.municipality_id,
+        municipality_name,
         institutional_context: updated.institutional_context,
         source: updated.source.parse().unwrap_or_else(|_| {
             warn!(thread_id = %updated.id, source = %updated.source, "unknown thread source");

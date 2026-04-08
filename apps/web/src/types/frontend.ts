@@ -57,7 +57,7 @@ export interface Thread {
   authorId?: string | null;
   municipality?: Municipality;
   municipalityId?: string;
-  municipalityName?: string;
+  municipalityName?: string | null;
   institutionalContext?: InstitutionalContext;
   replyCount: number;
   score?: number;
