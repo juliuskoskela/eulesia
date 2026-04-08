@@ -2,7 +2,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { useThreads, useTags, useClubs } from "./useApi";
+import {
+  loadConversationTargetDevices,
+  useThreads,
+  useTags,
+  useClubs,
+} from "./useApi";
+
+const makeDevice = (id: string) => ({
+  id,
+  platform: "web",
+  createdAt: new Date(0).toISOString(),
+});
 
 // Helper: create a mock Response with Content-Type: application/json
 const jsonResponse = (body: unknown, ok = true) => ({
@@ -196,6 +207,41 @@ describe("useApi hooks", () => {
           expect.any(Object),
         );
       });
+    });
+  });
+
+  describe("loadConversationTargetDevices", () => {
+    it("includes the sender's own devices and de-duplicates shared IDs", async () => {
+      const client: NonNullable<
+        Parameters<typeof loadConversationTargetDevices>[2]
+      > = {
+        listDevices: vi
+          .fn()
+          .mockResolvedValue([
+            makeDevice("self-device"),
+            makeDevice("shared-device"),
+          ]),
+        getUserDevices: vi
+          .fn()
+          .mockResolvedValue([
+            makeDevice("shared-device"),
+            makeDevice("peer-device"),
+          ]),
+      };
+
+      const devices = await loadConversationTargetDevices(
+        ["me", "peer", "me"],
+        "me",
+        client,
+      );
+
+      expect(client.listDevices).toHaveBeenCalledTimes(1);
+      expect(client.getUserDevices).toHaveBeenCalledWith("peer");
+      expect(devices).toEqual([
+        { deviceId: "self-device", userId: "me" },
+        { deviceId: "shared-device", userId: "me" },
+        { deviceId: "peer-device", userId: "peer" },
+      ]);
     });
   });
 });

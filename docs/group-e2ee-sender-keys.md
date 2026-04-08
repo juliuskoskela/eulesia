@@ -89,12 +89,14 @@ per-message chain derivation, not from the info parameter.
 ### Sender Key Distribution (SKD)
 
 When a member generates a new sender key, they must distribute it to every
-other member's devices. This uses the existing per-device encryption
+active group device, including their own devices. This keeps the sender's
+history readable on the current device and synchronizes sender-key state
+across the sender's other devices. This uses the existing per-device encryption
 infrastructure:
 
 1. Member generates new `SenderKeyState`
 2. Serializes it as JSON: `{ chainKey, epoch, messageIndex }`
-3. For each other member's device, encrypts via existing X3DH pairwise session
+3. For each target device, encrypts via existing X3DH pairwise session
    (same as DM encryption — `ensureSession` + `deriveMessageKey` + AES-GCM)
 4. Sends as a message with `message_type: "skd"` and `device_ciphertexts`
 5. Server routes through `message_device_queue` like a DM

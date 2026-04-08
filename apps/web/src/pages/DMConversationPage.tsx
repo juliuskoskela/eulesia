@@ -299,6 +299,7 @@ export function DMConversationPage() {
 
   const sendMessageMutation = useSendDM(conversationId || "", {
     deviceId: deviceReady ? deviceId : null,
+    userId: currentUser?.id ?? null,
     otherUserId,
   });
   const markReadMutation = useMarkRead(conversationId || "");

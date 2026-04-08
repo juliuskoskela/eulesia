@@ -28,7 +28,7 @@ import {
   senderKeyEncrypt,
   senderKeyDecrypt,
 } from "../crypto/index.ts";
-import type { SenderKeyState } from "../crypto/index.ts";
+import type { SenderKeyState, SessionState } from "../crypto/index.ts";
 import type { ApiClient } from "./apiTypes.ts";
 
 // ---------------------------------------------------------------------------
@@ -148,17 +148,29 @@ export async function ensureSession(
 
 /**
  * Encrypt a plaintext message for a conversation, producing per-device
- * ciphertexts for all recipient devices.
+ * ciphertexts for all target devices.
  *
- * For each device:
+ * For each target device:
  * 1. Ensure a session exists (establishes via X3DH if needed).
- * 2. Derive a per-message key from the session send key + counter.
+ * 2. Derive a per-message key from the appropriate session key + counter.
  * 3. Encrypt the plaintext with AES-256-GCM.
  * 4. Increment the send counter.
  */
+export function selectOutboundSessionKey(
+  session: SessionState,
+  localDeviceId: string,
+  targetDeviceId: string,
+): string {
+  // Local self-copies are later decrypted through the receive path, so they
+  // must use the session's receive key rather than its initiator send key.
+  return targetDeviceId === localDeviceId
+    ? session.receiveKey
+    : session.sendKey;
+}
+
 export async function encryptForConversation(
   conversationId: string,
-  recipientDevices: Array<{ deviceId: string; userId: string }>,
+  targetDevices: Array<{ deviceId: string; userId: string }>,
   plaintext: string,
   api: ApiClient,
 ): Promise<EncryptedPayload> {
@@ -166,9 +178,12 @@ export async function encryptForConversation(
 
   // Load our identity key for inclusion in pre-key messages
   const deviceKeys = await loadDeviceKeys();
-  const myIdentityPublicKey = deviceKeys?.identityKeyPair.publicKey;
+  if (!deviceKeys) {
+    throw new Error("Local device keys not found — device not initialized");
+  }
+  const myIdentityPublicKey = deviceKeys.identityKeyPair.publicKey;
 
-  for (const { deviceId, userId } of recipientDevices) {
+  for (const { deviceId, userId } of targetDevices) {
     // Ensure session exists
     await ensureSession(conversationId, deviceId, api, userId);
 
@@ -178,18 +193,19 @@ export async function encryptForConversation(
       throw new Error(`Session not found for device ${deviceId} after ensure`);
     }
 
-    // Import the send key
-    const sendKeyBytes = fromBase64url(session.sendKey);
-    const sendKey = await crypto.subtle.importKey(
+    const sessionKeyBytes = fromBase64url(
+      selectOutboundSessionKey(session, deviceKeys.deviceId, deviceId),
+    );
+    const sessionKey = await crypto.subtle.importKey(
       "raw",
-      new Uint8Array(sendKeyBytes) as Uint8Array<ArrayBuffer>,
+      new Uint8Array(sessionKeyBytes) as Uint8Array<ArrayBuffer>,
       { name: "AES-GCM", length: 256 },
       true, // extractable for deriveMessageKey
       ["encrypt", "decrypt"],
     );
 
     // Derive per-message key
-    const messageKey = await deriveMessageKey(sendKey, session.sendCounter);
+    const messageKey = await deriveMessageKey(sessionKey, session.sendCounter);
 
     // Encrypt
     const encrypted = await encryptMessage(messageKey, plaintext);
@@ -401,7 +417,7 @@ export async function ensureLocalSenderKey(
 
 /**
  * Build sender key distribution payloads encrypted per-device for all
- * group members. Uses existing X3DH pairwise sessions.
+ * target group devices. Uses existing X3DH pairwise sessions.
  *
  * Returns device_ciphertexts ready to POST as an SKD message.
  */
