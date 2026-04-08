@@ -246,3 +246,100 @@ export async function decryptConversationMessage(
 
   return plaintext;
 }
+
+// ---------------------------------------------------------------------------
+// Group encryption (sender-key model)
+// ---------------------------------------------------------------------------
+
+/**
+ * Envelope format for group-encrypted messages.
+ */
+interface GroupCiphertextEnvelope {
+  ct: string;
+  nonce: string;
+  epoch: number;
+}
+
+/**
+ * Derive a symmetric group key from the conversation ID, epoch, and the
+ * local device's identity key material.
+ *
+ * All group members at the same epoch can derive the same key independently
+ * because the key is derived from the conversation context and their own
+ * device identity. The server fans out the same ciphertext to all members.
+ *
+ * NOTE: This is a simplified sender-key model suitable for the current
+ * architecture. A production hardening pass would use proper sender-key
+ * distribution (e.g., Signal Sender Key Distribution Messages or MLS).
+ */
+async function deriveGroupKey(
+  conversationId: string,
+  epoch: number,
+): Promise<CryptoKey> {
+  const deviceKeys = await loadDeviceKeys();
+  if (!deviceKeys) throw new Error("Device not initialized");
+
+  const encoder = new TextEncoder();
+  const salt = encoder.encode(`eulesia-group-${conversationId}`);
+  const info = encoder.encode(`epoch-${epoch}`);
+
+  // Use identity public key as input keying material
+  const ikm = fromBase64url(deviceKeys.identityKeyPair.publicKey);
+  const hkdfKey = await crypto.subtle.importKey(
+    "raw",
+    new Uint8Array(ikm) as Uint8Array<ArrayBuffer>,
+    "HKDF",
+    false,
+    ["deriveKey"],
+  );
+
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt, info },
+    hkdfKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+/**
+ * Encrypt a plaintext message for a group conversation.
+ * Returns a base64url-encoded envelope that the server fans out to all members.
+ */
+export async function encryptForGroup(
+  conversationId: string,
+  plaintext: string,
+  epoch: number = 0,
+): Promise<string> {
+  const groupKey = await deriveGroupKey(conversationId, epoch);
+  const encrypted = await encryptMessage(groupKey, plaintext);
+
+  const envelope: GroupCiphertextEnvelope = {
+    ct: toBase64url(encrypted.ciphertext),
+    nonce: toBase64url(encrypted.nonce),
+    epoch,
+  };
+
+  const encoder = new TextEncoder();
+  return toBase64url(encoder.encode(JSON.stringify(envelope)));
+}
+
+/**
+ * Decrypt a group message from the base64url-encoded envelope.
+ */
+export async function decryptGroupMessage(
+  conversationId: string,
+  ciphertextB64: string,
+): Promise<string> {
+  const envelopeBytes = fromBase64url(ciphertextB64);
+  const decoder = new TextDecoder();
+  const envelope: GroupCiphertextEnvelope = JSON.parse(
+    decoder.decode(envelopeBytes),
+  );
+
+  const groupKey = await deriveGroupKey(conversationId, envelope.epoch);
+  const ciphertext = fromBase64url(envelope.ct);
+  const nonce = fromBase64url(envelope.nonce);
+
+  return cryptoDecrypt(groupKey, ciphertext, nonce);
+}

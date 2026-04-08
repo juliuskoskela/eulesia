@@ -25,6 +25,8 @@ export {
   ensureSession,
   encryptForConversation,
   decryptConversationMessage,
+  encryptForGroup,
+  decryptGroupMessage,
 } from "./messageEncryptor.ts";
 
 export type { EncryptedPayload } from "./messageEncryptor.ts";

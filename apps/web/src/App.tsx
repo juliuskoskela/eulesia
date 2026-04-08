@@ -84,6 +84,19 @@ const DMConversationPage = lazy(() =>
     default: m.DMConversationPage,
   })),
 );
+const GroupConversationPage = lazy(() =>
+  import("./pages/GroupConversationPage").then((m) => ({
+    default: m.GroupConversationPage,
+  })),
+);
+const CreateGroupPage = lazy(() =>
+  import("./pages/CreateGroupPage").then((m) => ({
+    default: m.CreateGroupPage,
+  })),
+);
+const UserHomePage = lazy(() =>
+  import("./pages/UserHomePage").then((m) => ({ default: m.UserHomePage })),
+);
 const TermsPage = lazy(() =>
   import("./pages/TermsPage").then((m) => ({ default: m.TermsPage })),
 );
@@ -340,6 +353,26 @@ function AppRoutes() {
             <ProtectedRoute>
               <PageErrorBoundary>
                 <MessagesPage />
+              </PageErrorBoundary>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages/new-group"
+          element={
+            <ProtectedRoute>
+              <PageErrorBoundary>
+                <CreateGroupPage />
+              </PageErrorBoundary>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/messages/group/:conversationId"
+          element={
+            <ProtectedRoute>
+              <PageErrorBoundary>
+                <GroupConversationPage />
               </PageErrorBoundary>
             </ProtectedRoute>
           }

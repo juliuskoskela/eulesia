@@ -283,6 +283,29 @@ export interface ConversationWithMessages {
   messages: DirectMessage[];
 }
 
+export interface GroupMember {
+  userId: string;
+  name: string;
+  avatarUrl?: string | null;
+  role: "owner" | "member";
+  joinedEpoch: number;
+}
+
+export interface GroupConversationDetail {
+  id: string;
+  name: string;
+  description?: string | null;
+  encryption: string;
+  currentEpoch: number;
+  members: GroupMember[];
+  messages: DirectMessage[];
+}
+
+export interface CreateGroupData {
+  name: string;
+  description?: string;
+  members: string[];
+}
 export type SortBy = "recent" | "new" | "top";
 
 export type TopPeriod = "day" | "week" | "month" | "year";

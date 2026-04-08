@@ -10,6 +10,7 @@ use eulesia_common::error::ApiError;
 use eulesia_common::types::{ConversationType, GroupRole, new_id};
 use eulesia_db::entities::{conversation_epochs, membership_events, memberships};
 use eulesia_db::repo::conversations::ConversationRepo;
+use eulesia_db::repo::devices::DeviceRepo;
 use eulesia_db::repo::epochs::EpochRepo;
 use eulesia_db::repo::memberships::MembershipRepo;
 use eulesia_db::repo::users::UserRepo;
@@ -78,6 +79,26 @@ pub async fn invite(
         .is_some()
     {
         return Err(ApiError::Conflict("user is already a member".into()));
+    }
+
+    // E2EE groups require all members to have a registered device.
+    if !DeviceRepo::has_active_device(&*state.db, req.user_id)
+        .await
+        .map_err(db_err)?
+    {
+        return Err(ApiError::BadRequest("user has no registered device".into()));
+    }
+
+    // Enforce group size limit.
+    let current_count = MembershipRepo::list_active(&*state.db, conversation_id)
+        .await
+        .map_err(db_err)?
+        .len();
+    if current_count >= super::types::MAX_GROUP_MEMBERS {
+        return Err(ApiError::BadRequest(format!(
+            "groups cannot have more than {} members",
+            super::types::MAX_GROUP_MEMBERS
+        )));
     }
 
     let now = chrono::Utc::now().fixed_offset();

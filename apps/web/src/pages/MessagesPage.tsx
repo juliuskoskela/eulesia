@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MessageSquare, Search } from "lucide-react";
+import { MessageSquare, Search, Users, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Layout } from "../components/layout";
 import { SEOHead } from "../components/SEOHead";
@@ -26,14 +26,23 @@ function ConversationItem({ conversation }: { conversation: Conversation }) {
     otherUser?.name || conversation.name || t("groupConversation");
   const avatarUrl = otherUser?.avatarUrl;
 
+  const isGroup = conversation.conversationType === "group";
+  const path = isGroup
+    ? `/messages/group/${conversation.id}`
+    : `/messages/${conversation.id}`;
+
   return (
     <Link
-      to={`/messages/${conversation.id}`}
+      to={path}
       className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800"
     >
       {/* Avatar */}
-      <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-        {avatarUrl ? (
+      <div
+        className={`w-12 h-12 ${isGroup ? "bg-teal-600" : "bg-blue-600"} rounded-full flex items-center justify-center flex-shrink-0`}
+      >
+        {isGroup ? (
+          <Users className="w-6 h-6 text-white" />
+        ) : avatarUrl ? (
           <img
             src={avatarUrl}
             alt=""
@@ -89,9 +98,18 @@ export function MessagesPage() {
         className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-4"
         data-guide="messages-header"
       >
-        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-          {t("title")}
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+            {t("title")}
+          </h1>
+          <Link
+            to="/messages/new-group"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            {t("newGroup", { defaultValue: "New Group" })}
+          </Link>
+        </div>
       </div>
 
       {/* Conversations list */}

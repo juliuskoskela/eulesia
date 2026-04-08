@@ -57,7 +57,7 @@ struct PreKeyBundleQuery {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DeviceResponse {
+pub struct DeviceResponse {
     id: Id,
     display_name: Option<String>,
     platform: String,
@@ -334,6 +334,21 @@ async fn get_pre_key_bundle(
             key_data: URL_SAFE_NO_PAD.encode(&k.key_data),
         }),
     }))
+}
+
+/// List active devices for any user (authenticated callers only).
+pub async fn list_user_devices(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(user_id): Path<Id>,
+) -> Result<Json<Vec<DeviceResponse>>, ApiError> {
+    let devices = DeviceRepo::list_active_for_user(&*state.db, user_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    Ok(Json(
+        devices.into_iter().map(DeviceResponse::from).collect(),
+    ))
 }
 
 pub fn routes() -> Router<AppState> {

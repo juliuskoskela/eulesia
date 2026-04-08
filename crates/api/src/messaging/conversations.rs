@@ -13,6 +13,7 @@ use eulesia_db::entities::{
     conversation_epochs, conversations, direct_conversations, membership_events, memberships,
 };
 use eulesia_db::repo::conversations::ConversationRepo;
+use eulesia_db::repo::devices::DeviceRepo;
 use eulesia_db::repo::epochs::EpochRepo;
 use eulesia_db::repo::memberships::MembershipRepo;
 use eulesia_db::repo::users::UserRepo;
@@ -227,10 +228,11 @@ async fn create_direct(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    let encryption = req.encryption.as_deref().unwrap_or("e2ee");
-    if encryption != "e2ee" && encryption != "none" {
+    // Private conversations are always end-to-end encrypted.
+    let encryption = "e2ee";
+    if req.encryption.as_deref().is_some_and(|e| e != "e2ee") {
         return Err(ApiError::BadRequest(
-            "encryption must be 'e2ee' or 'none'".into(),
+            "private conversations must use e2ee encryption".into(),
         ));
     }
 
@@ -363,10 +365,11 @@ async fn create_group(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    let encryption = req.encryption.as_deref().unwrap_or("e2ee");
-    if encryption != "e2ee" && encryption != "none" {
+    // Private conversations are always end-to-end encrypted.
+    let encryption = "e2ee";
+    if req.encryption.as_deref().is_some_and(|e| e != "e2ee") {
         return Err(ApiError::BadRequest(
-            "encryption must be 'e2ee' or 'none'".into(),
+            "private conversations must use e2ee encryption".into(),
         ));
     }
 
@@ -444,12 +447,30 @@ async fn create_group(
         .filter(|&id| id != caller)
         .collect();
 
+    // +1 for the creator who is already a member.
+    if unique_members.len() + 1 > super::types::MAX_GROUP_MEMBERS {
+        return Err(ApiError::BadRequest(format!(
+            "groups cannot have more than {} members",
+            super::types::MAX_GROUP_MEMBERS
+        )));
+    }
+
     for member_id in unique_members {
         // Verify user exists.
         UserRepo::find_by_id(&state.db, member_id)
             .await
             .map_err(db_err)?
             .ok_or_else(|| ApiError::NotFound(format!("user {member_id} not found")))?;
+
+        // E2EE groups require all members to have a registered device.
+        if !DeviceRepo::has_active_device(&*state.db, member_id)
+            .await
+            .map_err(db_err)?
+        {
+            return Err(ApiError::BadRequest(format!(
+                "user {member_id} has no registered device"
+            )));
+        }
 
         MembershipRepo::create(
             &txn,

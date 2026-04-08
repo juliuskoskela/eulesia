@@ -6,6 +6,9 @@ use eulesia_db::entities::messages;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Maximum number of members in a group conversation (including creator).
+pub const MAX_GROUP_MEMBERS: usize = 50;
+
 // ---------------------------------------------------------------------------
 // Request types
 // ---------------------------------------------------------------------------

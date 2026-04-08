@@ -44,6 +44,9 @@ import type {
   Device,
   PreKeyBundle,
   ConversationWithMessages,
+  GroupMember,
+  GroupConversationDetail,
+  CreateGroupData,
 } from "../types/frontend";
 import type { UserProfileResponse } from "../types/generated/UserProfileResponse";
 import type {
@@ -1193,6 +1196,59 @@ class ApiClient {
     },
   ): Promise<DirectMessage> {
     return this.request(`/dm/${conversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Group conversations
+  async createGroupConversation(data: CreateGroupData): Promise<Conversation> {
+    return this.request("/conversations", {
+      method: "POST",
+      body: JSON.stringify({
+        conversationType: "group",
+        encryption: "e2ee",
+        ...data,
+      }),
+    });
+  }
+
+  async getGroupConversation(
+    id: string,
+    limit?: number,
+  ): Promise<GroupConversationDetail> {
+    const query = limit ? `?limit=${limit}` : "";
+    return this.request(`/conversations/${id}${query}`);
+  }
+
+  async getGroupMembers(conversationId: string): Promise<GroupMember[]> {
+    return this.request(`/conversations/${conversationId}/members`);
+  }
+
+  async inviteGroupMember(
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.request(`/conversations/${conversationId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async removeGroupMember(
+    conversationId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.request(`/conversations/${conversationId}/members/${userId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async sendGroupMessage(
+    conversationId: string,
+    data: { ciphertext: string; senderDeviceId: string },
+  ): Promise<DirectMessage> {
+    return this.request(`/conversations/${conversationId}/messages`, {
       method: "POST",
       body: JSON.stringify(data),
     });

@@ -18,6 +18,7 @@ import {
   EditedIndicator,
   ConfirmDeleteDialog,
 } from "../components/common";
+import { useQuery } from "@tanstack/react-query";
 import {
   useConversation,
   useSendDM,
@@ -25,6 +26,7 @@ import {
   useEditDirectMessage,
   useDeleteDirectMessage,
 } from "../hooks/useApi";
+import { api } from "../lib/api";
 import { useAuth } from "../hooks/useAuth";
 import { useDevice } from "../hooks/useDevice";
 import { useSocket } from "../hooks/useSocket";
@@ -257,6 +259,16 @@ export function DMConversationPage() {
     error,
   } = useConversation(conversationId || "");
   const otherUserId = conversationData?.otherUser?.id ?? null;
+
+  // Check if recipient has a registered device (required for E2EE).
+  const { data: recipientDevices } = useQuery({
+    queryKey: ["userDevices", otherUserId],
+    queryFn: () => api.getUserDevices(otherUserId!),
+    enabled: !!otherUserId,
+  });
+  const recipientHasDevice = (recipientDevices?.length ?? 0) > 0;
+  const canSend = deviceReady && recipientHasDevice;
+
   const sendMessageMutation = useSendDM(conversationId || "", {
     deviceId: deviceReady ? deviceId : null,
     otherUserId,
@@ -488,6 +500,34 @@ export function DMConversationPage() {
           </div>
         </div>
 
+        {/* Device warning banners */}
+        {!deviceReady && (
+          <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 text-center">
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              {t("deviceNotRegistered", {
+                defaultValue:
+                  "Your device is not registered for encryption. Go to Settings to set up a device.",
+              })}
+            </p>
+            <Link
+              to="/profile"
+              className="text-sm text-amber-600 dark:text-amber-400 underline"
+            >
+              {t("goToSettings", { defaultValue: "Settings" })}
+            </Link>
+          </div>
+        )}
+        {deviceReady && !recipientHasDevice && otherUserId && (
+          <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 text-center">
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              {t("recipientNoDevice", {
+                defaultValue:
+                  "The other user has no registered device. Encrypted messaging is not available until they set up a device.",
+              })}
+            </p>
+          </div>
+        )}
+
         {/* Input bar — elevated surface */}
         <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 py-3">
           <form onSubmit={handleSendMessage} className="flex gap-2">
@@ -502,11 +542,14 @@ export function DMConversationPage() {
               }}
               placeholder={t("writeMessage")}
               enterKeyHint="send"
-              className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white dark:focus:bg-gray-750 transition-colors"
+              disabled={!canSend}
+              className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white dark:focus:bg-gray-750 transition-colors disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={!newMessage.trim() || sendMessageMutation.isPending}
+              disabled={
+                !newMessage.trim() || sendMessageMutation.isPending || !canSend
+              }
               className="p-2.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
               aria-label={t("sendMessage")}
             >

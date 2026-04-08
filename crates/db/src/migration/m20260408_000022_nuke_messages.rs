@@ -16,7 +16,7 @@ impl MigrationTrait for Migration {
         // Single TRUNCATE ... CASCADE covers all listed tables and any
         // dependent rows reachable via foreign-key cascades.
         db.execute_unprepared(
-            r#"
+            r"
             TRUNCATE
                 messages,
                 message_device_queue,
@@ -30,7 +30,7 @@ impl MigrationTrait for Migration {
                 device_signed_pre_keys,
                 one_time_pre_keys
             CASCADE
-            "#,
+            ",
         )
         .await?;
 
@@ -38,7 +38,7 @@ impl MigrationTrait for Migration {
         // (identity columns auto-reset on TRUNCATE … RESTART IDENTITY, but
         // these tables use UUID PKs so this is a no-op safety net).
         db.execute_unprepared(
-            r#"
+            r"
             DO $$
             DECLARE
                 seq RECORD;
@@ -67,7 +67,7 @@ impl MigrationTrait for Migration {
                 END LOOP;
             END
             $$
-            "#,
+            ",
         )
         .await?;
 
