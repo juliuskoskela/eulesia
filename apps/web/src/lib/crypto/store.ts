@@ -149,12 +149,22 @@ function tx<T>(
 /**
  * Persist device key material to IndexedDB.
  *
- * Overwrites any existing record with the same `deviceId`.
+ * Clears any stale device key records first so that exactly one record
+ * exists after the write. This prevents `loadDeviceKeys` from
+ * non-deterministically picking an arbitrary device when multiple
+ * records have accumulated.
  */
 export async function saveDeviceKeys(keys: DeviceKeys): Promise<void> {
   const db = await openKeyStore();
   try {
-    await tx(db, STORE_DEVICE_KEYS, "readwrite", (store) => store.put(keys));
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_DEVICE_KEYS, "readwrite");
+      const store = transaction.objectStore(STORE_DEVICE_KEYS);
+      store.clear();
+      store.put(keys);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
   } finally {
     db.close();
   }

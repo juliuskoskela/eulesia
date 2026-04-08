@@ -66,8 +66,8 @@ pub async fn invite(
         return Err(ApiError::Forbidden);
     }
 
-    // Verify target user exists.
-    UserRepo::find_by_id(&state.db, req.user_id)
+    // Verify target user exists (keep the model for the response).
+    let target_user = UserRepo::find_by_id(&state.db, req.user_id)
         .await
         .map_err(db_err)?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;
@@ -168,11 +168,7 @@ pub async fn invite(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    let user = UserRepo::find_by_id(&state.db, req.user_id)
-        .await
-        .map_err(db_err)?;
-    let (uname, uavatar) =
-        user.map_or_else(|| ("Unknown".into(), None), |u| (u.name, u.avatar_url));
+    let (uname, uavatar) = (target_user.name, target_user.avatar_url);
 
     Ok(Json(MemberSummary {
         user_id: req.user_id,

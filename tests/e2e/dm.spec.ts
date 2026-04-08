@@ -21,11 +21,13 @@ test.describe("Direct Messages", () => {
     expect(users.length).toBeGreaterThan(0);
     const otherUserId = users[0].id;
 
-    // Start a DM conversation via the v2 conversations endpoint
+    // Start a plaintext DM conversation via the v2 conversations endpoint.
+    // E2EE conversations require device registration + per-device ciphertexts;
+    // this smoke test exercises the basic messaging flow without crypto setup.
     const dmRes = await ctx.request.post(`${API_URL}/api/v1/conversations`, {
       data: {
         conversationType: "direct",
-        encryption: "e2ee",
+        encryption: "none",
         members: [otherUserId],
       },
     });
@@ -35,7 +37,6 @@ test.describe("Direct Messages", () => {
     expect(conversationId).toBeTruthy();
 
     // Send a plaintext message via the v2 messages endpoint.
-    // This will be stored as plaintext content since we pass the content field.
     const msgRes = await ctx.request.post(
       `${API_URL}/api/v1/conversations/${conversationId}/messages`,
       { data: { content: "Hello from e2e test!" } },

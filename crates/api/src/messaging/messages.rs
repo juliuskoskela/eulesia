@@ -232,7 +232,7 @@ pub async fn send(
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
     // Single authoritative read inside lock — fetch type + epoch + encryption together.
-    let (conv_type, current_epoch, _encryption) = {
+    let (conv_type, current_epoch, encryption) = {
         use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
         let row = txn
             .query_one(Statement::from_sql_and_values(
@@ -271,6 +271,14 @@ pub async fn send(
     // device_ciphertexts (DMs) or ciphertext (groups).
     let has_e2ee_payload = req.device_ciphertexts.is_some() || req.ciphertext.is_some();
     let is_plaintext = !has_e2ee_payload;
+
+    // Reject plaintext sends on E2EE conversations — clients must provide
+    // device_ciphertexts (DMs) or ciphertext (groups).
+    if is_plaintext && encryption == "e2ee" {
+        return Err(ApiError::BadRequest(
+            "plaintext messages are not allowed in end-to-end encrypted conversations".into(),
+        ));
+    }
 
     if is_plaintext {
         // Plaintext path — no device binding, no ciphertext, no device queue.
