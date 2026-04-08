@@ -38,7 +38,7 @@ pub async fn create_dm_v1(
 ) -> Result<Json<ConversationResponse>, ApiError> {
     let v2_req = CreateConversationRequest {
         conversation_type: ConversationType::Direct,
-        encryption: Some("none".into()),
+        encryption: Some("e2ee".into()),
         name: None,
         description: None,
         members: vec![req.user_id],

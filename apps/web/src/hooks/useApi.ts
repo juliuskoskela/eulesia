@@ -716,12 +716,59 @@ export function useStartConversation() {
   });
 }
 
-export function useSendDM(conversationId: string) {
+export function useSendDM(
+  conversationId: string,
+  options?: {
+    /** The local device ID, if E2EE is initialized. */
+    deviceId?: string | null;
+    /** The ID of the other user in the conversation, for device lookup. */
+    otherUserId?: string | null;
+  },
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (content: string) =>
-      api.sendDirectMessage(conversationId, content),
+    mutationFn: async (content: string) => {
+      const { deviceId, otherUserId } = options ?? {};
+
+      // Attempt E2EE if device is initialized and we know the other user
+      if (deviceId && otherUserId) {
+        try {
+          const { encryptForConversation } = await import(
+            "../lib/e2ee/index.ts"
+          );
+
+          // Get the other user's devices
+          const devices = await api.getUserDevices(otherUserId);
+
+          if (devices.length > 0) {
+            const recipientDeviceIds = devices.map((d) => d.id);
+
+            const payload = await encryptForConversation(
+              conversationId,
+              recipientDeviceIds,
+              content,
+              api,
+            );
+
+            return api.sendEncryptedDirectMessage(conversationId, {
+              deviceCiphertexts: payload.deviceCiphertexts,
+              senderDeviceId: deviceId,
+            });
+          }
+          // No devices on the other side — fall through to plaintext
+        } catch (encryptErr) {
+          // Encryption failed — fall back to plaintext gracefully
+          console.warn(
+            "E2EE encryption failed, sending plaintext:",
+            encryptErr,
+          );
+        }
+      }
+
+      // Plaintext fallback
+      return api.sendDirectMessage(conversationId, content);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversation(conversationId),

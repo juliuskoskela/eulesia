@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { AdminAuthProvider, useAdminAuth } from "./hooks/useAdminAuth";
+import { DeviceProvider } from "./hooks/useDevice";
 import { SocketProvider } from "./hooks/useSocket";
 import { GuideProvider } from "./components/guide";
 import { CookieConsent } from "./components/common/CookieConsent";
@@ -602,17 +603,19 @@ function App() {
           <DeepLinkHandler />
           <BackButtonHandler />
           <AuthProvider>
-            <AdminAuthProvider>
-              <SocketProvider>
-                <NativePushHandler />
-                <GuideProvider>
-                  <AppRoutes />
-                  <CookieConsent />
-                  <PWAUpdatePrompt />
-                  <PWAInstallBanner />
-                </GuideProvider>
-              </SocketProvider>
-            </AdminAuthProvider>
+            <DeviceProvider>
+              <AdminAuthProvider>
+                <SocketProvider>
+                  <NativePushHandler />
+                  <GuideProvider>
+                    <AppRoutes />
+                    <CookieConsent />
+                    <PWAUpdatePrompt />
+                    <PWAInstallBanner />
+                  </GuideProvider>
+                </SocketProvider>
+              </AdminAuthProvider>
+            </DeviceProvider>
           </AuthProvider>
         </BrowserRouter>
       </PWAProvider>

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ContentWithPreviews } from "../components/common/ContentWithPreviews";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
@@ -26,11 +26,59 @@ import {
   useDeleteDirectMessage,
 } from "../hooks/useApi";
 import { useAuth } from "../hooks/useAuth";
+import { useDevice } from "../hooks/useDevice";
 import { useSocket } from "../hooks/useSocket";
 import { useKeyboard } from "../hooks/useKeyboard";
 import { formatRelativeTime } from "../lib/formatTime";
 import type { DirectMessage } from "../lib/api";
 import { getAvatarInitials } from "../utils/avatar";
+
+/**
+ * Hook to decrypt an E2EE message on demand. Returns the decrypted content
+ * or falls back to the plaintext content field.
+ */
+function useDecryptedContent(message: DirectMessage): {
+  content: string;
+  isDecrypting: boolean;
+  decryptionFailed: boolean;
+} {
+  const [decryptedContent, setDecryptedContent] = useState<string | null>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [decryptionFailed, setDecryptionFailed] = useState(false);
+
+  const decrypt = useCallback(async () => {
+    if (!message.ciphertext || !message.senderDeviceId) return;
+
+    setIsDecrypting(true);
+    try {
+      const { decryptConversationMessage } = await import(
+        "../lib/e2ee/index.ts"
+      );
+      const plaintext = await decryptConversationMessage(
+        message.conversationId,
+        message.senderDeviceId,
+        message.ciphertext,
+      );
+      setDecryptedContent(plaintext);
+    } catch (err) {
+      console.warn("Message decryption failed:", err);
+      setDecryptionFailed(true);
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [message.ciphertext, message.senderDeviceId, message.conversationId]);
+
+  useEffect(() => {
+    if (message.ciphertext && message.senderDeviceId && !decryptedContent) {
+      decrypt();
+    }
+  }, [message.ciphertext, message.senderDeviceId, decryptedContent, decrypt]);
+
+  // If we have ciphertext and decrypted it, use that. Otherwise use content.
+  const content = decryptedContent ?? message.content;
+
+  return { content, isDecrypting, decryptionFailed };
+}
 
 interface DMMessageBubbleProps {
   message: DirectMessage;
@@ -49,6 +97,11 @@ function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const {
+    content: displayContent,
+    isDecrypting,
+    decryptionFailed,
+  } = useDecryptedContent(message);
 
   if (message.isHidden) {
     return (
@@ -61,7 +114,7 @@ function MessageBubble({
   }
 
   const handleStartEdit = () => {
-    setEditContent(message.content);
+    setEditContent(displayContent);
     setIsEditing(true);
   };
 
@@ -135,7 +188,13 @@ function MessageBubble({
                   : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md border border-gray-100 dark:border-gray-700"
               }`}
             >
-              {message.contentHtml ? (
+              {isDecrypting ? (
+                <p className="text-sm italic opacity-60">Decrypting...</p>
+              ) : decryptionFailed ? (
+                <p className="text-sm italic opacity-60">
+                  Unable to decrypt message
+                </p>
+              ) : message.contentHtml && !message.ciphertext ? (
                 <ContentWithPreviews
                   html={message.contentHtml}
                   className={`prose prose-sm max-w-none ${
@@ -143,7 +202,10 @@ function MessageBubble({
                   }`}
                 />
               ) : (
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <p className="text-sm whitespace-pre-wrap">{displayContent}</p>
+              )}
+              {message.ciphertext && !decryptionFailed && !isDecrypting && (
+                <Lock className="inline-block w-3 h-3 ml-1 opacity-40" />
               )}
             </div>
             {isOwnMessage && (
@@ -185,6 +247,7 @@ export function DMConversationPage() {
   const navigate = useNavigate();
   const { conversationId } = useParams<{ conversationId: string }>();
   const { currentUser } = useAuth();
+  const { deviceId, isInitialized: deviceReady } = useDevice();
   const { joinDm, leaveDm, emitTypingDm, typingInDm } = useSocket();
   const { isKeyboardOpen, keyboardHeight } = useKeyboard();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -193,7 +256,11 @@ export function DMConversationPage() {
     isLoading,
     error,
   } = useConversation(conversationId || "");
-  const sendMessageMutation = useSendDM(conversationId || "");
+  const otherUserId = conversationData?.otherUser?.id ?? null;
+  const sendMessageMutation = useSendDM(conversationId || "", {
+    deviceId: deviceReady ? deviceId : null,
+    otherUserId,
+  });
   const markReadMutation = useMarkRead(conversationId || "");
   const editMessageMutation = useEditDirectMessage(conversationId || "");
   const deleteMessageMutation = useDeleteDirectMessage(conversationId || "");
@@ -269,9 +336,8 @@ export function DMConversationPage() {
   }
 
   const { otherUser, messages } = conversationData;
-  // E2EE is not yet implemented on the frontend — all messages are plaintext
-  // regardless of the conversation's encryption field in the database.
-  const isEncrypted = false;
+  // E2EE is active when the device is initialized and conversation supports it
+  const isEncrypted = deviceReady && conversationData.encryption === "e2ee";
   const canLinkToOtherUserProfile =
     Boolean(otherUser?.id) && (otherUser?.canViewProfile ?? true);
 

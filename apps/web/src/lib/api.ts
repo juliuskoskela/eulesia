@@ -41,6 +41,9 @@ import type {
   SubmitAppealData,
   AppealResponse,
   MySanction,
+  Device,
+  PreKeyBundle,
+  ConversationWithMessages,
 } from "../types/frontend";
 import type { UserProfileResponse } from "../types/generated/UserProfileResponse";
 import type {
@@ -189,13 +192,6 @@ interface EditHistoryEntry {
   previousTitle?: string | null;
   editedAt: string;
   editor: { id: string; name: string; avatarUrl?: string };
-}
-
-interface ConversationWithMessages {
-  id: string;
-  encryption?: "e2ee" | "none";
-  otherUser: UserSummary | null;
-  messages: DirectMessage[];
 }
 
 interface CreatePlaceData {
@@ -1145,6 +1141,61 @@ class ApiClient {
 
   async markConversationRead(conversationId: string): Promise<void> {
     await this.request(`/dm/${conversationId}/read`, { method: "POST" });
+  }
+
+  // E2EE Device management
+  async registerDevice(data: {
+    displayName: string;
+    platform: string;
+    identityKey: string;
+    signedPreKey: { keyId: number; keyData: string; signature: string };
+  }): Promise<Device> {
+    return this.request("/devices", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async uploadPreKeys(
+    deviceId: string,
+    data: {
+      signedPreKey?: { keyId: number; keyData: string; signature: string };
+      oneTimeKeys: { keyId: number; keyData: string }[];
+    },
+  ): Promise<void> {
+    await this.request(`/devices/${deviceId}/pre-keys`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPreKeyBundle(deviceId: string): Promise<PreKeyBundle> {
+    return this.request(`/devices/${deviceId}/pre-key-bundle`);
+  }
+
+  async listDevices(): Promise<Device[]> {
+    return this.request("/devices");
+  }
+
+  async revokeDevice(deviceId: string): Promise<void> {
+    await this.request(`/devices/${deviceId}`, { method: "DELETE" });
+  }
+
+  async getUserDevices(userId: string): Promise<Device[]> {
+    return this.request(`/users/${userId}/devices`);
+  }
+
+  async sendEncryptedDirectMessage(
+    conversationId: string,
+    data: {
+      deviceCiphertexts: Record<string, string>;
+      senderDeviceId: string;
+    },
+  ): Promise<DirectMessage> {
+    return this.request(`/dm/${conversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   }
 
   // Notifications

@@ -7,6 +7,7 @@ use axum::{
     },
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::CookieJar;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -22,7 +23,7 @@ use crate::registry::ConnectionRegistry;
 
 #[derive(Deserialize)]
 pub struct WsQuery {
-    token: String,
+    token: Option<String>,
 }
 
 pub type WsState = (Arc<sea_orm::DatabaseConnection>, ConnectionRegistry);
@@ -30,10 +31,29 @@ pub type WsState = (Arc<sea_orm::DatabaseConnection>, ConnectionRegistry);
 pub async fn ws_upgrade(
     State((db, registry)): State<WsState>,
     Query(query): Query<WsQuery>,
+    jar: CookieJar,
     ws: WebSocketUpgrade,
 ) -> Response {
+    // Extract token from query param first, then fall back to session cookie.
+    let token = query.token.or_else(|| {
+        jar.get("session")
+            .or_else(|| jar.get("__Host-session"))
+            .map(|c| c.value().to_string())
+    });
+
+    let token = match token {
+        Some(t) => t,
+        None => {
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                "missing session token",
+            )
+                .into_response();
+        }
+    };
+
     // Validate session token before upgrading
-    let session_result = AuthService::validate_session(&db, &query.token).await;
+    let session_result = AuthService::validate_session(&db, &token).await;
 
     match session_result {
         Ok((session, _user)) => {

@@ -240,6 +240,10 @@ export interface DirectMessage {
   conversationId: string;
   content: string;
   contentHtml?: string;
+  /** Base64url-encoded ciphertext envelope, present for E2EE messages. */
+  ciphertext?: string;
+  /** Device ID of the sender, present for E2EE messages. */
+  senderDeviceId?: string;
   author: UserSummary | null;
   editedAt?: string | null;
   isHidden?: boolean;
@@ -253,6 +257,31 @@ export type FeedScope =
   | "european"
   | "personal"
   | "all";
+
+// E2EE Device types
+export interface Device {
+  id: string;
+  userId: string;
+  displayName: string;
+  platform: string;
+  identityKey: string;
+  createdAt: string;
+  lastActiveAt: string;
+}
+
+export interface PreKeyBundle {
+  deviceId: string;
+  identityKey: string;
+  signedPreKey: { keyId: number; keyData: string; signature: string };
+  oneTimePreKey?: { keyId: number; keyData: string };
+}
+
+export interface ConversationWithMessages {
+  id: string;
+  encryption?: "e2ee" | "none";
+  otherUser: UserSummary | null;
+  messages: DirectMessage[];
+}
 
 export type SortBy = "recent" | "new" | "top";
 

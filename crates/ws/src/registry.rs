@@ -22,6 +22,7 @@ struct Connection {
 
 #[derive(Clone, Default)]
 pub struct ConnectionRegistry {
+    /// connection_id -> Connection
     connections: Arc<DashMap<Uuid, Connection>>,
     /// Reverse index: user_id → set of connection_ids.
     user_connections: Arc<DashMap<Uuid, Vec<Uuid>>>,
