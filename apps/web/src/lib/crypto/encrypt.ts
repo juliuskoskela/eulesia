@@ -75,15 +75,13 @@ export async function deriveMessageKey(
   );
 
   // Encode the counter as a big-endian 8-byte value in the info parameter
-  const info = new Uint8Array(8 + 20); // 8 bytes counter + "eulesia-e2ee-msg" prefix
   const encoder = new TextEncoder();
   const prefix = encoder.encode("eulesia-e2ee-msg");
+  const info = new Uint8Array(prefix.length + 8); // prefix + 8-byte counter
   info.set(prefix, 0);
-  // Write counter as big-endian uint64 (only using lower 32 bits for now,
-  // which supports ~4 billion messages per session)
+  // Write counter as big-endian uint64 immediately after the prefix.
   const view = new DataView(info.buffer, info.byteOffset, info.byteLength);
-  view.setUint32(16, 0, false);
-  view.setUint32(20, counter, false);
+  view.setBigUint64(prefix.length, BigInt(counter), false);
 
   return crypto.subtle.deriveKey(
     {

@@ -166,15 +166,18 @@ export function UserProfilePage() {
   });
 
   const isOwnProfile = currentUser?.id === userId;
-  const { data: recipientDevices, isLoading: recipientDevicesLoading } =
-    useQuery({
-      queryKey: ["userDevices", userId],
-      queryFn: () => api.getUserDevices(userId!),
-      enabled: Boolean(isAuthenticated && userId && !isOwnProfile),
-    });
+  const {
+    data: recipientDevices,
+    isLoading: recipientDevicesLoading,
+    isError: recipientDevicesError,
+  } = useQuery({
+    queryKey: ["userDevices", userId],
+    queryFn: () => api.getUserDevices(userId!),
+    enabled: Boolean(isAuthenticated && userId && !isOwnProfile),
+  });
   const isInstitution = user?.role === "institution";
   const hasTopic = isInstitution && user?.institutionTopic;
-  const recipientHasDevice = (recipientDevices?.length ?? 0) > 0;
+  const recipientHasDevice = !!recipientDevices && recipientDevices.length > 0;
 
   const privateChatBlockReason = !isAuthenticated
     ? null
@@ -184,11 +187,16 @@ export function UserProfilePage() {
         ? deviceError || t("profile:userProfile.privateChatNeedsYourDevice")
         : recipientDevicesLoading
           ? t("profile:userProfile.checkingPrivateChat")
-          : !recipientHasDevice
-            ? t("profile:userProfile.privateChatNeedsRecipientDevice", {
-                name: user?.name ?? "",
+          : recipientDevicesError
+            ? t("profile:userProfile.privateChatCheckFailed", {
+                defaultValue:
+                  "Could not verify whether the recipient has a registered device.",
               })
-            : null;
+            : !recipientHasDevice
+              ? t("profile:userProfile.privateChatNeedsRecipientDevice", {
+                  name: user?.name ?? "",
+                })
+              : null;
 
   const canStartPrivateChat =
     isAuthenticated && !sendingMessage && !privateChatBlockReason;

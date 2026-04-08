@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import i18n from "../lib/i18n";
 import { api, setUnauthorizedHandler } from "../lib/api";
 import type { RegisterRequest, User } from "../lib/api";
+import { loadDeviceKeys, clearKeyStore } from "../lib/crypto/index.ts";
 
 interface SanctionInfo {
   sanctionType: "suspension" | "ban";
@@ -133,6 +134,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    // Revoke the device while the session is still valid, then clear local
+    // crypto state. This prevents orphaning server-side devices.
+    try {
+      const keys = await loadDeviceKeys();
+      if (keys?.deviceId) {
+        await api.revokeDevice(keys.deviceId).catch(() => {});
+      }
+    } catch {
+      // Best-effort — continue with logout regardless
+    }
+    try {
+      await clearKeyStore();
+    } catch {
+      // Non-fatal
+    }
     try {
       await api.logout();
     } catch {

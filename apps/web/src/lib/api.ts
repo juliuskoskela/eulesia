@@ -1294,15 +1294,27 @@ class ApiClient {
       ),
     ]);
 
-    const messages: DirectMessage[] = messagesResp.map((m) => ({
-      id: m.id,
-      conversationId: m.conversationId,
-      content: m.content ?? null,
-      ciphertext: m.ciphertext || undefined,
-      senderDeviceId: m.senderDeviceId ?? undefined,
-      author: null,
-      createdAt: m.serverTs,
-    }));
+    const memberById = new Map(members.map((m) => [m.userId, m]));
+    const messages: DirectMessage[] = messagesResp.map((m) => {
+      const member = memberById.get(m.senderId);
+      return {
+        id: m.id,
+        conversationId: m.conversationId,
+        content: m.content ?? null,
+        ciphertext: m.ciphertext || undefined,
+        senderDeviceId: m.senderDeviceId ?? undefined,
+        senderId: m.senderId,
+        author: member
+          ? {
+              id: member.userId,
+              name: member.name,
+              avatarUrl: member.avatarUrl ?? null,
+              role: "citizen" as const,
+            }
+          : null,
+        createdAt: m.serverTs,
+      };
+    });
 
     return {
       id: meta.id,

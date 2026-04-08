@@ -245,6 +245,8 @@ export interface DirectMessage {
   ciphertext?: string;
   /** Device ID of the sender, present for E2EE messages. */
   senderDeviceId?: string;
+  /** Raw sender ID from the v2 API — used when author is not populated. */
+  senderId?: string;
   author: UserSummary | null;
   editedAt?: string | null;
   isHidden?: boolean;

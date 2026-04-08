@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -202,7 +202,9 @@ export function GroupConversationPage() {
                 <GroupMessageBubble
                   key={msg.id}
                   message={msg}
-                  isOwnMessage={msg.author?.id === currentUser?.id}
+                  isOwnMessage={
+                    (msg.senderId ?? msg.author?.id) === currentUser?.id
+                  }
                 />
               ))
             )}
@@ -278,6 +280,49 @@ export function GroupConversationPage() {
 }
 
 // ---------------------------------------------------------------------------
+// Decrypt group E2EE message on demand.
+// ---------------------------------------------------------------------------
+
+function useGroupDecryptedContent(message: DirectMessage): {
+  content: string;
+  isDecrypting: boolean;
+  decryptionFailed: boolean;
+} {
+  const [decrypted, setDecrypted] = useState<string | null>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [decryptionFailed, setDecryptionFailed] = useState(false);
+
+  const decrypt = useCallback(async () => {
+    if (!message.ciphertext) return;
+    setIsDecrypting(true);
+    try {
+      const { decryptGroupMessage } = await import("../lib/e2ee/index.ts");
+      const plaintext = await decryptGroupMessage(
+        message.conversationId,
+        message.ciphertext,
+      );
+      setDecrypted(plaintext);
+    } catch {
+      setDecryptionFailed(true);
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [message.ciphertext, message.conversationId]);
+
+  useEffect(() => {
+    if (message.ciphertext && !decrypted) {
+      decrypt();
+    }
+  }, [message.ciphertext, decrypted, decrypt]);
+
+  return {
+    content: decrypted ?? message.content ?? "",
+    isDecrypting,
+    decryptionFailed,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Group message bubble (simplified — no edit/delete for groups)
 // ---------------------------------------------------------------------------
 
@@ -288,6 +333,12 @@ function GroupMessageBubble({
   message: DirectMessage;
   isOwnMessage: boolean;
 }) {
+  const {
+    content: displayContent,
+    isDecrypting,
+    decryptionFailed,
+  } = useGroupDecryptedContent(message);
+
   return (
     <div className={`flex gap-3 ${isOwnMessage ? "flex-row-reverse" : ""}`}>
       <div
@@ -302,9 +353,15 @@ function GroupMessageBubble({
             {message.author.name}
           </p>
         )}
-        <p className="text-sm whitespace-pre-wrap break-words">
-          {message.content}
-        </p>
+        {isDecrypting ? (
+          <p className="text-sm italic opacity-60">Decrypting...</p>
+        ) : decryptionFailed ? (
+          <p className="text-sm italic opacity-60">Unable to decrypt message</p>
+        ) : (
+          <p className="text-sm whitespace-pre-wrap break-words">
+            {displayContent}
+          </p>
+        )}
         <div
           className={`flex items-center gap-1 mt-1 ${
             isOwnMessage ? "justify-end" : ""

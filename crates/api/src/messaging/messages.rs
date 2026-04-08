@@ -220,10 +220,17 @@ pub async fn send(
         .map_err(db_err)?
         .ok_or(ApiError::Forbidden)?;
 
-    // Use plaintext path if conversation is plaintext OR if the request
-    // contains neither per-device ciphertexts (DMs) nor a group ciphertext.
+    // Reject plaintext sends on E2EE conversations — clients must provide
+    // either per-device ciphertexts (DMs) or a group ciphertext.
     let has_e2ee_payload = req.device_ciphertexts.is_some() || req.ciphertext.is_some();
-    let is_plaintext = encryption == "none" || !has_e2ee_payload;
+
+    if encryption != "none" && !has_e2ee_payload {
+        return Err(ApiError::BadRequest(
+            "E2EE conversations require ciphertext or device_ciphertexts".into(),
+        ));
+    }
+
+    let is_plaintext = encryption == "none";
 
     if is_plaintext {
         // Plaintext path — no device binding, no ciphertext, no device queue.

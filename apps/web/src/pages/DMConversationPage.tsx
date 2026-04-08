@@ -265,13 +265,13 @@ export function DMConversationPage() {
   const otherUserId = conversationData?.otherUser?.id ?? null;
 
   // Check if recipient has a registered device (required for E2EE).
-  const { data: recipientDevices } = useQuery({
+  const { data: recipientDevices, isError: recipientDevicesError } = useQuery({
     queryKey: ["userDevices", otherUserId],
     queryFn: () => api.getUserDevices(otherUserId!),
     enabled: !!otherUserId,
   });
-  const recipientHasDevice = (recipientDevices?.length ?? 0) > 0;
-  const canSend = deviceReady && recipientHasDevice;
+  const recipientHasDevice = !!recipientDevices && recipientDevices.length > 0;
+  const canSend = deviceReady && (recipientHasDevice || recipientDevicesError);
 
   const sendMessageMutation = useSendDM(conversationId || "", {
     deviceId: deviceReady ? deviceId : null,
@@ -522,16 +522,29 @@ export function DMConversationPage() {
             </Link>
           </div>
         )}
-        {deviceReady && !recipientHasDevice && otherUserId && (
+        {deviceReady && recipientDevicesError && otherUserId && (
           <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 text-center">
             <p className="text-sm text-amber-700 dark:text-amber-300">
-              {t("recipientNoDevice", {
+              {t("recipientDeviceCheckFailed", {
                 defaultValue:
-                  "The other user has no registered device. Encrypted messaging is not available until they set up a device.",
+                  "Could not verify whether the recipient has a registered device.",
               })}
             </p>
           </div>
         )}
+        {deviceReady &&
+          !recipientDevicesError &&
+          !recipientHasDevice &&
+          otherUserId && (
+            <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 text-center">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                {t("recipientNoDevice", {
+                  defaultValue:
+                    "The other user has no registered device. Encrypted messaging is not available until they set up a device.",
+                })}
+              </p>
+            </div>
+          )}
 
         {/* Input bar — elevated surface */}
         <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 border-t border-emerald-100 dark:border-emerald-950/40 px-4 py-3 backdrop-blur">

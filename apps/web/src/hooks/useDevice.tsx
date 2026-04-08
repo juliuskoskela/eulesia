@@ -21,7 +21,6 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "./useAuth.tsx";
 import { api } from "../lib/api.ts";
 import { initializeDevice, replenishPreKeys } from "../lib/e2ee/index.ts";
-import { clearKeyStore } from "../lib/crypto/index.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -115,26 +114,10 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     isInitializing,
   ]);
 
-  // Revoke server device and clear key store on logout
+  // Reset local device state on logout. Revocation and key-store clearing
+  // are handled in the auth logout flow while the session is still valid.
   useEffect(() => {
     if (prevAuthRef.current && !isAuthenticated) {
-      // User just logged out — revoke the server device, then clear local crypto.
-      const revokeAndClear = async () => {
-        if (deviceId) {
-          try {
-            await api.revokeDevice(deviceId);
-          } catch (err) {
-            // Best-effort — session may already be invalidated.
-            console.warn("Failed to revoke device on logout:", err);
-          }
-        }
-        try {
-          await clearKeyStore();
-        } catch (err) {
-          console.warn("Failed to clear key store on logout:", err);
-        }
-      };
-      revokeAndClear();
       setDeviceId(null);
       setIsInitialized(false);
       setError(null);
@@ -142,7 +125,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       setHasFreshRegistration(false);
     }
     prevAuthRef.current = isAuthenticated;
-  }, [isAuthenticated, deviceId]);
+  }, [isAuthenticated]);
 
   return (
     <DeviceContext.Provider
