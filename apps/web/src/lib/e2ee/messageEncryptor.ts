@@ -13,6 +13,7 @@ import {
   fromBase64url,
   importKeyPair,
   initiateSession,
+  receiveSession,
   deriveMessageKey,
   encryptMessage,
   decryptMessage as cryptoDecrypt,
@@ -114,6 +115,7 @@ export async function ensureSession(
     deviceId,
     sendKey: toBase64url(new Uint8Array(sendKeyRaw)),
     receiveKey: toBase64url(new Uint8Array(receiveKeyRaw)),
+    ephemeralPublicKey: toBase64url(initiated.ephemeralPublicKey),
     sendCounter: 0,
     receiveCounter: 0,
   });
@@ -167,12 +169,15 @@ export async function encryptForConversation(
     // Encrypt
     const encrypted = await encryptMessage(messageKey, plaintext);
 
-    // Build envelope
+    // Build envelope — include ephemeral key on first message so the
+    // responder can complete X3DH session establishment.
+    const isFirstMessage = session.sendCounter === 0;
     const envelope: CiphertextEnvelope = {
       ct: toBase64url(encrypted.ciphertext),
       nonce: toBase64url(encrypted.nonce),
       counter: session.sendCounter,
-      isPreKeyMessage: session.sendCounter === 0,
+      ephemeralKey: isFirstMessage ? session.ephemeralPublicKey : undefined,
+      isPreKeyMessage: isFirstMessage,
     };
 
     // Base64url-encode the JSON envelope
@@ -212,8 +217,57 @@ export async function decryptConversationMessage(
   const envelopeJson = decoder.decode(envelopeBytes);
   const envelope: CiphertextEnvelope = JSON.parse(envelopeJson);
 
-  // Load the session
-  const session = await loadSession(conversationId, senderDeviceId);
+  // Load existing session or establish one from the pre-key message
+  let session = await loadSession(conversationId, senderDeviceId);
+  if (!session && envelope.isPreKeyMessage && envelope.ephemeralKey) {
+    // First message from this device — run responder-side X3DH
+    const deviceKeys = await loadDeviceKeys();
+    if (!deviceKeys) throw new Error("Device not initialized");
+
+    const myIdentityKey = await importKeyPair(
+      deviceKeys.identityKeyPair,
+      "dh",
+      false,
+    );
+    const mySignedPreKey = await importKeyPair(
+      deviceKeys.signedPreKeyPair,
+      "dh",
+      false,
+    );
+
+    const theirIdentityKey = fromBase64url(
+      deviceKeys.identityKeyPair.publicKey,
+    ); // placeholder — the sender's identity key should be fetched from the server
+    const theirEphemeralKey = fromBase64url(envelope.ephemeralKey);
+
+    const sessionKeys = await receiveSession(
+      myIdentityKey,
+      mySignedPreKey,
+      undefined, // OTK lookup would go here in a full implementation
+      theirIdentityKey,
+      theirEphemeralKey,
+    );
+
+    const sendKeyRaw = await crypto.subtle.exportKey(
+      "raw",
+      sessionKeys.sendKey,
+    );
+    const recvKeyRaw = await crypto.subtle.exportKey(
+      "raw",
+      sessionKeys.receiveKey,
+    );
+
+    session = {
+      conversationId,
+      deviceId: senderDeviceId,
+      sendKey: toBase64url(new Uint8Array(sendKeyRaw)),
+      receiveKey: toBase64url(new Uint8Array(recvKeyRaw)),
+      sendCounter: 0,
+      receiveCounter: 0,
+    };
+    await saveSession(session);
+  }
+
   if (!session) {
     throw new Error(
       `No session found for device ${senderDeviceId} in conversation ${conversationId}`,

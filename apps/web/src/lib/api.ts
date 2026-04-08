@@ -732,19 +732,25 @@ class ApiClient {
     messageId: string,
     content: string,
   ): Promise<DirectMessage> {
-    return this.request(`/dm/${conversationId}/messages/${messageId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ content }),
-    });
+    return this.request(
+      `/conversations/${conversationId}/messages/${messageId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ content }),
+      },
+    );
   }
 
   async deleteDirectMessage(
     conversationId: string,
     messageId: string,
   ): Promise<{ deleted: boolean }> {
-    return this.request(`/dm/${conversationId}/messages/${messageId}`, {
-      method: "DELETE",
-    });
+    return this.request(
+      `/conversations/${conversationId}/messages/${messageId}`,
+      {
+        method: "DELETE",
+      },
+    );
   }
 
   async getTags(): Promise<TagWithCategory[]> {
@@ -1108,9 +1114,9 @@ class ApiClient {
     );
   }
 
-  // Direct Messages
+  // Conversations (v2 endpoints — support E2EE ciphertext fields)
   async getConversations(): Promise<Conversation[]> {
-    return this.request("/dm");
+    return this.request("/conversations");
   }
 
   async getUnreadDmCount(): Promise<{ count: number }> {
@@ -1118,9 +1124,13 @@ class ApiClient {
   }
 
   async startConversation(userId: string): Promise<Conversation> {
-    return this.request("/dm", {
+    return this.request("/conversations", {
       method: "POST",
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({
+        conversationType: "direct",
+        encryption: "e2ee",
+        members: [userId],
+      }),
     });
   }
 
@@ -1129,21 +1139,23 @@ class ApiClient {
     limit?: number,
   ): Promise<ConversationWithMessages> {
     const query = limit ? `?limit=${limit}` : "";
-    return this.request(`/dm/${id}${query}`);
+    return this.request(`/conversations/${id}${query}`);
   }
 
   async sendDirectMessage(
     conversationId: string,
     content: string,
   ): Promise<DirectMessage> {
-    return this.request(`/dm/${conversationId}/messages`, {
+    return this.request(`/conversations/${conversationId}/messages`, {
       method: "POST",
       body: JSON.stringify({ content }),
     });
   }
 
   async markConversationRead(conversationId: string): Promise<void> {
-    await this.request(`/dm/${conversationId}/read`, { method: "POST" });
+    await this.request(`/conversations/${conversationId}/read`, {
+      method: "POST",
+    });
   }
 
   // E2EE Device management
@@ -1195,7 +1207,7 @@ class ApiClient {
       senderDeviceId: string;
     },
   ): Promise<DirectMessage> {
-    return this.request(`/dm/${conversationId}/messages`, {
+    return this.request(`/conversations/${conversationId}/messages`, {
       method: "POST",
       body: JSON.stringify(data),
     });

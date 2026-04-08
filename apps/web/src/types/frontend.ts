@@ -238,7 +238,8 @@ export interface Conversation {
 export interface DirectMessage {
   id: string;
   conversationId: string;
-  content: string;
+  /** Plaintext content — may be null/absent for E2EE messages. */
+  content?: string | null;
   contentHtml?: string;
   /** Base64url-encoded ciphertext envelope, present for E2EE messages. */
   ciphertext?: string;

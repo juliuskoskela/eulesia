@@ -123,6 +123,7 @@ export async function initializeDevice(
   const identityExported = await exportKeyPair(identityKeyPair);
 
   const signingKeyPair = await generateExtractableSigningKeyPair();
+  const signingExported = await exportKeyPair(signingKeyPair);
 
   const signedPreKeyPair = await generateExtractableKeyPair();
   const signedPreKeyExported = await exportKeyPair(signedPreKeyPair);
@@ -160,6 +161,7 @@ export async function initializeDevice(
   await saveDeviceKeys({
     deviceId: device.id,
     identityKeyPair: identityExported,
+    signingKeyPair: signingExported,
     signedPreKeyPair: signedPreKeyExported,
     signedPreKeyId,
     oneTimePreKeys,

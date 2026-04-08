@@ -123,8 +123,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     {},
   );
   const typingThrottleRef = useRef<Record<string, number>>({});
-  // Track which conversations we're actively viewing
-  const joinedConversationsRef = useRef<Set<string>>(new Set());
   // Track intentional close to prevent reconnect
   const intentionalCloseRef = useRef(false);
 
@@ -320,12 +318,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   // Public API
   // -----------------------------------------------------------------------
 
-  const joinDm = useCallback((conversationId: string) => {
-    joinedConversationsRef.current.add(conversationId);
+  const joinDm = useCallback((_conversationId: string) => {
+    // Currently a no-op — reserved for future join signalling.
   }, []);
 
   const leaveDm = useCallback((conversationId: string) => {
-    joinedConversationsRef.current.delete(conversationId);
     // Clear typing state for this conversation
     setTypingInDm((prev) => {
       if (!prev[conversationId]) return prev;

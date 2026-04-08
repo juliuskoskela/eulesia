@@ -2,14 +2,13 @@ use std::sync::Arc;
 
 use axum::{
     extract::{
-        Query, State, WebSocketUpgrade,
+        State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::CookieJar;
 use futures_util::{SinkExt, StreamExt};
-use serde::Deserialize;
 use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
@@ -21,25 +20,19 @@ use eulesia_db::repo::conversations::ConversationRepo;
 use crate::messages::{ClientMessage, ServerMessage};
 use crate::registry::ConnectionRegistry;
 
-#[derive(Deserialize)]
-pub struct WsQuery {
-    token: Option<String>,
-}
-
 pub type WsState = (Arc<sea_orm::DatabaseConnection>, ConnectionRegistry);
 
 pub async fn ws_upgrade(
     State((db, registry)): State<WsState>,
-    Query(query): Query<WsQuery>,
     jar: CookieJar,
     ws: WebSocketUpgrade,
 ) -> Response {
-    // Extract token from query param first, then fall back to session cookie.
-    let token = query.token.or_else(|| {
-        jar.get("session")
-            .or_else(|| jar.get("__Host-session"))
-            .map(|c| c.value().to_string())
-    });
+    // Authenticate via session cookie only — query-param tokens are a
+    // security risk (logged in URLs, referer headers, browser history).
+    let token = jar
+        .get("session")
+        .or_else(|| jar.get("__Host-session"))
+        .map(|c| c.value().to_string());
 
     let token = match token {
         Some(t) => t,

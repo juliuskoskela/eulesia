@@ -77,7 +77,7 @@ function useDecryptedContent(message: DirectMessage): {
   }, [message.ciphertext, message.senderDeviceId, decryptedContent, decrypt]);
 
   // If we have ciphertext and decrypted it, use that. Otherwise use content.
-  const content = decryptedContent ?? message.content;
+  const content = decryptedContent ?? message.content ?? "";
 
   return { content, isDecrypting, decryptionFailed };
 }

@@ -3,10 +3,12 @@
  *
  * IndexedDB-backed key storage for the Eulesia E2EE messaging protocol.
  *
- * Stores device key material and per-conversation session state in the
- * browser's IndexedDB. Keys are serialised as base64url strings and should be
- * encrypted at rest before being written (see the `keys.exportKeyPair` and
- * `keys.importKeyPair` helpers).
+ * browser's IndexedDB. This module persists the serialised values it is given
+ * and does not itself provide encryption at rest. If callers pass exported
+ * private keys or other secret key material as base64url strings, that data is
+ * stored in IndexedDB in that form. Callers that require at-rest protection
+ * must encrypt or wrap sensitive key material before writing it via this
+ * module.
  *
  * Uses only the native IndexedDB API with no third-party wrappers.
  */
@@ -37,6 +39,8 @@ export interface DeviceKeys {
   deviceId: string;
   /** Long-term identity key pair (ECDH, X25519 or P-256). */
   identityKeyPair: ExportedKeyPair;
+  /** Signing key pair (Ed25519 or ECDSA) used to sign pre-keys. */
+  signingKeyPair: ExportedKeyPair;
   /** Current signed pre-key pair. */
   signedPreKeyPair: ExportedKeyPair;
   /** Monotonically increasing ID for the signed pre-key. */
@@ -61,6 +65,8 @@ export interface SessionState {
   sendKey: string;
   /** Base64url-encoded AES-256-GCM receive key. */
   receiveKey: string;
+  /** Base64url-encoded ephemeral public key (initiator only, for first message). */
+  ephemeralPublicKey?: string;
   /** Next send-side message counter. */
   sendCounter: number;
   /** Next receive-side message counter. */

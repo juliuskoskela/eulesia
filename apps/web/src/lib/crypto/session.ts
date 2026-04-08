@@ -82,7 +82,8 @@ function concat(...arrays: Uint8Array[]): Uint8Array {
  * - "eulesia-e2ee-recv" for the receive key
  *
  * @param ikm  Input keying material (concatenated DH outputs).
- * @returns    A pair of non-extractable AES-256-GCM keys.
+ * @returns    A pair of extractable AES-256-GCM keys (extractable so they
+ *             can be persisted to IndexedDB for session continuity).
  */
 async function deriveSessionKeys(ikm: Uint8Array): Promise<SessionKeys> {
   // Import the IKM as an HKDF key
@@ -122,7 +123,7 @@ async function deriveSessionKeys(ikm: Uint8Array): Promise<SessionKeys> {
     },
     hkdfKey,
     { name: "AES-GCM", length: 256 },
-    false,
+    true,
     ["encrypt", "decrypt"],
   );
 
