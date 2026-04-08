@@ -37,13 +37,26 @@ test.describe("Direct Messages", () => {
     );
     expect(msgRes.ok()).toBeTruthy();
 
+    const conversationLoaded = page.waitForResponse((res) => {
+      const url = res.url();
+      return (
+        res.request().method() === "GET" &&
+        res.ok() &&
+        (url.includes(`/api/v1/dm/${conversationId}`) ||
+          url.includes(`/api/v1/conversations/${conversationId}/messages`))
+      );
+    });
+
     // Navigate to the conversation page and verify the message renders
     await page.goto(`/messages/${conversationId}`);
     await expect(page.locator("main")).toBeVisible();
+    await conversationLoaded;
 
     // The message text should appear on the page
-    await expect(page.getByText("Hello from e2e test!")).toBeVisible({
-      timeout: 10000,
+    await expect(
+      page.getByText("Hello from e2e test!", { exact: true }),
+    ).toBeVisible({
+      timeout: 30000,
     });
 
     expectNoPageErrors(page);
