@@ -2,6 +2,7 @@ pub mod entities;
 pub mod legacy_import;
 pub mod migration;
 pub mod repo;
+pub mod seed;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use std::time::Duration;
@@ -29,5 +30,7 @@ pub async fn migrate(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {
     use sea_orm_migration::MigratorTrait;
     migration::Migrator::up(db, None).await?;
     info!("database migrations applied");
+    let report = seed::sync_reference_data(db).await?;
+    info!(?report, "reference data synced");
     Ok(())
 }
