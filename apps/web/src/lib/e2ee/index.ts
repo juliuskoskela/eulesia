@@ -39,3 +39,14 @@ export type {
 
 // apiTypes — Minimal API client interface
 export type { ApiClient } from "./apiTypes.ts";
+
+export { getE2eeBackend, usingMatrixCrypto } from "./backend.ts";
+
+export {
+  asMatrixDeviceId,
+  asMatrixRoomId,
+  asMatrixUserId,
+  closeMatrixCryptoMachine,
+  getMatrixCryptoMachine,
+  initializeMatrixCryptoMachine,
+} from "./matrixCrypto.ts";
