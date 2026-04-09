@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "./useAuth.tsx";
 import { api } from "../lib/api.ts";
 import { initializeDevice, replenishPreKeys } from "../lib/e2ee/index.ts";
+import { usingMatrixCrypto } from "../lib/e2ee/backend.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +81,17 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       }
 
       const registration = await initializeDevice(api, currentUser.id);
+
+      if (usingMatrixCrypto()) {
+        const { initializeMatrixCryptoMachine } = await import(
+          "../lib/e2ee/matrixCrypto.ts"
+        );
+        await initializeMatrixCryptoMachine(
+          currentUser.id,
+          registration.deviceId,
+        );
+      }
+
       setDeviceId(registration.deviceId);
       setIsInitialized(true);
       setHasFreshRegistration(registration.didCreateDevice);
@@ -128,6 +140,12 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   // session logouts.
   useEffect(() => {
     if (prevAuthRef.current && !isAuthenticated) {
+      if (usingMatrixCrypto()) {
+        void import("../lib/e2ee/matrixCrypto.ts").then(
+          ({ closeMatrixCryptoMachine }) => closeMatrixCryptoMachine(),
+        );
+      }
+
       setDeviceId(null);
       setIsInitialized(false);
       setError(null);
