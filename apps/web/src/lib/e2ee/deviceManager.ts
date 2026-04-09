@@ -49,9 +49,7 @@ function getPlatform(): string {
 
   if (/android/i.test(ua)) return "android";
   if (/iPad|iPhone|iPod/.test(ua)) return "ios";
-  if (/Macintosh/.test(ua)) return "macos";
-  if (/Windows/.test(ua)) return "windows";
-  if (/Linux/.test(ua)) return "linux";
+  if (/Macintosh|Windows|Linux/.test(ua)) return "desktop";
 
   return "web";
 }

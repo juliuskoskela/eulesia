@@ -96,4 +96,34 @@ describe("initializeDevice", () => {
       didCreateDevice: true,
     });
   });
+
+  it("maps desktop browser user agents to the desktop platform", async () => {
+    const originalNavigator = globalThis.navigator;
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 Chrome/123.0.0.0 Safari/537.36",
+      },
+    });
+
+    const api = makeApiClient({
+      registerDevice: vi.fn().mockResolvedValue({ id: "device-desktop" }),
+    });
+
+    try {
+      await initializeDevice(api, "user-1");
+
+      expect(api.registerDevice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          platform: "desktop",
+        }),
+      );
+    } finally {
+      Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: originalNavigator,
+      });
+    }
+  });
 });

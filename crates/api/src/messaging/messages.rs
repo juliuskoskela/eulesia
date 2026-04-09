@@ -418,7 +418,7 @@ pub async fn send(
         conversation_id,
         msg.id,
         caller,
-        Some(device_id),
+        auth.device_id.map(|d| d.0),
         &broadcast_ct,
         current_epoch,
     )

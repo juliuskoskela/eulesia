@@ -12,10 +12,12 @@ impl PreKeyRepo {
         db: &DatabaseConnection,
         keys: Vec<one_time_pre_keys::ActiveModel>,
     ) -> Result<u64, DbErr> {
-        let count = keys.len() as u64;
         if keys.is_empty() {
             return Ok(0);
         }
+
+        let tracked_keys = tracked_matrix_keys(&keys);
+        let existing_before = count_existing_matrix_keys(db, &tracked_keys).await?;
 
         one_time_pre_keys::Entity::insert_many(keys)
             .on_conflict(
@@ -29,7 +31,8 @@ impl PreKeyRepo {
             .exec(db)
             .await?;
 
-        Ok(count)
+        let existing_after = count_existing_matrix_keys(db, &tracked_keys).await?;
+        Ok(existing_after.saturating_sub(existing_before))
     }
 
     pub async fn count_available_matrix_keys(
@@ -84,4 +87,39 @@ impl PreKeyRepo {
             .one(db)
             .await
     }
+}
+
+fn tracked_matrix_keys(keys: &[one_time_pre_keys::ActiveModel]) -> Vec<(Uuid, String)> {
+    keys.iter()
+        .filter_map(|key| match (&key.device_id, &key.matrix_key_id) {
+            (ActiveValue::Set(device_id), ActiveValue::Set(Some(matrix_key_id))) => {
+                Some((*device_id, matrix_key_id.clone()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+async fn count_existing_matrix_keys(
+    db: &DatabaseConnection,
+    keys: &[(Uuid, String)],
+) -> Result<u64, DbErr> {
+    if keys.is_empty() {
+        return Ok(0);
+    }
+
+    let filter = keys
+        .iter()
+        .fold(Condition::any(), |condition, (device_id, matrix_key_id)| {
+            condition.add(
+                Condition::all()
+                    .add(one_time_pre_keys::Column::DeviceId.eq(*device_id))
+                    .add(one_time_pre_keys::Column::MatrixKeyId.eq(matrix_key_id.clone())),
+            )
+        });
+
+    one_time_pre_keys::Entity::find()
+        .filter(filter)
+        .count(db)
+        .await
 }
