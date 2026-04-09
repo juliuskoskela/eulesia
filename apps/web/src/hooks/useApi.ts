@@ -36,6 +36,7 @@ export const queryKeys = {
   // Clubs
   clubs: (filters?: ClubFilters) => ["clubs", filters] as const,
   club: (id: string) => ["club", id] as const,
+  clubThreads: (clubId: string) => ["clubThreads", clubId] as const,
   clubThread: (clubId: string, threadId: string) =>
     ["clubThread", clubId, threadId] as const,
   clubCategories: ["clubCategories"] as const,
@@ -433,6 +434,14 @@ export function useClub(id: string) {
   });
 }
 
+export function useClubThreads(clubId: string) {
+  return useQuery({
+    queryKey: queryKeys.clubThreads(clubId),
+    queryFn: () => api.listClubThreads(clubId),
+    enabled: !!clubId,
+  });
+}
+
 export function useClubCategories() {
   return useQuery({
     queryKey: queryKeys.clubCategories,
@@ -584,6 +593,9 @@ export function useCreateClubThread(clubId: string) {
       api.createClubThread(clubId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.club(clubId) });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.clubThreads(clubId),
+      });
     },
   });
 }
