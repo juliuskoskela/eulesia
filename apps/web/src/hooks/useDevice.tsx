@@ -99,7 +99,6 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       console.error("Device initialization failed:", err);
       setError(message);
       setHasFreshRegistration(false);
-      // Device init failure is non-fatal — the app falls back to plaintext
     } finally {
       setIsInitializing(false);
     }

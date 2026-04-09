@@ -25,6 +25,7 @@ mod m20260408_000023_add_skd_message_type;
 mod m20260424_000024_device_pairing_tokens;
 mod m20260424_000025_matrix_crypto_keys;
 mod m20260424_000026_replace_skd_with_to_device_message_type;
+mod m20260424_000027_drop_legacy_device_prekeys;
 
 pub struct Migrator;
 
@@ -57,6 +58,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260424_000024_device_pairing_tokens::Migration),
             Box::new(m20260424_000025_matrix_crypto_keys::Migration),
             Box::new(m20260424_000026_replace_skd_with_to_device_message_type::Migration),
+            Box::new(m20260424_000027_drop_legacy_device_prekeys::Migration),
         ]
     }
 }

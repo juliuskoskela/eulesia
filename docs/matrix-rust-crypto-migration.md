@@ -1,6 +1,6 @@
 # Matrix Rust Crypto Migration
 
-This branch replaces Eulesia's bespoke browser E2EE state with the
+This branch replaced Eulesia's bespoke browser E2EE state with the
 Matrix Rust crypto stack exposed through
 `@matrix-org/matrix-sdk-crypto-wasm`.
 
@@ -40,13 +40,15 @@ which the application must transport and acknowledge.
 - removes the bespoke browser message/session/sender-key implementation from
   the active frontend crypto surface
 
-This leaves only device registration compatibility glue around the existing
-server-side device lifecycle.
+Device registration is now metadata-only. Matrix device keys and one-time keys
+flow through dedicated Matrix-shaped endpoints after registration.
 
 ## Current status on this branch
 
 Implemented now:
 
+- metadata-only `POST /devices` registration for pairing, revocation, and
+  stable browser/device identity
 - Matrix-shaped `/devices/{id}/matrix/keys/upload`,
   `/devices/matrix/keys/query`, and `/devices/matrix/keys/claim`
   endpoints backed by the existing `devices` table plus Matrix-specific key
@@ -59,12 +61,8 @@ Implemented now:
   over the existing per-device queue
 - group message bodies encrypted as Megolm room events instead of the bespoke
   sender-key protocol
-
-Still intentionally compatibility-only:
-
-- device registration still goes through Eulesia's existing `POST /devices`
-  lifecycle so pairing, revocation, and browser identity continuity stay
-  stable while the crypto engine changes underneath
+- removal of the legacy browser pre-key enrollment path and the old
+  `device_signed_pre_keys` runtime surface
 
 ## ID mapping
 
@@ -77,85 +75,11 @@ outside a Matrix homeserver.
 
 The mapping lives in `apps/web/src/lib/e2ee/matrixIds.ts`.
 
-## Required adapter work
+## Remaining follow-ups
 
-To fully replace the bespoke layers, Eulesia needs an application adapter
-between `OlmMachine` and the current server API.
-
-### 1. Keys upload
-
-Current Eulesia endpoints:
-
-- `POST /devices`
-- `POST /devices/{id}/pre-keys`
-
-Matrix machine output:
-
-- `KeysUploadRequest`
-
-Adapter task:
-
-- translate Matrix account identity keys, device keys, signed one-time keys,
-  and fallback keys into Eulesia device registration and pre-key uploads
-- persist enough server metadata to reconnect the Matrix machine to the
-  existing Eulesia `devices` table
-
-### 2. Device queries
-
-Current Eulesia endpoint:
-
-- `GET /users/{id}/devices`
-
-Matrix machine output:
-
-- `KeysQueryRequest`
-
-Adapter task:
-
-- fetch Eulesia devices for tracked users
-- synthesize a Matrix `/keys/query` response body for
-  `markRequestAsSent(..., RequestType.KeysQuery, ...)`
-
-### 3. One-time key claims / Olm session establishment
-
-Current Eulesia endpoint:
-
-- `GET /devices/{id}/pre-key-bundle?userId=<id>`
-
-Matrix machine output:
-
-- `KeysClaimRequest`
-
-Adapter task:
-
-- translate key claims into Eulesia pre-key bundle fetches
-- synthesize a Matrix `/keys/claim` response body
-
-### 4. To-device transport
-
-Current Eulesia transport:
-
-- queued per-device ciphertexts in `message_device_queue`
-- websocket `new_message` invalidation
-
-Matrix machine output:
-
-- `ToDeviceRequest`
-
-Adapter task:
-
-- add a first-class server endpoint for encrypted to-device payload delivery,
-  or
-- encode Matrix to-device payloads into the existing device queue without
-  losing request identity and replay semantics
-
-## Migration order
-
-1. Keep the current server API stable and build a client-side adapter for
-   `KeysUploadRequest`, `KeysQueryRequest`, and `KeysClaimRequest`.
-2. Replace bespoke DM session establishment and message envelopes with
-   `OlmMachine` to-device encryption.
-3. Add first-class to-device transport on the server.
-4. Replace bespoke group sender keys with Megolm room sessions.
-5. Trim remaining compatibility-only device-registration glue once the server
-   no longer needs legacy pre-key fields.
+1. Document the Matrix-shaped device key APIs as the canonical E2EE surface in
+   the public API docs.
+2. Decide whether to promote hidden `to_device` payload delivery into a
+   first-class endpoint instead of reusing the existing per-device queue.
+3. Remove or archive outdated design docs that still describe the retired
+   X3DH/sender-key implementation as active architecture.

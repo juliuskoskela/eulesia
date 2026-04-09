@@ -42,7 +42,6 @@ import type {
   AppealResponse,
   MySanction,
   Device,
-  PreKeyBundle,
   ConversationWithMessages,
   GroupMember,
   GroupConversationDetail,
@@ -1198,8 +1197,6 @@ class ApiClient {
   async registerDevice(data: {
     displayName: string;
     platform: string;
-    identityKey: string;
-    signedPreKey: { keyId: number; keyData: string; signature: string };
     pairingCode?: string;
   }): Promise<Device> {
     return this.request("/devices", {
@@ -1215,28 +1212,6 @@ class ApiClient {
     return this.request("/devices/pairing-codes", {
       method: "POST",
     });
-  }
-
-  async uploadPreKeys(
-    deviceId: string,
-    data: {
-      signedPreKey?: { keyId: number; keyData: string; signature: string };
-      oneTimeKeys: { keyId: number; keyData: string }[];
-    },
-  ): Promise<void> {
-    await this.request(`/devices/${deviceId}/pre-keys`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
-  async getPreKeyBundle(
-    deviceId: string,
-    userId: string,
-  ): Promise<PreKeyBundle> {
-    return this.request(
-      `/devices/${deviceId}/pre-key-bundle?userId=${encodeURIComponent(userId)}`,
-    );
   }
 
   async listDevices(): Promise<Device[]> {

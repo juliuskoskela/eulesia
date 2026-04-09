@@ -6,7 +6,7 @@
  * circular imports.
  */
 
-import type { Device, PreKeyBundle } from "../api.ts";
+import type { Device } from "../api.ts";
 
 export interface MatrixSignedKeyPayload {
   key: string;
@@ -57,20 +57,8 @@ export interface ApiClient {
   registerDevice(data: {
     displayName: string;
     platform: string;
-    identityKey: string;
-    signedPreKey: { keyId: number; keyData: string; signature: string };
     pairingCode?: string;
   }): Promise<Device>;
-
-  uploadPreKeys(
-    deviceId: string,
-    data: {
-      signedPreKey?: { keyId: number; keyData: string; signature: string };
-      oneTimeKeys: { keyId: number; keyData: string }[];
-    },
-  ): Promise<void>;
-
-  getPreKeyBundle(deviceId: string, userId: string): Promise<PreKeyBundle>;
 
   listDevices(): Promise<Device[]>;
 

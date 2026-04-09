@@ -1,5 +1,4 @@
 // Identity
-pub mod device_signed_pre_keys;
 pub mod devices;
 pub mod ftn_oidc_state;
 pub mod ftn_pending_registrations;

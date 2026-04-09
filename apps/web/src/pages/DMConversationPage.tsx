@@ -37,7 +37,7 @@ import { getAvatarInitials } from "../utils/avatar";
 
 /**
  * Hook to decrypt an E2EE message on demand. Returns the decrypted content
- * or falls back to the plaintext content field.
+ * when available.
  */
 function useDecryptedContent(message: DirectMessage): {
   content: string;
@@ -87,8 +87,10 @@ function useDecryptedContent(message: DirectMessage): {
     decrypt,
   ]);
 
-  // If we have ciphertext and decrypted it, use that. Otherwise use content.
-  const content = decryptedContent ?? message.content ?? "";
+  const content =
+    message.ciphertext && !decryptedContent
+      ? ""
+      : (decryptedContent ?? message.content ?? "");
 
   return { content, isDecrypting, decryptionFailed };
 }
@@ -377,8 +379,7 @@ export function DMConversationPage() {
   }
 
   const { messages } = conversationData;
-  // E2EE is active when the device is initialized and conversation supports it
-  const isEncrypted = deviceReady && conversationData.encryption === "e2ee";
+  const isEncryptedConversation = conversationData.encryption === "e2ee";
   const canLinkToOtherUserProfile =
     Boolean(otherUser?.id) && (otherUser?.canViewProfile ?? true);
 
@@ -451,7 +452,7 @@ export function DMConversationPage() {
             <div
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10"
               title={
-                isEncrypted
+                isEncryptedConversation
                   ? t("encryptionEnabled", {
                       defaultValue: "End-to-end encrypted",
                     })
@@ -460,13 +461,13 @@ export function DMConversationPage() {
                     })
               }
             >
-              {isEncrypted ? (
+              {isEncryptedConversation ? (
                 <Lock className="w-3.5 h-3.5 text-emerald-300" />
               ) : (
                 <Unlock className="w-3.5 h-3.5 text-white/50" />
               )}
               <span className="text-xs text-white/70">
-                {isEncrypted
+                {isEncryptedConversation
                   ? t("encrypted", { defaultValue: "E2EE" })
                   : t("plaintext", { defaultValue: "Plain" })}
               </span>

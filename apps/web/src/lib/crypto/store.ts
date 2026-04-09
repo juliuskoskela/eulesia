@@ -3,12 +3,8 @@
  *
  * IndexedDB-backed local device storage.
  *
- * browser's native IndexedDB. This module persists the serialised values it is given
- * and does not itself provide encryption at rest. If callers pass exported
- * private keys or other secret key material as base64url strings, that data is
- * stored in IndexedDB in that form. Callers that require at-rest protection
- * must encrypt or wrap sensitive key material before writing it via this
- * module.
+ * browser's native IndexedDB. This module now stores only non-secret device
+ * metadata outside the Matrix crypto store.
  *
  * Uses only the native IndexedDB API with no third-party wrappers.
  */
@@ -36,8 +32,6 @@ export interface DeviceKeys {
   userId?: string;
   /** Unique identifier for this device (UUID). */
   deviceId: string;
-  /** Public identity key retained only for registration continuity. */
-  identityPublicKey?: string;
 }
 
 // ---------------------------------------------------------------------------

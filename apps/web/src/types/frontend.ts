@@ -269,16 +269,8 @@ export interface Device {
   userId?: string;
   displayName?: string | null;
   platform: string;
-  identityKey?: string;
   createdAt: string;
   lastActiveAt?: string;
-}
-
-export interface PreKeyBundle {
-  deviceId: string;
-  identityKey: string;
-  signedPreKey: { keyId: number; keyData: string; signature: string };
-  oneTimePreKey?: { keyId: number; keyData: string };
 }
 
 export interface ConversationWithMessages {

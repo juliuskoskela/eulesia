@@ -1,39 +1,15 @@
 /**
  * @module crypto
  *
- * Eulesia end-to-end encryption (E2EE) cryptographic library.
+ * Shared encoding helpers and local device metadata storage.
  *
  * Re-exports all public APIs from the individual modules:
  *
- * - **keys** — Key generation, serialization, signing, and ECDH key agreement.
+ * - **keys** — Base64url helpers for Matrix payload transport.
  * - **store** — IndexedDB-backed device state persistence.
- *
- * @example
- * ```ts
- * import {
- *   generateExtractableKeyPair,
- *   saveDeviceKeys,
- * } from "@/lib/crypto";
- * ```
  */
 
-// keys — Key generation, serialization, signing, ECDH
-export {
-  toBase64url,
-  fromBase64url,
-  detectCurve,
-  generateKeyPair,
-  generateSigningKeyPair,
-  sign,
-  verify,
-  deriveSharedSecret,
-  exportKeyPair,
-  importKeyPair,
-  generateExtractableKeyPair,
-  generateExtractableSigningKeyPair,
-} from "./keys.ts";
-
-export type { KeyPair, ExportedKeyPair, CurveFamily } from "./keys.ts";
+export { toBase64url, fromBase64url } from "./keys.ts";
 
 // store — IndexedDB key and session persistence
 export {

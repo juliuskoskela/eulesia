@@ -1,5 +1,9 @@
 # Group E2EE: Sender Keys Protocol
 
+> Historical design note: this document describes the retired bespoke
+> sender-key implementation. The active runtime now uses Matrix Megolm with
+> hidden `to_device` room-key distribution.
+>
 > Architecture document for end-to-end encrypted group messaging in Eulesia.
 > Private group chats are capped at 50 members. For larger groups (clubs),
 > a separate MLS-based protocol will be designed later.
