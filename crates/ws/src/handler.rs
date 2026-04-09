@@ -160,6 +160,7 @@ async fn broadcast_typing(
 ///
 /// Sender fanout is required so the user's other devices stay in sync after a
 /// send, but excluding the origin avoids a needless echo to the same socket.
+#[allow(clippy::too_many_arguments)]
 pub async fn broadcast_new_message(
     db: &sea_orm::DatabaseConnection,
     registry: &ConnectionRegistry,

@@ -578,6 +578,7 @@ pub async fn list(
                  conversation_id, id, sender_id, ciphertext, server_ts
           FROM messages
           WHERE conversation_id IN ({in_clause})
+            AND message_type <> 'to_device'
           ORDER BY conversation_id, server_ts DESC"
     );
     let mut values: Vec<sea_orm::Value> = conv_ids.iter().map(|id| (*id).into()).collect();
@@ -624,6 +625,7 @@ pub async fn list(
           FROM memberships mb
           JOIN messages m
             ON m.conversation_id = mb.conversation_id
+           AND m.message_type <> 'to_device'
            AND m.sender_id <> mb.user_id
            AND (mb.last_read_at IS NULL OR m.server_ts > mb.last_read_at)
           WHERE mb.user_id = ${} AND mb.left_at IS NULL

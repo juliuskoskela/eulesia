@@ -44,12 +44,15 @@ function useDecryptedContent(message: DirectMessage): {
   isDecrypting: boolean;
   decryptionFailed: boolean;
 } {
+  const { isInitialized: isCryptoReady } = useDevice();
   const [decryptedContent, setDecryptedContent] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [decryptionFailed, setDecryptionFailed] = useState(false);
 
   const decrypt = useCallback(async () => {
-    if (!message.ciphertext || !message.senderDeviceId) return;
+    if (!isCryptoReady || !message.ciphertext || !message.senderDeviceId) {
+      return;
+    }
 
     setIsDecrypting(true);
     try {
@@ -68,10 +71,27 @@ function useDecryptedContent(message: DirectMessage): {
     } finally {
       setIsDecrypting(false);
     }
-  }, [message.ciphertext, message.senderDeviceId, message.conversationId]);
+  }, [
+    isCryptoReady,
+    message.ciphertext,
+    message.senderDeviceId,
+    message.conversationId,
+  ]);
+
+  useEffect(() => {
+    setDecryptedContent(null);
+    setDecryptionFailed(false);
+  }, [
+    isCryptoReady,
+    message.id,
+    message.ciphertext,
+    message.senderDeviceId,
+    message.conversationId,
+  ]);
 
   useEffect(() => {
     if (
+      isCryptoReady &&
       message.ciphertext &&
       message.senderDeviceId &&
       !decryptedContent &&
@@ -84,6 +104,7 @@ function useDecryptedContent(message: DirectMessage): {
     message.senderDeviceId,
     decryptedContent,
     decryptionFailed,
+    isCryptoReady,
     decrypt,
   ]);
 

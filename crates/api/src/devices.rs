@@ -70,6 +70,7 @@ impl From<devices::Model> for DeviceResponse {
 }
 
 #[derive(Deserialize)]
+#[allow(clippy::struct_field_names)]
 struct MatrixKeysUploadRequest {
     device_keys: Option<MatrixDeviceKeys>,
     #[serde(default)]
@@ -210,8 +211,7 @@ async fn create_device(
     }
 
     // If user already has devices, require a valid pairing code to bind this one.
-    let mut pairing_token_id = None;
-    if count > 0 {
+    let pairing_token_id = if count > 0 {
         let pairing_code = req.pairing_code.as_deref().ok_or_else(|| {
             ApiError::BadRequest("pairing_code is required when pairing additional devices".into())
         })?;
@@ -241,8 +241,10 @@ async fn create_device(
             }
         }
 
-        pairing_token_id = Some(pair.id);
-    }
+        Some(pair.id)
+    } else {
+        None
+    };
 
     let device_id = new_id();
     let now = Utc::now().fixed_offset();
@@ -278,6 +280,15 @@ async fn create_device(
         }
     }
 
+    if auth.device_id.is_none() {
+        let bound = SessionRepo::bind_device(&txn, auth.session_id.0, auth.user_id.0, device_id)
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+        if !bound {
+            return Err(ApiError::Unauthorized);
+        }
+    }
+
     txn.commit()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
@@ -306,6 +317,13 @@ async fn create_device_pairing_code(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<DevicePairingResponse>, ApiError> {
+    let Some(device_id) = auth.device_id.map(|id| id.0) else {
+        return Err(ApiError::BadRequest(
+            "current session must be bound to an active device before pairing another device"
+                .into(),
+        ));
+    };
+
     // Keep pairing flow scoped to users with at least one registered device.
     let existing = DeviceRepo::count_active_for_user(&state.db, auth.user_id.0)
         .await
@@ -324,7 +342,7 @@ async fn create_device_pairing_code(
         device_pairing_tokens::ActiveModel {
             id: Set(new_id()),
             user_id: Set(auth.user_id.0),
-            created_by_device_id: Set(auth.device_id.map(|id| id.0)),
+            created_by_device_id: Set(Some(device_id)),
             code_hash: Set(hash_pairing_code(&code)),
             used_at: Set(None),
             used_by_device_id: Set(None),
@@ -375,6 +393,13 @@ async fn revoke_device(
 
     // Revoke all sessions bound to this device
     SessionRepo::revoke_device_sessions(&state.db, device_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    // Sessions without a device binding can still act on behalf of any active
+    // device they name explicitly, so revoke those too when a device is
+    // removed.
+    SessionRepo::revoke_unbound_sessions_for_user(&state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 

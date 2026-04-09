@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint src vite.config.ts vitest.config.ts capacitor.config.ts eslint.config.js",
+    "lint": "eslint --quiet src vite.config.ts vitest.config.ts capacitor.config.ts eslint.config.js",
     "lint:fix": "eslint --fix src vite.config.ts vitest.config.ts capacitor.config.ts eslint.config.js",
     "typecheck": "tsc -b --pretty false",
     "check": "pnpm run lint && pnpm run typecheck",
