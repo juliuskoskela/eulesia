@@ -68,6 +68,18 @@ impl DeviceRepo {
         Ok(())
     }
 
+    pub async fn has_active_device(
+        db: &impl ConnectionTrait,
+        user_id: Uuid,
+    ) -> Result<bool, DbErr> {
+        let count = devices::Entity::find()
+            .filter(devices::Column::UserId.eq(user_id))
+            .filter(devices::Column::RevokedAt.is_null())
+            .count(db)
+            .await?;
+        Ok(count > 0)
+    }
+
     pub async fn count_active_for_user(
         db: &DatabaseConnection,
         user_id: Uuid,

@@ -18,6 +18,9 @@ import {
   Sun,
   Moon,
   Monitor,
+  Lock,
+  Smartphone,
+  Laptop,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -25,7 +28,9 @@ import { Layout } from "../components/layout";
 import { SEOHead } from "../components/SEOHead";
 import { LanguageSwitcher } from "../components/common/LanguageSwitcher";
 import { AppealButton } from "../components/common/AppealButton";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../hooks/useAuth";
+import { useDevice } from "../hooks/useDevice";
 import { useTheme } from "../hooks/useTheme";
 import { useMySanctions } from "../hooks/useAdminApi";
 import { useGuide } from "../hooks/useGuide";
@@ -42,6 +47,19 @@ type CapacitorWindow = Window & {
     isNativePlatform?: () => boolean;
   };
 };
+
+const DEVICE_LIMIT = 10;
+
+function getDeviceIcon(platform: string) {
+  return platform === "android" || platform === "ios" ? Smartphone : Laptop;
+}
+
+function formatDeviceTimestamp(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
 
 export function ProfilePage() {
   const { t } = useTranslation(["profile", "common", "auth"]);
@@ -934,6 +952,9 @@ export function ProfilePage() {
           </div>
         </div>
 
+        {/* Security & Devices */}
+        <DeviceManagementSection />
+
         {/* Language */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
@@ -1071,5 +1092,249 @@ export function ProfilePage() {
         </button>
       </div>
     </Layout>
+  );
+}
+
+function DeviceManagementSection() {
+  const { t } = useTranslation(["profile", "common"]);
+  const queryClient = useQueryClient();
+  const {
+    deviceId,
+    isInitialized,
+    isInitializing,
+    error,
+    initializeCurrentDevice,
+  } = useDevice();
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
+
+  const { data: devices, isLoading } = useQuery({
+    queryKey: ["devices"],
+    queryFn: () => api.listDevices(),
+  });
+
+  const deviceList = devices ?? [];
+  const hasOtherDevices = deviceList.some((device) => device.id !== deviceId);
+  const currentDevice = deviceList.find((device) => device.id === deviceId);
+  const atDeviceLimit = !isInitialized && deviceList.length >= DEVICE_LIMIT;
+
+  const handleRetrySetup = async () => {
+    try {
+      await initializeCurrentDevice();
+      await queryClient.invalidateQueries({ queryKey: ["devices"] });
+      await queryClient.invalidateQueries({ queryKey: ["userDevices"] });
+    } catch (err) {
+      console.error("Device retry failed:", err);
+    }
+  };
+
+  const handleRevokeDevice = async (targetDeviceId: string) => {
+    setRevokingDeviceId(targetDeviceId);
+    try {
+      await api.revokeDevice(targetDeviceId);
+      await queryClient.invalidateQueries({ queryKey: ["devices"] });
+      await queryClient.invalidateQueries({ queryKey: ["userDevices"] });
+    } catch (err) {
+      console.error("Failed to revoke device:", err);
+    } finally {
+      setRevokingDeviceId(null);
+    }
+  };
+
+  const statusTitle = isInitialized
+    ? t("security.ready")
+    : isInitializing
+      ? t("security.settingUp")
+      : t("security.setupFailed");
+
+  const statusDescription = isInitialized
+    ? t("security.readyDescription")
+    : isInitializing
+      ? t("security.settingUpDescription")
+      : t("security.setupFailedDescription");
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+      <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <Lock className="w-4 h-4 text-emerald-600" />
+          {t("security.title")}
+        </h2>
+      </div>
+
+      <div className="p-4 space-y-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {t("security.description")}
+        </p>
+
+        <div
+          className={`rounded-2xl border p-4 ${
+            isInitialized
+              ? "border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 dark:border-emerald-900 dark:from-emerald-950/30 dark:to-teal-950/20"
+              : isInitializing
+                ? "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/20"
+                : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-gray-900 dark:text-gray-100">
+                  {statusTitle}
+                </p>
+                {isInitializing && (
+                  <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                )}
+              </div>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                {statusDescription}
+              </p>
+              {!isInitialized && hasOtherDevices && (
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                  {t("security.newDeviceHint")}
+                </p>
+              )}
+              {!isInitialized && atDeviceLimit && (
+                <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                  {t("security.deviceLimitHint")}
+                </p>
+              )}
+              {error && (
+                <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            {!isInitialized && (
+              <button
+                type="button"
+                onClick={handleRetrySetup}
+                disabled={isInitializing}
+                className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+              >
+                {isInitializing && <Loader2 className="w-4 h-4 animate-spin" />}
+                {t("security.retrySetup")}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {t("security.deviceList")}
+            </h3>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {deviceList.length}/{DEVICE_LIMIT}
+            </span>
+          </div>
+
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {t("common:actions.loading")}
+            </div>
+          ) : deviceList.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-200 dark:border-gray-800 px-4 py-5 text-center">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {t("security.noDevices")}
+              </p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {t("security.noDevicesDescription")}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {deviceList.map((device) => {
+                const Icon = getDeviceIcon(device.platform);
+                const isCurrentDevice = device.id === deviceId;
+                const platformLabel =
+                  device.platform === "android" || device.platform === "ios"
+                    ? t("security.mobile")
+                    : t("security.desktop");
+
+                return (
+                  <div
+                    key={device.id}
+                    className={`rounded-2xl border p-3 ${
+                      isCurrentDevice
+                        ? "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/20"
+                        : "border-gray-200 dark:border-gray-800"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                          <Icon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                              {device.displayName || t("security.thisBrowser")}
+                            </p>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                isCurrentDevice
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                  : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                              }`}
+                            >
+                              {isCurrentDevice
+                                ? t("security.currentDevice")
+                                : t("security.otherDevice")}
+                            </span>
+                          </div>
+
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {platformLabel} • ID {device.id.slice(-6)}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {t("security.registeredOn", {
+                              date: formatDeviceTimestamp(device.createdAt),
+                            })}
+                          </p>
+                          {isCurrentDevice && (
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                              {t("security.signOutToRemove")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {!isCurrentDevice && (
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeDevice(device.id)}
+                          disabled={revokingDeviceId === device.id}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/20"
+                        >
+                          {revokingDeviceId === device.id ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              {t("security.revoking")}
+                            </>
+                          ) : (
+                            t("security.revoke")
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {currentDevice && (
+            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+              {t("security.registeredOn", {
+                date: formatDeviceTimestamp(currentDevice.createdAt),
+              })}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
