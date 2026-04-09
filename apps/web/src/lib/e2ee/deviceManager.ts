@@ -110,6 +110,7 @@ async function generateOneTimePreKeys(
  */
 export async function initializeDevice(
   api: ApiClient,
+  pairingCode?: string,
 ): Promise<DeviceRegistration> {
   // Step 1: Try loading existing keys — but verify the device still exists
   // on the server (migrations may have truncated the devices table).
@@ -161,6 +162,7 @@ export async function initializeDevice(
       keyData: signedPreKeyExported.publicKey,
       signature: toBase64url(signedPreKeySignature),
     },
+    pairingCode,
   });
 
   // Step 4: Upload one-time pre-keys

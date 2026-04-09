@@ -1200,10 +1200,20 @@ class ApiClient {
     platform: string;
     identityKey: string;
     signedPreKey: { keyId: number; keyData: string; signature: string };
+    pairingCode?: string;
   }): Promise<Device> {
     return this.request("/devices", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  }
+
+  async createDevicePairingCode(): Promise<{
+    code: string;
+    expiresAt: string;
+  }> {
+    return this.request("/devices/pairing-codes", {
+      method: "POST",
     });
   }
 

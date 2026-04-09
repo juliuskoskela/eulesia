@@ -398,7 +398,7 @@ export async function ensureLocalSenderKey(
   userId: string,
   epoch: number,
 ): Promise<SenderKeyState> {
-  const existing = await loadSenderKey(conversationId, userId);
+  const existing = await loadSenderKey(conversationId, userId, epoch);
   if (existing && existing.epoch === epoch) {
     return existing;
   }
@@ -544,7 +544,11 @@ export async function decryptGroupMessage(
     decoder.decode(envelopeBytes),
   );
 
-  const senderKey = await loadSenderKey(conversationId, envelope.senderId);
+  const senderKey = await loadSenderKey(
+    conversationId,
+    envelope.senderId,
+    envelope.epoch,
+  );
   if (!senderKey) {
     throw new Error(
       `No sender key for user ${envelope.senderId} in conversation ${conversationId}. ` +

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -58,6 +58,8 @@ export function GroupConversationPage() {
 
   const [newMessage, setNewMessage] = useState("");
   const [showMembers, setShowMembers] = useState(false);
+  const [processedSkdMessageKey, setProcessedSkdMessageKey] = useState("");
+  const [senderKeyRevision, setSenderKeyRevision] = useState(0);
 
   // Determine current user's role
   const myMembership = groupData?.members.find(
@@ -73,6 +75,11 @@ export function GroupConversationPage() {
       };
     }
   }, [conversationId, joinDm, leaveDm]);
+
+  useEffect(() => {
+    setProcessedSkdMessageKey("");
+    setSenderKeyRevision(0);
+  }, [conversationId]);
 
   useEffect(() => {
     if (conversationId && groupData) {
@@ -92,18 +99,31 @@ export function GroupConversationPage() {
     }
   }, [isKeyboardOpen]);
 
+  const skdMessages = useMemo(
+    () =>
+      (groupData?.messages ?? []).filter(
+        (m) => m.messageType === "skd" && m.ciphertext && m.senderDeviceId,
+      ),
+    [groupData?.messages],
+  );
+  const skdMessageKey = useMemo(
+    () => skdMessages.map((m) => m.id).join(","),
+    [skdMessages],
+  );
+
   // Process incoming SKD messages to import sender keys
   useEffect(() => {
-    const skdMessages = (groupData?.messages ?? []).filter(
-      (m) => m.messageType === "skd" && m.ciphertext && m.senderDeviceId,
-    );
     if (skdMessages.length === 0 || !conversationId) return;
+    if (skdMessageKey === processedSkdMessageKey) return;
+
+    let cancelled = false;
 
     (async () => {
       const { handleSenderKeyDistribution } = await import(
         "../lib/e2ee/index.ts"
       );
       for (const msg of skdMessages) {
+        if (cancelled) break;
         try {
           await handleSenderKeyDistribution(
             conversationId,
@@ -114,8 +134,15 @@ export function GroupConversationPage() {
           // SKD processing failure is non-fatal — may already be imported
         }
       }
+      if (cancelled) return;
+      setProcessedSkdMessageKey(skdMessageKey);
+      setSenderKeyRevision((value) => value + 1);
     })();
-  }, [groupData?.messages, conversationId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [skdMessages, skdMessageKey, conversationId, processedSkdMessageKey]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,6 +261,7 @@ export function GroupConversationPage() {
                 <GroupMessageBubble
                   key={msg.id}
                   message={msg}
+                  senderKeyRevision={senderKeyRevision}
                   isOwnMessage={
                     (msg.senderId ?? msg.author?.id) === currentUser?.id
                   }
@@ -315,7 +343,10 @@ export function GroupConversationPage() {
 // Decrypt group E2EE message on demand.
 // ---------------------------------------------------------------------------
 
-function useGroupDecryptedContent(message: DirectMessage): {
+function useGroupDecryptedContent(
+  message: DirectMessage,
+  senderKeyRevision: number,
+): {
   content: string;
   isDecrypting: boolean;
   decryptionFailed: boolean;
@@ -323,10 +354,12 @@ function useGroupDecryptedContent(message: DirectMessage): {
   const [decrypted, setDecrypted] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [decryptionFailed, setDecryptionFailed] = useState(false);
+  const [lastAttemptedRevision, setLastAttemptedRevision] = useState(-1);
 
   const decrypt = useCallback(async () => {
     if (!message.ciphertext) return;
     setIsDecrypting(true);
+    setDecryptionFailed(false);
     try {
       const { decryptGroupMessage } = await import("../lib/e2ee/index.ts");
       const plaintext = await decryptGroupMessage(
@@ -342,10 +375,28 @@ function useGroupDecryptedContent(message: DirectMessage): {
   }, [message.ciphertext, message.conversationId]);
 
   useEffect(() => {
-    if (message.ciphertext && !decrypted && !decryptionFailed) {
+    if (!message.ciphertext || decrypted) return;
+    if (lastAttemptedRevision === senderKeyRevision) return;
+
+    setLastAttemptedRevision(senderKeyRevision);
+    if (!isDecrypting) {
       decrypt();
     }
-  }, [message.ciphertext, decrypted, decryptionFailed, decrypt]);
+  }, [
+    message.id,
+    message.ciphertext,
+    decrypted,
+    senderKeyRevision,
+    lastAttemptedRevision,
+    isDecrypting,
+    decrypt,
+  ]);
+
+  useEffect(() => {
+    setDecrypted(null);
+    setDecryptionFailed(false);
+    setLastAttemptedRevision(-1);
+  }, [message.id]);
 
   return {
     content: decrypted ?? message.content ?? "",
@@ -361,15 +412,17 @@ function useGroupDecryptedContent(message: DirectMessage): {
 function GroupMessageBubble({
   message,
   isOwnMessage,
+  senderKeyRevision,
 }: {
   message: DirectMessage;
   isOwnMessage: boolean;
+  senderKeyRevision: number;
 }) {
   const {
     content: displayContent,
     isDecrypting,
     decryptionFailed,
-  } = useGroupDecryptedContent(message);
+  } = useGroupDecryptedContent(message, senderKeyRevision);
 
   return (
     <div className={`flex gap-3 ${isOwnMessage ? "flex-row-reverse" : ""}`}>

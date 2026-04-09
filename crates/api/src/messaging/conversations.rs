@@ -207,6 +207,44 @@ async fn create_direct(
         }
     }
 
+    let caller_has_device = DeviceRepo::has_active_device(&*state.db, caller)
+        .await
+        .map_err(db_err)?;
+    let other_has_device = DeviceRepo::has_active_device(&*state.db, other)
+        .await
+        .map_err(db_err)?;
+    let both_have_devices = caller_has_device && other_has_device;
+
+    // Choose sensible default and enforce policy:
+    // - If both users are enrolled, prefer enforced e2ee.
+    // - If either user is not enrolled, allow legacy plaintext fallback.
+    let encryption = match req.encryption.as_deref() {
+        Some("e2ee") if !both_have_devices => {
+            return Err(ApiError::BadRequest(
+                "encryption \"e2ee\" requires both users to have active devices".into(),
+            ));
+        }
+        Some("none") if both_have_devices => {
+            return Err(ApiError::BadRequest(
+                "encryption \"none\" is not allowed when both users have active devices".into(),
+            ));
+        }
+        Some("e2ee") => "e2ee",
+        Some("none") => "none",
+        None => {
+            if both_have_devices {
+                "e2ee"
+            } else {
+                "none"
+            }
+        }
+        Some(other) => {
+            return Err(ApiError::BadRequest(format!(
+                "unsupported encryption mode: {other}"
+            )));
+        }
+    };
+
     let conv_id = new_id();
     let now = chrono::Utc::now().fixed_offset();
     let (user_a, user_b) = if caller < other {
@@ -220,14 +258,6 @@ async fn create_direct(
         .begin()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
-
-    // Private conversations are always end-to-end encrypted.
-    let encryption = "e2ee";
-    if req.encryption.as_deref().is_some_and(|e| e != "e2ee") {
-        return Err(ApiError::BadRequest(
-            "private conversations must use e2ee encryption".into(),
-        ));
-    }
 
     // Create conversation.
     let conv = conversations::ActiveModel {

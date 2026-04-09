@@ -2,9 +2,13 @@ use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use chrono::Utc;
 use sea_orm::ActiveValue::Set;
 use sea_orm::TransactionTrait;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+use eulesia_db::entities::device_pairing_tokens;
 
 use crate::AppState;
 use eulesia_auth::error::AuthError;
@@ -12,6 +16,7 @@ use eulesia_auth::session::AuthUser;
 use eulesia_common::error::ApiError;
 use eulesia_common::types::{Id, Platform, new_id};
 use eulesia_db::entities::{device_signed_pre_keys, devices, one_time_pre_keys};
+use eulesia_db::repo::device_pairing_tokens::DevicePairingTokenRepo;
 use eulesia_db::repo::devices::DeviceRepo;
 use eulesia_db::repo::pre_keys::PreKeyRepo;
 use eulesia_db::repo::sessions::SessionRepo;
@@ -25,6 +30,14 @@ struct CreateDeviceRequest {
     platform: Platform,
     identity_key: String,
     signed_pre_key: SignedPreKeyUpload,
+    pairing_code: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DevicePairingResponse {
+    code: String,
+    expires_at: String,
 }
 
 #[derive(Deserialize)]
@@ -135,8 +148,43 @@ async fn create_device(
         return Err(ApiError::from(AuthError::DeviceLimitExceeded));
     }
 
+    // If user already has devices, require a valid pairing code to bind this one.
+    let mut pairing_token_id = None;
+    if count > 0 {
+        let pairing_code = req.pairing_code.as_deref().ok_or_else(|| {
+            ApiError::BadRequest("pairing_code is required when pairing additional devices".into())
+        })?;
+        let pair = DevicePairingTokenRepo::find_valid_by_hash(
+            &state.db,
+            auth.user_id.0,
+            &hash_pairing_code(pairing_code),
+        )
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .ok_or_else(|| ApiError::BadRequest("invalid or expired pairing code".into()))?;
+
+        if let Some(created_by_device_id) = pair.created_by_device_id {
+            if let Some(request_device_id) = auth.device_id {
+                if request_device_id.0 != created_by_device_id {
+                    return Err(ApiError::Forbidden);
+                }
+            }
+
+            let originating_device = DeviceRepo::find_by_id(&state.db, created_by_device_id)
+                .await
+                .map_err(|e| ApiError::Database(e.to_string()))?;
+            if originating_device.and_then(|d| d.revoked_at).is_some() {
+                return Err(ApiError::BadRequest(
+                    "pairing code was issued by a revoked device".into(),
+                ));
+            }
+        }
+
+        pairing_token_id = Some(pair.id);
+    }
+
     let device_id = new_id();
-    let now = chrono::Utc::now().fixed_offset();
+    let now = Utc::now().fixed_offset();
 
     // Wrap device + initial SPK creation in a transaction
     let txn = state
@@ -175,11 +223,80 @@ async fn create_device(
     .await
     .map_err(|e| ApiError::Database(e.to_string()))?;
 
+    if let Some(token_id) = pairing_token_id {
+        let consumed = DevicePairingTokenRepo::consume(&txn, auth.user_id.0, token_id, device_id)
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+        if !consumed {
+            return Err(ApiError::BadRequest("pairing code was already used".into()));
+        }
+    }
+
     txn.commit()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
     Ok(Json(DeviceResponse::from(device)))
+}
+
+fn hash_pairing_code(code: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(code.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+fn generate_pairing_code() -> String {
+    use rand::{Rng, distr::Alphanumeric};
+    let mut rng = rand::rng();
+    (0..12)
+        .map(|_| {
+            let c = rng.sample(Alphanumeric) as char;
+            c
+        })
+        .collect()
+}
+
+async fn create_device_pairing_code(
+    State(state): State<AppState>,
+    auth: AuthUser,
+) -> Result<Json<DevicePairingResponse>, ApiError> {
+    // Keep pairing flow scoped to users with at least one registered device.
+    let existing = DeviceRepo::count_active_for_user(&state.db, auth.user_id.0)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    if existing == 0 {
+        return Err(ApiError::BadRequest(
+            "no active device exists for pairing; register this device normally first".into(),
+        ));
+    }
+
+    let code = generate_pairing_code();
+    let expires_at = Utc::now().fixed_offset() + chrono::Duration::minutes(15);
+
+    let row = DevicePairingTokenRepo::create(
+        &state.db,
+        device_pairing_tokens::ActiveModel {
+            id: Set(new_id()),
+            user_id: Set(auth.user_id.0),
+            created_by_device_id: Set(auth.device_id.map(|id| id.0)),
+            code_hash: Set(hash_pairing_code(&code)),
+            used_at: Set(None),
+            used_by_device_id: Set(None),
+            expires_at: Set(expires_at),
+            created_at: Set(Utc::now().fixed_offset()),
+        },
+    )
+    .await
+    .map_err(|e| {
+        // Should never collide with unique hashes, but keep error surfaced for
+        // unexpected DB constraint failures.
+        ApiError::Database(e.to_string())
+    })?;
+
+    Ok(Json(DevicePairingResponse {
+        code,
+        expires_at: row.expires_at.to_rfc3339(),
+    }))
 }
 
 async fn list_devices(
@@ -336,12 +453,16 @@ async fn get_pre_key_bundle(
     }))
 }
 
-/// List active devices for any user (authenticated callers only).
+/// List active devices for the currently authenticated user.
 pub async fn list_user_devices(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    auth: AuthUser,
     Path(user_id): Path<Id>,
 ) -> Result<Json<Vec<DeviceResponse>>, ApiError> {
+    if auth.user_id.0 != user_id {
+        return Err(ApiError::Forbidden);
+    }
+
     let devices = DeviceRepo::list_active_for_user(&*state.db, user_id)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
@@ -354,6 +475,7 @@ pub async fn list_user_devices(
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/devices", post(create_device).get(list_devices))
+        .route("/devices/pairing-codes", post(create_device_pairing_code))
         .route("/devices/{id}", delete(revoke_device))
         .route("/devices/{id}/pre-keys", post(upload_pre_keys))
         .route("/devices/{id}/pre-key-bundle", get(get_pre_key_bundle))

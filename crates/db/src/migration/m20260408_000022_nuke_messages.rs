@@ -1,22 +1,26 @@
 use sea_orm_migration::prelude::*;
 
-/// Clear all messaging data for a clean E2EE start.
+/// Clear messaging/state tables for an explicit E2EE reset.
 ///
-/// Old plaintext DMs were partially migrated from v1 and are no longer useful.
-/// We TRUNCATE (with CASCADE) every messaging-related table so the E2EE layer
-/// can start from a blank slate.
+/// This migration is opt-in and only runs when
+/// `EULESIA_ALLOW_NUKE_MESSAGES` is enabled (`1`, `true`, `yes`).
+/// It is retained for test or emergency recovery environments only.
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        let db = manager.get_connection();
+        if std::env::var("EULESIA_ALLOW_NUKE_MESSAGES")
+            .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false)
+        {
+            let db = manager.get_connection();
 
-        // Single TRUNCATE ... CASCADE covers all listed tables and any
-        // dependent rows reachable via foreign-key cascades.
-        db.execute_unprepared(
-            r"
+            // Single TRUNCATE ... CASCADE covers all listed tables and any
+            // dependent rows reachable via foreign-key cascades.
+            db.execute_unprepared(
+                r"
             TRUNCATE
                 messages,
                 message_device_queue,
@@ -31,14 +35,14 @@ impl MigrationTrait for Migration {
                 one_time_pre_keys
             CASCADE
             ",
-        )
-        .await?;
+            )
+            .await?;
 
-        // Reset SERIAL / BIGSERIAL sequences that back any of these tables
-        // (identity columns auto-reset on TRUNCATE … RESTART IDENTITY, but
-        // these tables use UUID PKs so this is a no-op safety net).
-        db.execute_unprepared(
-            r"
+            // Reset SERIAL / BIGSERIAL sequences that back any of these tables
+            // (identity columns auto-reset on TRUNCATE … RESTART IDENTITY, but
+            // these tables use UUID PKs so this is a no-op safety net).
+            db.execute_unprepared(
+                r"
             DO $$
             DECLARE
                 seq RECORD;
@@ -68,8 +72,9 @@ impl MigrationTrait for Migration {
             END
             $$
             ",
-        )
-        .await?;
+            )
+            .await?;
+        }
 
         Ok(())
     }

@@ -3,7 +3,7 @@
  *
  * IndexedDB-backed key storage for the Eulesia E2EE messaging protocol.
  *
- * browser's IndexedDB. This module persists the serialised values it is given
+ * browser's native IndexedDB. This module persists the serialised values it is given
  * and does not itself provide encryption at rest. If callers pass exported
  * private keys or other secret key material as base64url strings, that data is
  * stored in IndexedDB in that form. Callers that require at-rest protection
@@ -23,7 +23,7 @@ import type { ExportedKeyPair } from "./keys.ts";
 const DB_NAME = "eulesia-e2ee-keystore";
 
 /** Current schema version. Bump when adding/modifying object stores. */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /** Object store names. */
 const STORE_DEVICE_KEYS = "deviceKeys";
@@ -105,12 +105,13 @@ export async function openKeyStore(): Promise<IDBDatabase> {
         });
       }
 
-      // Sender keys — compound key [conversationId, userId]
-      if (!db.objectStoreNames.contains(STORE_SENDER_KEYS)) {
-        db.createObjectStore(STORE_SENDER_KEYS, {
-          keyPath: ["conversationId", "userId"],
-        });
+      // Sender keys — compound key [conversationId, userId, epoch]
+      if (db.objectStoreNames.contains(STORE_SENDER_KEYS)) {
+        db.deleteObjectStore(STORE_SENDER_KEYS);
       }
+      db.createObjectStore(STORE_SENDER_KEYS, {
+        keyPath: ["conversationId", "userId", "epoch"],
+      });
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -260,7 +261,7 @@ export async function loadSession(
 // ---------------------------------------------------------------------------
 
 /**
- * Sender key state for a group member. Stored per [conversationId, userId].
+ * Sender key state for a group member. Stored per [conversationId, userId, epoch].
  * Each member has one sender key per epoch.
  */
 export interface SenderKeyState {
@@ -287,11 +288,12 @@ export async function saveSenderKey(state: SenderKeyState): Promise<void> {
 }
 
 /**
- * Load a sender key for a specific group member.
+ * Load a sender key for a specific group member and epoch.
  */
 export async function loadSenderKey(
   conversationId: string,
   userId: string,
+  epoch: number,
 ): Promise<SenderKeyState | null> {
   const db = await openKeyStore();
   try {
@@ -300,7 +302,7 @@ export async function loadSenderKey(
       STORE_SENDER_KEYS,
       "readonly",
       (store) =>
-        store.get([conversationId, userId]) as IDBRequest<
+        store.get([conversationId, userId, epoch]) as IDBRequest<
           SenderKeyState | undefined
         >,
     );

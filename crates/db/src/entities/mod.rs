@@ -11,6 +11,7 @@ pub mod users;
 // Conversations & Messaging
 pub mod conversation_epochs;
 pub mod conversations;
+pub mod device_pairing_tokens;
 pub mod direct_conversations;
 pub mod media;
 pub mod membership_events;

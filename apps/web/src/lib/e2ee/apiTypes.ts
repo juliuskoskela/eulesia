@@ -14,6 +14,7 @@ export interface ApiClient {
     platform: string;
     identityKey: string;
     signedPreKey: { keyId: number; keyData: string; signature: string };
+    pairingCode?: string;
   }): Promise<Device>;
 
   uploadPreKeys(

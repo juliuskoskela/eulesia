@@ -21,8 +21,8 @@ mod m20260407_000018_jobs_geo_foundation;
 mod m20260407_000019_places_source_identity_index;
 mod m20260408_000020_clean_municipality_duplicates;
 mod m20260408_000021_thread_scope_personal;
-mod m20260408_000022_nuke_messages;
 mod m20260408_000023_add_skd_message_type;
+mod m20260424_000024_device_pairing_tokens;
 
 pub struct Migrator;
 
@@ -51,8 +51,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260407_000019_places_source_identity_index::Migration),
             Box::new(m20260408_000020_clean_municipality_duplicates::Migration),
             Box::new(m20260408_000021_thread_scope_personal::Migration),
-            Box::new(m20260408_000022_nuke_messages::Migration),
             Box::new(m20260408_000023_add_skd_message_type::Migration),
+            Box::new(m20260424_000024_device_pairing_tokens::Migration),
         ]
     }
 }
