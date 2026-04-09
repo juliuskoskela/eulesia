@@ -302,6 +302,7 @@ export interface GroupConversationDetail {
   currentEpoch: number;
   members: GroupMember[];
   messages: DirectMessage[];
+  protocolMessages: DirectMessage[];
 }
 
 export interface CreateGroupData {

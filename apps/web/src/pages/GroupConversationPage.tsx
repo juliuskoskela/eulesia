@@ -46,13 +46,9 @@ export function GroupConversationPage() {
     error,
   } = useGroupConversation(conversationId || "");
 
-  const currentEpoch = groupData?.currentEpoch ?? 0;
-  const memberUserIds = groupData?.members.map((m) => m.userId) ?? [];
   const sendMessageMutation = useSendGroupMessage(conversationId || "", {
     deviceId: deviceReady ? deviceId : null,
-    epoch: currentEpoch,
     userId: currentUser?.id ?? null,
-    memberUserIds,
   });
   const markReadMutation = useMarkRead(conversationId || "");
 
@@ -101,11 +97,8 @@ export function GroupConversationPage() {
   }, [isKeyboardOpen]);
 
   const protocolMessages = useMemo(
-    () =>
-      (groupData?.messages ?? []).filter(
-        (m) => m.messageType === "to_device" && m.ciphertext,
-      ),
-    [groupData?.messages],
+    () => groupData?.protocolMessages ?? [],
+    [groupData?.protocolMessages],
   );
   const protocolMessageKey = useMemo(
     () => protocolMessages.map((m) => m.id).join(","),

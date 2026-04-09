@@ -1187,6 +1187,31 @@ class ApiClient {
     };
   }
 
+  async getConversationMessages(
+    conversationId: string,
+    options?: {
+      limit?: number;
+      before?: string;
+      messageType?: string;
+    },
+  ): Promise<MessageResponse[]> {
+    const params = new URLSearchParams();
+    if (options?.limit) {
+      params.set("limit", String(options.limit));
+    }
+    if (options?.before) {
+      params.set("before", options.before);
+    }
+    if (options?.messageType) {
+      params.set("messageType", options.messageType);
+    }
+
+    const query = params.toString();
+    return this.request<MessageResponse[]>(
+      `/conversations/${conversationId}/messages${query ? `?${query}` : ""}`,
+    );
+  }
+
   async markConversationRead(conversationId: string): Promise<void> {
     await this.request(`/conversations/${conversationId}/read`, {
       method: "POST",
@@ -1315,22 +1340,25 @@ class ApiClient {
     id: string,
     limit?: number,
   ): Promise<GroupConversationDetail> {
-    const [meta, members, messagesResp] = await Promise.all([
-      this.request<{
-        id: string;
-        encryption: string;
-        name: string | null;
-        description: string | null;
-        currentEpoch: number;
-      }>(`/conversations/${id}`),
-      this.getGroupMembers(id),
-      this.request<MessageResponse[]>(
-        `/conversations/${id}/messages${limit ? `?limit=${limit}` : ""}`,
-      ),
-    ]);
+    const [meta, members, messagesResp, protocolMessagesResp] =
+      await Promise.all([
+        this.request<{
+          id: string;
+          encryption: string;
+          name: string | null;
+          description: string | null;
+          currentEpoch: number;
+        }>(`/conversations/${id}`),
+        this.getGroupMembers(id),
+        this.getConversationMessages(id, { limit }),
+        this.getConversationMessages(id, {
+          limit: 100,
+          messageType: "to_device",
+        }),
+      ]);
 
     const memberById = new Map(members.map((m) => [m.userId, m]));
-    const messages: DirectMessage[] = messagesResp.map((m) => {
+    const toDirectMessage = (m: MessageResponse): DirectMessage => {
       const member = memberById.get(m.senderId);
       return {
         id: m.id,
@@ -1350,7 +1378,15 @@ class ApiClient {
           : null,
         createdAt: m.serverTs,
       };
-    });
+    };
+
+    const messages = messagesResp.map(toDirectMessage);
+    const protocolMessagesById = new Map(
+      protocolMessagesResp.map((message) => [
+        message.id,
+        toDirectMessage(message),
+      ]),
+    );
 
     return {
       id: meta.id,
@@ -1360,6 +1396,22 @@ class ApiClient {
       currentEpoch: meta.currentEpoch,
       members,
       messages,
+      protocolMessages: [...protocolMessagesById.values()],
+    };
+  }
+
+  async getGroupConversationState(id: string): Promise<{
+    currentEpoch: number;
+    members: GroupMember[];
+  }> {
+    const [meta, members] = await Promise.all([
+      this.request<{ currentEpoch: number }>(`/conversations/${id}`),
+      this.getGroupMembers(id),
+    ]);
+
+    return {
+      currentEpoch: meta.currentEpoch,
+      members,
     };
   }
 

@@ -906,18 +906,19 @@ export function useSendGroupMessage(
   conversationId: string,
   options?: {
     deviceId?: string | null;
-    epoch?: number;
     userId?: string | null;
-    memberUserIds?: string[];
   },
 ) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (content: string) => {
-      const { deviceId, epoch, userId, memberUserIds } = options ?? {};
+      const { deviceId, userId } = options ?? {};
       if (!deviceId) throw new Error("DEVICE_NOT_INITIALIZED");
       if (!userId) throw new Error("USER_ID_UNKNOWN");
-      if (!memberUserIds?.length) {
+
+      const latestState = await api.getGroupConversationState(conversationId);
+      const memberUserIds = latestState.members.map((member) => member.userId);
+      if (!memberUserIds.length) {
         throw new Error("GROUP_MEMBERS_UNKNOWN");
       }
 
@@ -925,7 +926,7 @@ export function useSendGroupMessage(
       const ciphertext = await encryptForGroup(
         conversationId,
         content,
-        epoch ?? 0,
+        latestState.currentEpoch,
         memberUserIds,
         api,
       );

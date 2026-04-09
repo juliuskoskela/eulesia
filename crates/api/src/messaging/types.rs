@@ -77,6 +77,7 @@ pub struct DeliveryAck {
 pub struct MessageCursorParams {
     pub before: Option<Uuid>,
     pub limit: Option<u64>,
+    pub message_type: Option<MessageType>,
 }
 
 // ---------------------------------------------------------------------------

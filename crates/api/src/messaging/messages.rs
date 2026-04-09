@@ -38,6 +38,26 @@ fn decode_base64(input: &str, field: &str) -> Result<Vec<u8>, ApiError> {
     Ok(bytes)
 }
 
+fn resolve_e2ee_sender_device(
+    auth_device_id: Option<Uuid>,
+    requested_device_id: Option<Uuid>,
+) -> Result<Uuid, ApiError> {
+    match (auth_device_id, requested_device_id) {
+        (Some(auth_device_id), Some(requested_device_id))
+            if auth_device_id != requested_device_id =>
+        {
+            Err(ApiError::BadRequest(
+                "sender_device_id must match the authenticated device".into(),
+            ))
+        }
+        (Some(auth_device_id), _) => Ok(auth_device_id),
+        (None, Some(requested_device_id)) => Ok(requested_device_id),
+        (None, None) => Err(ApiError::BadRequest(
+            "sender_device_id required for E2EE messages".into(),
+        )),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Prepared send — intermediate representation before persistence
 // ---------------------------------------------------------------------------
@@ -330,16 +350,10 @@ pub async fn send(
     }
 
     // E2EE path — resolve device ID from session or request body.
-    let device_id = auth
-        .device_id
-        .map(|d| d.0)
-        .or(req.sender_device_id)
-        .ok_or_else(|| {
-            ApiError::BadRequest("sender_device_id required for E2EE messages".into())
-        })?;
+    let device_id = resolve_e2ee_sender_device(auth.device_id.map(|d| d.0), req.sender_device_id)?;
 
     // Verify the device belongs to the caller and is active.
-    if auth.device_id.map(|d| d.0) != Some(device_id) {
+    if auth.device_id.is_none() {
         // Device came from request body — validate ownership.
         let dev = DeviceRepo::find_by_id_and_user(&state.db, device_id, caller)
             .await
@@ -443,9 +457,15 @@ pub async fn list_messages(
 
     let limit = params.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
 
-    let msgs = ConversationRepo::messages_page(&state.db, conversation_id, params.before, limit)
-        .await
-        .map_err(db_err)?;
+    let msgs = ConversationRepo::messages_page(
+        &state.db,
+        conversation_id,
+        params.before,
+        limit,
+        params.message_type.as_ref().map(MessageType::as_str),
+    )
+    .await
+    .map_err(db_err)?;
 
     if is_plaintext {
         // Plaintext path — decode stored bytes as UTF-8 content.
@@ -781,5 +801,24 @@ mod tests {
             broadcast_ciphertext(false, Some(b"group-message")),
             STANDARD.encode(b"group-message")
         );
+    }
+
+    #[test]
+    fn authenticated_device_must_match_request_device() {
+        let auth_device_id = Uuid::now_v7();
+        let requested_device_id = Uuid::now_v7();
+
+        let result = resolve_e2ee_sender_device(Some(auth_device_id), Some(requested_device_id));
+
+        assert!(matches!(result, Err(ApiError::BadRequest(_))));
+    }
+
+    #[test]
+    fn authenticated_device_is_used_when_request_omits_device() {
+        let auth_device_id = Uuid::now_v7();
+
+        let result = resolve_e2ee_sender_device(Some(auth_device_id), None).unwrap();
+
+        assert_eq!(result, auth_device_id);
     }
 }
