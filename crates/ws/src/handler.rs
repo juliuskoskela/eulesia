@@ -155,14 +155,18 @@ async fn broadcast_typing(
     }
 }
 
-/// Broadcast a new-message event to all other conversation members.
-/// Called by message handlers after persisting a message.
+/// Broadcast a new-message event to all conversation members, excluding the
+/// originating connection when it is known.
+///
+/// Sender fanout is required so the user's other devices stay in sync after a
+/// send, but excluding the origin avoids a needless echo to the same socket.
 pub async fn broadcast_new_message(
     db: &sea_orm::DatabaseConnection,
     registry: &ConnectionRegistry,
     conversation_id: Uuid,
     message_id: Uuid,
     sender_id: Uuid,
+    sender_connection_id: Option<Uuid>,
     ciphertext: &str,
     epoch: i64,
 ) {
@@ -183,7 +187,13 @@ pub async fn broadcast_new_message(
     };
 
     for member in &members {
-        if member.user_id != sender_id {
+        if member.user_id == sender_id {
+            if let Some(connection_id) = sender_connection_id {
+                registry.send_to_user_excluding_connection(&member.user_id, &connection_id, &msg);
+            } else {
+                registry.send_to_user(&member.user_id, &msg);
+            }
+        } else {
             registry.send_to_user(&member.user_id, &msg);
         }
     }

@@ -5,7 +5,8 @@
  *
  * The DeviceProvider watches authentication state and automatically
  * initializes the device's cryptographic identity when the user is
- * authenticated. On logout, the local key store is cleared.
+ * authenticated. Logging out only resets in-memory session state; the local
+ * device identity persists until the user explicitly revokes the device.
  */
 
 import {
@@ -55,7 +56,7 @@ const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
 
 export function DeviceProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation("common");
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, currentUser } = useAuth();
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -72,7 +73,13 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const registration = await initializeDevice(api);
+      if (!currentUser) {
+        throw new Error(
+          "Cannot initialize device without an authenticated user",
+        );
+      }
+
+      const registration = await initializeDevice(api, currentUser.id);
       setDeviceId(registration.deviceId);
       setIsInitialized(true);
       setHasFreshRegistration(registration.didCreateDevice);
@@ -94,7 +101,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsInitializing(false);
     }
-  }, []);
+  }, [currentUser]);
 
   // Initialize device when authenticated
   useEffect(() => {
@@ -102,11 +109,13 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       isAuthenticated &&
       !isInitialized &&
       !isInitializing &&
+      currentUser &&
       !hasAttemptedInit
     ) {
       void initialize();
     }
   }, [
+    currentUser,
     hasAttemptedInit,
     initialize,
     isAuthenticated,
@@ -114,8 +123,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     isInitializing,
   ]);
 
-  // Reset local device state on logout. Revocation and key-store clearing
-  // are handled in the auth logout flow while the session is still valid.
+  // Reset in-memory device state on logout. The persisted key store remains
+  // intact so the browser keeps the same cryptographic identity across
+  // session logouts.
   useEffect(() => {
     if (prevAuthRef.current && !isAuthenticated) {
       setDeviceId(null);

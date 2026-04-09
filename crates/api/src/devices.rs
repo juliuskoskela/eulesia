@@ -453,16 +453,16 @@ async fn get_pre_key_bundle(
     }))
 }
 
-/// List active devices for the currently authenticated user.
+/// List active devices for a user.
+///
+/// This remains an authenticated endpoint so anonymous callers cannot enumerate
+/// devices, but authenticated clients must be able to discover recipient
+/// devices for E2EE session setup and sender-key distribution.
 pub async fn list_user_devices(
     State(state): State<AppState>,
-    auth: AuthUser,
+    _auth: AuthUser,
     Path(user_id): Path<Id>,
 ) -> Result<Json<Vec<DeviceResponse>>, ApiError> {
-    if auth.user_id.0 != user_id {
-        return Err(ApiError::Forbidden);
-    }
-
     let devices = DeviceRepo::list_active_for_user(&*state.db, user_id)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;

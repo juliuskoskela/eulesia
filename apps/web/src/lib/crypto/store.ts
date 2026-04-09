@@ -36,6 +36,8 @@ const STORE_SENDER_KEYS = "senderKeys";
 
 /** Device-scoped long-term and pre-key material. */
 export interface DeviceKeys {
+  /** The authenticated user that owns this local device identity. */
+  userId?: string;
   /** Unique identifier for this device (UUID). */
   deviceId: string;
   /** Long-term identity key pair (ECDH, X25519 or P-256). */

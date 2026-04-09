@@ -110,27 +110,51 @@ async function generateOneTimePreKeys(
  */
 export async function initializeDevice(
   api: ApiClient,
+  userId: string,
   pairingCode?: string,
 ): Promise<DeviceRegistration> {
   // Step 1: Try loading existing keys — but verify the device still exists
   // on the server (migrations may have truncated the devices table).
   const existing = await loadDeviceKeys();
   if (existing) {
-    try {
-      const serverDevices = await api.listDevices();
-      const stillExists = serverDevices.some((d) => d.id === existing.deviceId);
-      if (stillExists) {
-        return {
-          deviceId: existing.deviceId,
-          identityPublicKey: existing.identityKeyPair.publicKey,
-          didCreateDevice: false,
-        };
+    if (existing.userId && existing.userId !== userId) {
+      await clearKeyStore();
+    } else {
+      try {
+        const serverDevices = await api.listDevices();
+        const stillExists = serverDevices.some(
+          (d) => d.id === existing.deviceId,
+        );
+        if (stillExists) {
+          if (existing.userId !== userId) {
+            await saveDeviceKeys({ ...existing, userId });
+          }
+
+          return {
+            deviceId: existing.deviceId,
+            identityPublicKey: existing.identityKeyPair.publicKey,
+            didCreateDevice: false,
+          };
+        }
+      } catch {
+        // Preserve the local identity until the server authoritatively confirms
+        // that the device is missing. Transient startup failures must not force
+        // a new device registration once the device has been bound to a user.
+        if (existing.userId === userId) {
+          return {
+            deviceId: existing.deviceId,
+            identityPublicKey: existing.identityKeyPair.publicKey,
+            didCreateDevice: false,
+          };
+        }
+
+        throw new Error("Unable to verify the existing device identity");
       }
-    } catch {
-      // If the check fails, assume device is gone and re-register.
+
+      // The server confirmed that this device no longer exists — clear the
+      // stale local identity before registering a replacement.
+      await clearKeyStore();
     }
-    // Server device is gone — clear stale local keys and re-register.
-    await clearKeyStore();
   }
 
   // Step 2: Generate new key material
@@ -175,6 +199,7 @@ export async function initializeDevice(
 
   // Step 5: Persist to IndexedDB
   await saveDeviceKeys({
+    userId,
     deviceId: device.id,
     identityKeyPair: identityExported,
     signingKeyPair: signingExported,
