@@ -11,42 +11,38 @@
  */
 
 // deviceManager — Device registration and lifecycle
-export {
-  initializeDevice,
-  replenishPreKeys,
-  getDeviceId,
-  consumeOneTimePreKey,
-} from "./deviceManager.ts";
+export { initializeDevice } from "./deviceManager.ts";
 
 export type { DeviceRegistration } from "./deviceManager.ts";
 
 // messageEncryptor — Message encryption and decryption
 export {
-  ensureSession,
   encryptForConversation,
   decryptConversationMessage,
   encryptForGroup,
   decryptGroupMessage,
-  ensureLocalSenderKey,
-  distributeSenderKey,
-  handleSenderKeyDistribution,
 } from "./messageEncryptor.ts";
 
-export type {
-  EncryptedPayload,
-  SenderKeyDistributionPayload,
-} from "./messageEncryptor.ts";
+export type { EncryptedPayload } from "./messageEncryptor.ts";
 
 // apiTypes — Minimal API client interface
 export type { ApiClient } from "./apiTypes.ts";
-
-export { getE2eeBackend, usingMatrixCrypto } from "./backend.ts";
 
 export {
   asMatrixDeviceId,
   asMatrixRoomId,
   asMatrixUserId,
   closeMatrixCryptoMachine,
+  getMatrixCryptoModule,
   getMatrixCryptoMachine,
   initializeMatrixCryptoMachine,
 } from "./matrixCrypto.ts";
+
+export {
+  decryptMatrixToDeviceEvent,
+  ensureMatrixSessions,
+  getMatrixDevice,
+  syncMatrixMachine,
+} from "./matrixApiAdapter.ts";
+
+export { processMatrixGroupToDeviceMessages } from "./matrixGroup.ts";

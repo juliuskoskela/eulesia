@@ -1,7 +1,7 @@
 /**
  * @module store
  *
- * IndexedDB-backed key storage for the Eulesia E2EE messaging protocol.
+ * IndexedDB-backed local device storage.
  *
  * browser's native IndexedDB. This module persists the serialised values it is given
  * and does not itself provide encryption at rest. If callers pass exported
@@ -13,8 +13,6 @@
  * Uses only the native IndexedDB API with no third-party wrappers.
  */
 
-import type { ExportedKeyPair } from "./keys.ts";
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -22,60 +20,24 @@ import type { ExportedKeyPair } from "./keys.ts";
 /** IndexedDB database name. */
 const DB_NAME = "eulesia-e2ee-keystore";
 
-/** Current schema version. Bump when adding/modifying object stores. */
-const DB_VERSION = 3;
+/** Current schema version. */
+const DB_VERSION = 4;
 
 /** Object store names. */
 const STORE_DEVICE_KEYS = "deviceKeys";
-const STORE_SESSIONS = "sessions";
-const STORE_SENDER_KEYS = "senderKeys";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-/** Device-scoped long-term and pre-key material. */
+/** Device-scoped metadata retained outside the Matrix crypto store. */
 export interface DeviceKeys {
   /** The authenticated user that owns this local device identity. */
   userId?: string;
   /** Unique identifier for this device (UUID). */
   deviceId: string;
-  /** Long-term identity key pair (ECDH, X25519 or P-256). */
-  identityKeyPair: ExportedKeyPair;
-  /** Signing key pair (Ed25519 or ECDSA) used to sign pre-keys. */
-  signingKeyPair: ExportedKeyPair;
-  /** Current signed pre-key pair. */
-  signedPreKeyPair: ExportedKeyPair;
-  /** Monotonically increasing ID for the signed pre-key. */
-  signedPreKeyId: number;
-  /** Pool of unused one-time pre-keys. */
-  oneTimePreKeys: OneTimePreKeyEntry[];
-}
-
-/** A single one-time pre-key with its ID. */
-export interface OneTimePreKeyEntry {
-  keyId: number;
-  keyPair: ExportedKeyPair;
-}
-
-/** Per-conversation, per-remote-device session state. */
-export interface SessionState {
-  /** The conversation (thread/DM) this session belongs to. */
-  conversationId: string;
-  /** The remote device that shares this session. */
-  deviceId: string;
-  /** Base64url-encoded AES-256-GCM send key. */
-  sendKey: string;
-  /** Base64url-encoded AES-256-GCM receive key. */
-  receiveKey: string;
-  /** Base64url-encoded ephemeral public key (initiator only, for first message). */
-  ephemeralPublicKey?: string;
-  /** Key ID of the consumed one-time pre-key (initiator only, for first message). */
-  usedOneTimePreKeyId?: number;
-  /** Next send-side message counter. */
-  sendCounter: number;
-  /** Next receive-side message counter. */
-  receiveCounter: number;
+  /** Public identity key retained only for registration continuity. */
+  identityPublicKey?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,20 +62,13 @@ export async function openKeyStore(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_DEVICE_KEYS, { keyPath: "deviceId" });
       }
 
-      // Sessions — compound key [conversationId, deviceId]
-      if (!db.objectStoreNames.contains(STORE_SESSIONS)) {
-        db.createObjectStore(STORE_SESSIONS, {
-          keyPath: ["conversationId", "deviceId"],
-        });
+      // Clean out retired stores from the bespoke protocol implementation.
+      if (db.objectStoreNames.contains("sessions")) {
+        db.deleteObjectStore("sessions");
       }
-
-      // Sender keys — compound key [conversationId, userId, epoch]
-      if (db.objectStoreNames.contains(STORE_SENDER_KEYS)) {
-        db.deleteObjectStore(STORE_SENDER_KEYS);
+      if (db.objectStoreNames.contains("senderKeys")) {
+        db.deleteObjectStore("senderKeys");
       }
-      db.createObjectStore(STORE_SENDER_KEYS, {
-        keyPath: ["conversationId", "userId", "epoch"],
-      });
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -214,146 +169,11 @@ export async function loadDeviceKeysById(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Sessions
-// ---------------------------------------------------------------------------
-
-/**
- * Persist session state for a specific conversation and remote device.
- *
- * Overwrites any existing session with the same compound key.
- */
-export async function saveSession(session: SessionState): Promise<void> {
-  const db = await openKeyStore();
-  try {
-    await tx(db, STORE_SESSIONS, "readwrite", (store) => store.put(session));
-  } finally {
-    db.close();
-  }
-}
-
-/**
- * Load session state for a specific conversation and remote device.
- *
- * @returns The session record, or `null` if no session exists yet.
- */
-export async function loadSession(
-  conversationId: string,
-  deviceId: string,
-): Promise<SessionState | null> {
-  const db = await openKeyStore();
-  try {
-    const result = await tx(
-      db,
-      STORE_SESSIONS,
-      "readonly",
-      (store) =>
-        store.get([conversationId, deviceId]) as IDBRequest<
-          SessionState | undefined
-        >,
-    );
-    return result ?? null;
-  } finally {
-    db.close();
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Sender Keys
-// ---------------------------------------------------------------------------
-
-/**
- * Sender key state for a group member. Stored per [conversationId, userId, epoch].
- * Each member has one sender key per epoch.
- */
-export interface SenderKeyState {
-  conversationId: string;
-  userId: string;
-  /** HMAC-SHA256 chain key — base64url-encoded 32 bytes. */
-  chainKey: string;
-  /** Epoch when this sender key was created. */
-  epoch: number;
-  /** Monotonic message counter (ratchets forward on each send/receive). */
-  messageIndex: number;
-}
-
-/**
- * Save (or overwrite) a sender key for a specific group member.
- */
-export async function saveSenderKey(state: SenderKeyState): Promise<void> {
-  const db = await openKeyStore();
-  try {
-    await tx(db, STORE_SENDER_KEYS, "readwrite", (store) => store.put(state));
-  } finally {
-    db.close();
-  }
-}
-
-/**
- * Load a sender key for a specific group member and epoch.
- */
-export async function loadSenderKey(
-  conversationId: string,
-  userId: string,
-  epoch: number,
-): Promise<SenderKeyState | null> {
-  const db = await openKeyStore();
-  try {
-    const result = await tx(
-      db,
-      STORE_SENDER_KEYS,
-      "readonly",
-      (store) =>
-        store.get([conversationId, userId, epoch]) as IDBRequest<
-          SenderKeyState | undefined
-        >,
-    );
-    return result ?? null;
-  } finally {
-    db.close();
-  }
-}
-
-/**
- * Delete all sender keys for a conversation (used on epoch rotation).
- */
-export async function clearSenderKeysForConversation(
-  conversationId: string,
-): Promise<void> {
-  const db = await openKeyStore();
-  try {
-    const transaction = db.transaction(STORE_SENDER_KEYS, "readwrite");
-    const store = transaction.objectStore(STORE_SENDER_KEYS);
-    const request = store.openCursor();
-    await new Promise<void>((resolve, reject) => {
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (cursor) {
-          const value = cursor.value as SenderKeyState;
-          if (value.conversationId === conversationId) {
-            cursor.delete();
-          }
-          cursor.continue();
-        } else {
-          resolve();
-        }
-      };
-      request.onerror = () => reject(request.error);
-    });
-  } finally {
-    db.close();
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Cleanup
-// ---------------------------------------------------------------------------
-
 /**
  * Delete the entire key store database.
  *
- * This is a destructive operation intended for logout / account deletion.
- * All device keys and session state will be permanently lost.
+ * This is a destructive operation intended for account reset or device
+ * revocation. All locally persisted device keys will be permanently lost.
  */
 export async function clearKeyStore(): Promise<void> {
   return new Promise<void>((resolve, reject) => {

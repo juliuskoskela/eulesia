@@ -23,6 +23,8 @@ mod m20260408_000020_clean_municipality_duplicates;
 mod m20260408_000021_thread_scope_personal;
 mod m20260408_000023_add_skd_message_type;
 mod m20260424_000024_device_pairing_tokens;
+mod m20260424_000025_matrix_crypto_keys;
+mod m20260424_000026_replace_skd_with_to_device_message_type;
 
 pub struct Migrator;
 
@@ -53,6 +55,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260408_000021_thread_scope_personal::Migration),
             Box::new(m20260408_000023_add_skd_message_type::Migration),
             Box::new(m20260424_000024_device_pairing_tokens::Migration),
+            Box::new(m20260424_000025_matrix_crypto_keys::Migration),
+            Box::new(m20260424_000026_replace_skd_with_to_device_message_type::Migration),
         ]
     }
 }

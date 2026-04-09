@@ -1251,6 +1251,66 @@ class ApiClient {
     return this.request(`/users/${userId}/devices`);
   }
 
+  async uploadMatrixKeys(
+    deviceId: string,
+    data: {
+      device_keys?: {
+        user_id: string;
+        device_id: string;
+        keys: Record<string, string>;
+        signatures: Record<string, Record<string, string>>;
+      };
+      one_time_keys?: Record<
+        string,
+        {
+          key: string;
+          signatures: Record<string, Record<string, string>>;
+        }
+      >;
+      fallback_keys?: Record<
+        string,
+        {
+          key: string;
+          signatures: Record<string, Record<string, string>>;
+        }
+      >;
+    },
+  ): Promise<{ one_time_key_counts: Record<string, number> }> {
+    return this.request(`/devices/${deviceId}/matrix/keys/upload`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async queryMatrixKeys(data: {
+    device_keys: Record<string, string[]>;
+    timeout?: number;
+    token?: string;
+  }): Promise<{
+    device_keys: Record<string, Record<string, unknown>>;
+    master_keys: Record<string, unknown>;
+    self_signing_keys: Record<string, unknown>;
+    failures: Record<string, unknown>;
+  }> {
+    return this.request("/devices/matrix/keys/query", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async claimMatrixKeys(data: {
+    one_time_keys: Record<string, Record<string, string>>;
+    timeout?: number;
+  }): Promise<{
+    one_time_keys: Record<string, Record<string, Record<string, unknown>>>;
+    failures: Record<string, unknown>;
+  }> {
+    return this.request("/devices/matrix/keys/claim", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   async sendEncryptedDirectMessage(
     conversationId: string,
     data: {
@@ -1361,17 +1421,17 @@ class ApiClient {
     });
   }
 
-  /** Send a Sender Key Distribution message (per-device, like a DM). */
-  async sendGroupSkd(
+  /** Send a hidden Matrix to-device payload through the group device queue. */
+  async sendGroupToDevice(
     conversationId: string,
     data: {
       deviceCiphertexts: Record<string, string>;
       senderDeviceId: string;
     },
-  ): Promise<DirectMessage> {
+  ): Promise<void> {
     return this.request(`/conversations/${conversationId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ ...data, messageType: "skd" }),
+      body: JSON.stringify({ ...data, messageType: "to_device" }),
     });
   }
 

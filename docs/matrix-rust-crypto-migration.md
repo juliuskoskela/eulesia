@@ -1,12 +1,12 @@
 # Matrix Rust Crypto Migration
 
-This branch starts replacing Eulesia's bespoke browser E2EE state with the
+This branch replaces Eulesia's bespoke browser E2EE state with the
 Matrix Rust crypto stack exposed through
 `@matrix-org/matrix-sdk-crypto-wasm`.
 
 ## Why
 
-The current client-side E2EE implementation owns too much protocol logic:
+The removed client-side E2EE implementation owned too much protocol logic:
 
 - custom X3DH/session establishment in `apps/web/src/lib/crypto/session.ts`
 - custom pairwise message envelopes in
@@ -33,12 +33,38 @@ which the application must transport and acknowledge.
 ## What this PR changes
 
 - adds the Matrix WASM dependency to the web client
-- introduces a runtime E2EE backend boundary (`legacy` vs `matrix`)
-- initializes an `OlmMachine` for the authenticated local device when
-  `VITE_E2EE_BACKEND=matrix`
+- initializes an `OlmMachine` for the authenticated local device
 - introduces stable ID mapping from Eulesia UUIDs to Matrix-style IDs
+- routes DM Olm, hidden to-device protocol traffic, and group Megolm payloads
+  through the Matrix Rust state machine
+- removes the bespoke browser message/session/sender-key implementation from
+  the active frontend crypto surface
 
-This is an intentional seam for deleting bespoke crypto code incrementally.
+This leaves only device registration compatibility glue around the existing
+server-side device lifecycle.
+
+## Current status on this branch
+
+Implemented now:
+
+- Matrix-shaped `/devices/{id}/matrix/keys/upload`,
+  `/devices/matrix/keys/query`, and `/devices/matrix/keys/claim`
+  endpoints backed by the existing `devices` table plus Matrix-specific key
+  columns
+- a browser-side adapter that drains `OlmMachine.outgoingRequests()` through
+  those endpoints and acknowledges responses with `markRequestAsSent(...)`
+- DM payloads encrypted through Matrix Olm to-device events and carried over
+  the existing `device_ciphertexts` transport
+- group room-key distribution carried through hidden Matrix to-device payloads
+  over the existing per-device queue
+- group message bodies encrypted as Megolm room events instead of the bespoke
+  sender-key protocol
+
+Still intentionally compatibility-only:
+
+- device registration still goes through Eulesia's existing `POST /devices`
+  lifecycle so pairing, revocation, and browser identity continuity stay
+  stable while the crypto engine changes underneath
 
 ## ID mapping
 
@@ -123,23 +149,6 @@ Adapter task:
 - encode Matrix to-device payloads into the existing device queue without
   losing request identity and replay semantics
 
-### 5. Group encryption
-
-Current Eulesia group protocol:
-
-- bespoke sender-key distribution (`skd`)
-
-Matrix machine output:
-
-- `shareRoomKey(...)`
-- `encryptRoomEvent(...)`
-- `decryptRoomEvent(...)`
-
-Adapter task:
-
-- migrate group conversations from bespoke sender keys to Megolm room keys
-- treat each Eulesia conversation as a Matrix-style room at the crypto layer
-
 ## Migration order
 
 1. Keep the current server API stable and build a client-side adapter for
@@ -148,5 +157,5 @@ Adapter task:
    `OlmMachine` to-device encryption.
 3. Add first-class to-device transport on the server.
 4. Replace bespoke group sender keys with Megolm room sessions.
-5. Delete the legacy `apps/web/src/lib/crypto/*` protocol state gradually,
-   keeping only app-level glue and persistence the Matrix machine still needs.
+5. Trim remaining compatibility-only device-registration glue once the server
+   no longer needs legacy pre-key fields.

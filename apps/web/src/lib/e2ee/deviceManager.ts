@@ -3,9 +3,9 @@
  *
  * Device lifecycle management for the Eulesia E2EE messaging protocol.
  *
- * On first use, generates cryptographic identity keys, registers the device
- * with the server, and stores key material locally in IndexedDB.
- * On subsequent uses, loads existing keys from IndexedDB.
+ * On first use, registers the browser as a device and retains only the
+ * metadata needed to reconnect the Matrix crypto machine to that device ID.
+ * On subsequent uses, verifies the stored device ID against the server.
  */
 
 import {
@@ -18,7 +18,7 @@ import {
   saveDeviceKeys,
   clearKeyStore,
 } from "../crypto/index.ts";
-import type { ExportedKeyPair, OneTimePreKeyEntry } from "../crypto/index.ts";
+import type { ExportedKeyPair } from "../crypto/index.ts";
 import type { ApiClient } from "./apiTypes.ts";
 
 // ---------------------------------------------------------------------------
@@ -37,12 +37,6 @@ export interface DeviceRegistration {
 
 /** Number of one-time pre-keys to generate on initial registration. */
 const INITIAL_OTK_COUNT = 100;
-
-/** Replenish one-time keys when the server count drops below this threshold. */
-const OTK_REPLENISH_THRESHOLD = 20;
-
-/** Number of one-time keys to upload per replenishment batch. */
-const OTK_REPLENISH_BATCH = 50;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,8 +78,8 @@ function getPlatform(): string {
 async function generateOneTimePreKeys(
   startKeyId: number,
   count: number,
-): Promise<OneTimePreKeyEntry[]> {
-  const entries: OneTimePreKeyEntry[] = [];
+): Promise<Array<{ keyId: number; keyPair: ExportedKeyPair }>> {
+  const entries: Array<{ keyId: number; keyPair: ExportedKeyPair }> = [];
   for (let i = 0; i < count; i++) {
     const keyPair = await generateExtractableKeyPair();
     const exported = await exportKeyPair(keyPair);
@@ -99,13 +93,14 @@ async function generateOneTimePreKeys(
 // ---------------------------------------------------------------------------
 
 /**
- * Initialize the local device's cryptographic identity.
+ * Initialize the local browser device registration.
  *
- * 1. Try loading keys from IndexedDB.
- * 2. If none exist, generate new identity + signed pre-key + 100 OTKs.
+ * 1. Try loading the existing local device metadata from IndexedDB.
+ * 2. If none exists, generate the compatibility registration payload required
+ *    by the current server-side device lifecycle.
  * 3. Register the device with the server (POST /devices).
- * 4. Upload pre-keys (POST /devices/{id}/pre-keys).
- * 5. Persist keys to IndexedDB.
+ * 4. Upload one-time pre-keys required by the current compatibility API.
+ * 5. Persist only the local device metadata needed by the Matrix adapter.
  * 6. Return the device registration info.
  */
 export async function initializeDevice(
@@ -132,7 +127,7 @@ export async function initializeDevice(
 
           return {
             deviceId: existing.deviceId,
-            identityPublicKey: existing.identityKeyPair.publicKey,
+            identityPublicKey: existing.identityPublicKey ?? "",
             didCreateDevice: false,
           };
         }
@@ -143,7 +138,7 @@ export async function initializeDevice(
         if (existing.userId === userId) {
           return {
             deviceId: existing.deviceId,
-            identityPublicKey: existing.identityKeyPair.publicKey,
+            identityPublicKey: existing.identityPublicKey ?? "",
             didCreateDevice: false,
           };
         }
@@ -162,7 +157,6 @@ export async function initializeDevice(
   const identityExported = await exportKeyPair(identityKeyPair);
 
   const signingKeyPair = await generateExtractableSigningKeyPair();
-  const signingExported = await exportKeyPair(signingKeyPair);
 
   const signedPreKeyPair = await generateExtractableKeyPair();
   const signedPreKeyExported = await exportKeyPair(signedPreKeyPair);
@@ -201,11 +195,7 @@ export async function initializeDevice(
   await saveDeviceKeys({
     userId,
     deviceId: device.id,
-    identityKeyPair: identityExported,
-    signingKeyPair: signingExported,
-    signedPreKeyPair: signedPreKeyExported,
-    signedPreKeyId,
-    oneTimePreKeys,
+    identityPublicKey: identityExported.publicKey,
   });
 
   // Step 6: Return registration info
@@ -214,76 +204,4 @@ export async function initializeDevice(
     identityPublicKey: identityExported.publicKey,
     didCreateDevice: true,
   };
-}
-
-/**
- * Re-upload one-time pre-keys if the server-side count is running low.
- *
- * Called periodically (e.g. on app startup). Checks the server for the
- * available OTK count and uploads a new batch if below the threshold.
- */
-export async function replenishPreKeys(
-  api: ApiClient,
-  deviceId: string,
-): Promise<void> {
-  const deviceKeys = await loadDeviceKeys();
-  if (!deviceKeys || deviceKeys.deviceId !== deviceId) return;
-
-  // Check current OTK count on the device store.
-  // If we have fewer than the threshold locally, generate and upload more.
-  const localOtkCount = deviceKeys.oneTimePreKeys.length;
-  if (localOtkCount >= OTK_REPLENISH_THRESHOLD) return;
-
-  // Determine the next keyId (continue from the highest existing)
-  const maxKeyId = deviceKeys.oneTimePreKeys.reduce(
-    (max, otk) => Math.max(max, otk.keyId),
-    0,
-  );
-
-  const newKeys = await generateOneTimePreKeys(
-    maxKeyId + 1,
-    OTK_REPLENISH_BATCH,
-  );
-
-  await api.uploadPreKeys(deviceId, {
-    oneTimeKeys: newKeys.map((otk) => ({
-      keyId: otk.keyId,
-      keyData: otk.keyPair.publicKey,
-    })),
-  });
-
-  // Update local store with the new keys
-  deviceKeys.oneTimePreKeys = [...deviceKeys.oneTimePreKeys, ...newKeys];
-  await saveDeviceKeys(deviceKeys);
-}
-
-/**
- * Get the current device ID from IndexedDB, or null if no device is
- * registered on this browser.
- */
-export async function getDeviceId(): Promise<string | null> {
-  const keys = await loadDeviceKeys();
-  return keys?.deviceId ?? null;
-}
-
-/**
- * Remove a consumed one-time pre-key from the local store.
- * Called after the key has been used in a session establishment.
- */
-export async function consumeOneTimePreKey(
-  keyId: number,
-): Promise<ExportedKeyPair | null> {
-  const deviceKeys = await loadDeviceKeys();
-  if (!deviceKeys) return null;
-
-  const index = deviceKeys.oneTimePreKeys.findIndex(
-    (otk) => otk.keyId === keyId,
-  );
-  if (index === -1) return null;
-
-  const consumed = deviceKeys.oneTimePreKeys[index]!;
-  deviceKeys.oneTimePreKeys.splice(index, 1);
-  await saveDeviceKeys(deviceKeys);
-
-  return consumed.keyPair;
 }

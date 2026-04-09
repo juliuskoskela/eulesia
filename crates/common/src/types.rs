@@ -424,10 +424,10 @@ pub enum MessageType {
     System,
     Reaction,
     Redaction,
-    /// Sender Key Distribution — delivers a group sender key to each device
-    /// via per-device ciphertexts (even in group conversations).
-    #[serde(rename = "skd")]
-    Skd,
+    /// Hidden Matrix to-device payload routed through the existing per-device
+    /// message queue for key distribution and protocol maintenance.
+    #[serde(rename = "to_device")]
+    ToDevice,
 }
 
 impl MessageType {
@@ -438,7 +438,7 @@ impl MessageType {
             Self::System => "system",
             Self::Reaction => "reaction",
             Self::Redaction => "redaction",
-            Self::Skd => "skd",
+            Self::ToDevice => "to_device",
         }
     }
 }
@@ -458,7 +458,7 @@ impl std::str::FromStr for MessageType {
             "system" => Ok(Self::System),
             "reaction" => Ok(Self::Reaction),
             "redaction" => Ok(Self::Redaction),
-            "skd" => Ok(Self::Skd),
+            "to_device" => Ok(Self::ToDevice),
             other => Err(format!("invalid message type: {other}")),
         }
     }
@@ -1393,6 +1393,7 @@ mod tests {
         roundtrip(MessageType::System, "system");
         roundtrip(MessageType::Reaction, "reaction");
         roundtrip(MessageType::Redaction, "redaction");
+        roundtrip(MessageType::ToDevice, "to_device");
     }
 
     #[test]

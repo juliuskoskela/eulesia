@@ -917,48 +917,17 @@ export function useSendGroupMessage(
       const { deviceId, epoch, userId, memberUserIds } = options ?? {};
       if (!deviceId) throw new Error("DEVICE_NOT_INITIALIZED");
       if (!userId) throw new Error("USER_ID_UNKNOWN");
-
-      const { ensureLocalSenderKey, distributeSenderKey, encryptForGroup } =
-        await import("../lib/e2ee/index.ts");
-
-      // Ensure we have a sender key for the current epoch
-      const senderKey = await ensureLocalSenderKey(
-        conversationId,
-        userId,
-        epoch ?? 0,
-      );
-
-      // Distribute sender key to group members if this is a fresh key
-      // (messageIndex === 0 means it was just generated)
-      if (senderKey.messageIndex === 0 && memberUserIds?.length) {
-        const targetDevices = await loadConversationTargetDevices(
-          memberUserIds,
-          userId,
-        );
-        if (!targetDevices.some((target) => target.deviceId === deviceId)) {
-          throw new Error("SENDER_DEVICE_MISSING");
-        }
-
-        if (targetDevices.length > 0) {
-          const skdPayload = await distributeSenderKey(
-            conversationId,
-            senderKey,
-            targetDevices,
-            api,
-          );
-          await api.sendGroupSkd(conversationId, {
-            deviceCiphertexts: skdPayload.deviceCiphertexts,
-            senderDeviceId: deviceId,
-          });
-        }
+      if (!memberUserIds?.length) {
+        throw new Error("GROUP_MEMBERS_UNKNOWN");
       }
 
-      // Encrypt and send the actual message
+      const { encryptForGroup } = await import("../lib/e2ee/index.ts");
       const ciphertext = await encryptForGroup(
         conversationId,
         content,
-        userId,
         epoch ?? 0,
+        memberUserIds,
+        api,
       );
 
       return api.sendGroupMessage(conversationId, {

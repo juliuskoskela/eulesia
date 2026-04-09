@@ -58,8 +58,9 @@ export function GroupConversationPage() {
 
   const [newMessage, setNewMessage] = useState("");
   const [showMembers, setShowMembers] = useState(false);
-  const [processedSkdMessageKey, setProcessedSkdMessageKey] = useState("");
-  const [senderKeyRevision, setSenderKeyRevision] = useState(0);
+  const [processedProtocolMessageKey, setProcessedProtocolMessageKey] =
+    useState("");
+  const [roomKeyRevision, setRoomKeyRevision] = useState(0);
 
   // Determine current user's role
   const myMembership = groupData?.members.find(
@@ -77,8 +78,8 @@ export function GroupConversationPage() {
   }, [conversationId, joinDm, leaveDm]);
 
   useEffect(() => {
-    setProcessedSkdMessageKey("");
-    setSenderKeyRevision(0);
+    setProcessedProtocolMessageKey("");
+    setRoomKeyRevision(0);
   }, [conversationId]);
 
   useEffect(() => {
@@ -99,50 +100,54 @@ export function GroupConversationPage() {
     }
   }, [isKeyboardOpen]);
 
-  const skdMessages = useMemo(
+  const protocolMessages = useMemo(
     () =>
       (groupData?.messages ?? []).filter(
-        (m) => m.messageType === "skd" && m.ciphertext && m.senderDeviceId,
+        (m) => m.messageType === "to_device" && m.ciphertext,
       ),
     [groupData?.messages],
   );
-  const skdMessageKey = useMemo(
-    () => skdMessages.map((m) => m.id).join(","),
-    [skdMessages],
+  const protocolMessageKey = useMemo(
+    () => protocolMessages.map((m) => m.id).join(","),
+    [protocolMessages],
   );
 
-  // Process incoming SKD messages to import sender keys
+  // Process hidden Matrix to-device payloads to import room keys and other
+  // protocol state before attempting Megolm decrypts.
   useEffect(() => {
-    if (skdMessages.length === 0 || !conversationId) return;
-    if (skdMessageKey === processedSkdMessageKey) return;
+    if (protocolMessages.length === 0 || !conversationId) return;
+    if (protocolMessageKey === processedProtocolMessageKey) return;
 
     let cancelled = false;
 
     (async () => {
-      const { handleSenderKeyDistribution } = await import(
-        "../lib/e2ee/index.ts"
+      const { processMatrixGroupToDeviceMessages } = await import(
+        "../lib/e2ee/matrixGroup.ts"
       );
-      for (const msg of skdMessages) {
-        if (cancelled) break;
-        try {
-          await handleSenderKeyDistribution(
-            conversationId,
-            msg.senderDeviceId!,
-            msg.ciphertext!,
-          );
-        } catch {
-          // SKD processing failure is non-fatal — may already be imported
-        }
+      try {
+        await processMatrixGroupToDeviceMessages(
+          protocolMessages
+            .map((message) => message.ciphertext)
+            .filter((ciphertext): ciphertext is string => Boolean(ciphertext)),
+        );
+      } catch {
+        // Processing protocol messages is best-effort. Decrypt retries will
+        // run again if additional room-key messages arrive.
       }
       if (cancelled) return;
-      setProcessedSkdMessageKey(skdMessageKey);
-      setSenderKeyRevision((value) => value + 1);
+      setProcessedProtocolMessageKey(protocolMessageKey);
+      setRoomKeyRevision((value) => value + 1);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [skdMessages, skdMessageKey, conversationId, processedSkdMessageKey]);
+  }, [
+    protocolMessages,
+    protocolMessageKey,
+    conversationId,
+    processedProtocolMessageKey,
+  ]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,10 +189,10 @@ export function GroupConversationPage() {
     );
   }
 
-  // Filter out SKD (sender key distribution) messages — they're protocol
-  // messages, not user-visible chat.
+  // Filter out hidden protocol messages — they carry Matrix room keys and
+  // other to-device state, not user-visible chat.
   const messages = (groupData.messages ?? []).filter(
-    (m) => m.messageType !== "skd",
+    (m) => m.messageType !== "to_device",
   );
   const typingUsers = conversationId ? (typingInDm[conversationId] ?? []) : [];
 
@@ -261,7 +266,7 @@ export function GroupConversationPage() {
                 <GroupMessageBubble
                   key={msg.id}
                   message={msg}
-                  senderKeyRevision={senderKeyRevision}
+                  roomKeyRevision={roomKeyRevision}
                   isOwnMessage={
                     (msg.senderId ?? msg.author?.id) === currentUser?.id
                   }
@@ -345,7 +350,7 @@ export function GroupConversationPage() {
 
 function useGroupDecryptedContent(
   message: DirectMessage,
-  senderKeyRevision: number,
+  roomKeyRevision: number,
 ): {
   content: string;
   isDecrypting: boolean;
@@ -362,9 +367,16 @@ function useGroupDecryptedContent(
     setDecryptionFailed(false);
     try {
       const { decryptGroupMessage } = await import("../lib/e2ee/index.ts");
+      const senderUserId = message.senderId ?? message.author?.id;
+      if (!senderUserId) {
+        throw new Error("Missing group message sender");
+      }
       const plaintext = await decryptGroupMessage(
         message.conversationId,
         message.ciphertext,
+        message.id,
+        senderUserId,
+        message.createdAt,
       );
       setDecrypted(plaintext);
     } catch {
@@ -376,9 +388,9 @@ function useGroupDecryptedContent(
 
   useEffect(() => {
     if (!message.ciphertext || decrypted) return;
-    if (lastAttemptedRevision === senderKeyRevision) return;
+    if (lastAttemptedRevision === roomKeyRevision) return;
 
-    setLastAttemptedRevision(senderKeyRevision);
+    setLastAttemptedRevision(roomKeyRevision);
     if (!isDecrypting) {
       decrypt();
     }
@@ -386,7 +398,7 @@ function useGroupDecryptedContent(
     message.id,
     message.ciphertext,
     decrypted,
-    senderKeyRevision,
+    roomKeyRevision,
     lastAttemptedRevision,
     isDecrypting,
     decrypt,
@@ -412,17 +424,17 @@ function useGroupDecryptedContent(
 function GroupMessageBubble({
   message,
   isOwnMessage,
-  senderKeyRevision,
+  roomKeyRevision,
 }: {
   message: DirectMessage;
   isOwnMessage: boolean;
-  senderKeyRevision: number;
+  roomKeyRevision: number;
 }) {
   const {
     content: displayContent,
     isDecrypting,
     decryptionFailed,
-  } = useGroupDecryptedContent(message, senderKeyRevision);
+  } = useGroupDecryptedContent(message, roomKeyRevision);
 
   return (
     <div className={`flex gap-3 ${isOwnMessage ? "flex-row-reverse" : ""}`}>
@@ -441,7 +453,7 @@ function GroupMessageBubble({
         {isDecrypting ? (
           <p className="text-sm italic opacity-60">Decrypting...</p>
         ) : decryptionFailed ? (
-          <p className="text-sm italic opacity-60">Waiting for sender key...</p>
+          <p className="text-sm italic opacity-60">Waiting for room key...</p>
         ) : (
           <p className="text-sm whitespace-pre-wrap break-words">
             {displayContent}

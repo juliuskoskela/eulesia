@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  fromMatrixDeviceId,
+  fromMatrixUserId,
   getMatrixStoreName,
   toMatrixDeviceId,
+  toMatrixEventId,
   toMatrixRoomId,
   toMatrixUserId,
 } from "./matrixIds.ts";
@@ -11,17 +14,26 @@ describe("matrixIds", () => {
     expect(toMatrixUserId("550E8400-E29B-41D4-A716-446655440000")).toBe(
       "@550e8400-e29b-41d4-a716-446655440000:eulesia.invalid",
     );
+    expect(
+      fromMatrixUserId("@550e8400-e29b-41d4-a716-446655440000:eulesia.invalid"),
+    ).toBe("550e8400-e29b-41d4-a716-446655440000");
   });
 
   it("maps device ids to opaque Matrix device ids", () => {
     expect(toMatrixDeviceId("550e8400-e29b-41d4-a716-446655440000")).toBe(
       "550E8400E29B41D4A716446655440000",
     );
+    expect(fromMatrixDeviceId("550E8400E29B41D4A716446655440000")).toBe(
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
   });
 
   it("maps conversation ids to room ids and stable store names", () => {
     expect(toMatrixRoomId("550E8400-E29B-41D4-A716-446655440000")).toBe(
       "!550e8400-e29b-41d4-a716-446655440000:eulesia.invalid",
+    );
+    expect(toMatrixEventId("550E8400-E29B-41D4-A716-446655440000")).toBe(
+      "$550e8400-e29b-41d4-a716-446655440000:eulesia.invalid",
     );
     expect(
       getMatrixStoreName(

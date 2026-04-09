@@ -36,20 +36,7 @@ vi.mock("../crypto/index.ts", () => ({
 const existingKeys = {
   userId: "user-1",
   deviceId: "device-existing",
-  identityKeyPair: {
-    publicKey: "identity-public-existing",
-    privateKey: "identity-private-existing",
-  },
-  signingKeyPair: {
-    publicKey: "signing-public-existing",
-    privateKey: "signing-private-existing",
-  },
-  signedPreKeyPair: {
-    publicKey: "signed-public-existing",
-    privateKey: "signed-private-existing",
-  },
-  signedPreKeyId: 1,
-  oneTimePreKeys: [],
+  identityPublicKey: "identity-public-existing",
 };
 
 function makeApiClient(overrides: Partial<ApiClient> = {}): ApiClient {
@@ -96,7 +83,7 @@ describe("initializeDevice", () => {
 
     expect(registration).toEqual({
       deviceId: existingKeys.deviceId,
-      identityPublicKey: existingKeys.identityKeyPair.publicKey,
+      identityPublicKey: existingKeys.identityPublicKey,
       didCreateDevice: false,
     });
     expect(api.listDevices).toHaveBeenCalledTimes(1);

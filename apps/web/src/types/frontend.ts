@@ -247,7 +247,7 @@ export interface DirectMessage {
   senderDeviceId?: string;
   /** Raw sender ID from the v2 API — used when author is not populated. */
   senderId?: string;
-  /** Message type (text, media, system, skd, etc.). */
+  /** Message type (text, media, system, to_device, etc.). */
   messageType?: string;
   author: UserSummary | null;
   editedAt?: string | null;

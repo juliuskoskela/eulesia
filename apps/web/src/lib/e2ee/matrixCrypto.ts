@@ -17,7 +17,7 @@ type MatrixMachineContext = {
 let matrixModulePromise: Promise<MatrixCryptoModule> | null = null;
 let activeMachinePromise: Promise<MatrixMachineContext> | null = null;
 
-async function loadMatrixModule(): Promise<MatrixCryptoModule> {
+export async function getMatrixCryptoModule(): Promise<MatrixCryptoModule> {
   if (!matrixModulePromise) {
     matrixModulePromise = import("@matrix-org/matrix-sdk-crypto-wasm").then(
       async (module) => {
@@ -34,7 +34,7 @@ async function buildMatrixMachine(
   userId: string,
   deviceId: string,
 ): Promise<MatrixMachineContext> {
-  const matrix = await loadMatrixModule();
+  const matrix = await getMatrixCryptoModule();
   const machine = await matrix.OlmMachine.initialize(
     new matrix.UserId(toMatrixUserId(userId)),
     new matrix.DeviceId(toMatrixDeviceId(deviceId)),

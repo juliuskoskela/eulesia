@@ -48,7 +48,7 @@ struct PreparedSend {
 }
 
 fn message_uses_device_queue(conv_type: ConversationType, message_type: &str) -> bool {
-    conv_type == ConversationType::Direct || message_type == MessageType::Skd.as_str()
+    conv_type == ConversationType::Direct || message_type == MessageType::ToDevice.as_str()
 }
 
 fn ciphertext_for_viewer(
@@ -163,7 +163,7 @@ async fn prepare_device_queued_send<C: sea_orm::ConnectionTrait>(
     })
 }
 
-/// Prepare a group/channel send: single sender-key ciphertext fanned out.
+/// Prepare a group/channel send: single Megolm room-event ciphertext fanned out.
 async fn prepare_group_send<C: sea_orm::ConnectionTrait>(
     txn: &C,
     req: &SendMessageRequest,
@@ -357,9 +357,9 @@ pub async fn send(
             prepare_device_queued_send(&txn, &req, device_id, conversation_id, msg_id, now).await?
         }
         ConversationType::Group | ConversationType::Channel => {
-            if req.message_type == MessageType::Skd {
-                // Sender Key Distribution uses per-device ciphertexts (like DMs)
-                // even in group conversations — each device gets a unique SKD.
+            if req.message_type == MessageType::ToDevice {
+                // Hidden Matrix to-device protocol payloads use per-device
+                // ciphertexts even in group conversations.
                 prepare_device_queued_send(&txn, &req, device_id, conversation_id, msg_id, now)
                     .await?
             } else {
@@ -730,10 +730,10 @@ mod tests {
     }
 
     #[test]
-    fn group_skd_recipient_uses_queue_ciphertext() {
-        let msg = make_message(MessageType::Skd, Some(Uuid::now_v7()), b"sender-copy");
+    fn group_to_device_recipient_uses_queue_ciphertext() {
+        let msg = make_message(MessageType::ToDevice, Some(Uuid::now_v7()), b"sender-copy");
         let viewer_device_id = Uuid::now_v7();
-        let queue_ciphertexts = HashMap::from([(msg.id, b"recipient-skd".to_vec())]);
+        let queue_ciphertexts = HashMap::from([(msg.id, b"recipient-to-device".to_vec())]);
 
         let ciphertext = ciphertext_for_viewer(
             &msg,
@@ -742,12 +742,12 @@ mod tests {
             &queue_ciphertexts,
         );
 
-        assert_eq!(ciphertext, STANDARD.encode(b"recipient-skd"));
+        assert_eq!(ciphertext, STANDARD.encode(b"recipient-to-device"));
     }
 
     #[test]
-    fn group_skd_without_queue_entry_returns_empty_ciphertext() {
-        let msg = make_message(MessageType::Skd, Some(Uuid::now_v7()), b"sender-copy");
+    fn group_to_device_without_queue_entry_returns_empty_ciphertext() {
+        let msg = make_message(MessageType::ToDevice, Some(Uuid::now_v7()), b"sender-copy");
 
         let ciphertext = ciphertext_for_viewer(
             &msg,

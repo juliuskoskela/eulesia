@@ -1,171 +1,24 @@
 /**
  * @module messageEncryptor
  *
- * Encrypt and decrypt messages using established X3DH sessions for the
- * Eulesia E2EE messaging protocol.
+ * Matrix-backed E2EE message encryption and decryption.
  *
- * For DMs, each message is encrypted per-device for every recipient device.
- * Session establishment uses pre-key bundles fetched from the server.
+ * DMs use Olm to-device events and group conversations use Megolm room
+ * encryption with Matrix to-device room-key distribution.
  */
 
-import {
-  toBase64url,
-  fromBase64url,
-  importKeyPair,
-  initiateSession,
-  receiveSession,
-  deriveMessageKey,
-  encryptMessage,
-  decryptMessage as cryptoDecrypt,
-  loadDeviceKeys,
-  loadSession,
-  saveSession,
-  saveSenderKey,
-  loadSenderKey,
-  generateSenderKeyMaterial,
-  ratchetSenderKey,
-  fastForwardChain,
-  senderKeyEncrypt,
-  senderKeyDecrypt,
-} from "../crypto/index.ts";
-import type { SenderKeyState, SessionState } from "../crypto/index.ts";
 import type { ApiClient } from "./apiTypes.ts";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import {
+  decryptConversationWithMatrix,
+  encryptConversationWithMatrix,
+} from "./matrixDm.ts";
+import {
+  decryptGroupMessageWithMatrix,
+  encryptGroupMessageWithMatrix,
+} from "./matrixGroup.ts";
 
 export interface EncryptedPayload {
-  /** Map of deviceId to base64url-encoded ciphertext envelope. */
   deviceCiphertexts: Record<string, string>;
-}
-
-/**
- * Wire format for a single device's encrypted envelope.
- * Serialized to JSON then base64url-encoded.
- */
-interface CiphertextEnvelope {
-  /** The AES-256-GCM ciphertext bytes, base64url-encoded. */
-  ct: string;
-  /** The 12-byte nonce, base64url-encoded. */
-  nonce: string;
-  /** The message counter used for key derivation. */
-  counter: number;
-  /** The sender's ephemeral public key (only for initial session messages). */
-  ephemeralKey?: string;
-  /** The sender's identity public key (only for initial session messages,
-   *  so the receiver can run the responder-side X3DH). */
-  senderIdentityKey?: string;
-  /** Whether this is a pre-key message (first message in a session). */
-  isPreKeyMessage?: boolean;
-  /** The key ID of the consumed one-time pre-key (initial messages only).
-   *  The responder uses this to look up the matching local OTK for DH4. */
-  oneTimePreKeyId?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Session management
-// ---------------------------------------------------------------------------
-
-/**
- * Ensure a session exists with the given remote device for a conversation.
- *
- * If no session exists, fetches the remote device's pre-key bundle from the
- * server and performs X3DH session initiation.
- */
-export async function ensureSession(
-  conversationId: string,
-  deviceId: string,
-  api: ApiClient,
-  /** The user who owns the target device — required for pre-key bundle lookup. */
-  remoteUserId?: string,
-): Promise<void> {
-  // Check if we already have a session
-  const existing = await loadSession(conversationId, deviceId);
-  if (existing) return;
-
-  // Load our local device keys
-  const deviceKeys = await loadDeviceKeys();
-  if (!deviceKeys) {
-    throw new Error("Local device keys not found — device not initialized");
-  }
-
-  if (!remoteUserId) {
-    throw new Error("remoteUserId is required for pre-key bundle lookup");
-  }
-
-  // Fetch the remote device's pre-key bundle
-  const bundle = await api.getPreKeyBundle(deviceId, remoteUserId);
-
-  // Import our identity key for ECDH
-  const myIdentityKey = await importKeyPair(
-    deviceKeys.identityKeyPair,
-    "dh",
-    false,
-  );
-
-  // Decode their keys from base64url
-  const theirIdentityKey = fromBase64url(bundle.identityKey);
-  const theirSignedPreKey = fromBase64url(bundle.signedPreKey.keyData);
-  const theirOneTimePreKey = bundle.oneTimePreKey
-    ? fromBase64url(bundle.oneTimePreKey.keyData)
-    : undefined;
-
-  // Perform X3DH session initiation
-  const initiated = await initiateSession(
-    myIdentityKey,
-    theirIdentityKey,
-    theirSignedPreKey,
-    theirOneTimePreKey,
-  );
-
-  // Export session keys to storable format
-  const sendKeyRaw = await crypto.subtle.exportKey(
-    "raw",
-    initiated.sessionKeys.sendKey,
-  );
-  const receiveKeyRaw = await crypto.subtle.exportKey(
-    "raw",
-    initiated.sessionKeys.receiveKey,
-  );
-
-  // Save the session — includes the ephemeral public key and OTK key ID for the first message
-  await saveSession({
-    conversationId,
-    deviceId,
-    sendKey: toBase64url(new Uint8Array(sendKeyRaw)),
-    receiveKey: toBase64url(new Uint8Array(receiveKeyRaw)),
-    ephemeralPublicKey: toBase64url(initiated.ephemeralPublicKey),
-    usedOneTimePreKeyId: bundle.oneTimePreKey?.keyId,
-    sendCounter: 0,
-    receiveCounter: 0,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Encryption
-// ---------------------------------------------------------------------------
-
-/**
- * Encrypt a plaintext message for a conversation, producing per-device
- * ciphertexts for all target devices.
- *
- * For each target device:
- * 1. Ensure a session exists (establishes via X3DH if needed).
- * 2. Derive a per-message key from the appropriate session key + counter.
- * 3. Encrypt the plaintext with AES-256-GCM.
- * 4. Increment the send counter.
- */
-export function selectOutboundSessionKey(
-  session: SessionState,
-  localDeviceId: string,
-  targetDeviceId: string,
-): string {
-  // Local self-copies are later decrypted through the receive path, so they
-  // must use the session's receive key rather than its initiator send key.
-  return targetDeviceId === localDeviceId
-    ? session.receiveKey
-    : session.sendKey;
 }
 
 export async function encryptForConversation(
@@ -174,411 +27,50 @@ export async function encryptForConversation(
   plaintext: string,
   api: ApiClient,
 ): Promise<EncryptedPayload> {
-  const deviceCiphertexts: Record<string, string> = {};
-
-  // Load our identity key for inclusion in pre-key messages
-  const deviceKeys = await loadDeviceKeys();
-  if (!deviceKeys) {
-    throw new Error("Local device keys not found — device not initialized");
-  }
-  const myIdentityPublicKey = deviceKeys.identityKeyPair.publicKey;
-
-  for (const { deviceId, userId } of targetDevices) {
-    // Ensure session exists
-    await ensureSession(conversationId, deviceId, api, userId);
-
-    // Load session state
-    const session = await loadSession(conversationId, deviceId);
-    if (!session) {
-      throw new Error(`Session not found for device ${deviceId} after ensure`);
-    }
-
-    const sessionKeyBytes = fromBase64url(
-      selectOutboundSessionKey(session, deviceKeys.deviceId, deviceId),
-    );
-    const sessionKey = await crypto.subtle.importKey(
-      "raw",
-      new Uint8Array(sessionKeyBytes) as Uint8Array<ArrayBuffer>,
-      { name: "AES-GCM", length: 256 },
-      true, // extractable for deriveMessageKey
-      ["encrypt", "decrypt"],
-    );
-
-    // Derive per-message key
-    const messageKey = await deriveMessageKey(sessionKey, session.sendCounter);
-
-    // Encrypt
-    const encrypted = await encryptMessage(messageKey, plaintext);
-
-    // Build envelope — include ephemeral key on first message so the
-    // responder can complete X3DH session establishment.
-    const isFirstMessage = session.sendCounter === 0;
-    const envelope: CiphertextEnvelope = {
-      ct: toBase64url(encrypted.ciphertext),
-      nonce: toBase64url(encrypted.nonce),
-      counter: session.sendCounter,
-      ephemeralKey: isFirstMessage ? session.ephemeralPublicKey : undefined,
-      senderIdentityKey: isFirstMessage ? myIdentityPublicKey : undefined,
-      isPreKeyMessage: isFirstMessage,
-      oneTimePreKeyId: isFirstMessage ? session.usedOneTimePreKeyId : undefined,
-    };
-
-    // Base64url-encode the JSON envelope
-    const envelopeJson = JSON.stringify(envelope);
-    const encoder = new TextEncoder();
-    const envelopeBytes = encoder.encode(envelopeJson);
-    deviceCiphertexts[deviceId] = toBase64url(envelopeBytes);
-
-    // Increment counter and save
-    session.sendCounter += 1;
-    await saveSession(session);
-  }
-
-  return { deviceCiphertexts };
+  return encryptConversationWithMatrix(
+    conversationId,
+    targetDevices,
+    plaintext,
+    api,
+  );
 }
 
-// ---------------------------------------------------------------------------
-// Decryption
-// ---------------------------------------------------------------------------
-
-/**
- * Decrypt a received message from a specific sender device.
- *
- * @param conversationId  The conversation this message belongs to.
- * @param senderDeviceId  The device that sent the encrypted message.
- * @param ciphertextB64   The base64url-encoded ciphertext envelope.
- * @returns               The decrypted plaintext string.
- */
 export async function decryptConversationMessage(
   conversationId: string,
-  senderDeviceId: string,
+  _senderDeviceId: string,
   ciphertextB64: string,
 ): Promise<string> {
-  // Decode the envelope
-  const envelopeBytes = fromBase64url(ciphertextB64);
-  const decoder = new TextDecoder();
-  const envelopeJson = decoder.decode(envelopeBytes);
-  const envelope: CiphertextEnvelope = JSON.parse(envelopeJson);
-
-  // Load existing session or establish one from the pre-key message
-  let session = await loadSession(conversationId, senderDeviceId);
-  if (
-    !session &&
-    envelope.isPreKeyMessage &&
-    envelope.ephemeralKey &&
-    envelope.senderIdentityKey
-  ) {
-    // First message from this device — run responder-side X3DH
-    const deviceKeys = await loadDeviceKeys();
-    if (!deviceKeys) throw new Error("Device not initialized");
-
-    const myIdentityKey = await importKeyPair(
-      deviceKeys.identityKeyPair,
-      "dh",
-      false,
-    );
-    const mySignedPreKey = await importKeyPair(
-      deviceKeys.signedPreKeyPair,
-      "dh",
-      false,
-    );
-
-    const theirIdentityKey = fromBase64url(envelope.senderIdentityKey);
-    const theirEphemeralKey = fromBase64url(envelope.ephemeralKey);
-
-    // Look up and consume the one-time pre-key if the initiator used one
-    let myOneTimePreKey;
-    if (envelope.oneTimePreKeyId != null) {
-      const { consumeOneTimePreKey } = await import("./deviceManager.ts");
-      const otkPair = await consumeOneTimePreKey(envelope.oneTimePreKeyId);
-      if (otkPair) {
-        myOneTimePreKey = await importKeyPair(otkPair, "dh", false);
-      }
-    }
-
-    const sessionKeys = await receiveSession(
-      myIdentityKey,
-      mySignedPreKey,
-      myOneTimePreKey,
-      theirIdentityKey,
-      theirEphemeralKey,
-    );
-
-    const sendKeyRaw = await crypto.subtle.exportKey(
-      "raw",
-      sessionKeys.sendKey,
-    );
-    const recvKeyRaw = await crypto.subtle.exportKey(
-      "raw",
-      sessionKeys.receiveKey,
-    );
-
-    session = {
-      conversationId,
-      deviceId: senderDeviceId,
-      sendKey: toBase64url(new Uint8Array(sendKeyRaw)),
-      receiveKey: toBase64url(new Uint8Array(recvKeyRaw)),
-      sendCounter: 0,
-      receiveCounter: 0,
-    };
-    await saveSession(session);
-  }
-
-  if (!session) {
-    throw new Error(
-      `No session found for device ${senderDeviceId} in conversation ${conversationId}`,
-    );
-  }
-
-  // Import the receive key
-  const receiveKeyBytes = fromBase64url(session.receiveKey);
-  const receiveKey = await crypto.subtle.importKey(
-    "raw",
-    new Uint8Array(receiveKeyBytes) as Uint8Array<ArrayBuffer>,
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"],
-  );
-
-  // Derive the per-message key using the envelope's counter
-  const messageKey = await deriveMessageKey(receiveKey, envelope.counter);
-
-  // Decrypt
-  const ciphertext = fromBase64url(envelope.ct);
-  const nonce = fromBase64url(envelope.nonce);
-  const plaintext = await cryptoDecrypt(messageKey, ciphertext, nonce);
-
-  // Update receive counter to be at least past this message
-  if (envelope.counter >= session.receiveCounter) {
-    session.receiveCounter = envelope.counter + 1;
-    await saveSession(session);
-  }
-
-  return plaintext;
+  return decryptConversationWithMatrix(conversationId, ciphertextB64);
 }
 
-// ---------------------------------------------------------------------------
-// Group encryption (sender-key model)
-// ---------------------------------------------------------------------------
-
-/**
- * Envelope format for group-encrypted messages (Sender Keys protocol).
- */
-interface GroupCiphertextEnvelope {
-  ct: string;
-  nonce: string;
-  epoch: number;
-  messageIndex: number;
-  senderId: string;
-}
-
-/**
- * Sender Key Distribution payload — encrypted per-device and sent as an
- * SKD message so recipients can decrypt future group messages from this sender.
- */
-export interface SenderKeyDistributionPayload {
-  type: "skd";
-  conversationId: string;
-  senderId: string;
-  epoch: number;
-  chainKey: string;
-  messageIndex: number;
-}
-
-// ---------------------------------------------------------------------------
-// Sender Key: generate and distribute
-// ---------------------------------------------------------------------------
-
-/**
- * Ensure the local user has a sender key for this conversation + epoch.
- * If not (or if epoch is stale), generate a fresh one.
- */
-export async function ensureLocalSenderKey(
-  conversationId: string,
-  userId: string,
-  epoch: number,
-): Promise<SenderKeyState> {
-  const existing = await loadSenderKey(conversationId, userId, epoch);
-  if (existing && existing.epoch === epoch) {
-    return existing;
-  }
-
-  // Generate fresh sender key for new epoch
-  const state: SenderKeyState = {
-    conversationId,
-    userId,
-    chainKey: generateSenderKeyMaterial(),
-    epoch,
-    messageIndex: 0,
-  };
-  await saveSenderKey(state);
-  return state;
-}
-
-/**
- * Build sender key distribution payloads encrypted per-device for all
- * target group devices. Uses existing X3DH pairwise sessions.
- *
- * Returns device_ciphertexts ready to POST as an SKD message.
- */
-export async function distributeSenderKey(
-  conversationId: string,
-  senderKey: SenderKeyState,
-  recipientDevices: Array<{ deviceId: string; userId: string }>,
-  apiClient: ApiClient,
-): Promise<EncryptedPayload> {
-  const payload: SenderKeyDistributionPayload = {
-    type: "skd",
-    conversationId: senderKey.conversationId,
-    senderId: senderKey.userId,
-    epoch: senderKey.epoch,
-    chainKey: senderKey.chainKey,
-    messageIndex: senderKey.messageIndex,
-  };
-
-  const plaintext = JSON.stringify(payload);
-
-  // Encrypt per-device using existing pairwise sessions (same as DM encryption)
-  return encryptForConversation(
-    conversationId,
-    recipientDevices,
-    plaintext,
-    apiClient,
-  );
-}
-
-/**
- * Handle an incoming sender key distribution message.
- * Decrypts the SKD payload and stores the remote member's sender key.
- */
-export async function handleSenderKeyDistribution(
-  conversationId: string,
-  senderDeviceId: string,
-  ciphertextB64: string,
-): Promise<void> {
-  // Decrypt using pairwise session (same as DM decryption)
-  const plaintext = await decryptConversationMessage(
-    conversationId,
-    senderDeviceId,
-    ciphertextB64,
-  );
-
-  const payload: SenderKeyDistributionPayload = JSON.parse(plaintext);
-  if (payload.type !== "skd") {
-    throw new Error("Invalid SKD payload");
-  }
-
-  // Use the trusted conversationId parameter, not the payload's value,
-  // to prevent a malicious SKD from poisoning keys in other conversations.
-  if (payload.conversationId !== conversationId) {
-    throw new Error("SKD conversationId mismatch");
-  }
-
-  await saveSenderKey({
-    conversationId,
-    userId: payload.senderId,
-    epoch: payload.epoch,
-    chainKey: payload.chainKey,
-    messageIndex: payload.messageIndex,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Sender Key: encrypt group message
-// ---------------------------------------------------------------------------
-
-/**
- * Encrypt a plaintext message for a group conversation using sender keys.
- * Returns a base64url-encoded envelope that the server fans out to all members.
- *
- * The sender's chain key is ratcheted forward after each message.
- */
 export async function encryptForGroup(
   conversationId: string,
   plaintext: string,
-  userId: string,
-  epoch: number = 0,
+  currentEpoch: number,
+  memberUserIds: string[],
+  api: ApiClient,
 ): Promise<string> {
-  const senderKey = await ensureLocalSenderKey(conversationId, userId, epoch);
-
-  // Ratchet and encrypt
-  const { messageKey, nextChainKey } = await ratchetSenderKey(
-    senderKey.chainKey,
+  return encryptGroupMessageWithMatrix(
+    conversationId,
+    plaintext,
+    currentEpoch,
+    memberUserIds,
+    api,
   );
-  const { ciphertext, nonce } = await senderKeyEncrypt(messageKey, plaintext);
-
-  const envelope: GroupCiphertextEnvelope = {
-    ct: toBase64url(ciphertext),
-    nonce: toBase64url(nonce),
-    epoch: senderKey.epoch,
-    messageIndex: senderKey.messageIndex,
-    senderId: userId,
-  };
-
-  // Save ratcheted state
-  await saveSenderKey({
-    ...senderKey,
-    chainKey: nextChainKey,
-    messageIndex: senderKey.messageIndex + 1,
-  });
-
-  const encoder = new TextEncoder();
-  return toBase64url(encoder.encode(JSON.stringify(envelope)));
 }
 
-// ---------------------------------------------------------------------------
-// Sender Key: decrypt group message
-// ---------------------------------------------------------------------------
-
-/**
- * Decrypt a group message from the base64url-encoded envelope.
- * Looks up the sender's key and fast-forwards the chain if needed.
- */
 export async function decryptGroupMessage(
   conversationId: string,
   ciphertextB64: string,
+  messageId: string,
+  senderUserId: string,
+  createdAt: string,
 ): Promise<string> {
-  const envelopeBytes = fromBase64url(ciphertextB64);
-  const decoder = new TextDecoder();
-  const envelope: GroupCiphertextEnvelope = JSON.parse(
-    decoder.decode(envelopeBytes),
-  );
-
-  const senderKey = await loadSenderKey(
+  return decryptGroupMessageWithMatrix({
     conversationId,
-    envelope.senderId,
-    envelope.epoch,
-  );
-  if (!senderKey) {
-    throw new Error(
-      `No sender key for user ${envelope.senderId} in conversation ${conversationId}. ` +
-        `Sender key distribution message may not have been received yet.`,
-    );
-  }
-
-  // Fast-forward the chain to the target message index
-  const steps = envelope.messageIndex - senderKey.messageIndex;
-  if (steps < 0) {
-    throw new Error(
-      `Message index ${envelope.messageIndex} is behind stored index ${senderKey.messageIndex}`,
-    );
-  }
-
-  const { messageKey, nextChainKey } = await fastForwardChain(
-    senderKey.chainKey,
-    steps,
-  );
-
-  const ct = fromBase64url(envelope.ct) as Uint8Array<ArrayBuffer>;
-  const nonce = fromBase64url(envelope.nonce) as Uint8Array<ArrayBuffer>;
-  const plaintext = await senderKeyDecrypt(messageKey, ct, nonce);
-
-  // Save ratcheted state (advance past this message)
-  await saveSenderKey({
-    ...senderKey,
-    chainKey: nextChainKey,
-    messageIndex: envelope.messageIndex + 1,
+    ciphertext: ciphertextB64,
+    messageId,
+    senderUserId,
+    createdAt,
   });
-
-  return plaintext;
 }

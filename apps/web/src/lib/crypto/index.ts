@@ -6,19 +6,12 @@
  * Re-exports all public APIs from the individual modules:
  *
  * - **keys** — Key generation, serialization, signing, and ECDH key agreement.
- * - **session** — X3DH session establishment (initiator and responder).
- * - **encrypt** — AES-256-GCM message encryption/decryption with per-message
- *   key derivation.
- * - **store** — IndexedDB-backed key and session state persistence.
+ * - **store** — IndexedDB-backed device state persistence.
  *
  * @example
  * ```ts
  * import {
  *   generateExtractableKeyPair,
- *   initiateSession,
- *   deriveMessageKey,
- *   encryptMessage,
- *   decryptMessage,
  *   saveDeviceKeys,
  * } from "@/lib/crypto";
  * ```
@@ -42,42 +35,13 @@ export {
 
 export type { KeyPair, ExportedKeyPair, CurveFamily } from "./keys.ts";
 
-// session — X3DH session establishment
-export { initiateSession, receiveSession } from "./session.ts";
-
-export type { SessionKeys, InitiatedSession } from "./session.ts";
-
-// encrypt — AES-256-GCM message encryption/decryption
-export { deriveMessageKey, encryptMessage, decryptMessage } from "./encrypt.ts";
-
-export type { EncryptedMessage } from "./encrypt.ts";
-
 // store — IndexedDB key and session persistence
 export {
   openKeyStore,
   saveDeviceKeys,
   loadDeviceKeys,
   loadDeviceKeysById,
-  saveSession,
-  loadSession,
-  saveSenderKey,
-  loadSenderKey,
-  clearSenderKeysForConversation,
   clearKeyStore,
 } from "./store.ts";
 
-export type {
-  DeviceKeys,
-  OneTimePreKeyEntry,
-  SessionState,
-  SenderKeyState,
-} from "./store.ts";
-
-// senderKeys — Sender Key group E2EE primitives
-export {
-  generateSenderKeyMaterial,
-  ratchetSenderKey,
-  fastForwardChain,
-  senderKeyEncrypt,
-  senderKeyDecrypt,
-} from "./senderKeys.ts";
+export type { DeviceKeys } from "./store.ts";

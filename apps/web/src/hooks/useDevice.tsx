@@ -21,8 +21,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useAuth } from "./useAuth.tsx";
 import { api } from "../lib/api.ts";
-import { initializeDevice, replenishPreKeys } from "../lib/e2ee/index.ts";
-import { usingMatrixCrypto } from "../lib/e2ee/backend.ts";
+import { initializeDevice } from "../lib/e2ee/index.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,27 +81,18 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
 
       const registration = await initializeDevice(api, currentUser.id);
 
-      if (usingMatrixCrypto()) {
-        const { initializeMatrixCryptoMachine } = await import(
-          "../lib/e2ee/matrixCrypto.ts"
-        );
-        await initializeMatrixCryptoMachine(
-          currentUser.id,
-          registration.deviceId,
-        );
-      }
+      const { initializeMatrixCryptoMachine, syncMatrixMachine } = await import(
+        "../lib/e2ee/index.ts"
+      );
+      await initializeMatrixCryptoMachine(
+        currentUser.id,
+        registration.deviceId,
+      );
+      await syncMatrixMachine(api, registration.deviceId);
 
       setDeviceId(registration.deviceId);
       setIsInitialized(true);
       setHasFreshRegistration(registration.didCreateDevice);
-
-      // After successful initialization, try to replenish pre-keys
-      try {
-        await replenishPreKeys(api, registration.deviceId);
-      } catch (replenishErr) {
-        // Non-fatal: pre-key replenishment failure should not block the app
-        console.warn("Pre-key replenishment failed:", replenishErr);
-      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Device initialization failed";
@@ -140,11 +130,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   // session logouts.
   useEffect(() => {
     if (prevAuthRef.current && !isAuthenticated) {
-      if (usingMatrixCrypto()) {
-        void import("../lib/e2ee/matrixCrypto.ts").then(
-          ({ closeMatrixCryptoMachine }) => closeMatrixCryptoMachine(),
-        );
-      }
+      void import("../lib/e2ee/matrixCrypto.ts").then(
+        ({ closeMatrixCryptoMachine }) => closeMatrixCryptoMachine(),
+      );
 
       setDeviceId(null);
       setIsInitialized(false);

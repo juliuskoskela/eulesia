@@ -11,6 +11,12 @@ pub struct Model {
     pub platform: String,
     #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub identity_key: Vec<u8>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub matrix_curve25519_key: Option<Vec<u8>>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub matrix_ed25519_key: Option<Vec<u8>>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)", nullable)]
+    pub matrix_device_signature: Option<Vec<u8>>,
     pub last_seen_at: Option<DateTimeWithTimeZone>,
     pub revoked_at: Option<DateTimeWithTimeZone>,
     pub fcm_token: Option<String>,

@@ -38,7 +38,8 @@ pub struct SendMessageRequest {
     pub message_type: MessageType,
     /// E2EE: base64-encoded ciphertext (group/channel messages).
     pub ciphertext: Option<String>,
-    /// E2EE: per-device ciphertexts (direct messages).
+    /// E2EE: per-device ciphertexts (direct messages and hidden Matrix
+    /// to-device protocol messages in group conversations).
     pub device_ciphertexts: Option<HashMap<Uuid, String>>,
     /// Plaintext content (for encryption: "none" conversations).
     pub content: Option<String>,
