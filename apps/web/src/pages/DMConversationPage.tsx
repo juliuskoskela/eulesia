@@ -157,6 +157,17 @@ interface DMMessageBubbleProps {
   onDelete: (messageId: string) => void;
 }
 
+function useLongPress(callback: () => void, ms = 500) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onTouchStart = useCallback(() => {
+    timerRef.current = setTimeout(callback, ms);
+  }, [callback, ms]);
+  const onTouchEnd = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+  return { onTouchStart, onTouchEnd, onTouchMove: onTouchEnd };
+}
+
 function MessageBubble({
   message,
   isOwnMessage,
@@ -168,11 +179,47 @@ function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const {
     content: displayContent,
     isDecrypting,
     decryptionFailed,
   } = useDecryptedContent(message);
+
+  const openContextMenu = useCallback(
+    (x: number, y: number) => {
+      if (isOwnMessage && !isEditing) setContextMenu({ x, y });
+    },
+    [isOwnMessage, isEditing],
+  );
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isOwnMessage) return;
+      e.preventDefault();
+      openContextMenu(e.clientX, e.clientY);
+    },
+    [isOwnMessage, openContextMenu],
+  );
+
+  const longPress = useLongPress(() => {
+    if (isOwnMessage) openContextMenu(0, 0);
+  });
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
 
   if (message.isHidden) {
     return (
@@ -187,6 +234,7 @@ function MessageBubble({
   const handleStartEdit = () => {
     setEditContent(displayContent);
     setIsEditing(true);
+    setContextMenu(null);
   };
 
   const handleSaveEdit = () => {
@@ -251,7 +299,11 @@ function MessageBubble({
             </div>
           </div>
         ) : (
-          <div className="relative inline-block">
+          <div
+            className="relative inline-block"
+            onContextMenu={handleContextMenu}
+            {...longPress}
+          >
             <div
               className={`px-4 py-3 rounded-2xl shadow-sm ${
                 isOwnMessage
@@ -280,23 +332,34 @@ function MessageBubble({
                 />
               )}
             </div>
-            {isOwnMessage && (
-              <div className="absolute top-0 left-0 -translate-x-full pr-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+            {contextMenu && (
+              <div
+                className="fixed z-50 min-w-[140px] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+                style={
+                  contextMenu.x
+                    ? { left: contextMenu.x, top: contextMenu.y }
+                    : { right: 16, top: "50%", transform: "translateY(-50%)" }
+                }
+                onClick={(e) => e.stopPropagation()}
+              >
                 {!isEncrypted && (
                   <button
                     onClick={handleStartEdit}
-                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    title={t("common:actions.edit")}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
                     <Pencil className="w-3.5 h-3.5" />
+                    {t("common:actions.edit")}
                   </button>
                 )}
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500"
-                  title={t("common:actions.delete")}
+                  onClick={() => {
+                    setContextMenu(null);
+                    setShowDeleteConfirm(true);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
+                  {t("common:actions.delete")}
                 </button>
               </div>
             )}

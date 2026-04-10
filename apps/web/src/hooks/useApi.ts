@@ -870,6 +870,19 @@ export function useGroupConversation(id: string) {
   });
 }
 
+export function useDeleteGroupMessage(conversationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      api.deleteDirectMessage(conversationId, messageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["groupConversation", conversationId],
+      });
+    },
+  });
+}
+
 export function useGroupMembers(conversationId: string) {
   return useQuery({
     queryKey: ["groupMembers", conversationId] as const,

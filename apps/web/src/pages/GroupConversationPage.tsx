@@ -9,6 +9,7 @@ import {
   UserMinus,
   X,
   Search,
+  Trash2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Layout } from "../components/layout";
@@ -17,9 +18,11 @@ import {
   useGroupConversation,
   useSendGroupMessage,
   useMarkRead,
+  useDeleteGroupMessage,
   useInviteGroupMember,
   useRemoveGroupMember,
 } from "../hooks/useApi";
+import { ConfirmDeleteDialog } from "../components/common";
 import { useAuth } from "../hooks/useAuth";
 import { useDevice } from "../hooks/useDevice";
 import { useSocket } from "../hooks/useSocket";
@@ -52,6 +55,7 @@ export function GroupConversationPage() {
     userId: currentUser?.id ?? null,
   });
   const markReadMutation = useMarkRead(conversationId || "");
+  const deleteMessageMutation = useDeleteGroupMessage(conversationId || "");
 
   const [newMessage, setNewMessage] = useState("");
 
@@ -281,6 +285,9 @@ export function GroupConversationPage() {
                   isOwnMessage={
                     (msg.senderId ?? msg.author?.id) === currentUser?.id
                   }
+                  onDelete={(messageId) =>
+                    deleteMessageMutation.mutate(messageId)
+                  }
                 />
               ))
             )}
@@ -434,32 +441,84 @@ function useGroupDecryptedContent(
 }
 
 // ---------------------------------------------------------------------------
-// Group message bubble (simplified — no edit/delete for groups)
+// Group message bubble
 // ---------------------------------------------------------------------------
+
+function useLongPress(callback: () => void, ms = 500) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onTouchStart = useCallback(() => {
+    timerRef.current = setTimeout(callback, ms);
+  }, [callback, ms]);
+  const onTouchEnd = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+  return { onTouchStart, onTouchEnd, onTouchMove: onTouchEnd };
+}
 
 function GroupMessageBubble({
   message,
   isOwnMessage,
   roomKeyRevision,
+  onDelete,
 }: {
   message: DirectMessage;
   isOwnMessage: boolean;
   roomKeyRevision: number;
+  onDelete: (messageId: string) => void;
 }) {
+  const { t } = useTranslation(["messages", "common"]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const {
     content: displayContent,
     isDecrypting,
     decryptionFailed,
   } = useGroupDecryptedContent(message, roomKeyRevision);
 
+  const openContextMenu = useCallback(
+    (x: number, y: number) => {
+      if (isOwnMessage) setContextMenu({ x, y });
+    },
+    [isOwnMessage],
+  );
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isOwnMessage) return;
+      e.preventDefault();
+      openContextMenu(e.clientX, e.clientY);
+    },
+    [isOwnMessage, openContextMenu],
+  );
+
+  const longPress = useLongPress(() => {
+    if (isOwnMessage) openContextMenu(0, 0);
+  });
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
+
   return (
     <div className={`flex gap-3 ${isOwnMessage ? "flex-row-reverse" : ""}`}>
       <div
-        className={`max-w-[75%] rounded-2xl px-4 py-3 shadow-sm ${
+        className={`relative max-w-[75%] rounded-2xl px-4 py-3 shadow-sm ${
           isOwnMessage
             ? "bg-teal-600 text-white rounded-br-md"
             : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md border border-gray-100 dark:border-gray-700/50"
         }`}
+        onContextMenu={handleContextMenu}
+        {...longPress}
       >
         {!isOwnMessage && message.author && (
           <p className="text-xs font-medium text-teal-600 dark:text-teal-400 mb-0.5">
@@ -492,7 +551,38 @@ function GroupMessageBubble({
             {formatRelativeTime(message.createdAt)}
           </span>
         </div>
+        {contextMenu && (
+          <div
+            className="fixed z-50 min-w-[140px] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1"
+            style={
+              contextMenu.x
+                ? { left: contextMenu.x, top: contextMenu.y }
+                : { right: 16, top: "50%", transform: "translateY(-50%)" }
+            }
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setContextMenu(null);
+                setShowDeleteConfirm(true);
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {t("common:actions.delete")}
+            </button>
+          </div>
+        )}
       </div>
+      <ConfirmDeleteDialog
+        open={showDeleteConfirm}
+        type="message"
+        onConfirm={() => {
+          onDelete(message.id);
+          setShowDeleteConfirm(false);
+        }}
+        onClose={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }
