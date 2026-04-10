@@ -6,6 +6,7 @@ import {
   asMatrixUserId,
   getMatrixCryptoMachine,
   getMatrixCryptoModule,
+  serializeCryptoOp,
 } from "./matrixCrypto.ts";
 import {
   fromMatrixDeviceId,
@@ -114,26 +115,28 @@ async function ensureRoomKeysShared(
   }
 }
 
-export async function processMatrixGroupToDeviceMessages(
+export function processMatrixGroupToDeviceMessages(
   ciphertexts: string[],
 ): Promise<void> {
   if (ciphertexts.length === 0) {
-    return;
+    return Promise.resolve();
   }
 
-  const matrix = await getMatrixCryptoModule();
-  const machine = await requireMatrixMachine();
-  const events = ciphertexts.map((ciphertext) => {
-    const eventBytes = fromBase64url(ciphertext);
-    const eventJson = new TextDecoder().decode(eventBytes);
-    return JSON.parse(eventJson);
-  });
+  return serializeCryptoOp(async () => {
+    const matrix = await getMatrixCryptoModule();
+    const machine = await requireMatrixMachine();
+    const events = ciphertexts.map((ciphertext) => {
+      const eventBytes = fromBase64url(ciphertext);
+      const eventJson = new TextDecoder().decode(eventBytes);
+      return JSON.parse(eventJson);
+    });
 
-  await machine.receiveSyncChanges(
-    JSON.stringify(events),
-    new matrix.DeviceLists(),
-    new Map<string, number>(),
-  );
+    await machine.receiveSyncChanges(
+      JSON.stringify(events),
+      new matrix.DeviceLists(),
+      new Map<string, number>(),
+    );
+  });
 }
 
 export async function encryptGroupMessageWithMatrix(
@@ -159,44 +162,48 @@ export async function encryptGroupMessageWithMatrix(
   return toBase64url(new TextEncoder().encode(encryptedContent));
 }
 
-export async function decryptGroupMessageWithMatrix(data: {
+export function decryptGroupMessageWithMatrix(data: {
   conversationId: string;
   ciphertext: string;
   messageId: string;
   senderUserId: string;
   createdAt: string;
 }): Promise<string> {
-  const matrix = await getMatrixCryptoModule();
-  const machine = await requireMatrixMachine();
-  const roomId = await getMatrixRoomId(data.conversationId);
-  const encryptedContentJson = new TextDecoder().decode(
-    fromBase64url(data.ciphertext),
-  );
-  const encryptedContent = JSON.parse(
-    encryptedContentJson,
-  ) as MatrixEncryptedRoomEventContent;
-  const eventJson = JSON.stringify({
-    content: encryptedContent,
-    event_id: toMatrixEventId(data.messageId),
-    origin_server_ts: getMessageTimestamp(data.createdAt),
-    room_id: toMatrixRoomId(data.conversationId),
-    sender: asMatrixUserId(data.senderUserId),
-    type: "m.room.encrypted",
+  return serializeCryptoOp(async () => {
+    const matrix = await getMatrixCryptoModule();
+    const machine = await requireMatrixMachine();
+    const roomId = await getMatrixRoomId(data.conversationId);
+    const encryptedContentJson = new TextDecoder().decode(
+      fromBase64url(data.ciphertext),
+    );
+    const encryptedContent = JSON.parse(
+      encryptedContentJson,
+    ) as MatrixEncryptedRoomEventContent;
+    const eventJson = JSON.stringify({
+      content: encryptedContent,
+      event_id: toMatrixEventId(data.messageId),
+      origin_server_ts: getMessageTimestamp(data.createdAt),
+      room_id: toMatrixRoomId(data.conversationId),
+      sender: asMatrixUserId(data.senderUserId),
+      type: "m.room.encrypted",
+    });
+
+    const decryptedEvent = await machine.decryptRoomEvent(
+      eventJson,
+      roomId,
+      new matrix.DecryptionSettings(matrix.TrustRequirement.Untrusted),
+    );
+    const payload = JSON.parse(decryptedEvent.event) as {
+      content?: { body?: string };
+    };
+    const body = payload.content?.body;
+
+    if (typeof body !== "string") {
+      throw new Error(
+        "Matrix group message payload is missing the message body",
+      );
+    }
+
+    return body;
   });
-
-  const decryptedEvent = await machine.decryptRoomEvent(
-    eventJson,
-    roomId,
-    new matrix.DecryptionSettings(matrix.TrustRequirement.Untrusted),
-  );
-  const payload = JSON.parse(decryptedEvent.event) as {
-    content?: { body?: string };
-  };
-  const body = payload.content?.body;
-
-  if (typeof body !== "string") {
-    throw new Error("Matrix group message payload is missing the message body");
-  }
-
-  return body;
 }

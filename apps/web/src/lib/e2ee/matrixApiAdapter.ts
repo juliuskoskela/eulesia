@@ -9,6 +9,7 @@ import {
   asMatrixUserId,
   getMatrixCryptoMachine,
   getMatrixCryptoModule,
+  serializeCryptoOp,
 } from "./matrixCrypto.ts";
 
 async function requireMatrixMachine() {
@@ -133,7 +134,13 @@ function isDecryptedToDeviceEvent(
   return event instanceof matrix.DecryptedToDeviceEvent;
 }
 
-export async function decryptMatrixToDeviceEvent(
+export function decryptMatrixToDeviceEvent(
+  event: MatrixToDeviceEvent,
+): Promise<Record<string, unknown>> {
+  return serializeCryptoOp(() => decryptSingle(event));
+}
+
+async function decryptSingle(
   event: MatrixToDeviceEvent,
 ): Promise<Record<string, unknown>> {
   const matrix = await getMatrixCryptoModule();

@@ -85,6 +85,27 @@ export async function closeMatrixCryptoMachine(): Promise<void> {
   current?.machine.close();
 }
 
+// ---------------------------------------------------------------------------
+// Shared serialization queue for OlmMachine operations.
+//
+// The WASM OlmMachine persists Olm/Megolm session state to IndexedDB.
+// Concurrent receiveSyncChanges / decryptRoomEvent calls race on that
+// state — e.g. a pre-key message that creates a session must persist
+// before the next message can use it.  This queue ensures at most one
+// crypto operation runs at a time.
+// ---------------------------------------------------------------------------
+
+let cryptoQueue: Promise<void> = Promise.resolve();
+
+export function serializeCryptoOp<T>(fn: () => Promise<T>): Promise<T> {
+  const result = cryptoQueue.then(fn, fn);
+  cryptoQueue = result.then(
+    () => {},
+    () => {},
+  );
+  return result;
+}
+
 export function asMatrixUserId(userId: string): string {
   return toMatrixUserId(userId);
 }
