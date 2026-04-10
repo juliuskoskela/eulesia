@@ -44,6 +44,7 @@ export {
 export {
   decryptMatrixToDeviceEvent,
   ensureMatrixSessions,
+  ensureUserKeysKnown,
   getMatrixDevice,
   syncMatrixMachine,
 } from "./matrixApiAdapter.ts";

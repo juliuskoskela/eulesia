@@ -41,7 +41,10 @@ import { loadCachedDmPlaintext } from "../lib/e2ee/dmPlaintextCache.ts";
  * Hook to decrypt an E2EE message on demand. Returns the decrypted content
  * when available.
  */
-function useDecryptedContent(message: DirectMessage): {
+function useDecryptedContent(
+  message: DirectMessage,
+  keysReady = true,
+): {
   content: string;
   isDecrypting: boolean;
   decryptionFailed: boolean;
@@ -125,6 +128,7 @@ function useDecryptedContent(message: DirectMessage): {
   useEffect(() => {
     if (
       isCryptoReady &&
+      keysReady &&
       message.ciphertext &&
       message.senderDeviceId &&
       !decryptedContent &&
@@ -138,6 +142,7 @@ function useDecryptedContent(message: DirectMessage): {
     decryptedContent,
     decryptionFailed,
     isCryptoReady,
+    keysReady,
     decrypt,
   ]);
 
@@ -153,6 +158,7 @@ interface DMMessageBubbleProps {
   message: DirectMessage;
   isOwnMessage: boolean;
   isEncrypted: boolean;
+  keysReady: boolean;
   onEdit: (messageId: string, content: string) => void;
   onDelete: (messageId: string) => void;
 }
@@ -172,6 +178,7 @@ function MessageBubble({
   message,
   isOwnMessage,
   isEncrypted,
+  keysReady,
   onEdit,
   onDelete,
 }: DMMessageBubbleProps) {
@@ -187,7 +194,7 @@ function MessageBubble({
     content: displayContent,
     isDecrypting,
     decryptionFailed,
-  } = useDecryptedContent(message);
+  } = useDecryptedContent(message, keysReady);
 
   const openContextMenu = useCallback(
     (x: number, y: number) => {
@@ -428,6 +435,31 @@ export function DMConversationPage() {
 
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [keysReady, setKeysReady] = useState(false);
+
+  // Ensure the OlmMachine knows the other participant's device keys before
+  // any decryption attempt.  Without this the machine can't verify or decrypt
+  // Olm pre-key messages from the sender.
+  useEffect(() => {
+    if (!deviceReady || !deviceId || !otherUserId || !currentUser?.id) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { ensureUserKeysKnown } = await import("../lib/e2ee/index.ts");
+        await ensureUserKeysKnown(api, deviceId, [otherUserId, currentUser.id]);
+        if (!cancelled) setKeysReady(true);
+      } catch (err) {
+        console.warn("Failed to sync participant device keys:", err);
+        // Allow decryption attempts anyway — cached keys may be sufficient
+        if (!cancelled) setKeysReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceReady, deviceId, otherUserId, currentUser?.id]);
 
   // Auto-resize textarea to fit content, capped at 33vh
   useEffect(() => {
@@ -634,6 +666,7 @@ export function DMConversationPage() {
                   message={msg}
                   isOwnMessage={msg.author?.id === currentUser?.id}
                   isEncrypted={conversationData?.encryption === "e2ee"}
+                  keysReady={keysReady}
                   onEdit={(messageId, content) =>
                     editMessageMutation.mutate({ messageId, content })
                   }

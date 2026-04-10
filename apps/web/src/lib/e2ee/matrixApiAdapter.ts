@@ -111,6 +111,29 @@ export async function ensureMatrixSessions(
   }
 }
 
+/**
+ * Ensure the OlmMachine has queried the given users' device identity keys.
+ * This is required on the recipient side before decrypting Olm pre-key
+ * messages — without the sender's identity keys the machine can't verify
+ * or decrypt the session.
+ */
+export async function ensureUserKeysKnown(
+  api: ApiClient,
+  deviceId: string,
+  userIds: string[],
+): Promise<void> {
+  const matrix = await getMatrixCryptoModule();
+  const machine = await requireMatrixMachine();
+  const uniqueUserIds = [...new Set(userIds)].map((userId) =>
+    asMatrixUserId(userId),
+  );
+
+  await machine.updateTrackedUsers(
+    uniqueUserIds.map((userId) => new matrix.UserId(userId)),
+  );
+  await syncMatrixMachine(api, deviceId);
+}
+
 export async function getMatrixDevice(userId: string, deviceId: string) {
   const matrix = await getMatrixCryptoModule();
   const machine = await requireMatrixMachine();

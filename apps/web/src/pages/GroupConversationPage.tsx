@@ -120,6 +120,34 @@ export function GroupConversationPage() {
     [protocolMessages],
   );
 
+  // Ensure the OlmMachine knows all members' device keys before processing
+  // protocol messages or decrypting group ciphertexts.
+  const memberUserIds = useMemo(
+    () => groupData?.members.map((m) => m.userId) ?? [],
+    [groupData?.members],
+  );
+
+  useEffect(() => {
+    if (!deviceReady || !deviceId || memberUserIds.length === 0) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { ensureUserKeysKnown } = await import("../lib/e2ee/index.ts");
+        await ensureUserKeysKnown(api, deviceId, memberUserIds);
+      } catch (err) {
+        console.warn("Failed to sync member device keys:", err);
+      }
+      if (cancelled) return;
+      // Trigger protocol message processing after keys are known.
+      setRoomKeyRevision((v) => v + 1);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceReady, deviceId, memberUserIds]);
+
   // Process hidden Matrix to-device payloads to import room keys and other
   // protocol state before attempting Megolm decrypts.
   useEffect(() => {
@@ -129,6 +157,16 @@ export function GroupConversationPage() {
     let cancelled = false;
 
     (async () => {
+      // Ensure member keys are known before processing protocol events.
+      if (deviceReady && deviceId && memberUserIds.length > 0) {
+        try {
+          const { ensureUserKeysKnown } = await import("../lib/e2ee/index.ts");
+          await ensureUserKeysKnown(api, deviceId, memberUserIds);
+        } catch {
+          // Best-effort — continue with processing.
+        }
+      }
+
       const { processMatrixGroupToDeviceMessages } = await import(
         "../lib/e2ee/matrixGroup.ts"
       );
@@ -155,6 +193,9 @@ export function GroupConversationPage() {
     protocolMessageKey,
     conversationId,
     processedProtocolMessageKey,
+    deviceReady,
+    deviceId,
+    memberUserIds,
   ]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
