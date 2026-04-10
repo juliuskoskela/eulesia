@@ -1,3 +1,6 @@
+// Session-scoped plaintext cache for sender-side readback of own DMs.
+// Uses sessionStorage (not localStorage) so plaintext is never persisted
+// beyond the current browser tab, avoiding cleartext-at-rest exposure.
 const DM_PLAINTEXT_CACHE_PREFIX = "eulesia.dm-plaintext.v1";
 
 type CachedPlaintextEntry = {
@@ -25,7 +28,7 @@ export function cacheSentDmPlaintext(data: {
     deviceId: data.deviceId,
     senderId: data.senderId,
   };
-  window.localStorage.setItem(
+  window.sessionStorage.setItem(
     getStorageKey(data.messageId),
     JSON.stringify(entry),
   );
@@ -40,7 +43,7 @@ export function loadCachedDmPlaintext(data: {
     return null;
   }
 
-  const raw = window.localStorage.getItem(getStorageKey(data.messageId));
+  const raw = window.sessionStorage.getItem(getStorageKey(data.messageId));
   if (!raw) {
     return null;
   }
@@ -58,5 +61,20 @@ export function loadCachedDmPlaintext(data: {
     return parsed.content;
   } catch {
     return null;
+  }
+}
+
+/** Best-effort cleanup of any legacy localStorage entries from v1. */
+export function clearLegacyDmPlaintextCache(): void {
+  if (typeof window === "undefined") return;
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (key?.startsWith(DM_PLAINTEXT_CACHE_PREFIX)) {
+      keysToRemove.push(key);
+    }
+  }
+  for (const key of keysToRemove) {
+    window.localStorage.removeItem(key);
   }
 }

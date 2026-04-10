@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "./useAuth.tsx";
 import { api } from "../lib/api.ts";
 import { initializeDevice, inspectDeviceSetup } from "../lib/e2ee/index.ts";
+import { clearLegacyDmPlaintextCache } from "../lib/e2ee/dmPlaintextCache.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,6 +96,10 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
             "Cannot initialize device without an authenticated user",
           );
         }
+
+        // Purge any plaintext DM entries left by the pre-sessionStorage
+        // cache so cleartext is never persisted across sessions.
+        clearLegacyDmPlaintextCache();
 
         const registration = await initializeDevice(
           api,
