@@ -39,8 +39,13 @@ export async function decryptConversationMessage(
   conversationId: string,
   _senderDeviceId: string,
   ciphertextB64: string,
+  messageId?: string,
 ): Promise<string> {
-  return decryptConversationWithMatrix(conversationId, ciphertextB64);
+  return decryptConversationWithMatrix(
+    conversationId,
+    ciphertextB64,
+    messageId,
+  );
 }
 
 export async function encryptForGroup(

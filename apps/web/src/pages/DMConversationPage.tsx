@@ -69,6 +69,7 @@ function useDecryptedContent(
         message.conversationId,
         message.senderDeviceId,
         message.ciphertext,
+        message.id,
       );
       setDecryptedContent(plaintext);
     } catch (err) {
@@ -79,6 +80,7 @@ function useDecryptedContent(
     }
   }, [
     isCryptoReady,
+    message.id,
     message.ciphertext,
     message.senderDeviceId,
     message.conversationId,

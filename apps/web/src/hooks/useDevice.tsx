@@ -22,7 +22,11 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "./useAuth.tsx";
 import { api } from "../lib/api.ts";
 import { initializeDevice, inspectDeviceSetup } from "../lib/e2ee/index.ts";
-import { clearLegacyDmPlaintextCache } from "../lib/e2ee/dmPlaintextCache.ts";
+import {
+  clearAllPlaintext,
+  clearLegacyDmPlaintextCache,
+  initPlaintextCache,
+} from "../lib/e2ee/dmPlaintextCache.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -114,6 +118,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           registration.deviceId,
         );
         await syncMatrixMachine(api, registration.deviceId);
+
+        // Scope the plaintext cache to this user/device pair.
+        initPlaintextCache(currentUser.id, registration.deviceId);
 
         setDeviceId(registration.deviceId);
         setIsInitialized(true);
@@ -217,6 +224,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       void import("../lib/e2ee/matrixCrypto.ts").then(
         ({ closeMatrixCryptoMachine }) => closeMatrixCryptoMachine(),
       );
+      void clearAllPlaintext();
 
       setDeviceId(null);
       setIsInitialized(false);

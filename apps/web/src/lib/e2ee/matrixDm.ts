@@ -96,7 +96,19 @@ export async function encryptConversationWithMatrix(
 export async function decryptConversationWithMatrix(
   conversationId: string,
   ciphertextB64: string,
+  messageId?: string,
 ): Promise<string> {
+  // Check the IndexedDB plaintext cache first.  Olm decryption via
+  // receiveSyncChanges is stateful — the ratchet advances on each call.
+  // Re-processing the same event after a page reload fails because the
+  // ratchet was already consumed.  The cache lets us skip Olm entirely for
+  // messages we've already successfully decrypted.
+  if (messageId) {
+    const { loadPlaintext } = await import("./dmPlaintextCache.ts");
+    const cached = await loadPlaintext(messageId);
+    if (cached !== null) return cached;
+  }
+
   const encryptedEvent = decodeMatrixEncryptedEvent(ciphertextB64);
   const decryptedEvent = await decryptMatrixToDeviceEvent(encryptedEvent);
 
@@ -111,6 +123,12 @@ export async function decryptConversationWithMatrix(
 
   if (typeof content.body !== "string") {
     throw new Error("Matrix DM payload is missing the message body");
+  }
+
+  // Cache the plaintext so subsequent page loads don't hit the Olm ratchet.
+  if (messageId) {
+    const { cachePlaintext } = await import("./dmPlaintextCache.ts");
+    await cachePlaintext(messageId, content.body);
   }
 
   return content.body;

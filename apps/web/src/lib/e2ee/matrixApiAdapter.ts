@@ -150,13 +150,6 @@ type MatrixToDeviceEvent = {
   content: Record<string, unknown>;
 };
 
-function isDecryptedToDeviceEvent(
-  matrix: typeof import("@matrix-org/matrix-sdk-crypto-wasm"),
-  event: unknown,
-): event is import("@matrix-org/matrix-sdk-crypto-wasm").DecryptedToDeviceEvent {
-  return event instanceof matrix.DecryptedToDeviceEvent;
-}
-
 export function decryptMatrixToDeviceEvent(
   event: MatrixToDeviceEvent,
 ): Promise<Record<string, unknown>> {
@@ -174,12 +167,31 @@ async function decryptSingle(
     new Map<string, number>(),
   );
 
-  const decrypted = processedEvents.find((processedEvent) =>
-    isDecryptedToDeviceEvent(matrix, processedEvent),
-  );
-  if (!decrypted) {
-    throw new Error("Unable to decrypt Matrix to-device event");
+  for (const pe of processedEvents) {
+    if (pe instanceof matrix.DecryptedToDeviceEvent) {
+      return JSON.parse(pe.rawEvent) as Record<string, unknown>;
+    }
+    if (pe instanceof matrix.UTDToDeviceEvent) {
+      const reason = pe.utdInfo?.reason ?? "unknown";
+      console.warn(
+        `[e2ee] UTD to-device event from ${event.sender}: reason=${reason}`,
+      );
+      throw new Error(
+        `Unable to decrypt to-device event (UTD reason: ${reason})`,
+      );
+    }
+    if (pe instanceof matrix.InvalidToDeviceEvent) {
+      console.warn(
+        `[e2ee] Invalid to-device event from ${event.sender}:`,
+        pe.rawEvent?.slice(0, 200),
+      );
+      throw new Error("Invalid to-device event (missing required fields)");
+    }
+    // PlainTextToDeviceEvent — not expected for m.room.encrypted
+    console.warn(
+      `[e2ee] Unexpected PlainText to-device event from ${event.sender}`,
+    );
   }
 
-  return JSON.parse(decrypted.rawEvent) as Record<string, unknown>;
+  throw new Error("receiveSyncChanges returned no events");
 }
