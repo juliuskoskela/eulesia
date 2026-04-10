@@ -129,15 +129,34 @@ export function ThreadCard({
             </span>
           </div>
 
-          {/* Title */}
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1 leading-snug">
-            {thread.title}
-          </h3>
-
-          {/* Preview content */}
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
-            {thread.content.split("\n")[0].replace(/[*#]/g, "")}
-          </p>
+          {/* Title & content preview — deduplicate when they overlap */}
+          {(() => {
+            const titleClean = thread.title.replace(/\.\.\.$/, "").trim();
+            const contentFirstLine = thread.content
+              .split("\n")[0]
+              .replace(/[*#]/g, "")
+              .trim();
+            const isAutoTitle =
+              titleClean === contentFirstLine ||
+              contentFirstLine.startsWith(titleClean) ||
+              titleClean.startsWith(contentFirstLine);
+            return isAutoTitle ? (
+              // Auto-generated or duplicate title: show content only
+              <p className="text-sm text-gray-900 dark:text-gray-100 mb-2 line-clamp-3 font-medium">
+                {contentFirstLine}
+              </p>
+            ) : (
+              // User-provided title + content preview
+              <>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1 leading-snug">
+                  {thread.title}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
+                  {contentFirstLine}
+                </p>
+              </>
+            );
+          })()}
 
           {/* Embedded media preview */}
           {thread.contentHtml && (
