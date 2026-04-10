@@ -491,15 +491,6 @@ function GroupMessageBubble({
           >
             {formatRelativeTime(message.createdAt)}
           </span>
-          {message.ciphertext && (
-            <Lock
-              className={`w-2.5 h-2.5 ${
-                isOwnMessage
-                  ? "text-teal-200"
-                  : "text-gray-400 dark:text-gray-500"
-              }`}
-            />
-          )}
         </div>
       </div>
     </div>

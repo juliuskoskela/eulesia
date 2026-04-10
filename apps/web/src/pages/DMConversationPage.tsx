@@ -279,9 +279,6 @@ function MessageBubble({
                   showPreviews={!isOwnMessage}
                 />
               )}
-              {message.ciphertext && !decryptionFailed && !isDecrypting && (
-                <Lock className="inline-block w-3 h-3 ml-1 opacity-40" />
-              )}
             </div>
             {isOwnMessage && (
               <div className="absolute top-0 left-0 -translate-x-full pr-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">

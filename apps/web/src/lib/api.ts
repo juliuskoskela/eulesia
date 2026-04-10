@@ -1168,27 +1168,31 @@ class ApiClient {
 
     const memberById = new Map(conv.members.map((m) => [m.userId, m]));
 
-    const messages: DirectMessage[] = messagesResp.map((m) => {
-      const member = memberById.get(m.senderId);
-      return {
-        id: m.id,
-        conversationId: m.conversationId,
-        content: m.content ?? null,
-        ciphertext: m.ciphertext || undefined,
-        senderDeviceId: m.senderDeviceId ?? undefined,
-        senderId: m.senderId,
-        messageType: m.messageType,
-        author: member
-          ? {
-              id: member.userId,
-              name: member.name,
-              avatarUrl: member.avatarUrl ?? null,
-              role: "citizen" as const,
-            }
-          : null,
-        createdAt: m.serverTs,
-      };
-    });
+    // API returns newest-first for cursor pagination; reverse to
+    // chronological (oldest-first) for chat rendering.
+    const messages: DirectMessage[] = messagesResp
+      .map((m) => {
+        const member = memberById.get(m.senderId);
+        return {
+          id: m.id,
+          conversationId: m.conversationId,
+          content: m.content ?? null,
+          ciphertext: m.ciphertext || undefined,
+          senderDeviceId: m.senderDeviceId ?? undefined,
+          senderId: m.senderId,
+          messageType: m.messageType,
+          author: member
+            ? {
+                id: member.userId,
+                name: member.name,
+                avatarUrl: member.avatarUrl ?? null,
+                role: "citizen" as const,
+              }
+            : null,
+          createdAt: m.serverTs,
+        };
+      })
+      .reverse();
 
     return {
       id: conv.id,
@@ -1392,7 +1396,9 @@ class ApiClient {
       };
     };
 
-    const messages = messagesResp.map(toDirectMessage);
+    // API returns newest-first for cursor pagination; reverse to
+    // chronological (oldest-first) for chat rendering.
+    const messages = messagesResp.map(toDirectMessage).reverse();
     const protocolMessagesById = new Map(
       protocolMessagesResp.map((message) => [
         message.id,
