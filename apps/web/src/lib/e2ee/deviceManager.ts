@@ -24,6 +24,11 @@ export interface DeviceRegistration {
   didCreateDevice: boolean;
 }
 
+export type DeviceSetupRequirement =
+  | { status: "existing"; deviceId: string }
+  | { status: "needs-trust" }
+  | { status: "needs-pairing" };
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -127,4 +132,51 @@ export async function initializeDevice(
     deviceId: device.id,
     didCreateDevice: true,
   };
+}
+
+export async function inspectDeviceSetup(
+  api: ApiClient,
+  userId: string,
+): Promise<DeviceSetupRequirement> {
+  const existing = await loadDeviceKeys();
+  if (existing) {
+    if (existing.userId && existing.userId !== userId) {
+      await clearKeyStore();
+    } else {
+      try {
+        const serverDevices = await api.listDevices();
+        const stillExists = serverDevices.some(
+          (device) => device.id === existing.deviceId,
+        );
+        if (stillExists) {
+          if (existing.userId !== userId) {
+            await saveDeviceKeys({ ...existing, userId });
+          }
+
+          return {
+            status: "existing",
+            deviceId: existing.deviceId,
+          };
+        }
+      } catch {
+        if (existing.userId === userId) {
+          return {
+            status: "existing",
+            deviceId: existing.deviceId,
+          };
+        }
+
+        throw new Error("Unable to verify the existing device identity");
+      }
+
+      await clearKeyStore();
+    }
+  }
+
+  const serverDevices = await api.listDevices();
+  if (serverDevices.length === 0) {
+    return { status: "needs-trust" };
+  }
+
+  return { status: "needs-pairing" };
 }

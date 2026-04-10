@@ -5,7 +5,7 @@ use axum::routing::{delete, post};
 use axum::{Json, Router};
 use base64::{
     Engine,
-    engine::general_purpose::{STANDARD_NO_PAD, URL_SAFE_NO_PAD},
+    engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD},
 };
 use chrono::Utc;
 use sea_orm::ActiveModelTrait;
@@ -125,7 +125,9 @@ struct MatrixKeysClaimResponse {
 fn decode_base64(input: &str, field: &str) -> Result<Vec<u8>, ApiError> {
     URL_SAFE_NO_PAD
         .decode(input)
-        .or_else(|_| base64::engine::general_purpose::STANDARD.decode(input))
+        .or_else(|_| URL_SAFE.decode(input))
+        .or_else(|_| STANDARD_NO_PAD.decode(input))
+        .or_else(|_| STANDARD.decode(input))
         .map_err(|_| ApiError::BadRequest(format!("invalid base64 in {field}")))
 }
 
@@ -202,7 +204,8 @@ async fn create_device(
     auth: AuthUser,
     Json(req): Json<CreateDeviceRequest>,
 ) -> Result<Json<DeviceResponse>, ApiError> {
-    // Check device limit
+    // Check device limit against all non-revoked device shells so repeated
+    // failed registrations cannot create an unbounded number of placeholders.
     let count = DeviceRepo::count_active_for_user(&state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
@@ -210,8 +213,13 @@ async fn create_device(
         return Err(ApiError::from(AuthError::DeviceLimitExceeded));
     }
 
-    // If user already has devices, require a valid pairing code to bind this one.
-    let pairing_token_id = if count > 0 {
+    let enrolled = DeviceRepo::count_enrolled_for_user(&state.db, auth.user_id.0)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    // Only already-enrolled devices can require pairing. Half-created device
+    // shells from failed crypto setup must not block first-device trust.
+    let pairing_token_id = if enrolled > 0 {
         let pairing_code = req.pairing_code.as_deref().ok_or_else(|| {
             ApiError::BadRequest("pairing_code is required when pairing additional devices".into())
         })?;
@@ -325,7 +333,7 @@ async fn create_device_pairing_code(
     };
 
     // Keep pairing flow scoped to users with at least one registered device.
-    let existing = DeviceRepo::count_active_for_user(&state.db, auth.user_id.0)
+    let existing = DeviceRepo::count_enrolled_for_user(&state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
     if existing == 0 {
@@ -367,7 +375,7 @@ async fn list_devices(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<Vec<DeviceResponse>>, ApiError> {
-    let devices = DeviceRepo::list_active_for_user(&*state.db, auth.user_id.0)
+    let devices = DeviceRepo::list_enrolled_for_user(&*state.db, auth.user_id.0)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
@@ -540,7 +548,7 @@ async fn query_matrix_keys(
         .map(|user_id| parse_matrix_user_id(user_id))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let devices = DeviceRepo::list_active_for_users(&*state.db, &requested_users)
+    let devices = DeviceRepo::list_enrolled_for_users(&*state.db, &requested_users)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
@@ -666,7 +674,7 @@ pub async fn list_user_devices(
     _auth: AuthUser,
     Path(user_id): Path<Id>,
 ) -> Result<Json<Vec<DeviceResponse>>, ApiError> {
-    let devices = DeviceRepo::list_active_for_user(&*state.db, user_id)
+    let devices = DeviceRepo::list_enrolled_for_user(&*state.db, user_id)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
@@ -683,4 +691,21 @@ pub fn routes() -> Router<AppState> {
         .route("/devices/matrix/keys/claim", post(claim_matrix_keys))
         .route("/devices/pairing-codes", post(create_device_pairing_code))
         .route("/devices/{id}", delete(revoke_device))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_base64;
+
+    #[test]
+    fn decode_base64_accepts_standard_no_pad() {
+        let decoded = decode_base64("AQIDBPr7", "device_keys.keys[ed25519]").unwrap();
+        assert_eq!(decoded, vec![1, 2, 3, 4, 250, 251]);
+    }
+
+    #[test]
+    fn decode_base64_accepts_url_safe_no_pad() {
+        let decoded = decode_base64("-_8", "device_keys.keys[ed25519]").unwrap();
+        assert_eq!(decoded, vec![251, 255]);
+    }
 }

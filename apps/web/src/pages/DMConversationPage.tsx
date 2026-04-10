@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ContentWithPreviews } from "../components/common/ContentWithPreviews";
+import { LinkifiedText } from "../components/common/LinkifiedText";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -34,6 +35,7 @@ import { useKeyboard } from "../hooks/useKeyboard";
 import { formatRelativeTime } from "../lib/formatTime";
 import type { DirectMessage } from "../lib/api";
 import { getAvatarInitials } from "../utils/avatar";
+import { loadCachedDmPlaintext } from "../lib/e2ee/dmPlaintextCache.ts";
 
 /**
  * Hook to decrypt an E2EE message on demand. Returns the decrypted content
@@ -44,7 +46,8 @@ function useDecryptedContent(message: DirectMessage): {
   isDecrypting: boolean;
   decryptionFailed: boolean;
 } {
-  const { isInitialized: isCryptoReady } = useDevice();
+  const { currentUser } = useAuth();
+  const { deviceId, isInitialized: isCryptoReady } = useDevice();
   const [decryptedContent, setDecryptedContent] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [decryptionFailed, setDecryptionFailed] = useState(false);
@@ -83,10 +86,40 @@ function useDecryptedContent(message: DirectMessage): {
     setDecryptionFailed(false);
   }, [
     isCryptoReady,
+    currentUser?.id,
+    deviceId,
     message.id,
     message.ciphertext,
     message.senderDeviceId,
     message.conversationId,
+  ]);
+
+  useEffect(() => {
+    if (
+      message.ciphertext ||
+      !deviceId ||
+      !currentUser ||
+      message.senderId !== currentUser.id ||
+      message.senderDeviceId !== deviceId
+    ) {
+      return;
+    }
+
+    const cached = loadCachedDmPlaintext({
+      messageId: message.id,
+      deviceId,
+      senderId: currentUser.id,
+    });
+    if (cached) {
+      setDecryptedContent(cached);
+    }
+  }, [
+    currentUser,
+    deviceId,
+    message.ciphertext,
+    message.id,
+    message.senderDeviceId,
+    message.senderId,
   ]);
 
   useEffect(() => {
@@ -220,7 +253,7 @@ function MessageBubble({
         ) : (
           <div className="relative inline-block">
             <div
-              className={`px-4 py-2.5 rounded-2xl shadow-sm ${
+              className={`px-4 py-3 rounded-2xl shadow-sm ${
                 isOwnMessage
                   ? "bg-teal-600 text-white rounded-br-md"
                   : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md border border-gray-100 dark:border-gray-700"
@@ -240,7 +273,11 @@ function MessageBubble({
                   }`}
                 />
               ) : (
-                <p className="text-sm whitespace-pre-wrap">{displayContent}</p>
+                <LinkifiedText
+                  text={displayContent}
+                  className="text-sm whitespace-pre-wrap break-words"
+                  showPreviews={!isOwnMessage}
+                />
               )}
               {message.ciphertext && !decryptionFailed && !isDecrypting && (
                 <Lock className="inline-block w-3 h-3 ml-1 opacity-40" />
@@ -290,7 +327,7 @@ export function DMConversationPage() {
   const { deviceId, isInitialized: deviceReady } = useDevice();
   const { joinDm, leaveDm, emitTypingDm, typingInDm } = useSocket();
   const { isKeyboardOpen, keyboardHeight } = useKeyboard();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const {
     data: conversationData,
     isLoading,
@@ -331,6 +368,15 @@ export function DMConversationPage() {
 
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-resize textarea to fit content, capped at 33vh
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const maxH = window.innerHeight * 0.33;
+    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+  }, [newMessage]);
 
   useEffect(() => {
     if (conversationId) {
@@ -406,7 +452,7 @@ export function DMConversationPage() {
 
   const otherUserHeader = otherUser ? (
     <>
-      <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+      <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
         {otherUser.avatarUrl ? (
           <img
             src={otherUser.avatarUrl}
@@ -414,17 +460,17 @@ export function DMConversationPage() {
             className="w-full h-full rounded-full object-cover"
           />
         ) : (
-          <span className="text-white text-sm font-bold">
+          <span className="text-gray-600 dark:text-gray-300 text-sm font-bold">
             {getAvatarInitials(otherUser.name)}
           </span>
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <h1 className="text-lg font-bold text-white truncate">
+        <h1 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
           {otherUser.name}
         </h1>
         {otherUser.institutionName && (
-          <p className="text-sm text-white/70 truncate">
+          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
             {otherUser.institutionName}
           </p>
         )}
@@ -433,7 +479,7 @@ export function DMConversationPage() {
   ) : null;
 
   return (
-    <Layout>
+    <Layout showFooter={false}>
       <SEOHead
         title={t("title")}
         path={`/messages/${conversationId}`}
@@ -448,13 +494,13 @@ export function DMConversationPage() {
         }}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-700 dark:from-emerald-900 dark:via-teal-900 dark:to-cyan-950 px-4 py-4 flex-shrink-0">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
-              className="p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             >
-              <ArrowLeft className="w-5 h-5 text-white" />
+              <ArrowLeft className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             </button>
             {otherUser && canLinkToOtherUserProfile && (
               <Link
@@ -471,7 +517,11 @@ export function DMConversationPage() {
             )}
             {/* Encryption status */}
             <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10"
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
+                isEncryptedConversation
+                  ? "bg-emerald-50 dark:bg-emerald-950/30"
+                  : "bg-gray-100 dark:bg-gray-800"
+              }`}
               title={
                 isEncryptedConversation
                   ? t("encryptionEnabled", {
@@ -483,11 +533,17 @@ export function DMConversationPage() {
               }
             >
               {isEncryptedConversation ? (
-                <Lock className="w-3.5 h-3.5 text-emerald-300" />
+                <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <Unlock className="w-3.5 h-3.5 text-white/50" />
+                <Unlock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
               )}
-              <span className="text-xs text-white/70">
+              <span
+                className={`text-xs font-medium ${
+                  isEncryptedConversation
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
                 {isEncryptedConversation
                   ? t("encrypted", { defaultValue: "E2EE" })
                   : t("plaintext", { defaultValue: "Plain" })}
@@ -497,8 +553,8 @@ export function DMConversationPage() {
         </div>
 
         {/* Messages area — contained surface with subtle pattern */}
-        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-emerald-50 via-white to-gray-50 dark:from-emerald-950/20 dark:via-gray-950 dark:to-gray-950">
-          <div className="px-4 py-4 space-y-4 min-h-full">
+        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-gray-50/80 dark:from-gray-950 dark:to-gray-900/30">
+          <div className="px-4 py-5 space-y-4 min-h-full">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
@@ -593,29 +649,38 @@ export function DMConversationPage() {
             </div>
           )}
 
-        {/* Input bar — elevated surface */}
-        <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 border-t border-emerald-100 dark:border-emerald-950/40 px-4 py-3 backdrop-blur">
-          <form onSubmit={handleSendMessage} className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
+        {/* Input bar */}
+        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 px-4 py-3">
+          <form onSubmit={handleSendMessage} className="flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
               value={newMessage}
               onChange={(e) => {
                 setNewMessage(e.target.value);
                 if (conversationId && e.target.value.trim())
                   emitTypingDm(conversationId);
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  textareaRef.current?.form?.requestSubmit();
+                }
+              }}
               placeholder={t("writeMessage")}
-              enterKeyHint="send"
               disabled={!canSend}
-              className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent focus:bg-white dark:focus:bg-gray-750 transition-colors disabled:opacity-50"
+              rows={1}
+              className={`flex-1 px-4 py-2.5 rounded-2xl text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 transition-colors disabled:opacity-50 resize-y overflow-y-auto max-h-[33vh] ${
+                isEncryptedConversation
+                  ? "border border-emerald-300/60 dark:border-emerald-600/40 bg-emerald-50/50 dark:bg-emerald-950/20 focus:ring-emerald-500 focus:border-transparent"
+                  : "border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-teal-500 focus:border-transparent"
+              }`}
             />
             <button
               type="submit"
               disabled={
                 !newMessage.trim() || sendMessageMutation.isPending || !canSend
               }
-              className="p-2.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+              className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
               aria-label={t("sendMessage")}
             >
               <Send className="w-5 h-5" />

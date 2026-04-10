@@ -21,7 +21,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useAuth } from "./useAuth.tsx";
 import { api } from "../lib/api.ts";
-import { initializeDevice } from "../lib/e2ee/index.ts";
+import { initializeDevice, inspectDeviceSetup } from "../lib/e2ee/index.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,10 +34,14 @@ interface DeviceContextType {
   isInitialized: boolean;
   /** Whether device initialization is currently in progress. */
   isInitializing: boolean;
+  /** Whether this browser needs explicit trust before creating its first device. */
+  requiresTrust: boolean;
+  /** Whether this browser needs a pairing code from another active device. */
+  requiresPairing: boolean;
   /** Error message if device initialization failed, or null. */
   error: string | null;
   /** Retry or manually trigger device initialization for this browser. */
-  initializeCurrentDevice: () => Promise<void>;
+  initializeCurrentDevice: (pairingCode?: string) => Promise<void>;
   /** Whether this session just registered a new device. */
   hasFreshRegistration: boolean;
   /** Dismiss the post-registration notice. */
@@ -50,6 +54,14 @@ interface DeviceContextType {
 
 const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
 
+function isPairingRequiredError(message: string): boolean {
+  return message.includes("pairing_code is required");
+}
+
+function isPairingFlowError(message: string): boolean {
+  return message.includes("pairing code") || message.includes("pairing_code");
+}
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
@@ -60,6 +72,8 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [requiresTrust, setRequiresTrust] = useState(false);
+  const [requiresPairing, setRequiresPairing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasAttemptedInit, setHasAttemptedInit] = useState(false);
   const [hasFreshRegistration, setHasFreshRegistration] = useState(false);
@@ -67,10 +81,63 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   // Track the previous auth state to detect logout transitions
   const prevAuthRef = useRef(false);
 
-  const initialize = useCallback(async () => {
+  const initialize = useCallback(
+    async (pairingCode?: string) => {
+      setHasAttemptedInit(true);
+      setIsInitializing(true);
+      setError(null);
+      setRequiresTrust(false);
+      setRequiresPairing(false);
+
+      try {
+        if (!currentUser) {
+          throw new Error(
+            "Cannot initialize device without an authenticated user",
+          );
+        }
+
+        const registration = await initializeDevice(
+          api,
+          currentUser.id,
+          pairingCode,
+        );
+
+        const { initializeMatrixCryptoMachine, syncMatrixMachine } =
+          await import("../lib/e2ee/index.ts");
+        await initializeMatrixCryptoMachine(
+          currentUser.id,
+          registration.deviceId,
+        );
+        await syncMatrixMachine(api, registration.deviceId);
+
+        setDeviceId(registration.deviceId);
+        setIsInitialized(true);
+        setHasFreshRegistration(registration.didCreateDevice);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Device initialization failed";
+        if (isPairingRequiredError(message)) {
+          setError(null);
+          setRequiresPairing(true);
+        } else {
+          console.error("Device initialization failed:", err);
+          setError(message);
+          setRequiresPairing(isPairingFlowError(message));
+        }
+        setHasFreshRegistration(false);
+      } finally {
+        setIsInitializing(false);
+      }
+    },
+    [currentUser],
+  );
+
+  const inspect = useCallback(async () => {
     setHasAttemptedInit(true);
     setIsInitializing(true);
     setError(null);
+    setRequiresTrust(false);
+    setRequiresPairing(false);
 
     try {
       if (!currentUser) {
@@ -79,8 +146,22 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         );
       }
 
-      const registration = await initializeDevice(api, currentUser.id);
+      const requirement = await inspectDeviceSetup(api, currentUser.id);
+      if (requirement.status === "needs-trust") {
+        setRequiresTrust(true);
+        setDeviceId(null);
+        setIsInitialized(false);
+        return;
+      }
 
+      if (requirement.status === "needs-pairing") {
+        setRequiresPairing(true);
+        setDeviceId(null);
+        setIsInitialized(false);
+        return;
+      }
+
+      const registration = await initializeDevice(api, currentUser.id);
       const { initializeMatrixCryptoMachine, syncMatrixMachine } = await import(
         "../lib/e2ee/index.ts"
       );
@@ -92,13 +173,12 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
 
       setDeviceId(registration.deviceId);
       setIsInitialized(true);
-      setHasFreshRegistration(registration.didCreateDevice);
+      setHasFreshRegistration(false);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Device initialization failed";
-      console.error("Device initialization failed:", err);
+      console.error("Device inspection failed:", err);
       setError(message);
-      setHasFreshRegistration(false);
     } finally {
       setIsInitializing(false);
     }
@@ -113,12 +193,12 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       currentUser &&
       !hasAttemptedInit
     ) {
-      void initialize();
+      void inspect();
     }
   }, [
     currentUser,
     hasAttemptedInit,
-    initialize,
+    inspect,
     isAuthenticated,
     isInitialized,
     isInitializing,
@@ -135,6 +215,8 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
 
       setDeviceId(null);
       setIsInitialized(false);
+      setRequiresTrust(false);
+      setRequiresPairing(false);
       setError(null);
       setHasAttemptedInit(false);
       setHasFreshRegistration(false);
@@ -148,6 +230,8 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         deviceId,
         isInitialized,
         isInitializing,
+        requiresTrust,
+        requiresPairing,
         error,
         initializeCurrentDevice: initialize,
         hasFreshRegistration,

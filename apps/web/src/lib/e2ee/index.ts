@@ -11,9 +11,12 @@
  */
 
 // deviceManager — Device registration and lifecycle
-export { initializeDevice } from "./deviceManager.ts";
+export { initializeDevice, inspectDeviceSetup } from "./deviceManager.ts";
 
-export type { DeviceRegistration } from "./deviceManager.ts";
+export type {
+  DeviceRegistration,
+  DeviceSetupRequirement,
+} from "./deviceManager.ts";
 
 // messageEncryptor — Message encryption and decryption
 export {

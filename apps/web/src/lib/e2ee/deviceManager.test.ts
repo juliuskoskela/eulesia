@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "./apiTypes.ts";
-import { initializeDevice } from "./deviceManager.ts";
+import { initializeDevice, inspectDeviceSetup } from "./deviceManager.ts";
 
 const { mockLoadDeviceKeys, mockSaveDeviceKeys, mockClearKeyStore } =
   vi.hoisted(() => ({
@@ -125,5 +125,50 @@ describe("initializeDevice", () => {
         value: originalNavigator,
       });
     }
+  });
+});
+
+describe("inspectDeviceSetup", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadDeviceKeys.mockResolvedValue(null);
+    mockSaveDeviceKeys.mockResolvedValue(undefined);
+    mockClearKeyStore.mockResolvedValue(undefined);
+  });
+
+  it("requires explicit trust when the user has no registered devices", async () => {
+    const api = makeApiClient({
+      listDevices: vi.fn().mockResolvedValue([]),
+    });
+
+    const result = await inspectDeviceSetup(api, "user-1");
+
+    expect(result).toEqual({ status: "needs-trust" });
+    expect(api.registerDevice).not.toHaveBeenCalled();
+  });
+
+  it("requires pairing when another device is already active", async () => {
+    const api = makeApiClient({
+      listDevices: vi.fn().mockResolvedValue([{ id: "device-existing" }]),
+    });
+
+    const result = await inspectDeviceSetup(api, "user-1");
+
+    expect(result).toEqual({ status: "needs-pairing" });
+    expect(api.registerDevice).not.toHaveBeenCalled();
+  });
+
+  it("reuses the current local device when it still exists on the server", async () => {
+    mockLoadDeviceKeys.mockResolvedValue(existingKeys);
+    const api = makeApiClient({
+      listDevices: vi.fn().mockResolvedValue([{ id: existingKeys.deviceId }]),
+    });
+
+    const result = await inspectDeviceSetup(api, "user-1");
+
+    expect(result).toEqual({
+      status: "existing",
+      deviceId: existingKeys.deviceId,
+    });
   });
 });

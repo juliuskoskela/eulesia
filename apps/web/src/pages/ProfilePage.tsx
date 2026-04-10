@@ -49,6 +49,7 @@ type CapacitorWindow = Window & {
 };
 
 const DEVICE_LIMIT = 10;
+const PUSH_SERVICE_WORKER_PATH = "/sw-push.js";
 
 function getDeviceIcon(platform: string) {
   return platform === "android" || platform === "ios" ? Smartphone : Laptop;
@@ -59,6 +60,70 @@ function formatDeviceTimestamp(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function getRegistrationScriptUrls(
+  registration: ServiceWorkerRegistration,
+): string[] {
+  return [
+    registration.active?.scriptURL,
+    registration.installing?.scriptURL,
+    registration.waiting?.scriptURL,
+  ].filter((value): value is string => Boolean(value));
+}
+
+function isPushServiceWorker(registration: ServiceWorkerRegistration): boolean {
+  return getRegistrationScriptUrls(registration).some((scriptUrl) => {
+    try {
+      return new URL(scriptUrl).pathname === PUSH_SERVICE_WORKER_PATH;
+    } catch {
+      return scriptUrl.endsWith(PUSH_SERVICE_WORKER_PATH);
+    }
+  });
+}
+
+async function getPushServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  return registrations.find(isPushServiceWorker) ?? null;
+}
+
+async function ensurePushServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  const existing = await getPushServiceWorkerRegistration();
+  if (existing) {
+    return existing;
+  }
+
+  const registration = await navigator.serviceWorker.register(
+    PUSH_SERVICE_WORKER_PATH,
+    { scope: "/" },
+  );
+
+  if (registration.active) {
+    return registration;
+  }
+
+  const worker = registration.installing ?? registration.waiting;
+  if (!worker) {
+    return registration;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const handleStateChange = () => {
+      if (worker.state === "activated") {
+        resolve();
+        return;
+      }
+
+      if (worker.state === "redundant") {
+        reject(new Error("Push service worker activation failed"));
+      }
+    };
+
+    worker.addEventListener("statechange", handleStateChange);
+    handleStateChange();
+  });
+
+  return registration;
 }
 
 export function ProfilePage() {
@@ -121,7 +186,11 @@ export function ProfilePage() {
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
       setPushSupported(true);
       try {
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await getPushServiceWorkerRegistration();
+        if (!reg) {
+          setPushEnabled(false);
+          return;
+        }
         const sub = await reg.pushManager.getSubscription();
         setPushEnabled(!!sub);
       } catch {
@@ -165,7 +234,11 @@ export function ProfilePage() {
       } else {
         if (pushEnabled) {
           // Unsubscribe
-          const reg = await navigator.serviceWorker.ready;
+          const reg = await getPushServiceWorkerRegistration();
+          if (!reg) {
+            setPushEnabled(false);
+            return;
+          }
           const sub = await reg.pushManager.getSubscription();
           if (sub) {
             await api.unsubscribePush(sub.endpoint);
@@ -176,7 +249,7 @@ export function ProfilePage() {
           // Subscribe
           const { vapidPublicKey, enabled } = await api.getPushVapidKey();
           if (!enabled || !vapidPublicKey) return;
-          const reg = await navigator.serviceWorker.ready;
+          const reg = await ensurePushServiceWorkerRegistration();
           const sub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: vapidPublicKey,
@@ -1102,10 +1175,21 @@ function DeviceManagementSection() {
     deviceId,
     isInitialized,
     isInitializing,
+    requiresTrust,
+    requiresPairing,
     error,
     initializeCurrentDevice,
   } = useDevice();
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
+  const [pairingCode, setPairingCode] = useState("");
+  const [isSubmittingPairingCode, setIsSubmittingPairingCode] = useState(false);
+  const [isGeneratingPairingCode, setIsGeneratingPairingCode] = useState(false);
+  const [generatedPairingCode, setGeneratedPairingCode] = useState<
+    string | null
+  >(null);
+  const [generatedPairingExpiry, setGeneratedPairingExpiry] = useState<
+    string | null
+  >(null);
 
   const { data: devices, isLoading } = useQuery({
     queryKey: ["devices"],
@@ -1116,6 +1200,17 @@ function DeviceManagementSection() {
   const hasOtherDevices = deviceList.some((device) => device.id !== deviceId);
   const currentDevice = deviceList.find((device) => device.id === deviceId);
   const atDeviceLimit = !isInitialized && deviceList.length >= DEVICE_LIMIT;
+  const isCurrentBrowserPaired = deviceId !== null;
+
+  const handleTrustCurrentBrowser = async () => {
+    try {
+      await initializeCurrentDevice();
+      await queryClient.invalidateQueries({ queryKey: ["devices"] });
+      await queryClient.invalidateQueries({ queryKey: ["userDevices"] });
+    } catch (err) {
+      console.error("Device trust failed:", err);
+    }
+  };
 
   const handleRetrySetup = async () => {
     try {
@@ -1127,7 +1222,49 @@ function DeviceManagementSection() {
     }
   };
 
+  const handlePairCurrentDevice = async () => {
+    if (!pairingCode.trim()) {
+      return;
+    }
+
+    setIsSubmittingPairingCode(true);
+    try {
+      await initializeCurrentDevice(pairingCode.trim());
+      setPairingCode("");
+      await queryClient.invalidateQueries({ queryKey: ["devices"] });
+      await queryClient.invalidateQueries({ queryKey: ["userDevices"] });
+    } catch (err) {
+      console.error("Device pairing failed:", err);
+    } finally {
+      setIsSubmittingPairingCode(false);
+    }
+  };
+
+  const handleGeneratePairingCode = async () => {
+    setIsGeneratingPairingCode(true);
+    try {
+      const response = await api.createDevicePairingCode();
+      setGeneratedPairingCode(response.code);
+      setGeneratedPairingExpiry(response.expiresAt);
+    } catch (err) {
+      console.error("Failed to generate pairing code:", err);
+    } finally {
+      setIsGeneratingPairingCode(false);
+    }
+  };
+
   const handleRevokeDevice = async (targetDeviceId: string) => {
+    const isLastPairedDevice =
+      deviceList.filter((device) => device.id !== targetDeviceId).length === 0;
+    const confirmed = window.confirm(
+      isLastPairedDevice
+        ? t("security.revokeLastDeviceWarning")
+        : t("security.revokeDeviceConfirmation"),
+    );
+    if (!confirmed) {
+      return;
+    }
+
     setRevokingDeviceId(targetDeviceId);
     try {
       await api.revokeDevice(targetDeviceId);
@@ -1144,13 +1281,21 @@ function DeviceManagementSection() {
     ? t("security.ready")
     : isInitializing
       ? t("security.settingUp")
-      : t("security.setupFailed");
+      : requiresTrust
+        ? t("security.trustRequired")
+        : requiresPairing
+          ? t("security.pairingRequired")
+          : t("security.setupFailed");
 
   const statusDescription = isInitialized
     ? t("security.readyDescription")
     : isInitializing
       ? t("security.settingUpDescription")
-      : t("security.setupFailedDescription");
+      : requiresTrust
+        ? t("security.trustRequiredDescription")
+        : requiresPairing
+          ? t("security.pairingRequiredDescription")
+          : t("security.setupFailedDescription");
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -1188,7 +1333,7 @@ function DeviceManagementSection() {
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
                 {statusDescription}
               </p>
-              {!isInitialized && hasOtherDevices && (
+              {requiresPairing && hasOtherDevices && (
                 <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                   {t("security.newDeviceHint")}
                 </p>
@@ -1205,7 +1350,19 @@ function DeviceManagementSection() {
               )}
             </div>
 
-            {!isInitialized && (
+            {requiresTrust && (
+              <button
+                type="button"
+                onClick={handleTrustCurrentBrowser}
+                disabled={isInitializing}
+                className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+              >
+                {isInitializing && <Loader2 className="w-4 h-4 animate-spin" />}
+                {t("security.trustThisBrowser")}
+              </button>
+            )}
+
+            {!isInitialized && !requiresPairing && !requiresTrust && (
               <button
                 type="button"
                 onClick={handleRetrySetup}
@@ -1217,6 +1374,81 @@ function DeviceManagementSection() {
               </button>
             )}
           </div>
+
+          {requiresPairing && hasOtherDevices && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-white/70 p-4 dark:border-amber-900 dark:bg-gray-950/20">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {t("security.enterPairingCode")}
+              </p>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                {t("security.enterPairingCodeDescription")}
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  value={pairingCode}
+                  onChange={(event) => setPairingCode(event.target.value)}
+                  placeholder={t("security.pairingCodePlaceholder")}
+                  className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                />
+                <button
+                  type="button"
+                  onClick={handlePairCurrentDevice}
+                  disabled={isSubmittingPairingCode || !pairingCode.trim()}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+                >
+                  {isSubmittingPairingCode && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  {t("security.pairThisBrowser")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isInitialized && !atDeviceLimit && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-white/70 p-4 dark:border-emerald-900 dark:bg-gray-950/20">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {t("security.generatePairingCode")}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                    {t("security.generatePairingCodeDescription")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGeneratePairingCode}
+                  disabled={isGeneratingPairingCode}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/20"
+                >
+                  {isGeneratingPairingCode && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  {t("security.newPairingCode")}
+                </button>
+              </div>
+
+              {generatedPairingCode && (
+                <div className="mt-4 rounded-lg bg-gray-950 px-4 py-3 text-white dark:bg-black">
+                  <p className="text-xs uppercase tracking-[0.2em] text-gray-400">
+                    {t("security.activePairingCode")}
+                  </p>
+                  <p className="mt-2 font-mono text-2xl tracking-[0.3em]">
+                    {generatedPairingCode}
+                  </p>
+                  {generatedPairingExpiry && (
+                    <p className="mt-2 text-xs text-gray-400">
+                      {t("security.pairingCodeExpires", {
+                        date: formatDeviceTimestamp(generatedPairingExpiry),
+                      })}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div>
@@ -1228,6 +1460,12 @@ function DeviceManagementSection() {
               {deviceList.length}/{DEVICE_LIMIT}
             </span>
           </div>
+
+          {!isCurrentBrowserPaired && deviceList.length > 0 && (
+            <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              {t("security.trustedDevicesHint")}
+            </p>
+          )}
 
           {isLoading ? (
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
@@ -1282,7 +1520,9 @@ function DeviceManagementSection() {
                             >
                               {isCurrentDevice
                                 ? t("security.currentDevice")
-                                : t("security.otherDevice")}
+                                : isCurrentBrowserPaired
+                                  ? t("security.otherDevice")
+                                  : t("security.pairedDevice")}
                             </span>
                           </div>
 

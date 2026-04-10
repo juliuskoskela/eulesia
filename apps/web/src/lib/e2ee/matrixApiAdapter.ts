@@ -85,16 +85,18 @@ export async function ensureMatrixSessions(
 ): Promise<void> {
   const matrix = await getMatrixCryptoModule();
   const machine = await requireMatrixMachine();
-  const uniqueUserIds = [...new Set(userIds)].map(
-    (userId) => new matrix.UserId(asMatrixUserId(userId)),
+  const uniqueUserIds = [...new Set(userIds)].map((userId) =>
+    asMatrixUserId(userId),
   );
 
-  await machine.updateTrackedUsers(uniqueUserIds);
+  await machine.updateTrackedUsers(
+    uniqueUserIds.map((userId) => new matrix.UserId(userId)),
+  );
   await syncMatrixMachine(api, deviceId);
 
   for (;;) {
     const claimRequest = await machine.getMissingSessions(
-      uniqueUserIds.map((userId) => new matrix.UserId(userId.toString())),
+      uniqueUserIds.map((userId) => new matrix.UserId(userId)),
     );
     if (!claimRequest) {
       return;

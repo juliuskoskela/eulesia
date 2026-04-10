@@ -125,6 +125,7 @@ pub fn router(state: AppState) -> Router {
         .merge(waitlist::routes())
         // Alias: /reports/my-sanctions -> same handler as /moderation/my-sanctions
         .route("/reports/my-sanctions", get(moderation::my_sanctions))
+        .route("/dm/unread-count", get(dm_unread_count))
         .route("/conversations/unread-count", get(dm_unread_count))
         // Report aliases — frontend calls /reports but v2 uses /moderation
         .route("/reports", post(moderation::reports::create_report))

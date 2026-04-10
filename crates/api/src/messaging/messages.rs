@@ -132,14 +132,15 @@ async fn prepare_device_queued_send<C: sea_orm::ConnectionTrait>(
         ));
     }
 
-    // Store the sender's own device ciphertext as the canonical
-    // messages.ciphertext (gives the sending device history access).
+    // DM encryption cannot reliably produce an Olm to-device event for the
+    // sender's currently active device. When the client omits that copy, keep
+    // the canonical sender ciphertext empty and serve the sender's own history
+    // from the local browser cache instead.
     let sender_ct = device_cts
         .get(&device_id)
-        .ok_or_else(|| {
-            ApiError::BadRequest("device_ciphertexts must include the sender's device".into())
-        })
-        .and_then(|b64| decode_base64(b64, "device_ciphertexts[sender]"))?;
+        .map(|b64| decode_base64(b64, "device_ciphertexts[sender]"))
+        .transpose()?
+        .unwrap_or_default();
 
     // Validate target devices: only allow active devices belonging to
     // conversation participants.
@@ -147,7 +148,7 @@ async fn prepare_device_queued_send<C: sea_orm::ConnectionTrait>(
         .await
         .map_err(db_err)?;
     let member_user_ids: Vec<Uuid> = members.iter().map(|m| m.user_id).collect();
-    let all_devs = DeviceRepo::list_active_for_users(txn, &member_user_ids)
+    let all_devs = DeviceRepo::list_enrolled_for_users(txn, &member_user_ids)
         .await
         .map_err(db_err)?;
     let valid_devices: HashSet<Uuid> = all_devs.iter().map(|d| d.id).collect();
@@ -203,7 +204,7 @@ async fn prepare_group_send<C: sea_orm::ConnectionTrait>(
         .await
         .map_err(db_err)?;
     let member_user_ids: Vec<Uuid> = active_members.iter().map(|m| m.user_id).collect();
-    let all_devices = DeviceRepo::list_active_for_users(txn, &member_user_ids)
+    let all_devices = DeviceRepo::list_enrolled_for_users(txn, &member_user_ids)
         .await
         .map_err(db_err)?;
 
@@ -731,6 +732,22 @@ mod tests {
         );
 
         assert_eq!(ciphertext, STANDARD.encode(b"sender-copy"));
+    }
+
+    #[test]
+    fn direct_sender_device_without_stored_ciphertext_returns_empty() {
+        let sender_device_id = Uuid::now_v7();
+        let mut msg = make_message(MessageType::Text, Some(sender_device_id), b"sender-copy");
+        msg.ciphertext = None;
+
+        let ciphertext = ciphertext_for_viewer(
+            &msg,
+            ConversationType::Direct,
+            Some(sender_device_id),
+            &HashMap::new(),
+        );
+
+        assert!(ciphertext.is_empty());
     }
 
     #[test]

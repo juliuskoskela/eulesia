@@ -82,7 +82,7 @@ pub async fn invite(
     }
 
     // E2EE groups require all members to have a registered device.
-    if !DeviceRepo::has_active_device(&*state.db, req.user_id)
+    if !DeviceRepo::has_enrolled_device(&*state.db, req.user_id)
         .await
         .map_err(db_err)?
     {

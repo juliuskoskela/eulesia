@@ -52,6 +52,13 @@ export async function encryptConversationWithMatrix(
   };
 
   for (const target of targetDevices) {
+    if (
+      target.userId === localDeviceKeys.userId &&
+      target.deviceId === localDeviceKeys.deviceId
+    ) {
+      continue;
+    }
+
     const device = await getMatrixDevice(target.userId, target.deviceId);
     if (!device) {
       throw new Error(
@@ -59,10 +66,19 @@ export async function encryptConversationWithMatrix(
       );
     }
 
-    const encryptedContent = await device.encryptToDeviceEvent(
-      MATRIX_DM_EVENT_TYPE,
-      payload,
-    );
+    let encryptedContent: string;
+    try {
+      encryptedContent = await device.encryptToDeviceEvent(
+        MATRIX_DM_EVENT_TYPE,
+        payload,
+      );
+    } catch (error) {
+      throw new Error(
+        `Failed to encrypt DM for ${target.userId}/${target.deviceId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
     const encryptedEvent: MatrixEncryptedToDeviceEvent = {
       type: "m.room.encrypted",
       sender: asMatrixUserId(localDeviceKeys.userId),

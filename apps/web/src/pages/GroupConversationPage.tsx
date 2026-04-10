@@ -24,6 +24,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useDevice } from "../hooks/useDevice";
 import { useSocket } from "../hooks/useSocket";
 import { useKeyboard } from "../hooks/useKeyboard";
+import { LinkifiedText } from "../components/common/LinkifiedText";
 import { formatRelativeTime } from "../lib/formatTime";
 import { api } from "../lib/api";
 import type { DirectMessage, GroupMember } from "../lib/api";
@@ -36,8 +37,8 @@ export function GroupConversationPage() {
   const { currentUser } = useAuth();
   const { deviceId, isInitialized: deviceReady } = useDevice();
   const { joinDm, leaveDm, emitTypingDm, typingInDm } = useSocket();
-  const { isKeyboardOpen } = useKeyboard();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const { isKeyboardOpen, keyboardHeight } = useKeyboard();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -53,6 +54,16 @@ export function GroupConversationPage() {
   const markReadMutation = useMarkRead(conversationId || "");
 
   const [newMessage, setNewMessage] = useState("");
+
+  // Auto-resize textarea to fit content, capped at 33vh
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const maxH = window.innerHeight * 0.33;
+    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+  }, [newMessage]);
+
   const [showMembers, setShowMembers] = useState(false);
   const [processedProtocolMessageKey, setProcessedProtocolMessageKey] =
     useState("");
@@ -190,42 +201,49 @@ export function GroupConversationPage() {
   const typingUsers = conversationId ? (typingInDm[conversationId] ?? []) : [];
 
   return (
-    <Layout>
+    <Layout showFooter={false}>
       <SEOHead
         title={groupData.name || t("groupChat", { defaultValue: "Group" })}
         path={`/messages/group/${conversationId}`}
         noIndex
       />
-      <div className="flex flex-col h-[calc(100dvh-56px)]">
+      <div
+        className="flex flex-col"
+        style={{
+          height: isKeyboardOpen
+            ? `calc(100dvh - 3.5rem - ${keyboardHeight}px)`
+            : "calc(100dvh - 3.5rem - 5rem)",
+        }}
+      >
         {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-700 dark:from-emerald-900 dark:via-teal-900 dark:to-cyan-950 border-b border-emerald-600/20 px-4 py-3">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate("/messages")}
-              className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             >
-              <ArrowLeft className="w-5 h-5 text-white" />
+              <ArrowLeft className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             </button>
             <div className="flex-1 min-w-0">
-              <h1 className="font-semibold text-white truncate">
+              <h1 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
                 {groupData.name}
               </h1>
-              <p className="text-xs text-white/70">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {t("memberCount", {
                   defaultValue: "{{count}} members",
                   count: groupData.members.length,
                 })}
               </p>
             </div>
-            <div className="flex items-center gap-1">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-white/10 text-white/85">
-                <Lock className="w-3 h-3 text-emerald-200" /> E2EE
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400">
+                <Lock className="w-3 h-3" /> E2EE
               </span>
               <button
                 onClick={() => setShowMembers(!showMembers)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >
-                <Users className="w-5 h-5 text-white" />
+                <Users className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
           </div>
@@ -243,8 +261,8 @@ export function GroupConversationPage() {
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-emerald-50 via-white to-gray-50 dark:from-emerald-950/20 dark:via-gray-950 dark:to-gray-950">
-          <div className="px-4 py-4 space-y-3">
+        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-gray-50/80 dark:from-gray-950 dark:to-gray-900/30">
+          <div className="px-4 py-5 space-y-4">
             {messages.length === 0 ? (
               <div className="text-center py-12">
                 <Users className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
@@ -302,21 +320,26 @@ export function GroupConversationPage() {
         )}
 
         {/* Input bar */}
-        <div className="flex-shrink-0 bg-white/95 dark:bg-gray-900/95 border-t border-emerald-100 dark:border-emerald-950/40 px-4 py-3 backdrop-blur">
-          <form onSubmit={handleSendMessage} className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
+        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 px-4 py-3">
+          <form onSubmit={handleSendMessage} className="flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
               value={newMessage}
               onChange={(e) => {
                 setNewMessage(e.target.value);
                 if (conversationId && e.target.value.trim())
                   emitTypingDm(conversationId);
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  textareaRef.current?.form?.requestSubmit();
+                }
+              }}
               placeholder={t("writeMessage")}
-              enterKeyHint="send"
               disabled={!deviceReady}
-              className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-colors disabled:opacity-50"
+              rows={1}
+              className="flex-1 px-4 py-2.5 rounded-2xl border border-emerald-300/60 dark:border-emerald-600/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors disabled:opacity-50 resize-y overflow-y-auto max-h-[33vh]"
             />
             <button
               type="submit"
@@ -325,7 +348,7 @@ export function GroupConversationPage() {
                 sendMessageMutation.isPending ||
                 !deviceReady
               }
-              className="p-2.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+              className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-teal-600 text-white rounded-full hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
               aria-label={t("sendMessage")}
             >
               <Send className="w-5 h-5" />
@@ -432,10 +455,10 @@ function GroupMessageBubble({
   return (
     <div className={`flex gap-3 ${isOwnMessage ? "flex-row-reverse" : ""}`}>
       <div
-        className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+        className={`max-w-[75%] rounded-2xl px-4 py-3 shadow-sm ${
           isOwnMessage
             ? "bg-teal-600 text-white rounded-br-md"
-            : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md"
+            : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md border border-gray-100 dark:border-gray-700/50"
         }`}
       >
         {!isOwnMessage && message.author && (
@@ -448,9 +471,11 @@ function GroupMessageBubble({
         ) : decryptionFailed ? (
           <p className="text-sm italic opacity-60">Waiting for room key...</p>
         ) : (
-          <p className="text-sm whitespace-pre-wrap break-words">
-            {displayContent}
-          </p>
+          <LinkifiedText
+            text={displayContent}
+            className="text-sm whitespace-pre-wrap break-words"
+            showPreviews={!isOwnMessage}
+          />
         )}
         <div
           className={`flex items-center gap-1 mt-1 ${

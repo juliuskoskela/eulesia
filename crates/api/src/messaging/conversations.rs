@@ -207,10 +207,10 @@ async fn create_direct(
         }
     }
 
-    let caller_has_device = DeviceRepo::has_active_device(&*state.db, caller)
+    let caller_has_device = DeviceRepo::has_enrolled_device(&*state.db, caller)
         .await
         .map_err(db_err)?;
-    let other_has_device = DeviceRepo::has_active_device(&*state.db, other)
+    let other_has_device = DeviceRepo::has_enrolled_device(&*state.db, other)
         .await
         .map_err(db_err)?;
     let both_have_devices = caller_has_device && other_has_device;
@@ -486,7 +486,7 @@ async fn create_group(
             .ok_or_else(|| ApiError::NotFound(format!("user {member_id} not found")))?;
 
         // E2EE groups require all members to have a registered device.
-        if !DeviceRepo::has_active_device(&*state.db, member_id)
+        if !DeviceRepo::has_enrolled_device(&*state.db, member_id)
             .await
             .map_err(db_err)?
         {

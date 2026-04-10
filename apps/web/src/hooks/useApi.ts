@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { cacheSentDmPlaintext } from "../lib/e2ee/dmPlaintextCache.ts";
 import { useAuth } from "./useAuth";
 import type {
   ThreadFilters,
@@ -815,7 +816,16 @@ export function useSendDM(
         senderDeviceId: deviceId,
       });
     },
-    onSuccess: () => {
+    onSuccess: (message, content) => {
+      if (options?.deviceId && options?.userId) {
+        cacheSentDmPlaintext({
+          messageId: message.id,
+          content,
+          deviceId: options.deviceId,
+          senderId: options.userId,
+        });
+      }
+
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversation(conversationId),
       });

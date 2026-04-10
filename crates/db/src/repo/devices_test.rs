@@ -29,6 +29,15 @@ mod tests {
         }
     }
 
+    fn make_enrolled_device(id: Uuid, user_id: Uuid) -> devices::Model {
+        devices::Model {
+            matrix_curve25519_key: Some(vec![1, 2, 3]),
+            matrix_ed25519_key: Some(vec![4, 5, 6]),
+            matrix_device_signature: Some(vec![7, 8, 9]),
+            ..make_device(id, user_id)
+        }
+    }
+
     fn count_result(n: i64) -> BTreeMap<String, Value> {
         BTreeMap::from([("num_items".to_string(), Value::BigInt(Some(n)))])
     }
@@ -91,6 +100,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_enrolled_for_user_returns_only_ready_devices() {
+        let user_id = Uuid::now_v7();
+        let enrolled = make_enrolled_device(Uuid::now_v7(), user_id);
+
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([vec![enrolled.clone()]])
+            .into_connection();
+
+        let result = DeviceRepo::list_enrolled_for_user(&db, user_id)
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, enrolled.id);
+        assert!(result[0].matrix_curve25519_key.is_some());
+        assert!(result[0].matrix_ed25519_key.is_some());
+        assert!(result[0].matrix_device_signature.is_some());
+    }
+
+    #[tokio::test]
     async fn count_active_for_user_returns_count() {
         let db = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_results([[count_result(3)]])
@@ -100,5 +128,17 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result, 3);
+    }
+
+    #[tokio::test]
+    async fn count_enrolled_for_user_returns_count() {
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([[count_result(1)]])
+            .into_connection();
+
+        let result = DeviceRepo::count_enrolled_for_user(&db, Uuid::now_v7())
+            .await
+            .unwrap();
+        assert_eq!(result, 1);
     }
 }

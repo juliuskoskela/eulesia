@@ -1,5 +1,5 @@
 use sea_orm::*;
-use sea_query::OnConflict;
+use sea_query::{Expr, OnConflict};
 use uuid::Uuid;
 
 use crate::entities::one_time_pre_keys;
@@ -25,6 +25,7 @@ impl PreKeyRepo {
                     one_time_pre_keys::Column::DeviceId,
                     one_time_pre_keys::Column::MatrixKeyId,
                 ])
+                .target_and_where(Expr::col(one_time_pre_keys::Column::MatrixKeyId).is_not_null())
                 .do_nothing()
                 .to_owned(),
             )
