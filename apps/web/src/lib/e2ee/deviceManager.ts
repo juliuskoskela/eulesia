@@ -72,6 +72,21 @@ export async function initializeDevice(
   userId: string,
   pairingCode?: string,
 ): Promise<DeviceRegistration> {
+  const reuseExistingDevice = async (
+    existingDevice: NonNullable<Awaited<ReturnType<typeof loadDeviceKeys>>>,
+  ): Promise<DeviceRegistration> => {
+    if (existingDevice.userId !== userId) {
+      await saveDeviceKeys({ ...existingDevice, userId });
+    }
+
+    await api.bindCurrentSessionToDevice(existingDevice.deviceId);
+
+    return {
+      deviceId: existingDevice.deviceId,
+      didCreateDevice: false,
+    };
+  };
+
   // Step 1: Try loading existing keys — but verify the device still exists
   // on the server (migrations may have truncated the devices table).
   const existing = await loadDeviceKeys();
@@ -85,24 +100,14 @@ export async function initializeDevice(
           (d) => d.id === existing.deviceId,
         );
         if (stillExists) {
-          if (existing.userId !== userId) {
-            await saveDeviceKeys({ ...existing, userId });
-          }
-
-          return {
-            deviceId: existing.deviceId,
-            didCreateDevice: false,
-          };
+          return reuseExistingDevice(existing);
         }
       } catch {
         // Preserve the local identity until the server authoritatively confirms
         // that the device is missing. Transient startup failures must not force
         // a new device registration once the device has been bound to a user.
         if (existing.userId === userId) {
-          return {
-            deviceId: existing.deviceId,
-            didCreateDevice: false,
-          };
+          return reuseExistingDevice(existing);
         }
 
         throw new Error("Unable to verify the existing device identity");

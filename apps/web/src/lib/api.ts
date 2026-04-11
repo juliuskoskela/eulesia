@@ -1234,6 +1234,16 @@ class ApiClient {
     });
   }
 
+  async sendDirectMessage(
+    conversationId: string,
+    data: { content: string },
+  ): Promise<MessageResponse> {
+    return this.request(`/conversations/${conversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   // E2EE Device management
   async registerDevice(data: {
     displayName: string;
@@ -1257,6 +1267,12 @@ class ApiClient {
 
   async listDevices(): Promise<Device[]> {
     return this.request("/devices");
+  }
+
+  async bindCurrentSessionToDevice(deviceId: string): Promise<void> {
+    await this.request(`/devices/${deviceId}/bind`, {
+      method: "POST",
+    });
   }
 
   async revokeDevice(deviceId: string): Promise<void> {

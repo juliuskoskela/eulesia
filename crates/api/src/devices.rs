@@ -384,6 +384,47 @@ async fn list_devices(
     ))
 }
 
+async fn bind_device(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(device_id): Path<Id>,
+) -> Result<(), ApiError> {
+    let device = DeviceRepo::find_by_id_and_user(&state.db, device_id, auth.user_id.0)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .ok_or_else(|| ApiError::NotFound("device not found".into()))?;
+
+    if device.revoked_at.is_some() {
+        return Err(ApiError::BadRequest("device is revoked".into()));
+    }
+
+    if device.matrix_curve25519_key.is_none()
+        || device.matrix_ed25519_key.is_none()
+        || device.matrix_device_signature.is_none()
+    {
+        return Err(ApiError::BadRequest("device is not enrolled".into()));
+    }
+
+    if auth.device_id == Some(eulesia_common::types::DeviceId(device_id)) {
+        return Ok(());
+    }
+
+    if auth.device_id.is_some() {
+        return Err(ApiError::BadRequest(
+            "current session is already bound to a different device".into(),
+        ));
+    }
+
+    let bound = SessionRepo::bind_device(&*state.db, auth.session_id.0, auth.user_id.0, device_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    if !bound {
+        return Err(ApiError::Unauthorized);
+    }
+
+    Ok(())
+}
+
 async fn revoke_device(
     State(state): State<AppState>,
     auth: AuthUser,
@@ -686,6 +727,7 @@ pub async fn list_user_devices(
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/devices", post(create_device).get(list_devices))
+        .route("/devices/{id}/bind", post(bind_device))
         .route("/devices/{id}/matrix/keys/upload", post(upload_matrix_keys))
         .route("/devices/matrix/keys/query", post(query_matrix_keys))
         .route("/devices/matrix/keys/claim", post(claim_matrix_keys))

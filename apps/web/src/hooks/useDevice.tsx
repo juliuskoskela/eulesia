@@ -86,6 +86,28 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   // Track the previous auth state to detect logout transitions
   const prevAuthRef = useRef(false);
 
+  const completeInitialization = useCallback(
+    async (
+      userId: string,
+      registration: { deviceId: string },
+      freshRegistration: boolean,
+    ) => {
+      const { initializeMatrixCryptoMachine, syncMatrixMachine } = await import(
+        "../lib/e2ee/index.ts"
+      );
+      await initializeMatrixCryptoMachine(userId, registration.deviceId);
+      await syncMatrixMachine(api, registration.deviceId);
+
+      // Scope the plaintext cache to this user/device pair.
+      initPlaintextCache(userId, registration.deviceId);
+
+      setDeviceId(registration.deviceId);
+      setIsInitialized(true);
+      setHasFreshRegistration(freshRegistration);
+    },
+    [],
+  );
+
   const initialize = useCallback(
     async (pairingCode?: string) => {
       setHasAttemptedInit(true);
@@ -111,20 +133,11 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           pairingCode,
         );
 
-        const { initializeMatrixCryptoMachine, syncMatrixMachine } =
-          await import("../lib/e2ee/index.ts");
-        await initializeMatrixCryptoMachine(
+        await completeInitialization(
           currentUser.id,
-          registration.deviceId,
+          registration,
+          registration.didCreateDevice,
         );
-        await syncMatrixMachine(api, registration.deviceId);
-
-        // Scope the plaintext cache to this user/device pair.
-        initPlaintextCache(currentUser.id, registration.deviceId);
-
-        setDeviceId(registration.deviceId);
-        setIsInitialized(true);
-        setHasFreshRegistration(registration.didCreateDevice);
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Device initialization failed";
@@ -141,7 +154,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         setIsInitializing(false);
       }
     },
-    [currentUser],
+    [completeInitialization, currentUser],
   );
 
   const inspect = useCallback(async () => {
@@ -157,6 +170,8 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           "Cannot initialize device without an authenticated user",
         );
       }
+
+      clearLegacyDmPlaintextCache();
 
       const requirement = await inspectDeviceSetup(api, currentUser.id);
       if (requirement.status === "needs-trust") {
@@ -174,18 +189,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       }
 
       const registration = await initializeDevice(api, currentUser.id);
-      const { initializeMatrixCryptoMachine, syncMatrixMachine } = await import(
-        "../lib/e2ee/index.ts"
-      );
-      await initializeMatrixCryptoMachine(
-        currentUser.id,
-        registration.deviceId,
-      );
-      await syncMatrixMachine(api, registration.deviceId);
-
-      setDeviceId(registration.deviceId);
-      setIsInitialized(true);
-      setHasFreshRegistration(false);
+      await completeInitialization(currentUser.id, registration, false);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Device initialization failed";
@@ -194,7 +198,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsInitializing(false);
     }
-  }, [currentUser]);
+  }, [completeInitialization, currentUser]);
 
   // Initialize device when authenticated
   useEffect(() => {

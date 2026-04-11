@@ -24,6 +24,7 @@ function makeApiClient(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
     registerDevice: vi.fn(),
     listDevices: vi.fn(),
+    bindCurrentSessionToDevice: vi.fn(),
     revokeDevice: vi.fn(),
     getUserDevices: vi.fn(),
     ...overrides,
@@ -51,6 +52,9 @@ describe("initializeDevice", () => {
       didCreateDevice: false,
     });
     expect(api.listDevices).toHaveBeenCalledTimes(1);
+    expect(api.bindCurrentSessionToDevice).toHaveBeenCalledWith(
+      existingKeys.deviceId,
+    );
     expect(mockClearKeyStore).not.toHaveBeenCalled();
     expect(api.registerDevice).not.toHaveBeenCalled();
     expect(mockSaveDeviceKeys).not.toHaveBeenCalled();
@@ -67,11 +71,30 @@ describe("initializeDevice", () => {
 
     expect(mockClearKeyStore).toHaveBeenCalledTimes(1);
     expect(api.registerDevice).toHaveBeenCalledTimes(1);
+    expect(api.bindCurrentSessionToDevice).not.toHaveBeenCalled();
     expect(mockSaveDeviceKeys).toHaveBeenCalledTimes(1);
     expect(registration).toEqual({
       deviceId: "device-new",
       didCreateDevice: true,
     });
+  });
+
+  it("binds the current session before reusing an existing device", async () => {
+    mockLoadDeviceKeys.mockResolvedValue(existingKeys);
+    const api = makeApiClient({
+      listDevices: vi.fn().mockResolvedValue([{ id: existingKeys.deviceId }]),
+    });
+
+    const registration = await initializeDevice(api, "user-1");
+
+    expect(api.bindCurrentSessionToDevice).toHaveBeenCalledWith(
+      existingKeys.deviceId,
+    );
+    expect(registration).toEqual({
+      deviceId: existingKeys.deviceId,
+      didCreateDevice: false,
+    });
+    expect(api.registerDevice).not.toHaveBeenCalled();
   });
 
   it("clears the key store before reuse when a different user logs in", async () => {

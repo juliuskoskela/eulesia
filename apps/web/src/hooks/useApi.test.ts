@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import {
   loadConversationTargetDevices,
+  useSendDM,
   useThreads,
   useTags,
   useClubs,
@@ -242,6 +243,52 @@ describe("useApi hooks", () => {
         { deviceId: "shared-device", userId: "me" },
         { deviceId: "peer-device", userId: "peer" },
       ]);
+    });
+  });
+
+  describe("useSendDM", () => {
+    it("keeps plaintext conversations on the plaintext send path", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          data: {
+            id: "msg-1",
+            conversationId: "conv-1",
+            senderId: "user-1",
+            senderDeviceId: null,
+            epoch: 0,
+            ciphertext: "",
+            content: "hello world",
+            messageType: "text",
+            serverTs: new Date(0).toISOString(),
+          },
+        }),
+      );
+
+      const { result } = renderHook(
+        () =>
+          useSendDM("conv-1", {
+            encryption: "none",
+            deviceId: null,
+            userId: "user-1",
+            otherUserId: "user-2",
+          }),
+        {
+          wrapper: createWrapper(),
+        },
+      );
+
+      await act(async () => {
+        await result.current.mutateAsync("hello world");
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/conversations/conv-1/messages"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ content: "hello world" }),
+        }),
+      );
     });
   });
 });

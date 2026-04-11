@@ -416,17 +416,21 @@ export function DMConversationPage() {
       }
     : (conversationData?.otherUser ?? null);
   const otherUserId = otherUser?.id ?? null;
+  const isEncryptedConversation = conversationData?.encryption === "e2ee";
 
   // Check if recipient has a registered device (required for E2EE).
   const { data: recipientDevices, isError: recipientDevicesError } = useQuery({
     queryKey: ["userDevices", otherUserId],
     queryFn: () => api.getUserDevices(otherUserId!),
-    enabled: !!otherUserId,
+    enabled: !!otherUserId && isEncryptedConversation,
   });
   const recipientHasDevice = !!recipientDevices && recipientDevices.length > 0;
-  const canSend = deviceReady && (recipientHasDevice || recipientDevicesError);
+  const canSend = isEncryptedConversation
+    ? deviceReady && (recipientHasDevice || recipientDevicesError)
+    : true;
 
   const sendMessageMutation = useSendDM(conversationId || "", {
+    encryption: isEncryptedConversation ? "e2ee" : "none",
     deviceId: deviceReady ? deviceId : null,
     userId: currentUser?.id ?? null,
     otherUserId,
@@ -443,6 +447,12 @@ export function DMConversationPage() {
   // any decryption attempt.  Without this the machine can't verify or decrypt
   // Olm pre-key messages from the sender.
   useEffect(() => {
+    if (!isEncryptedConversation) {
+      setKeysReady(true);
+      return;
+    }
+
+    setKeysReady(false);
     if (!deviceReady || !deviceId || !otherUserId || !currentUser?.id) return;
     let cancelled = false;
 
@@ -461,7 +471,13 @@ export function DMConversationPage() {
     return () => {
       cancelled = true;
     };
-  }, [deviceReady, deviceId, otherUserId, currentUser?.id]);
+  }, [
+    currentUser?.id,
+    deviceId,
+    deviceReady,
+    isEncryptedConversation,
+    otherUserId,
+  ]);
 
   // Auto-resize textarea to fit content, capped at 33vh
   useEffect(() => {
@@ -540,7 +556,6 @@ export function DMConversationPage() {
   }
 
   const { messages } = conversationData;
-  const isEncryptedConversation = conversationData.encryption === "e2ee";
   const canLinkToOtherUserProfile =
     Boolean(otherUser?.id) && (otherUser?.canViewProfile ?? true);
 
@@ -704,7 +719,7 @@ export function DMConversationPage() {
         </div>
 
         {/* Device warning banners */}
-        {!deviceReady && (
+        {isEncryptedConversation && !deviceReady && (
           <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 text-center">
             <p className="text-sm text-amber-700 dark:text-amber-300">
               {t("deviceNotRegistered", {
@@ -720,17 +735,21 @@ export function DMConversationPage() {
             </Link>
           </div>
         )}
-        {deviceReady && recipientDevicesError && otherUserId && (
-          <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 text-center">
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              {t("recipientDeviceCheckFailed", {
-                defaultValue:
-                  "Could not verify whether the recipient has a registered device.",
-              })}
-            </p>
-          </div>
-        )}
-        {deviceReady &&
+        {isEncryptedConversation &&
+          deviceReady &&
+          recipientDevicesError &&
+          otherUserId && (
+            <div className="flex-shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800 text-center">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                {t("recipientDeviceCheckFailed", {
+                  defaultValue:
+                    "Could not verify whether the recipient has a registered device.",
+                })}
+              </p>
+            </div>
+          )}
+        {isEncryptedConversation &&
+          deviceReady &&
           !recipientDevicesError &&
           !recipientHasDevice &&
           otherUserId && (

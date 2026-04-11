@@ -62,6 +62,8 @@ export interface ApiClient {
 
   listDevices(): Promise<Device[]>;
 
+  bindCurrentSessionToDevice(deviceId: string): Promise<void>;
+
   revokeDevice(deviceId: string): Promise<void>;
 
   getUserDevices(userId: string): Promise<Device[]>;

@@ -765,6 +765,8 @@ export function useStartConversation() {
 export function useSendDM(
   conversationId: string,
   options?: {
+    /** The conversation encryption mode. */
+    encryption?: "e2ee" | "none";
     /** The local device ID, if E2EE is initialized. */
     deviceId?: string | null;
     /** The current authenticated user ID. */
@@ -777,7 +779,16 @@ export function useSendDM(
 
   return useMutation({
     mutationFn: async (content: string) => {
-      const { deviceId, userId, otherUserId } = options ?? {};
+      const {
+        encryption = "e2ee",
+        deviceId,
+        userId,
+        otherUserId,
+      } = options ?? {};
+
+      if (encryption !== "e2ee") {
+        return api.sendDirectMessage(conversationId, { content });
+      }
 
       if (!deviceId) {
         throw new Error("DEVICE_NOT_INITIALIZED");
@@ -817,12 +828,18 @@ export function useSendDM(
       });
     },
     onSuccess: (message, content) => {
-      if (options?.deviceId && options?.userId) {
+      const cachedDeviceId = options?.deviceId;
+      const cachedUserId = options?.userId;
+      if (
+        (options?.encryption ?? "e2ee") === "e2ee" &&
+        cachedDeviceId &&
+        cachedUserId
+      ) {
         cacheSentDmPlaintext({
           messageId: message.id,
           content,
-          deviceId: options.deviceId,
-          senderId: options.userId,
+          deviceId: cachedDeviceId,
+          senderId: cachedUserId,
         });
       }
 
